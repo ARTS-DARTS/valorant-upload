@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Valorant Lineups — Загрузить лайнап</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
   <style>
     :root {
@@ -292,7 +293,7 @@
           <button id="traj-clear" class="pill-btn" style="display:none;" onclick="clearTraj()">✕ Очистить</button>
         </div>
         <div class="map-wrap" id="map-wrap">
-          <img id="map-img" class="map-img" src="" alt="" style="display:none;">
+          <img id="map-img" class="map-img" crossorigin="anonymous" src="" alt="" style="display:none;">
           <div id="map-placeholder" style="padding:32px;text-align:center;color:var(--text2);font-size:13px;">Сначала выбери карту</div>
           <!-- Position marker -->
           <div id="map-marker" style="display:none;position:absolute;transform:translate(-50%,-50%);z-index:3;pointer-events:none;">
@@ -533,7 +534,8 @@ function renderAgentsGrid() {
   const grid = document.getElementById('agents-grid');
   grid.innerHTML = agentsList.map(a => `
     <div class="agent-card" data-uuid="${esc(a.uuid)}">
-      <img src="${esc(a.displayIconSmall || '')}" alt="${esc(a.displayName)}"
+      <img src="${esc(a.displayIconSmall || a.displayIcon || '')}" alt="${esc(a.displayName)}"
+           crossorigin="anonymous"
            onerror="this.style.display='none'">
       <span>${esc(a.displayName)}</span>
     </div>`).join('');
@@ -795,6 +797,20 @@ function renderScreenshots() {
 }
 
 // ── Map minimap ───────────────────────────────────────────────────────────────
+const MAP_FALLBACK_URLS = {
+  'Haven':    'https://media.valorant-api.com/maps/2bee0dc9-4bbe-4143-b2b1-1c5d92c14786/displayicon.png',
+  'Bind':     'https://media.valorant-api.com/maps/2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba/displayicon.png',
+  'Ascent':   'https://media.valorant-api.com/maps/7eaecc1b-4337-bbf6-6ab9-04b8f06b3319/displayicon.png',
+  'Split':    'https://media.valorant-api.com/maps/d960549e-485c-e861-8d71-aa9d1aed12a2/displayicon.png',
+  'Icebox':   'https://media.valorant-api.com/maps/e2ad5c54-4114-a870-9641-8ea21279579a/displayicon.png',
+  'Breeze':   'https://media.valorant-api.com/maps/2fb9a4fd-47b8-4e7d-a969-74b4046ebd53/displayicon.png',
+  'Fracture': 'https://media.valorant-api.com/maps/b529448b-4d60-346e-e89e-00a4c527a405/displayicon.png',
+  'Pearl':    'https://media.valorant-api.com/maps/33bb57b4-4e5b-8d85-0505-b8c5b8b36136/displayicon.png',
+  'Lotus':    'https://media.valorant-api.com/maps/2fe4ed3a-450a-01bc-1236-069b34a8b785/displayicon.png',
+  'Sunset':   'https://media.valorant-api.com/maps/92584fbe-486a-b1b2-9faa-39eb02e28435/displayicon.png',
+  'Abyss':    'https://media.valorant-api.com/maps/224b0a95-48b9-d703-cc5f-3e8e0f488ea8/displayicon.png',
+};
+
 function loadMapMinimap() {
   const mapName = document.getElementById('sel-map').value;
   const img     = document.getElementById('map-img');
@@ -807,9 +823,20 @@ function loadMapMinimap() {
     renderTrajectory();
     return;
   }
-  const mapData = mapsData.find(m => m.displayName === mapName);
-  if (mapData?.displayIcon) {
-    img.src = mapData.displayIcon;
+  const apiUrl = mapsData.find(m => m.displayName === mapName)?.displayIcon;
+  const url    = apiUrl || MAP_FALLBACK_URLS[mapName];
+  if (url) {
+    img.crossOrigin = 'anonymous';
+    img.onerror = () => {
+      const fb = MAP_FALLBACK_URLS[mapName];
+      if (fb && img.src !== fb) { img.src = fb; }
+      else {
+        img.style.display = 'none';
+        ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Карта недоступна</div>`;
+        ph.style.display = '';
+      }
+    };
+    img.src = url;
     img.style.display = 'block';
     ph.style.display = 'none';
     marker.style.display = 'none';
