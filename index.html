@@ -285,34 +285,23 @@
     <div class="section-title">📍 МЕТКА НА КАРТЕ</div>
     <div class="card">
       <div id="map-container">
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <button id="mode-start" class="pill-btn selected-mode" onclick="setMapMode('start')">📍 Позиция броска</button>
-          <button id="mode-end" class="pill-btn" onclick="setMapMode('end')">🎯 Точка попадания</button>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <button id="mode-position"   class="pill-btn selected-mode" onclick="setMapMode('position')">📍 Позиция броска</button>
+          <button id="mode-trajectory" class="pill-btn"               onclick="setMapMode('trajectory')">➡ Траектория</button>
+          <button id="traj-undo"  class="pill-btn" style="display:none;" onclick="undoTraj()">↩ Отмена точки</button>
+          <button id="traj-clear" class="pill-btn" style="display:none;" onclick="clearTraj()">✕ Очистить</button>
         </div>
         <div class="map-wrap" id="map-wrap">
           <img id="map-img" class="map-img" src="" alt="" style="display:none;">
           <div id="map-placeholder" style="padding:32px;text-align:center;color:var(--text2);font-size:13px;">Сначала выбери карту</div>
-          <!-- Marker 1: throw position (blue) -->
+          <!-- Position marker -->
           <div id="map-marker" style="display:none;position:absolute;transform:translate(-50%,-50%);z-index:3;pointer-events:none;">
             <div id="marker-dot" style="width:18px;height:18px;border-radius:50%;border:2px solid var(--primary);background:var(--surface);display:flex;align-items:center;justify-content:center;box-shadow:0 0 6px rgba(79,195,247,0.6);">
               <img id="marker-icon" style="width:12px;height:12px;border-radius:50%;object-fit:cover;display:none;" alt="">
             </div>
           </div>
-          <!-- Marker 2: landing point (orange) -->
-          <div id="map-marker2" style="display:none;position:absolute;transform:translate(-50%,-50%);z-index:3;pointer-events:none;">
-            <div style="width:14px;height:14px;border-radius:50%;border:2px solid #f59e0b;background:var(--surface);box-shadow:0 0 6px rgba(245,158,11,0.6);"></div>
-          </div>
-          <!-- SVG trajectory -->
-          <svg id="map-trajectory" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="#f59e0b" opacity="0.8"/>
-              </marker>
-            </defs>
-            <line id="trajectory-line" x1="0" y1="0" x2="0" y2="0"
-              stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5,4"
-              marker-end="url(#arrowhead)" opacity="0" stroke-opacity="0.8"/>
-          </svg>
+          <!-- Trajectory SVG container -->
+          <div id="traj-container" style="position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden;"></div>
         </div>
         <div class="map-hint" id="map-hint">Выбери режим и кликни на карту</div>
       </div>
@@ -446,9 +435,9 @@ let selectedAgent    = null;
 let selectedAbility  = null;
 let selectedCategory = null;
 let selectedDifficulty = null;
-let markerX  = null, markerY  = null;
-let marker2X = null, marker2Y = null;
-let mapMode  = 'start';
+let markerX = null, markerY = null;
+let trajectoryPoints = [];
+let mapMode = 'position';
 let videoUrl = null;
 let videoXhr = null;
 let screenshots = [];
@@ -811,12 +800,11 @@ function loadMapMinimap() {
   const img     = document.getElementById('map-img');
   const ph      = document.getElementById('map-placeholder');
   const marker  = document.getElementById('map-marker');
-  const marker2 = document.getElementById('map-marker2');
   if (!mapName) {
     img.style.display = 'none'; ph.style.display = '';
-    marker.style.display = 'none'; marker2.style.display = 'none';
-    markerX = markerY = marker2X = marker2Y = null;
-    updateTrajectory();
+    marker.style.display = 'none';
+    markerX = markerY = null; trajectoryPoints = [];
+    renderTrajectory();
     return;
   }
   const mapData = mapsData.find(m => m.displayName === mapName);
@@ -824,9 +812,9 @@ function loadMapMinimap() {
     img.src = mapData.displayIcon;
     img.style.display = 'block';
     ph.style.display = 'none';
-    marker.style.display = 'none'; marker2.style.display = 'none';
-    markerX = markerY = marker2X = marker2Y = null;
-    updateTrajectory();
+    marker.style.display = 'none';
+    markerX = markerY = null; trajectoryPoints = [];
+    renderTrajectory();
   } else {
     img.style.display = 'none';
     ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Миникарта не найдена</div>`;
@@ -838,10 +826,14 @@ function loadMapMinimap() {
 // Map mode switcher — exposed to window for inline onclick
 function setMapMode(mode) {
   mapMode = mode;
-  document.getElementById('mode-start').classList.toggle('selected-mode', mode === 'start');
-  document.getElementById('mode-end').classList.toggle('selected-mode', mode === 'end');
+  document.getElementById('mode-position').classList.toggle('selected-mode',   mode === 'position');
+  document.getElementById('mode-trajectory').classList.toggle('selected-mode', mode === 'trajectory');
+  document.getElementById('traj-undo').style.display  = mode === 'trajectory' ? '' : 'none';
+  document.getElementById('traj-clear').style.display = mode === 'trajectory' ? '' : 'none';
 }
 window.setMapMode = setMapMode;
+window.undoTraj  = function() { trajectoryPoints.pop(); renderTrajectory(); };
+window.clearTraj = function() { trajectoryPoints = []; renderTrajectory(); };
 
 document.getElementById('map-wrap').addEventListener('click', e => {
   const img = document.getElementById('map-img');
@@ -851,7 +843,7 @@ document.getElementById('map-wrap').addEventListener('click', e => {
   const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   const y = Math.max(0, Math.min(1, (e.clientY - rect.top)  / rect.height));
 
-  if (mapMode === 'start') {
+  if (mapMode === 'position') {
     markerX = x; markerY = y;
     const marker = document.getElementById('map-marker');
     marker.style.display = '';
@@ -859,27 +851,49 @@ document.getElementById('map-wrap').addEventListener('click', e => {
     marker.style.top  = (y * 100) + '%';
     updateMarkerIcon();
   } else {
-    marker2X = x; marker2Y = y;
-    const marker2 = document.getElementById('map-marker2');
-    marker2.style.display = '';
-    marker2.style.left = (x * 100) + '%';
-    marker2.style.top  = (y * 100) + '%';
+    trajectoryPoints.push({ x, y });
+    renderTrajectory();
   }
-  updateTrajectory();
   validateForm();
 });
 
-function updateTrajectory() {
-  const line = document.getElementById('trajectory-line');
-  if (markerX !== null && marker2X !== null) {
-    line.setAttribute('x1', (markerX  * 100) + '%');
-    line.setAttribute('y1', (markerY  * 100) + '%');
-    line.setAttribute('x2', (marker2X * 100) + '%');
-    line.setAttribute('y2', (marker2Y * 100) + '%');
-    line.setAttribute('opacity', '1');
-  } else {
-    line.setAttribute('opacity', '0');
+function renderTrajectory() {
+  const container = document.getElementById('traj-container');
+  container.innerHTML = '';
+  if (trajectoryPoints.length < 2) return;
+  const ns  = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+  const wrap = document.getElementById('map-wrap');
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  const mid = 'ul-arr';
+  const defs = document.createElementNS(ns, 'defs');
+  const mkr  = document.createElementNS(ns, 'marker');
+  mkr.setAttribute('id', mid);
+  mkr.setAttribute('markerWidth', '10'); mkr.setAttribute('markerHeight', '8');
+  mkr.setAttribute('refX', '10');       mkr.setAttribute('refY', '4');
+  mkr.setAttribute('orient', 'auto');   mkr.setAttribute('markerUnits', 'userSpaceOnUse');
+  const tri = document.createElementNS(ns, 'polygon');
+  tri.setAttribute('points', '0 0, 10 4, 0 8'); tri.setAttribute('fill', '#FF4655');
+  mkr.appendChild(tri); defs.appendChild(mkr); svg.appendChild(defs);
+  const coords = trajectoryPoints.map(p => `${(p.x*w).toFixed(1)},${(p.y*h).toFixed(1)}`).join(' ');
+  const poly = document.createElementNS(ns, 'polyline');
+  poly.setAttribute('points', coords);
+  poly.setAttribute('fill', 'none');   poly.setAttribute('stroke', '#FF4655');
+  poly.setAttribute('stroke-opacity', '0.85'); poly.setAttribute('stroke-width', '2');
+  poly.setAttribute('stroke-linejoin', 'round'); poly.setAttribute('stroke-linecap', 'round');
+  poly.setAttribute('marker-end', `url(#${mid})`);
+  svg.appendChild(poly);
+  for (let i = 0; i < trajectoryPoints.length; i++) {
+    const dot = document.createElementNS(ns, 'circle');
+    dot.setAttribute('cx', (trajectoryPoints[i].x*w).toFixed(1));
+    dot.setAttribute('cy', (trajectoryPoints[i].y*h).toFixed(1));
+    dot.setAttribute('r', i === 0 ? '5' : '3.5');
+    dot.setAttribute('fill', '#FF4655');
+    dot.setAttribute('stroke', 'rgba(255,255,255,0.45)'); dot.setAttribute('stroke-width', '0.5');
+    svg.appendChild(dot);
   }
+  container.appendChild(svg);
 }
 
 function updateMarkerIcon() {
@@ -960,10 +974,9 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       description:   desc,
       video_url:     videoUrl || null,
       screenshots:   screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
-      position_x:    markerX,
-      position_y:    markerY,
-      trajectory_x2: marker2X ?? null,
-      trajectory_y2: marker2Y ?? null,
+      position_x: markerX,
+      position_y: markerY,
+      trajectory: trajectoryPoints,
       category:      selectedCategory,
       difficulty:    selectedDifficulty,
       status:        'pending',
@@ -994,8 +1007,8 @@ document.getElementById('btn-another').addEventListener('click', () => {
   selectedAgent = null; selectedAbility = null;
   selectedCategory = null; selectedDifficulty = null;
   markerX = null; markerY = null;
-  marker2X = null; marker2Y = null;
-  mapMode = 'start';
+  trajectoryPoints = [];
+  mapMode = 'position';
   videoUrl = null; screenshots = [];
 
   document.getElementById('sel-map').value = '';
@@ -1013,10 +1026,9 @@ document.getElementById('btn-another').addEventListener('click', () => {
   document.getElementById('map-img').style.display = 'none';
   document.getElementById('map-placeholder').style.display = '';
   document.getElementById('map-marker').style.display = 'none';
-  document.getElementById('map-marker2').style.display = 'none';
+  document.getElementById('traj-container').innerHTML = '';
   document.getElementById('map-hint').textContent = 'Выбери режим и кликни на карту';
-  setMapMode('start');
-  updateTrajectory();
+  setMapMode('position');
   renderScreenshots();
   document.getElementById('success-screen').style.display = 'none';
   document.getElementById('form-screen').style.display = '';
