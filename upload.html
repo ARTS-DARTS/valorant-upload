@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Valorant Lineups — Загрузить лайнап</title>
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --primary: #4FC3F7;
+      --border: rgba(255,255,255,0.08);
+      --text1: #e2e8f0;
+      --text2: #94a3b8;
+      --green: #22c55e;
+      --red: #ef4444;
+      --orange: #f59e0b;
+      --r: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text1); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; font-size: 14px; }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; height: 54px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .logo { font-size: 16px; font-weight: 800; letter-spacing: 2px; color: var(--primary); }
+    .logo span { color: var(--text1); }
+    .user-info { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text2); }
+    .user-info img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+    .btn-out { background: transparent; border: 1px solid var(--border); color: var(--text2); padding: 5px 12px; border-radius: var(--r); cursor: pointer; font-size: 12px; transition: .15s; }
+    .btn-out:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ── Auth ───────────────────────────────────────────────── */
+    .center-screen { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 54px); padding: 24px; }
+    .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 40px 36px; max-width: 380px; width: 100%; }
+    .auth-title { font-size: 22px; font-weight: 800; color: var(--primary); letter-spacing: 2px; margin-bottom: 4px; text-align: center; }
+    .auth-sub { color: var(--text2); font-size: 12px; text-align: center; margin-bottom: 28px; }
+    .auth-tabs { display: flex; background: var(--surface2); border-radius: var(--r); padding: 3px; gap: 3px; margin-bottom: 22px; }
+    .auth-tab { flex: 1; padding: 7px; border: none; background: transparent; color: var(--text2); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: .15s; }
+    .auth-tab.active { background: var(--primary); color: #fff; }
+    .btn-google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; background: #fff; color: #111; border: none; padding: 12px; border-radius: var(--r); font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .15s; margin-bottom: 8px; }
+    .btn-google:hover { opacity: .88; }
+    .btn-google:disabled { opacity: .4; cursor: default; }
+    .g-icon { font-size: 15px; font-weight: 900; color: #4285F4; }
+    .field-group { margin-bottom: 14px; }
+    .flabel { display: block; color: var(--text2); font-size: 11px; font-weight: 700; letter-spacing: .5px; margin-bottom: 5px; }
+    .finput { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text1); padding: 10px 12px; border-radius: var(--r); font-size: 13px; outline: none; transition: border-color .15s; }
+    .finput:focus { border-color: var(--primary); }
+    .btn-primary { width: 100%; background: var(--primary); color: #fff; border: none; padding: 12px; border-radius: var(--r); font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity .15s; }
+    .btn-primary:hover { opacity: .88; }
+    .btn-primary:disabled { opacity: .4; cursor: default; }
+    .auth-err { color: var(--red); font-size: 12px; margin-top: 10px; text-align: center; display: none; }
+    .auth-divider { text-align: center; color: var(--text2); font-size: 11px; margin: 14px 0; }
+
+    /* ── Form ───────────────────────────────────────────────── */
+    .main { max-width: 680px; margin: 0 auto; padding: 24px 16px 60px; }
+    .section-title { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--primary); margin-bottom: 8px; margin-top: 24px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; margin-bottom: 14px; }
+    select.finput { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; cursor: pointer; }
+    .agent-option { display: flex; align-items: center; gap: 8px; }
+    .agent-option img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+
+    /* Ability icons */
+    .abilities-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .ability-btn { background: var(--surface2); border: 1.5px solid var(--border); border-radius: var(--r); padding: 6px; cursor: pointer; transition: border-color .15s, background .15s; display: flex; align-items: center; justify-content: center; }
+    .ability-btn:hover { border-color: var(--primary); }
+    .ability-btn.selected { border-color: var(--primary); background: rgba(79,195,247,0.12); }
+    .ability-btn img { width: 32px; height: 32px; object-fit: contain; }
+    .ability-btn span { font-size: 11px; color: var(--text2); margin-top: 3px; display: block; text-align: center; max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Pill buttons (category / difficulty) */
+    .pill-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill-btn { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 20px; padding: 6px 14px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text2); transition: .15s; white-space: nowrap; }
+    .pill-btn:hover { border-color: var(--primary); color: var(--text1); }
+    .pill-btn.selected { border-color: var(--primary); background: rgba(79,195,247,0.12); color: var(--primary); }
+
+    /* Char counter */
+    .input-wrap { position: relative; }
+    .char-counter { position: absolute; bottom: 8px; right: 10px; font-size: 11px; color: var(--text2); pointer-events: none; }
+    textarea.finput { resize: vertical; min-height: 80px; padding-bottom: 24px; }
+
+    /* Video tabs */
+    .vid-tabs { display: flex; background: var(--surface2); border-radius: var(--r); padding: 3px; gap: 3px; margin-bottom: 14px; }
+    .vid-tab { flex: 1; padding: 7px; border: none; background: transparent; color: var(--text2); border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: .15s; }
+    .vid-tab.active { background: var(--primary); color: #fff; }
+    .drop-zone { border: 2px dashed var(--border); border-radius: var(--r); padding: 32px 16px; text-align: center; cursor: pointer; transition: border-color .15s; color: var(--text2); font-size: 13px; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: var(--primary); color: var(--text1); }
+    .drop-icon { font-size: 32px; margin-bottom: 8px; }
+    .progress-wrap { margin-top: 12px; background: var(--surface2); border-radius: 20px; overflow: hidden; height: 8px; }
+    .progress-bar { height: 100%; background: var(--primary); border-radius: 20px; transition: width .2s; }
+    .vid-player { width: 100%; border-radius: var(--r); background: #000; display: block; max-height: 300px; }
+    .vid-controls { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+    .scrubber { flex: 1; min-width: 120px; accent-color: var(--primary); cursor: pointer; }
+    .time-display { font-size: 12px; color: var(--text2); white-space: nowrap; }
+    .btn-sm { background: var(--surface2); border: 1px solid var(--border); color: var(--text1); padding: 6px 12px; border-radius: var(--r); cursor: pointer; font-size: 12px; transition: .15s; }
+    .btn-sm:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-sm:disabled { opacity: .4; cursor: default; }
+    .btn-frame { background: rgba(79,195,247,0.12); border: 1px solid var(--primary); color: var(--primary); padding: 6px 14px; border-radius: var(--r); cursor: pointer; font-size: 12px; font-weight: 700; transition: .15s; }
+    .btn-frame:hover { background: rgba(79,195,247,0.22); }
+    .btn-frame:disabled { opacity: .4; cursor: default; }
+
+    /* Screenshots */
+    .shots-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .shot-item { position: relative; }
+    .shot-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
+    .shot-item .rm { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 50%; background: var(--red); border: none; color: #fff; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
+    .btn-add-shot { width: 80px; height: 80px; border: 2px dashed var(--border); border-radius: 6px; background: var(--surface2); color: var(--text2); font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: border-color .15s; }
+    .btn-add-shot:hover { border-color: var(--primary); }
+
+    /* Map marker */
+    .map-wrap { position: relative; cursor: crosshair; border-radius: var(--r); overflow: hidden; background: #0a0e1a; border: 1px solid var(--border); user-select: none; }
+    .map-wrap img { width: 100%; display: block; }
+    .map-marker { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--primary); border: 2px solid #fff; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 2px 6px rgba(0,0,0,0.6); }
+    .map-hint { color: var(--text2); font-size: 12px; margin-top: 6px; }
+
+    /* Submit */
+    .btn-submit { width: 100%; background: var(--primary); color: #fff; border: none; padding: 14px; border-radius: var(--r); font-size: 16px; font-weight: 800; cursor: pointer; letter-spacing: 1px; transition: opacity .15s; margin-top: 24px; }
+    .btn-submit:hover { opacity: .88; }
+    .btn-submit:disabled { opacity: .4; cursor: default; }
+
+    /* Success */
+    .success-card { text-align: center; }
+    .success-icon { font-size: 56px; margin-bottom: 16px; }
+    .success-title { font-size: 22px; font-weight: 800; color: var(--green); margin-bottom: 8px; }
+    .success-sub { color: var(--text2); font-size: 14px; margin-bottom: 28px; line-height: 1.6; }
+
+    /* Toasts */
+    #toasts { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 9999; }
+    .toast { padding: 10px 16px; border-radius: var(--r); font-size: 13px; font-weight: 600; animation: fadeIn .2s; pointer-events: none; max-width: 300px; }
+    .toast.s { background: #14532d; color: #bbf7d0; border: 1px solid #16a34a; }
+    .toast.e { background: #450a0a; color: #fca5a5; border: 1px solid #b91c1c; }
+    .toast.i { background: var(--surface2); color: var(--text1); border: 1px solid var(--border); }
+    .toast.w { background: #451a03; color: #fed7aa; border: 1px solid #c2410c; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Agent select custom */
+    .agent-select-wrap { position: relative; }
+    .agent-select-btn { display: flex; align-items: center; gap: 10px; width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text1); padding: 8px 12px; border-radius: var(--r); cursor: pointer; font-size: 13px; transition: border-color .15s; }
+    .agent-select-btn:hover, .agent-select-btn.open { border-color: var(--primary); }
+    .agent-select-btn img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .agent-select-btn .arrow { margin-left: auto; color: var(--text2); font-size: 10px; }
+    .agent-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); max-height: 240px; overflow-y: auto; z-index: 200; }
+    .agent-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; transition: background .1s; }
+    .agent-item:hover { background: var(--surface2); }
+    .agent-item img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+    .agent-item span { font-size: 13px; }
+
+    @media (max-width: 500px) {
+      .auth-card { padding: 28px 18px; }
+      .main { padding: 16px 10px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">VALORANT <span>LINEUPS</span></div>
+  <div class="user-info" id="header-user" style="display:none;">
+    <img id="user-avatar" src="" alt="" style="display:none;">
+    <span id="user-name"></span>
+    <button class="btn-out" id="btn-signout">Выйти</button>
+  </div>
+</header>
+
+<!-- Auth screen -->
+<div id="auth-screen" class="center-screen">
+  <div class="auth-card">
+    <div class="auth-title">UPLOAD</div>
+    <div class="auth-sub">Загрузи свой лайнап в базу</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-google-btn">Google</button>
+      <button class="auth-tab" id="tab-email-btn">Email</button>
+    </div>
+
+    <!-- Google tab -->
+    <div id="tab-google">
+      <button class="btn-google" id="btn-google">
+        <span class="g-icon">G</span> Войти через Google
+      </button>
+    </div>
+
+    <!-- Email tab -->
+    <div id="tab-email" style="display:none;">
+      <div class="field-group">
+        <label class="flabel">Email</label>
+        <input class="finput" type="email" id="auth-email" placeholder="your@email.com" autocomplete="email">
+      </div>
+      <div class="field-group">
+        <label class="flabel">Пароль</label>
+        <input class="finput" type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" id="btn-email-login">Войти</button>
+    </div>
+
+    <div class="auth-err" id="auth-err"></div>
+  </div>
+</div>
+
+<!-- Upload form -->
+<div id="form-screen" style="display:none;">
+  <div class="main">
+    <div class="section-title">🗺 КАРТА</div>
+    <div class="card">
+      <select class="finput" id="sel-map">
+        <option value="">— Выбери карту —</option>
+        <option>Haven</option><option>Bind</option><option>Ascent</option>
+        <option>Split</option><option>Icebox</option><option>Breeze</option>
+        <option>Fracture</option><option>Pearl</option><option>Lotus</option>
+        <option>Sunset</option><option>Abyss</option><option>Corrode</option>
+      </select>
+    </div>
+
+    <div class="section-title">🎭 АГЕНТ</div>
+    <div class="card">
+      <div class="agent-select-wrap">
+        <button class="agent-select-btn" id="agent-select-btn" type="button">
+          <span id="agent-btn-label">— Выбери агента —</span>
+          <span class="arrow">▾</span>
+        </button>
+        <div class="agent-dropdown" id="agent-dropdown" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div class="section-title">⚡ СПОСОБНОСТЬ</div>
+    <div class="card">
+      <div class="abilities-row" id="abilities-row">
+        <span style="color:var(--text2);font-size:13px;">Сначала выбери агента</span>
+      </div>
+    </div>
+
+    <div class="section-title">🎯 КАТЕГОРИЯ</div>
+    <div class="card">
+      <div class="pill-row" id="cat-row">
+        <button class="pill-btn" data-val="lineup">🎯 Лайнапы</button>
+        <button class="pill-btn" data-val="combo">⚡ Комбо</button>
+        <button class="pill-btn" data-val="meta">👑 Мета</button>
+        <button class="pill-btn" data-val="smoke">💨 Смоки</button>
+        <button class="pill-btn" data-val="defense">🛡 Защита</button>
+      </div>
+    </div>
+
+    <div class="section-title">💪 СЛОЖНОСТЬ</div>
+    <div class="card">
+      <div class="pill-row" id="diff-row">
+        <button class="pill-btn" data-val="easy">🟢 Легко</button>
+        <button class="pill-btn" data-val="medium">🟡 Средне</button>
+        <button class="pill-btn" data-val="hard">🔴 Сложно</button>
+      </div>
+    </div>
+
+    <div class="section-title">📝 НАЗВАНИЕ</div>
+    <div class="card">
+      <div class="input-wrap">
+        <input class="finput" type="text" id="inp-title" placeholder="Например: Viper lineups B от корнера" maxlength="100">
+        <span class="char-counter"><span id="title-count">0</span>/100</span>
+      </div>
+    </div>
+
+    <div class="section-title">📄 ОПИСАНИЕ</div>
+    <div class="card">
+      <div class="input-wrap">
+        <textarea class="finput" id="inp-desc" placeholder="Опиши лайнап: с какой позиции, куда летит, как ставить угол…" maxlength="1000" rows="4"></textarea>
+        <span class="char-counter"><span id="desc-count">0</span>/1000</span>
+      </div>
+    </div>
+
+    <div class="section-title">🎬 ВИДЕО</div>
+    <div class="card">
+      <div class="vid-tabs">
+        <button class="vid-tab active" id="vtab-file-btn">📁 Загрузить файл</button>
+        <button class="vid-tab" id="vtab-yt-btn">🔗 YouTube ссылка</button>
+      </div>
+
+      <!-- File upload tab -->
+      <div id="vtab-file">
+        <div class="drop-zone" id="drop-zone">
+          <div class="drop-icon">🎥</div>
+          <div>Перетащи видео сюда или <strong style="color:var(--primary);">нажми для выбора</strong></div>
+          <div style="font-size:11px;margin-top:6px;color:var(--text2);">MP4, MOV, WebM · Максимум 200 МБ</div>
+        </div>
+        <input type="file" id="vid-file-input" accept="video/*" style="display:none;">
+
+        <div id="vid-upload-progress" style="display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:13px;color:var(--text2);">Загрузка видео…</span>
+            <span id="vid-pct" style="font-size:13px;font-weight:700;color:var(--primary);">0%</span>
+          </div>
+          <div class="progress-wrap"><div class="progress-bar" id="vid-prog" style="width:0%"></div></div>
+          <button class="btn-sm" id="vid-cancel-btn" style="margin-top:8px;">✕ Отмена</button>
+        </div>
+
+        <div id="vid-player-wrap" style="display:none;">
+          <video class="vid-player" id="vid-player" controls preload="metadata"></video>
+          <div class="vid-controls">
+            <button class="btn-sm" id="vid-play-btn">▶</button>
+            <input type="range" class="scrubber" id="vid-scrubber" min="0" max="100" step="0.1" value="0">
+            <span class="time-display" id="vid-time">0:00 / 0:00</span>
+            <button class="btn-frame" id="vid-frame-btn">📷 Кадр</button>
+            <button class="btn-sm" id="vid-remove-btn">✕ Удалить</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- YouTube tab -->
+      <div id="vtab-yt" style="display:none;">
+        <input class="finput" type="url" id="yt-url" placeholder="https://www.youtube.com/watch?v=...">
+        <div id="yt-preview" style="margin-top:12px;display:none;">
+          <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:var(--r);">
+            <iframe id="yt-iframe" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;border-radius:var(--r);" allowfullscreen></iframe>
+          </div>
+        </div>
+        <div style="margin-top:8px;font-size:12px;color:var(--text2);">📷 Кадры из YouTube недоступны — добавь скриншоты вручную ниже</div>
+      </div>
+    </div>
+
+    <div class="section-title">🖼 СКРИНШОТЫ <span style="color:var(--text2);font-weight:400;">(до 5 шт.)</span></div>
+    <div class="card">
+      <div class="shots-row" id="shots-row">
+        <button class="btn-add-shot" id="btn-add-shot">+</button>
+      </div>
+      <input type="file" id="shot-file-input" accept="image/*" multiple style="display:none;">
+    </div>
+
+    <div class="section-title">📍 МЕТКА НА КАРТЕ</div>
+    <div class="card">
+      <div id="map-container">
+        <div class="map-wrap" id="map-wrap">
+          <img id="map-img" src="" alt="" style="display:none;">
+          <div id="map-placeholder" style="padding:32px;text-align:center;color:var(--text2);font-size:13px;">Сначала выбери карту</div>
+          <div class="map-marker" id="map-marker" style="display:none;"></div>
+        </div>
+        <div class="map-hint" id="map-hint">Кликни по карте чтобы поставить метку</div>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="btn-submit" disabled>⬆ Отправить лайнап</button>
+  </div>
+</div>
+
+<!-- Success screen -->
+<div id="success-screen" style="display:none;" class="center-screen">
+  <div class="auth-card success-card">
+    <div class="success-icon">✅</div>
+    <div class="success-title">Лайнап отправлен!</div>
+    <div class="success-sub">Он появится после проверки модератором.<br>Спасибо за вклад в базу лайнапов!</div>
+    <button class="btn-primary" id="btn-another">Отправить ещё один</button>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script type="module">
+import { initializeApp }                    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup,
+         signInWithEmailAndPassword, signOut, onAuthStateChanged }
+                                             from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, doc, collection, getDoc,
+         writeBatch, serverTimestamp }       from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const cfg = {
+  apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
+  authDomain:        'valorant-linemaps.firebaseapp.com',
+  projectId:         'valorant-linemaps',
+  storageBucket:     'valorant-linemaps.firebasestorage.app',
+  messagingSenderId: '288103111419',
+  appId:             '1:288103111419:web:daca10a760282d40996e5e',
+};
+
+const app  = initializeApp(cfg);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+// ── Utils ────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'i') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`; el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function fmtTime(s) {
+  if (!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+// ── Cloudinary ───────────────────────────────────────────────────────────────
+function compressImage(file) {
+  if (file.size < 300 * 1024) return Promise.resolve(file);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1280;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > MAX || h > MAX) { const s = MAX / Math.max(w,h); w = Math.round(w*s); h = Math.round(h*s); }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => { if (blob) resolve(blob); else reject(new Error('toBlob вернул null')); }, 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Ошибка загрузки изображения')); };
+    img.src = url;
+  });
+}
+
+function uploadToCloudinary(blob, onProgress) {
+  const fd = new FormData();
+  fd.append('file', blob, 'screenshot.jpg');
+  fd.append('upload_preset', '4343242');
+  fd.append('folder', 'lineups_screenshots');
+  let xhr;
+  const promise = new Promise((resolve, reject) => {
+    xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://api.cloudinary.com/v1_1/djxgwkbqn/image/upload');
+    xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText).secure_url); }
+        catch { reject(new Error('Неверный ответ Cloudinary')); }
+      } else { reject(new Error('Cloudinary ' + xhr.status)); }
+    };
+    xhr.onerror = () => reject(new Error('Сетевая ошибка'));
+    xhr.onabort = () => reject(new Error('canceled'));
+    xhr.send(fd);
+  });
+  promise.abort = () => xhr?.abort();
+  return promise;
+}
+
+function uploadVideoToCloudinary(file, onProgress) {
+  const fd = new FormData();
+  fd.append('file', file); fd.append('upload_preset', 'ml_default'); fd.append('folder', 'lineups_videos');
+  let xhr;
+  const promise = new Promise((resolve, reject) => {
+    xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://api.cloudinary.com/v1_1/dtz0ouvk0/video/upload');
+    xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText).secure_url); }
+        catch { reject(new Error('Неверный ответ Cloudinary')); }
+      } else { reject(new Error('Cloudinary ' + xhr.status)); }
+    };
+    xhr.onerror = () => reject(new Error('Сетевая ошибка'));
+    xhr.onabort = () => reject(new Error('canceled'));
+    xhr.send(fd);
+  });
+  promise.abort = () => xhr?.abort();
+  return promise;
+}
+
+// ── State ────────────────────────────────────────────────────────────────────
+let currentUser = null;
+let agentsList  = [];
+let mapsData    = [];
+let selectedAgent   = null;
+let selectedAbility = null;
+let selectedCategory = null;
+let selectedDifficulty = null;
+let markerX = null, markerY = null;
+let videoUrl = null;   // Cloudinary URL or YouTube URL
+let videoXhr = null;   // abort handle for in-progress upload
+let screenshots = [];  // [{localUrl, cloudUrl, uploading}]
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+onAuthStateChanged(auth, user => {
+  currentUser = user;
+  if (user) {
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('form-screen').style.display = '';
+    document.getElementById('success-screen').style.display = 'none';
+    document.getElementById('header-user').style.display = 'flex';
+    document.getElementById('user-name').textContent = user.displayName || user.email || 'Пользователь';
+    const av = document.getElementById('user-avatar');
+    if (user.photoURL) { av.src = user.photoURL; av.style.display = ''; }
+    if (!agentsList.length) loadAgents();
+    loadMaps();
+  } else {
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('form-screen').style.display = 'none';
+    document.getElementById('success-screen').style.display = 'none';
+    document.getElementById('header-user').style.display = 'none';
+  }
+});
+
+// Auth tabs
+document.getElementById('tab-google-btn').addEventListener('click', () => {
+  document.getElementById('tab-google-btn').classList.add('active');
+  document.getElementById('tab-email-btn').classList.remove('active');
+  document.getElementById('tab-google').style.display = '';
+  document.getElementById('tab-email').style.display = 'none';
+});
+document.getElementById('tab-email-btn').addEventListener('click', () => {
+  document.getElementById('tab-email-btn').classList.add('active');
+  document.getElementById('tab-google-btn').classList.remove('active');
+  document.getElementById('tab-email').style.display = '';
+  document.getElementById('tab-google').style.display = 'none';
+});
+
+document.getElementById('btn-google').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-google');
+  btn.disabled = true;
+  try {
+    await signInWithPopup(auth, new GoogleAuthProvider());
+  } catch (e) {
+    showAuthErr(e.message);
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btn-email-login').addEventListener('click', async () => {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-password').value;
+  if (!email || !pass) { showAuthErr('Заполни email и пароль'); return; }
+  const btn = document.getElementById('btn-email-login');
+  btn.disabled = true; btn.textContent = 'Вход…';
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch (e) {
+    showAuthErr(e.code === 'auth/invalid-credential' ? 'Неверный email или пароль' : e.message);
+    btn.disabled = false; btn.textContent = 'Войти';
+  }
+});
+
+document.getElementById('btn-signout').addEventListener('click', () => signOut(auth));
+
+function showAuthErr(msg) {
+  const el = document.getElementById('auth-err');
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ── Valorant API ─────────────────────────────────────────────────────────────
+async function loadAgents() {
+  try {
+    const res = await fetch('https://valorant-api.com/v1/agents?isPlayableCharacter=true&language=ru-RU');
+    const data = await res.json();
+    agentsList = (data.data || []).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    renderAgentDropdown();
+  } catch (e) {
+    toast('Не удалось загрузить агентов', 'e');
+  }
+}
+
+async function loadMaps() {
+  try {
+    const res = await fetch('https://valorant-api.com/v1/maps');
+    const data = await res.json();
+    mapsData = data.data || [];
+  } catch (_) {}
+}
+
+function renderAgentDropdown() {
+  const dd = document.getElementById('agent-dropdown');
+  dd.innerHTML = agentsList.map(a => `
+    <div class="agent-item" data-uuid="${esc(a.uuid)}">
+      <img src="${esc(a.displayIconSmall || '')}" alt="" onerror="this.style.display='none'">
+      <span>${esc(a.displayName)}</span>
+    </div>`).join('');
+  dd.querySelectorAll('.agent-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const agent = agentsList.find(a => a.uuid === item.dataset.uuid);
+      if (!agent) return;
+      selectAgent(agent);
+      closeAgentDropdown();
+    });
+  });
+}
+
+function selectAgent(agent) {
+  selectedAgent   = agent.displayName;
+  selectedAbility = null;
+  const btn = document.getElementById('agent-select-btn');
+  const label = document.getElementById('agent-btn-label');
+  const iconUrl = agent.displayIconSmall || '';
+  label.innerHTML = iconUrl
+    ? `<img src="${esc(iconUrl)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;"> ${esc(agent.displayName)}`
+    : esc(agent.displayName);
+  // abilities
+  const row = document.getElementById('abilities-row');
+  const abilities = (agent.abilities || []).filter(ab => ab.displayIcon && ab.slot !== 'Passive');
+  if (!abilities.length) { row.innerHTML = '<span style="color:var(--text2);font-size:13px;">Нет доступных абилок</span>'; return; }
+  row.innerHTML = abilities.map(ab => `
+    <button class="ability-btn" data-key="${esc(ab.slot)}" title="${esc(ab.displayName || '')}">
+      <img src="${esc(ab.displayIcon)}" alt="${esc(ab.displayName || '')}">
+      <span>${esc((ab.displayName || '').split(' ')[0])}</span>
+    </button>`).join('');
+  row.querySelectorAll('.ability-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      row.querySelectorAll('.ability-btn').forEach(x => x.classList.remove('selected'));
+      b.classList.add('selected');
+      selectedAbility = b.dataset.key;
+      updateMarkerIcon();
+      validateForm();
+    });
+  });
+  validateForm();
+}
+
+// Agent dropdown toggle
+const agentBtn = document.getElementById('agent-select-btn');
+const agentDD  = document.getElementById('agent-dropdown');
+agentBtn.addEventListener('click', () => {
+  const open = agentDD.style.display !== 'none';
+  agentDD.style.display = open ? 'none' : '';
+  agentBtn.classList.toggle('open', !open);
+});
+document.addEventListener('click', e => {
+  if (!document.querySelector('.agent-select-wrap').contains(e.target)) closeAgentDropdown();
+});
+function closeAgentDropdown() {
+  agentDD.style.display = 'none';
+  agentBtn.classList.remove('open');
+}
+
+// ── Category & Difficulty ────────────────────────────────────────────────────
+document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
+    b.classList.add('selected');
+    selectedCategory = b.dataset.val;
+    validateForm();
+  });
+});
+document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
+    b.classList.add('selected');
+    selectedDifficulty = b.dataset.val;
+    validateForm();
+  });
+});
+
+// ── Char counters ────────────────────────────────────────────────────────────
+document.getElementById('inp-title').addEventListener('input', e => {
+  document.getElementById('title-count').textContent = e.target.value.length;
+  validateForm();
+});
+document.getElementById('inp-desc').addEventListener('input', e => {
+  document.getElementById('desc-count').textContent = e.target.value.length;
+});
+document.getElementById('sel-map').addEventListener('change', () => {
+  loadMapMinimap();
+  validateForm();
+});
+
+// ── Video — file tab ─────────────────────────────────────────────────────────
+const dropZone   = document.getElementById('drop-zone');
+const vidInput   = document.getElementById('vid-file-input');
+const vidPlayer  = document.getElementById('vid-player');
+const vidScrubber = document.getElementById('vid-scrubber');
+const vidTimeEl  = document.getElementById('vid-time');
+const vidPlayBtn = document.getElementById('vid-play-btn');
+
+dropZone.addEventListener('click', () => vidInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleVideoFile(file);
+});
+vidInput.addEventListener('change', () => { if (vidInput.files[0]) handleVideoFile(vidInput.files[0]); });
+
+async function handleVideoFile(file) {
+  if (!file.type.startsWith('video/')) { toast('Выбери видеофайл', 'e'); return; }
+  if (file.size > 200 * 1024 * 1024) { toast('Видео превышает 200 МБ', 'e'); return; }
+  if (videoXhr) { videoXhr.abort(); videoXhr = null; }
+  videoUrl = null;
+  dropZone.style.display = 'none';
+  document.getElementById('vid-player-wrap').style.display = 'none';
+  const prog = document.getElementById('vid-upload-progress');
+  prog.style.display = '';
+  document.getElementById('vid-pct').textContent = '0%';
+  document.getElementById('vid-prog').style.width = '0%';
+
+  const upload = uploadVideoToCloudinary(file, pct => {
+    const p = Math.round(pct * 100);
+    document.getElementById('vid-pct').textContent = p + '%';
+    document.getElementById('vid-prog').style.width = p + '%';
+  });
+  videoXhr = upload;
+
+  document.getElementById('vid-cancel-btn').onclick = () => {
+    upload.abort();
+    prog.style.display = 'none';
+    dropZone.style.display = '';
+    videoUrl = null; videoXhr = null;
+    validateForm();
+  };
+
+  try {
+    const url = await upload;
+    videoUrl = url;
+    videoXhr = null;
+    prog.style.display = 'none';
+    vidPlayer.src = url;
+    document.getElementById('vid-player-wrap').style.display = '';
+    toast('Видео загружено ✅', 's');
+    validateForm();
+  } catch (e) {
+    if (e.message === 'canceled') return;
+    prog.style.display = 'none';
+    dropZone.style.display = '';
+    toast('Ошибка загрузки: ' + e.message, 'e');
+  }
+}
+
+// Video player controls
+vidPlayer.addEventListener('timeupdate', () => {
+  if (!vidPlayer.duration) return;
+  vidScrubber.value = (vidPlayer.currentTime / vidPlayer.duration) * 100;
+  vidTimeEl.textContent = fmtTime(vidPlayer.currentTime) + ' / ' + fmtTime(vidPlayer.duration);
+});
+vidPlayer.addEventListener('play',  () => { vidPlayBtn.textContent = '⏸'; });
+vidPlayer.addEventListener('pause', () => { vidPlayBtn.textContent = '▶'; });
+vidScrubber.addEventListener('input', () => {
+  vidPlayer.currentTime = (vidScrubber.value / 100) * vidPlayer.duration;
+});
+vidPlayBtn.addEventListener('click', () => vidPlayer.paused ? vidPlayer.play() : vidPlayer.pause());
+document.getElementById('vid-remove-btn').addEventListener('click', () => {
+  vidPlayer.src = '';
+  videoUrl = null;
+  document.getElementById('vid-player-wrap').style.display = 'none';
+  dropZone.style.display = '';
+  vidInput.value = '';
+  validateForm();
+});
+
+// Frame capture
+document.getElementById('vid-frame-btn').addEventListener('click', async () => {
+  if (!vidPlayer.videoWidth) { toast('Видео ещё не готово', 'i'); return; }
+  if (screenshots.length >= 5) { toast('Максимум 5 скриншотов', 'i'); return; }
+  const btn = document.getElementById('vid-frame-btn');
+  btn.disabled = true; btn.textContent = '⏳';
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = vidPlayer.videoWidth; canvas.height = vidPlayer.videoHeight;
+    canvas.getContext('2d').drawImage(vidPlayer, 0, 0);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+    const compressed = await compressImage(blob);
+    const localUrl = URL.createObjectURL(blob);
+    const entry = { localUrl, cloudUrl: null, uploading: true };
+    screenshots.push(entry);
+    renderScreenshots();
+    const url = await uploadToCloudinary(compressed);
+    entry.cloudUrl = url; entry.uploading = false;
+    renderScreenshots();
+    toast('Кадр добавлен ✅', 's');
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'e');
+  } finally {
+    btn.disabled = false; btn.textContent = '📷 Кадр';
+  }
+});
+
+// ── Video — YouTube tab ──────────────────────────────────────────────────────
+document.getElementById('vtab-file-btn').addEventListener('click', () => {
+  document.getElementById('vtab-file-btn').classList.add('active');
+  document.getElementById('vtab-yt-btn').classList.remove('active');
+  document.getElementById('vtab-file').style.display = '';
+  document.getElementById('vtab-yt').style.display = 'none';
+  videoUrl = null;
+  validateForm();
+});
+document.getElementById('vtab-yt-btn').addEventListener('click', () => {
+  document.getElementById('vtab-yt-btn').classList.add('active');
+  document.getElementById('vtab-file-btn').classList.remove('active');
+  document.getElementById('vtab-yt').style.display = '';
+  document.getElementById('vtab-file').style.display = 'none';
+  validateForm();
+});
+
+document.getElementById('yt-url').addEventListener('input', e => {
+  const val = e.target.value.trim();
+  const match = val.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  const preview = document.getElementById('yt-preview');
+  if (match) {
+    document.getElementById('yt-iframe').src = `https://www.youtube.com/embed/${match[1]}`;
+    preview.style.display = '';
+    videoUrl = val;
+  } else {
+    document.getElementById('yt-iframe').src = '';
+    preview.style.display = 'none';
+    videoUrl = null;
+  }
+  validateForm();
+});
+
+// ── Screenshots ──────────────────────────────────────────────────────────────
+document.getElementById('btn-add-shot').addEventListener('click', () => {
+  if (screenshots.length >= 5) { toast('Максимум 5 скриншотов', 'i'); return; }
+  document.getElementById('shot-file-input').click();
+});
+document.getElementById('shot-file-input').addEventListener('change', e => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  files.forEach(file => {
+    if (screenshots.length >= 5) { toast('Максимум 5 скриншотов', 'i'); return; }
+    if (!file.type.startsWith('image/')) return;
+    const localUrl = URL.createObjectURL(file);
+    const entry = { localUrl, cloudUrl: null, uploading: true };
+    screenshots.push(entry);
+    renderScreenshots();
+    compressImage(file).then(blob => uploadToCloudinary(blob)).then(url => {
+      entry.cloudUrl = url; entry.uploading = false;
+      renderScreenshots();
+    }).catch(err => {
+      toast('Ошибка загрузки фото: ' + err.message, 'e');
+      const idx = screenshots.indexOf(entry);
+      if (idx !== -1) screenshots.splice(idx, 1);
+      renderScreenshots();
+    });
+  });
+});
+
+function renderScreenshots() {
+  const row = document.getElementById('shots-row');
+  row.innerHTML = screenshots.map((s, i) => `
+    <div class="shot-item">
+      <img src="${esc(s.localUrl)}" alt="${s.uploading ? '⏳' : '✓'}" style="opacity:${s.uploading ? 0.5 : 1};">
+      <button class="rm" data-idx="${i}">✕</button>
+    </div>`).join('');
+  if (screenshots.length < 5) {
+    row.innerHTML += `<button class="btn-add-shot" id="btn-add-shot">+</button>`;
+    document.getElementById('btn-add-shot').addEventListener('click', () => {
+      if (screenshots.length >= 5) { toast('Максимум 5 скриншотов', 'i'); return; }
+      document.getElementById('shot-file-input').click();
+    });
+  }
+  row.querySelectorAll('.rm').forEach(b => {
+    b.addEventListener('click', () => {
+      const idx = parseInt(b.dataset.idx);
+      URL.revokeObjectURL(screenshots[idx].localUrl);
+      screenshots.splice(idx, 1);
+      renderScreenshots();
+    });
+  });
+}
+
+// ── Map minimap ──────────────────────────────────────────────────────────────
+function loadMapMinimap() {
+  const mapName = document.getElementById('sel-map').value;
+  const wrap = document.getElementById('map-wrap');
+  const img  = document.getElementById('map-img');
+  const ph   = document.getElementById('map-placeholder');
+  const marker = document.getElementById('map-marker');
+  if (!mapName) { img.style.display = 'none'; ph.style.display = ''; marker.style.display = 'none'; markerX = markerY = null; return; }
+  const mapData = mapsData.find(m => m.displayName === mapName);
+  if (mapData?.displayIcon) {
+    img.src = mapData.displayIcon;
+    img.style.display = 'block';
+    ph.style.display = 'none';
+    marker.style.display = 'none';
+    markerX = markerY = null;
+  } else {
+    img.style.display = 'none';
+    ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Миникарта не найдена</div>`;
+    ph.style.display = '';
+  }
+  validateForm();
+}
+
+document.getElementById('map-wrap').addEventListener('click', e => {
+  const wrap = document.getElementById('map-wrap');
+  const img  = document.getElementById('map-img');
+  if (img.style.display === 'none') return;
+  const rect = wrap.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width;
+  const y = (e.clientY - rect.top)  / rect.height;
+  markerX = Math.max(0, Math.min(1, x));
+  markerY = Math.max(0, Math.min(1, y));
+  const marker = document.getElementById('map-marker');
+  marker.style.display = '';
+  marker.style.left = (markerX * 100) + '%';
+  marker.style.top  = (markerY * 100) + '%';
+  document.getElementById('map-hint').textContent = `Метка: (${markerX.toFixed(3)}, ${markerY.toFixed(3)}) — кликни снова чтобы переставить`;
+  updateMarkerIcon();
+  validateForm();
+});
+
+function updateMarkerIcon() {
+  // Visual only — marker is a CSS dot, ability icon could be overlaid if needed
+}
+
+// ── Validation ───────────────────────────────────────────────────────────────
+function validateForm() {
+  const ok =
+    document.getElementById('sel-map').value &&
+    selectedAgent &&
+    selectedAbility &&
+    selectedCategory &&
+    selectedDifficulty &&
+    document.getElementById('inp-title').value.trim().length > 0 &&
+    markerX !== null;
+  document.getElementById('btn-submit').disabled = !ok;
+}
+
+// ── Submit ───────────────────────────────────────────────────────────────────
+document.getElementById('btn-submit').addEventListener('click', async () => {
+  if (!currentUser) { toast('Войди в аккаунт', 'e'); return; }
+
+  const title = document.getElementById('inp-title').value.trim();
+  const desc  = document.getElementById('inp-desc').value.trim();
+  const map   = document.getElementById('sel-map').value;
+
+  if (!map || !selectedAgent || !selectedAbility || !selectedCategory || !selectedDifficulty) {
+    toast('Заполни все обязательные поля', 'e'); return;
+  }
+  if (!title) { toast('Введи название', 'e'); return; }
+  if (title.length > 100) { toast('Название слишком длинное', 'e'); return; }
+  if (desc.length > 1000) { toast('Описание слишком длинное', 'e'); return; }
+  if (markerX === null) { toast('Поставь метку на карте', 'e'); return; }
+
+  // Check YouTube URL validity if YouTube tab active
+  const isYtTab = document.getElementById('vtab-yt-btn').classList.contains('active');
+  if (isYtTab && document.getElementById('yt-url').value.trim() && !videoUrl) {
+    toast('Ссылка YouTube невалидна', 'e'); return;
+  }
+
+  // Rate limit check
+  const uid = currentUser.uid;
+  try {
+    const rateDoc = await getDoc(doc(db, 'rate_limits', uid));
+    if (rateDoc.exists()) {
+      const lastAt = rateDoc.data()?.last_lineup_at?.toDate?.();
+      if (lastAt) {
+        const diffMin = (Date.now() - lastAt.getTime()) / 60000;
+        const cooldownMin = 10;
+        if (diffMin < cooldownMin) {
+          toast(`Подожди ещё ${Math.ceil(cooldownMin - diffMin)} мин.`, 'w');
+          return;
+        }
+      }
+    }
+  } catch (_) {}
+
+  // Check screenshots still uploading
+  if (screenshots.some(s => s.uploading)) {
+    toast('Подожди — фото ещё загружаются…', 'i'); return;
+  }
+
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true; btn.textContent = 'Отправка…';
+
+  try {
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'rate_limits', uid), { last_lineup_at: serverTimestamp() }, { merge: true });
+
+    const lineupRef = doc(collection(db, 'lineups'));
+    batch.set(lineupRef, {
+      map,
+      agent: selectedAgent,
+      ability: selectedAbility,
+      title,
+      description: desc,
+      video_url: videoUrl || null,
+      screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
+      position_x: markerX,
+      position_y: markerY,
+      category: selectedCategory,
+      difficulty: selectedDifficulty,
+      status: 'pending',
+      submitted_at: serverTimestamp(),
+      user_id: uid,
+      submitted_by: currentUser.displayName || currentUser.email || '',
+      patch_version: null,
+      reputation_up: 0,
+      reputation_down: 0,
+      is_outdated: false,
+      likes_count: 0,
+      source: 'web',
+    });
+
+    await batch.commit();
+    showSuccess();
+  } catch (e) {
+    toast('Ошибка отправки: ' + e.message, 'e');
+    btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
+  }
+});
+
+function showSuccess() {
+  document.getElementById('form-screen').style.display = 'none';
+  document.getElementById('success-screen').style.display = 'flex';
+}
+
+document.getElementById('btn-another').addEventListener('click', () => {
+  // Reset state
+  selectedAgent = null; selectedAbility = null; selectedCategory = null;
+  selectedDifficulty = null; markerX = null; markerY = null;
+  videoUrl = null; screenshots = [];
+  document.getElementById('sel-map').value = '';
+  document.getElementById('agent-btn-label').innerHTML = '— Выбери агента —';
+  document.getElementById('abilities-row').innerHTML = '<span style="color:var(--text2);font-size:13px;">Сначала выбери агента</span>';
+  document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('inp-title').value = '';
+  document.getElementById('inp-desc').value = '';
+  document.getElementById('title-count').textContent = '0';
+  document.getElementById('desc-count').textContent = '0';
+  document.getElementById('drop-zone').style.display = '';
+  document.getElementById('vid-player-wrap').style.display = 'none';
+  document.getElementById('vid-upload-progress').style.display = 'none';
+  document.getElementById('yt-url').value = '';
+  document.getElementById('yt-preview').style.display = 'none';
+  document.getElementById('map-img').style.display = 'none';
+  document.getElementById('map-placeholder').style.display = '';
+  document.getElementById('map-marker').style.display = 'none';
+  document.getElementById('map-hint').textContent = 'Кликни по карте чтобы поставить метку';
+  renderScreenshots();
+  document.getElementById('success-screen').style.display = 'none';
+  document.getElementById('form-screen').style.display = '';
+  document.getElementById('btn-submit').disabled = true;
+  document.getElementById('btn-submit').textContent = '⬆ Отправить лайнап';
+  window.scrollTo(0, 0);
+});
+</script>
+</body>
+</html>
