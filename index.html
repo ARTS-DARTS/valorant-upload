@@ -51,7 +51,6 @@
     .btn-primary:disabled { opacity: .4; cursor: default; }
     .auth-err { color: var(--red); font-size: 12px; margin-top: 10px; text-align: center; display: none; }
 
-    .main { max-width: 680px; margin: 0 auto; padding: 24px 16px 60px; }
     .section-title { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--primary); margin-bottom: 8px; margin-top: 24px; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; margin-bottom: 14px; }
     select.finput { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; cursor: pointer; }
@@ -134,9 +133,36 @@
     .toast.w { background: #451a03; color: #fed7aa; border: 1px solid #c2410c; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
+    /* Two-column layout: form + stats sidebar */
+    .form-layout { display: flex; align-items: flex-start; gap: 24px; max-width: 940px; margin: 0 auto; padding: 0 16px; }
+    .main { flex: 1; min-width: 0; padding: 24px 0 60px; }
+
+    /* Stats sidebar */
+    .stats-sidebar { width: 220px; flex-shrink: 0; padding-top: 24px; position: sticky; top: 70px; }
+    .stats-sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--primary); margin-bottom: 10px; }
+    .sidebar-row { display: flex; flex-direction: column; gap: 10px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+    .stat-icon { font-size: 22px; flex-shrink: 0; }
+    .stat-info { flex: 1; min-width: 0; }
+    .stat-count { font-size: 26px; font-weight: 800; line-height: 1; color: var(--text1); }
+    .stat-label { font-size: 11px; color: var(--text2); margin-top: 2px; font-weight: 600; letter-spacing: .3px; }
+    .stat-card.s-pending  .stat-count { color: var(--orange); }
+    .stat-card.s-approved .stat-count { color: var(--green);  }
+    .stat-card.s-total    .stat-count { color: var(--primary); }
+    .stats-loader { text-align: center; color: var(--text2); font-size: 12px; padding: 20px 0; }
+
+    @media (max-width: 720px) {
+      .form-layout { flex-direction: column; gap: 0; padding: 0 10px; }
+      .stats-sidebar { width: 100%; position: static; padding-top: 16px; padding-bottom: 0; }
+      .stats-sidebar-title { margin-bottom: 8px; }
+      .sidebar-row { flex-direction: row; }
+      .stat-card { flex: 1; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; }
+      .stat-icon { font-size: 18px; }
+      .stat-count { font-size: 22px; }
+      .main { padding: 16px 0 60px; width: 100%; }
+    }
     @media (max-width: 500px) {
       .auth-card { padding: 28px 18px; }
-      .main { padding: 16px 10px 60px; }
     }
   </style>
 </head>
@@ -185,6 +211,7 @@
 
 <!-- Upload form -->
 <div id="form-screen" style="display:none;">
+  <div class="form-layout">
   <div class="main">
     <div class="section-title">🗺 КАРТА</div>
     <div class="card">
@@ -309,7 +336,35 @@
     </div>
 
     <button class="btn-submit" id="btn-submit" disabled>⬆ Отправить лайнап</button>
-  </div>
+  </div><!-- /.main -->
+  <aside class="stats-sidebar" id="stats-sidebar">
+    <div class="stats-sidebar-title">МОЯ СТАТИСТИКА</div>
+    <div class="stats-loader" id="stats-loader">Загрузка…</div>
+    <div id="stats-cards" class="sidebar-row" style="display:none;">
+      <div class="stat-card s-total">
+        <div class="stat-icon">📤</div>
+        <div class="stat-info">
+          <div class="stat-count" id="stat-total">—</div>
+          <div class="stat-label">Отправлено</div>
+        </div>
+      </div>
+      <div class="stat-card s-approved">
+        <div class="stat-icon">✅</div>
+        <div class="stat-info">
+          <div class="stat-count" id="stat-approved">—</div>
+          <div class="stat-label">Принято</div>
+        </div>
+      </div>
+      <div class="stat-card s-pending">
+        <div class="stat-icon">⏳</div>
+        <div class="stat-info">
+          <div class="stat-count" id="stat-pending">—</div>
+          <div class="stat-label">На рассмотрении</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+  </div><!-- /.form-layout -->
 </div>
 
 <!-- Success screen -->
@@ -330,7 +385,8 @@ import { getAuth, GoogleAuthProvider, signInWithPopup,
          signInWithEmailAndPassword, signOut, onAuthStateChanged }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, doc, collection, getDoc,
-         writeBatch, serverTimestamp }       from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+         writeBatch, serverTimestamp, onSnapshot,
+         query, where }                      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -443,6 +499,40 @@ let videoUrl = null;
 let videoXhr = null;
 let screenshots = [];
 
+// ── Stats sidebar ─────────────────────────────────────────────────────────────
+let _statsUnsub = null;
+
+function _subscribeStats(uid) {
+  if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
+  const q = query(collection(db, 'lineups'), where('user_id', '==', uid));
+  _statsUnsub = onSnapshot(q, snap => {
+    let total = 0, approved = 0, pending = 0;
+    snap.forEach(d => {
+      total++;
+      const s = d.data().status;
+      if (s === 'approved') approved++;
+      else if (s === 'pending' || !s) pending++;
+    });
+    document.getElementById('stat-total').textContent    = total;
+    document.getElementById('stat-approved').textContent = approved;
+    document.getElementById('stat-pending').textContent  = pending;
+    document.getElementById('stats-loader').style.display = 'none';
+    document.getElementById('stats-cards').style.display  = 'flex';
+  }, () => {
+    document.getElementById('stats-loader').textContent = 'Ошибка загрузки';
+  });
+}
+
+function _unsubscribeStats() {
+  if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
+  document.getElementById('stats-loader').style.display = '';
+  document.getElementById('stats-loader').textContent   = 'Загрузка…';
+  document.getElementById('stats-cards').style.display  = 'none';
+  ['stat-total','stat-approved','stat-pending'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, user => {
   currentUser = user;
@@ -452,11 +542,13 @@ onAuthStateChanged(auth, user => {
     document.getElementById('success-screen').style.display = 'none';
     document.getElementById('header-user').style.display = 'flex';
     document.getElementById('user-name').textContent = user.displayName || user.email || 'Пользователь';
+    _subscribeStats(user.uid);
     const av = document.getElementById('user-avatar');
     if (user.photoURL) { av.src = user.photoURL; av.style.display = ''; }
     if (!agentsList.length) loadAgents();
     loadMaps();
   } else {
+    _unsubscribeStats();
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('form-screen').style.display = 'none';
     document.getElementById('success-screen').style.display = 'none';
@@ -517,6 +609,7 @@ async function loadAgents() {
     const data = await res.json();
     agentsList = (data.data || []).sort((a, b) => a.displayName.localeCompare(b.displayName));
     renderAgentsGrid();
+    _restoreDraft();
   } catch (e) {
     toast('Не удалось загрузить агентов', 'e');
   }
@@ -569,7 +662,7 @@ function selectAgent(agent) {
       b.classList.add('selected');
       selectedAbility = b.dataset.key;
       updateMarkerIcon();
-      validateForm();
+      validateForm(); _saveDraft();
     });
   });
   validateForm();
@@ -581,7 +674,7 @@ document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => {
     document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
     b.classList.add('selected');
     selectedCategory = b.dataset.val;
-    validateForm();
+    validateForm(); _saveDraft();
   });
 });
 document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => {
@@ -589,21 +682,22 @@ document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => {
     document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
     b.classList.add('selected');
     selectedDifficulty = b.dataset.val;
-    validateForm();
+    validateForm(); _saveDraft();
   });
 });
 
 // ── Char counters ─────────────────────────────────────────────────────────────
 document.getElementById('inp-title').addEventListener('input', e => {
   document.getElementById('title-count').textContent = e.target.value.length;
-  validateForm();
+  validateForm(); _saveDraft();
 });
 document.getElementById('inp-desc').addEventListener('input', e => {
   document.getElementById('desc-count').textContent = e.target.value.length;
+  _saveDraft();
 });
 document.getElementById('sel-map').addEventListener('change', () => {
   loadMapMinimap();
-  validateForm();
+  validateForm(); _saveDraft();
 });
 
 // ── Video — file tab ──────────────────────────────────────────────────────────
@@ -660,7 +754,7 @@ async function handleVideoFile(file) {
     vidPlayer.src = url;
     document.getElementById('vid-player-wrap').style.display = '';
     toast('Видео загружено ✅', 's');
-    validateForm();
+    validateForm(); _saveDraft();
   } catch (e) {
     if (e.message === 'canceled') return;
     prog.style.display = 'none';
@@ -686,7 +780,7 @@ document.getElementById('vid-remove-btn').addEventListener('click', () => {
   document.getElementById('vid-player-wrap').style.display = 'none';
   dropZone.style.display = '';
   vidInput.value = '';
-  validateForm();
+  validateForm(); _saveDraft();
 });
 
 // Frame capture — pause first so the frame is stable, set crossOrigin before src
@@ -710,7 +804,7 @@ document.getElementById('vid-frame-btn').addEventListener('click', async () => {
     renderScreenshots();
     const url = await uploadToCloudinary(compressed);
     entry.cloudUrl = url; entry.uploading = false;
-    renderScreenshots();
+    renderScreenshots(); _saveDraft();
     toast('Кадр добавлен ✅', 's');
   } catch (e) {
     toast('Ошибка: ' + e.message, 'e');
@@ -762,7 +856,7 @@ document.getElementById('shot-file-input').addEventListener('change', e => {
     renderScreenshots();
     compressImage(file).then(blob => uploadToCloudinary(blob)).then(url => {
       entry.cloudUrl = url; entry.uploading = false;
-      renderScreenshots();
+      renderScreenshots(); _saveDraft();
     }).catch(err => {
       toast('Ошибка загрузки фото: ' + err.message, 'e');
       const idx = screenshots.indexOf(entry);
@@ -789,9 +883,9 @@ function renderScreenshots() {
   row.querySelectorAll('.rm').forEach(b => {
     b.addEventListener('click', () => {
       const idx = parseInt(b.dataset.idx);
-      URL.revokeObjectURL(screenshots[idx].localUrl);
+      if (screenshots[idx].localUrl?.startsWith('blob:')) URL.revokeObjectURL(screenshots[idx].localUrl);
       screenshots.splice(idx, 1);
-      renderScreenshots();
+      renderScreenshots(); _saveDraft();
     });
   });
 }
@@ -859,8 +953,8 @@ function setMapMode(mode) {
   document.getElementById('traj-clear').style.display = mode === 'trajectory' ? '' : 'none';
 }
 window.setMapMode = setMapMode;
-window.undoTraj  = function() { trajectoryPoints.pop(); renderTrajectory(); };
-window.clearTraj = function() { trajectoryPoints = []; renderTrajectory(); };
+window.undoTraj  = function() { trajectoryPoints.pop(); renderTrajectory(); _saveDraft(); };
+window.clearTraj = function() { trajectoryPoints = []; renderTrajectory(); _saveDraft(); };
 
 document.getElementById('map-wrap').addEventListener('click', e => {
   const img = document.getElementById('map-img');
@@ -881,7 +975,7 @@ document.getElementById('map-wrap').addEventListener('click', e => {
     trajectoryPoints.push({ x, y });
     renderTrajectory();
   }
-  validateForm();
+  validateForm(); _saveDraft();
 });
 
 function renderTrajectory() {
@@ -935,6 +1029,112 @@ function updateMarkerIcon() {
   } else {
     img.style.display = 'none';
   }
+}
+
+// ── Draft persistence ─────────────────────────────────────────────────────────
+const _DRAFT_KEY = 'vl_lineup_draft';
+
+function _saveDraft() {
+  try {
+    localStorage.setItem(_DRAFT_KEY, JSON.stringify({
+      map:        document.getElementById('sel-map')?.value || '',
+      agent:      selectedAgent,
+      ability:    selectedAbility,
+      category:   selectedCategory,
+      difficulty: selectedDifficulty,
+      title:      document.getElementById('inp-title')?.value || '',
+      desc:       document.getElementById('inp-desc')?.value || '',
+      markerX, markerY, mapMode,
+      trajectory: trajectoryPoints,
+      videoUrl,
+      screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
+    }));
+  } catch(_) {}
+}
+
+function _clearDraft() {
+  try { localStorage.removeItem(_DRAFT_KEY); } catch(_) {}
+}
+
+function _restoreDraft() {
+  let d;
+  try { d = JSON.parse(localStorage.getItem(_DRAFT_KEY)); } catch(_) {}
+  if (!d) return;
+
+  // Text fields
+  if (d.title) { const el = document.getElementById('inp-title'); if (el) { el.value = d.title; document.getElementById('title-count').textContent = d.title.length; } }
+  if (d.desc)  { const el = document.getElementById('inp-desc');  if (el) { el.value = d.desc;  document.getElementById('desc-count').textContent  = d.desc.length;  } }
+
+  // Category & difficulty
+  if (d.category) {
+    const btn = document.querySelector(`#cat-row .pill-btn[data-val="${d.category}"]`);
+    if (btn) { document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); selectedCategory = d.category; }
+  }
+  if (d.difficulty) {
+    const btn = document.querySelector(`#diff-row .pill-btn[data-val="${d.difficulty}"]`);
+    if (btn) { document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); selectedDifficulty = d.difficulty; }
+  }
+
+  // Map + marker (load minimap, then place marker after image loads)
+  if (d.map) {
+    const sel = document.getElementById('sel-map');
+    if (sel) sel.value = d.map;
+    const img = document.getElementById('map-img');
+    const ph  = document.getElementById('map-placeholder');
+    const apiUrl = mapsData.find(m => m.displayName === d.map)?.displayIcon;
+    const url    = apiUrl || MAP_FALLBACK_URLS[d.map];
+    if (url && img) {
+      img.crossOrigin = 'anonymous'; img.src = url; img.style.display = 'block';
+      if (ph) ph.style.display = 'none';
+      const afterLoad = () => {
+        if (d.mapMode) setMapMode(d.mapMode);
+        if (d.trajectory?.length) { trajectoryPoints = d.trajectory; renderTrajectory(); }
+        if (d.markerX != null) {
+          markerX = d.markerX; markerY = d.markerY;
+          const marker = document.getElementById('map-marker');
+          if (marker) { marker.style.display = ''; marker.style.left = (d.markerX*100)+'%'; marker.style.top = (d.markerY*100)+'%'; }
+          updateMarkerIcon();
+        }
+        validateForm();
+      };
+      if (img.complete && img.naturalWidth) afterLoad();
+      else img.addEventListener('load', afterLoad, { once: true });
+    }
+  }
+
+  // Agent
+  if (d.agent && agentsList.length) {
+    const agent = agentsList.find(a => a.displayName === d.agent);
+    if (agent) {
+      const card = document.querySelector(`.agent-card[data-uuid="${agent.uuid}"]`);
+      if (card) card.classList.add('selected');
+      selectAgent(agent);
+      if (d.ability) {
+        selectedAbility = d.ability;
+        const abilBtn = document.querySelector(`.ability-btn[data-key="${d.ability}"]`);
+        if (abilBtn) { document.querySelectorAll('.ability-btn').forEach(b => b.classList.remove('selected')); abilBtn.classList.add('selected'); updateMarkerIcon(); }
+      }
+    }
+  }
+
+  // Video
+  if (d.videoUrl) {
+    videoUrl = d.videoUrl;
+    const dropZ = document.getElementById('drop-zone');
+    const wrap  = document.getElementById('vid-player-wrap');
+    const vid   = document.getElementById('vid-player');
+    if (dropZ) dropZ.style.display = 'none';
+    if (wrap)  wrap.style.display = '';
+    if (vid)   { vid.crossOrigin = 'anonymous'; vid.src = d.videoUrl; }
+  }
+
+  // Screenshots (already uploaded — use cloud URL for display)
+  if (d.screenshots?.length) {
+    screenshots = d.screenshots.map(url => ({ localUrl: url, cloudUrl: url, uploading: false }));
+    renderScreenshots();
+  }
+
+  validateForm();
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -1026,11 +1226,13 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
 });
 
 function showSuccess() {
+  _clearDraft();
   document.getElementById('form-screen').style.display = 'none';
   document.getElementById('success-screen').style.display = 'flex';
 }
 
 document.getElementById('btn-another').addEventListener('click', () => {
+  _clearDraft();
   selectedAgent = null; selectedAbility = null;
   selectedCategory = null; selectedDifficulty = null;
   markerX = null; markerY = null;
