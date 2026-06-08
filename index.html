@@ -141,11 +141,14 @@
     /* Stats sidebar */
     .stats-sidebar { width: 220px; flex-shrink: 0; padding-top: 24px; position: sticky; top: 70px; }
     .stats-sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--primary); margin-bottom: 10px; }
-    .sidebar-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 12px; }
-    .stat-count { font-size: 24px; font-weight: 800; line-height: 1; color: var(--text); margin-top: 4px; }
-    .stat-label { font-size: 10px; color: var(--text2); font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
+    .sidebar-row { display: flex; flex-direction: column; gap: 8px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 11px 12px; }
+    .stat-counts-row { display: flex; gap: 7px; }
+    .stat-counts-row .stat-card { flex: 1; min-width: 0; }
+    .stat-label { font-size: 9px; color: var(--text2); font-weight: 700; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 4px; }
+    .stat-count { font-size: 22px; font-weight: 800; line-height: 1; color: var(--text); }
     .stat-card.s-approved .stat-count { color: var(--green); }
+    .stat-card.s-pending  .stat-count { color: var(--orange); }
     .stat-card.s-rejected .stat-count { color: var(--red); }
     .stats-loader { text-align: center; color: var(--text2); font-size: 12px; padding: 20px 0; }
 
@@ -153,8 +156,8 @@
       .form-layout { flex-direction: column; gap: 0; padding: 0 10px; }
       .stats-sidebar { width: 100%; position: static; padding-top: 16px; padding-bottom: 0; }
       .stats-sidebar-title { margin-bottom: 8px; }
-      .sidebar-row { grid-template-columns: repeat(4, 1fr); gap: 8px; }
-      .stat-count { font-size: 20px; }
+      .stat-counts-row .stat-card { padding: 9px 8px; }
+      .stat-count { font-size: 18px; }
       .main { padding: 16px 0 60px; width: 100%; }
     }
     @media (max-width: 500px) {
@@ -337,25 +340,31 @@
     <div class="stats-sidebar-title">МОЯ СТАТИСТИКА</div>
     <div class="stats-loader" id="stats-loader">Загрузка…</div>
     <div id="stats-cards" class="sidebar-row" style="display:none;">
+      <!-- Status card: level + cooldown in one row -->
       <div class="stat-card">
-        <div class="stat-label">МОЙ УРОВЕНЬ</div>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
-          <span id="level-icon" style="font-size:18px;line-height:1;">—</span>
-          <span id="level-name" style="font-weight:800;font-size:13px;color:var(--primary);">—</span>
+        <div class="stat-label">МОЙ СТАТУС</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:5px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:5px;">
+            <span id="level-icon" style="font-size:16px;line-height:1;flex-shrink:0;">—</span>
+            <span id="level-name" style="font-weight:800;font-size:13px;">—</span>
+          </div>
+          <span id="cooldown-badge" style="font-size:11px;font-weight:700;font-family:monospace;letter-spacing:.3px;color:var(--green);white-space:nowrap;">—</span>
         </div>
       </div>
-      <div class="stat-card s-rejected">
-        <div class="stat-label">ОТКЛОНЕНО</div>
-        <div class="stat-count" id="stat-rejected">—</div>
-      </div>
-      <div class="stat-card s-approved">
-        <div class="stat-label">ОДОБРЕНО</div>
-        <div class="stat-count" id="stat-approved">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">КУЛДАУН</div>
-        <div id="cooldown-text" style="font-weight:700;font-size:12px;color:var(--green);margin-top:4px;">✓ Можно</div>
-        <div id="cooldown-timer" style="font-size:11px;color:var(--text2);display:none;margin-top:2px;font-family:monospace;letter-spacing:.5px;"></div>
+      <!-- 3 count cards -->
+      <div class="stat-counts-row">
+        <div class="stat-card s-approved">
+          <div class="stat-label">ОДОБРЕНО</div>
+          <div class="stat-count" id="stat-approved">—</div>
+        </div>
+        <div class="stat-card s-pending">
+          <div class="stat-label">В ОЖИД.</div>
+          <div class="stat-count" id="stat-pending">—</div>
+        </div>
+        <div class="stat-card s-rejected">
+          <div class="stat-label">ОТКЛ.</div>
+          <div class="stat-count" id="stat-rejected">—</div>
+        </div>
       </div>
     </div>
   </aside>
@@ -522,25 +531,20 @@ function _clearCooldownTimer() {
 
 function _showCooldownReady() {
   _clearCooldownTimer();
-  const textEl = document.getElementById('cooldown-text');
-  const timerEl = document.getElementById('cooldown-timer');
-  if (textEl)  { textEl.textContent = '✓ Можно'; textEl.style.color = 'var(--green)'; }
-  if (timerEl) timerEl.style.display = 'none';
+  const badge = document.getElementById('cooldown-badge');
+  if (badge) { badge.textContent = '✓ Можно'; badge.style.color = 'var(--green)'; }
 }
 
 function _startCooldownTimer(remainMs) {
   _clearCooldownTimer();
-  const textEl  = document.getElementById('cooldown-text');
-  const timerEl = document.getElementById('cooldown-timer');
-  if (textEl)  { textEl.textContent = '⏳ КД активен'; textEl.style.color = 'var(--orange)'; }
-  if (timerEl) timerEl.style.display = 'block';
+  const badge = document.getElementById('cooldown-badge');
   const startTime = Date.now();
   function tick() {
     const rem = remainMs - (Date.now() - startTime);
     if (rem <= 0) { _showCooldownReady(); return; }
     const mins = Math.floor(rem / 60000);
     const secs = Math.floor((rem % 60000) / 1000);
-    if (timerEl) timerEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+    if (badge) { badge.textContent = `КД: ${mins}:${String(secs).padStart(2, '0')}`; badge.style.color = 'var(--orange)'; }
   }
   tick();
   _cooldownInterval = setInterval(tick, 1000);
@@ -561,17 +565,19 @@ function _subscribeStats(uid) {
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
   const q = query(collection(db, 'lineups'), where('user_id', '==', uid));
   _statsUnsub = onSnapshot(q, snap => {
-    let approved = 0, rejected = 0;
+    let approved = 0, pending = 0, rejected = 0;
     snap.forEach(d => {
       const s = d.data().status;
       if (s === 'approved') approved++;
       else if (s === 'rejected') rejected++;
+      else pending++;
     });
     document.getElementById('stat-approved').textContent = approved;
+    document.getElementById('stat-pending').textContent  = pending;
     document.getElementById('stat-rejected').textContent = rejected;
     _updateLevelDisplay(approved);
     document.getElementById('stats-loader').style.display = 'none';
-    document.getElementById('stats-cards').style.display  = 'grid';
+    document.getElementById('stats-cards').style.display  = 'flex';
   }, () => {
     document.getElementById('stats-loader').textContent = 'Ошибка загрузки';
   });
@@ -583,7 +589,7 @@ function _unsubscribeStats() {
   document.getElementById('stats-loader').style.display = '';
   document.getElementById('stats-loader').textContent   = 'Загрузка…';
   document.getElementById('stats-cards').style.display  = 'none';
-  ['stat-approved', 'stat-rejected'].forEach(id => {
+  ['stat-approved', 'stat-pending', 'stat-rejected'].forEach(id => {
     document.getElementById(id).textContent = '—';
   });
   const nameEl = document.getElementById('level-name');
