@@ -118,8 +118,9 @@
     .btn-submit:hover { opacity: .88; }
     .btn-submit:disabled { opacity: .4; cursor: default; }
 
-    /* Success */
-    .success-card { text-align: center; }
+    /* Success modal */
+    .success-overlay { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); background: rgba(10,14,26,.55); animation: fadeIn .22s ease; }
+    .success-card { background: var(--surface); border: 1px solid rgba(34,197,94,.25); border-radius: 16px; padding: 44px 36px; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 24px 64px rgba(0,0,0,.6); }
     .success-icon { font-size: 56px; margin-bottom: 16px; }
     .success-title { font-size: 22px; font-weight: 800; color: var(--green); margin-bottom: 8px; }
     .success-sub { color: var(--text2); font-size: 14px; margin-bottom: 28px; line-height: 1.6; }
@@ -375,9 +376,9 @@
   </div><!-- /.form-layout -->
 </div>
 
-<!-- Success screen -->
-<div id="success-screen" style="display:none;" class="center-screen">
-  <div class="auth-card success-card">
+<!-- Success modal (overlay over form) -->
+<div id="success-screen" style="display:none;" class="success-overlay">
+  <div class="success-card">
     <div class="success-icon">✅</div>
     <div class="success-title">Лайнап отправлен!</div>
     <div class="success-sub">Он появится после проверки модератором.<br>Спасибо за вклад в базу лайнапов!</div>
@@ -549,7 +550,7 @@ onAuthStateChanged(auth, user => {
   if (user) {
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('form-screen').style.display = '';
-    document.getElementById('success-screen').style.display = 'none';
+    document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'flex';
     document.getElementById('user-name').textContent = user.displayName || user.email || 'Пользователь';
     _subscribeStats(user.uid);
@@ -561,7 +562,7 @@ onAuthStateChanged(auth, user => {
     _unsubscribeStats();
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('form-screen').style.display = 'none';
-    document.getElementById('success-screen').style.display = 'none';
+    document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'none';
   }
 });
@@ -1237,7 +1238,6 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
 
 function showSuccess() {
   _clearDraft();
-  document.getElementById('form-screen').style.display = 'none';
   document.getElementById('success-screen').style.display = 'flex';
 }
 
@@ -1270,7 +1270,6 @@ document.getElementById('btn-another').addEventListener('click', () => {
   setMapMode('position');
   renderScreenshots();
   document.getElementById('success-screen').style.display = 'none';
-  document.getElementById('form-screen').style.display = '';
   document.getElementById('btn-submit').disabled = true;
   document.getElementById('btn-submit').textContent = '⬆ Отправить лайнап';
   window.scrollTo(0, 0);
