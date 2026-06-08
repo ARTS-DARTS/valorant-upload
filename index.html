@@ -149,6 +149,7 @@
     .stat-card.s-pending  .stat-count { color: var(--orange); }
     .stat-card.s-approved .stat-count { color: var(--green);  }
     .stat-card.s-total    .stat-count { color: var(--primary); }
+    .stat-card.s-rejected .stat-count { color: var(--red); }
     .stats-loader { text-align: center; color: var(--text2); font-size: 12px; padding: 20px 0; }
 
     @media (max-width: 720px) {
@@ -362,6 +363,13 @@
           <div class="stat-label">На рассмотрении</div>
         </div>
       </div>
+      <div class="stat-card s-rejected">
+        <div class="stat-icon">❌</div>
+        <div class="stat-info">
+          <div class="stat-count" id="stat-rejected">—</div>
+          <div class="stat-label">Отклонено</div>
+        </div>
+      </div>
     </div>
   </aside>
   </div><!-- /.form-layout -->
@@ -506,16 +514,18 @@ function _subscribeStats(uid) {
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
   const q = query(collection(db, 'lineups'), where('user_id', '==', uid));
   _statsUnsub = onSnapshot(q, snap => {
-    let total = 0, approved = 0, pending = 0;
+    let total = 0, approved = 0, pending = 0, rejected = 0;
     snap.forEach(d => {
       total++;
       const s = d.data().status;
       if (s === 'approved') approved++;
-      else if (s === 'pending' || !s) pending++;
+      else if (s === 'rejected') rejected++;
+      else pending++;
     });
     document.getElementById('stat-total').textContent    = total;
     document.getElementById('stat-approved').textContent = approved;
     document.getElementById('stat-pending').textContent  = pending;
+    document.getElementById('stat-rejected').textContent = rejected;
     document.getElementById('stats-loader').style.display = 'none';
     document.getElementById('stats-cards').style.display  = 'flex';
   }, () => {
@@ -528,7 +538,7 @@ function _unsubscribeStats() {
   document.getElementById('stats-loader').style.display = '';
   document.getElementById('stats-loader').textContent   = 'Загрузка…';
   document.getElementById('stats-cards').style.display  = 'none';
-  ['stat-total','stat-approved','stat-pending'].forEach(id => {
+  ['stat-total','stat-approved','stat-pending','stat-rejected'].forEach(id => {
     document.getElementById(id).textContent = '—';
   });
 }
