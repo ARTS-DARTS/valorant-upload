@@ -407,9 +407,11 @@ const db   = getFirestore(app);
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 function toast(msg, type = 'i') {
+  const container = document.getElementById('toasts');
+  if (container.children.length >= 4) container.firstChild?.remove();
   const el = document.createElement('div');
   el.className = `toast ${type}`; el.textContent = msg;
-  document.getElementById('toasts').appendChild(el);
+  container.appendChild(el);
   setTimeout(() => el.remove(), 3200);
 }
 function esc(s) {
@@ -803,7 +805,9 @@ async function handleVideoFile(file) {
   });
   videoXhr = upload;
 
+  let _cancelled = false;
   document.getElementById('vid-cancel-btn').onclick = () => {
+    _cancelled = true;
     upload.abort();
     prog.style.display = 'none';
     dropZone.style.display = '';
@@ -813,6 +817,7 @@ async function handleVideoFile(file) {
 
   try {
     const url = await upload;
+    if (_cancelled) return;
     videoUrl = url;
     videoXhr = null;
     prog.style.display = 'none';
@@ -823,6 +828,7 @@ async function handleVideoFile(file) {
     validateForm(); _saveDraft();
   } catch (e) {
     if (e.message === 'canceled') return;
+    videoXhr = null;
     prog.style.display = 'none';
     dropZone.style.display = '';
     toast('Ошибка загрузки: ' + e.message, 'e');
@@ -863,6 +869,7 @@ document.getElementById('vid-frame-btn').addEventListener('click', async () => {
     canvas.height = vidPlayer.videoHeight;
     canvas.getContext('2d').drawImage(vidPlayer, 0, 0);
     const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+    if (!blob) throw new Error('Не удалось захватить кадр');
     const compressed = await compressImage(blob);
     const localUrl = URL.createObjectURL(blob);
     const entry = { localUrl, cloudUrl: null, uploading: true };
@@ -926,7 +933,10 @@ document.getElementById('shot-file-input').addEventListener('change', e => {
     }).catch(err => {
       toast('Ошибка загрузки фото: ' + err.message, 'e');
       const idx = screenshots.indexOf(entry);
-      if (idx !== -1) screenshots.splice(idx, 1);
+      if (idx !== -1) {
+        if (entry.localUrl?.startsWith('blob:')) URL.revokeObjectURL(entry.localUrl);
+        screenshots.splice(idx, 1);
+      }
       renderScreenshots();
     });
   });
@@ -1296,6 +1306,11 @@ function showSuccess() {
   document.getElementById('success-screen').style.display = 'flex';
   if (currentUser) _updateCooldown(currentUser.uid);
 }
+
+window.addEventListener('beforeunload', () => {
+  if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
+  _clearCooldownTimer();
+});
 
 document.getElementById('btn-another').addEventListener('click', () => {
   _clearDraft();
