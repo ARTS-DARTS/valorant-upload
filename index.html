@@ -135,7 +135,7 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
     /* Two-column layout: form + stats sidebar */
-    .form-layout { display: grid; grid-template-columns: 1fr 280px; gap: 24px; align-items: start; max-width: 940px; margin: 0 auto; padding: 0 16px; }
+    .form-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; max-width: 980px; margin: 0 auto; padding: 0 16px; }
     .main { flex: 1; min-width: 0; padding: 24px 0 60px; }
 
     /* Stats sidebar */
@@ -145,7 +145,7 @@
     .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 11px 12px; }
     .stat-counts-row { display: flex; gap: 7px; align-items: stretch; }
     .stat-counts-row .stat-card { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
-    .stat-label { font-size: 9px; color: var(--text2); font-weight: 700; letter-spacing: .5px; text-transform: uppercase; min-height: 22px; display: flex; align-items: flex-start; }
+    .stat-label { font-size: 9px; color: var(--text2); font-weight: 700; letter-spacing: 0; text-transform: uppercase; min-height: 22px; display: flex; align-items: flex-start; }
     .stat-count { font-size: 22px; font-weight: 800; line-height: 1; color: var(--text); margin-top: auto; }
     .stat-card.s-approved .stat-count { color: var(--green); }
     .stat-card.s-pending  .stat-count { color: var(--orange); }
