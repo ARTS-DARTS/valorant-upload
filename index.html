@@ -510,13 +510,13 @@ let _statsUnsub = null;
 let _cooldownInterval = null;
 
 function calculateLevel(approved) {
-  if (approved < 5)   return { name: 'Новобранец', icon: '🟢', color: '#4FC3F7' };
-  if (approved < 10)  return { name: 'Разведчик',  icon: '🔵', color: '#00BCD4' };
-  if (approved < 20)  return { name: 'Агент',       icon: '⚡', color: '#2196F3' };
-  if (approved < 40)  return { name: 'Специалист',  icon: '⭐', color: '#FF9800' };
-  if (approved < 80)  return { name: 'Ветеран',     icon: '👑', color: '#F44336' };
-  if (approved < 150) return { name: 'Элита',       icon: '💎', color: '#9C27B0' };
-  return               { name: 'Легенда',            icon: '🏆', color: '#FFD700' };
+  if (approved < 3)   return { name: 'Новобранец', icon: '🎯', color: '#808080' };
+  if (approved < 7)   return { name: 'Разведчик',  icon: '🔍', color: '#4FC3F7' };
+  if (approved < 15)  return { name: 'Агент',      icon: '⚡', color: '#66BB6A' };
+  if (approved < 30)  return { name: 'Специалист', icon: '💎', color: '#AB47BC' };
+  if (approved < 50)  return { name: 'Ветеран',    icon: '🔥', color: '#FF7043' };
+  if (approved < 100) return { name: 'Элита',      icon: '👑', color: '#FFD700' };
+  return               { name: 'Легенда',           icon: '🏆', color: '#FF4655' };
 }
 
 function _updateLevelDisplay(approved) {
