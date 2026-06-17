@@ -405,6 +405,12 @@ const app  = initializeApp(cfg);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
+const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
+const SEL_SECRET_KEY = 'e2ffe93a51ba4c05abadc810d9c0edfc';
+const SEL_S3_HOST    = 'valorant-lineups-video.s3.ru-3.storage.selcloud.ru';
+const SEL_REGION     = 'ru-3';
+const SEL_CDN_URL    = 'https://d5adab93-7400-49ad-b1f9-66966c03d203.selstorage.ru';
+
 // ── Utils ─────────────────────────────────────────────────────────────────────
 function toast(msg, type = 'i') {
   const container = document.getElementById('toasts');
@@ -468,25 +474,73 @@ function uploadToCloudinary(blob, onProgress) {
   return promise;
 }
 
-function uploadVideoToCloudinary(file, onProgress) {
-  const fd = new FormData();
-  fd.append('file', file); fd.append('upload_preset', 'ml_default'); fd.append('folder', 'lineups_videos');
-  let xhr;
-  const promise = new Promise((resolve, reject) => {
-    xhr = new XMLHttpRequest();
-    xhr.open('POST', 'https://api.cloudinary.com/v1_1/dtz0ouvk0/video/upload');
-    xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try { resolve(JSON.parse(xhr.responseText).secure_url); }
-        catch { reject(new Error('Неверный ответ Cloudinary')); }
-      } else { reject(new Error('Cloudinary ' + xhr.status)); }
-    };
-    xhr.onerror = () => reject(new Error('Сетевая ошибка'));
-    xhr.onabort = () => reject(new Error('canceled'));
-    xhr.send(fd);
+// ── AWS4 helpers (SubtleCrypto) ───────────────────────────────────────────────
+async function _sha256Hex(data) {
+  const buf = await crypto.subtle.digest('SHA-256', typeof data === 'string' ? new TextEncoder().encode(data) : data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function _hmacSha256(key, data) {
+  const k = typeof key === 'string' ? new TextEncoder().encode(key) : key;
+  const d = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const kObj = await crypto.subtle.importKey('raw', k, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', kObj, d));
+}
+function _selPadZ(n) { return String(n).padStart(2, '0'); }
+function _selAwsDate(d) { return `${d.getUTCFullYear()}${_selPadZ(d.getUTCMonth()+1)}${_selPadZ(d.getUTCDate())}`; }
+function _selAwsDateTime(d) { return `${_selAwsDate(d)}T${_selPadZ(d.getUTCHours())}${_selPadZ(d.getUTCMinutes())}${_selPadZ(d.getUTCSeconds())}Z`; }
+async function _selSigningKey(dateStamp) {
+  let k = await _hmacSha256('AWS4' + SEL_SECRET_KEY, dateStamp);
+  k = await _hmacSha256(k, SEL_REGION);
+  k = await _hmacSha256(k, 's3');
+  k = await _hmacSha256(k, 'aws4_request');
+  return k;
+}
+
+function uploadVideoToSelectel(file, onProgress) {
+  const fileName  = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  const objectKey = `lineups_videos/${fileName}`;
+  let xhr = null;
+  let aborted = false;
+
+  const promise = new Promise(async (resolve, reject) => {
+    try {
+      const now        = new Date();
+      const dateStamp  = _selAwsDate(now);
+      const amzDate    = _selAwsDateTime(now);
+      const buffer     = await file.arrayBuffer();
+      if (aborted) { reject(new Error('canceled')); return; }
+
+      const contentType   = file.type || 'video/mp4';
+      const payloadHash   = await _sha256Hex(buffer);
+      const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
+      const canonHeaders  = `content-type:${contentType}\nhost:${SEL_S3_HOST}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
+      const canonRequest  = ['PUT', `/${objectKey}`, '', canonHeaders, signedHeaders, payloadHash].join('\n');
+      const credScope     = `${dateStamp}/${SEL_REGION}/s3/aws4_request`;
+      const strToSign     = ['AWS4-HMAC-SHA256', amzDate, credScope, await _sha256Hex(canonRequest)].join('\n');
+      const signingKey    = await _selSigningKey(dateStamp);
+      const signature     = (await _hmacSha256(signingKey, strToSign)).reduce((s, b) => s + b.toString(16).padStart(2, '0'), '');
+      const auth          = `AWS4-HMAC-SHA256 Credential=${SEL_ACCESS_KEY}/${credScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+      if (aborted) { reject(new Error('canceled')); return; }
+
+      xhr = new XMLHttpRequest();
+      xhr.open('PUT', `https://${SEL_S3_HOST}/${objectKey}`);
+      xhr.setRequestHeader('Authorization', auth);
+      xhr.setRequestHeader('Content-Type', contentType);
+      xhr.setRequestHeader('x-amz-content-sha256', payloadHash);
+      xhr.setRequestHeader('x-amz-date', amzDate);
+      xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve(`${SEL_CDN_URL}/${objectKey}`);
+        else reject(new Error('Selectel upload error: ' + xhr.status + ' ' + xhr.responseText));
+      };
+      xhr.onerror = () => reject(new Error('Сетевая ошибка'));
+      xhr.onabort = () => reject(new Error('canceled'));
+      xhr.send(buffer);
+    } catch (e) { reject(e); }
   });
-  promise.abort = () => xhr?.abort();
+
+  promise.abort = () => { aborted = true; xhr?.abort(); };
   return promise;
 }
 
@@ -798,7 +852,7 @@ async function handleVideoFile(file) {
   document.getElementById('vid-pct').textContent = '0%';
   document.getElementById('vid-prog').style.width = '0%';
 
-  const upload = uploadVideoToCloudinary(file, pct => {
+  const upload = uploadVideoToSelectel(file, pct => {
     const p = Math.round(pct * 100);
     document.getElementById('vid-pct').textContent = p + '%';
     document.getElementById('vid-prog').style.width = p + '%';
