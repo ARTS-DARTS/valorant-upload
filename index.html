@@ -366,9 +366,24 @@
           <div class="stat-count" id="stat-rejected">—</div>
         </div>
       </div>
+      <button class="btn-out" id="btn-become-mod"
+        style="width:100%;margin-top:14px;padding:11px;border-radius:var(--r);border:1px solid var(--border);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">
+        🛡 Стать модератором
+      </button>
     </div>
   </aside>
   </div><!-- /.form-layout -->
+</div>
+
+<!-- Moderator application modal -->
+<div id="mod-screen" style="display:none;" class="success-overlay">
+  <div class="success-card" style="border-color:rgba(79,195,247,.3);text-align:left;max-width:440px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="font-size:20px;font-weight:800;color:var(--text);">🛡 Заявка на модератора</div>
+      <button id="mod-close" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
+    </div>
+    <div id="mod-body"></div>
+  </div>
 </div>
 
 <!-- Success modal (overlay over form) -->
@@ -388,7 +403,7 @@ import { initializeApp }                    from 'https://www.gstatic.com/fireba
 import { getAuth, GoogleAuthProvider, signInWithPopup,
          signInWithEmailAndPassword, signOut, onAuthStateChanged }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, doc, collection, getDoc,
+import { getFirestore, doc, collection, getDoc, setDoc,
          writeBatch, serverTimestamp, onSnapshot,
          query, where }                      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -1399,6 +1414,95 @@ document.getElementById('btn-another').addEventListener('click', () => {
   document.getElementById('btn-submit').textContent = '⬆ Отправить лайнап';
   window.scrollTo(0, 0);
 });
+
+// ── Moderator application ─────────────────────────────────────────────────────
+// Firestore: moderator_applications/{uid} { username, reason, status, created_at }
+// Заявки проверяются в admin_panel.html (вкладка "Заявки").
+const modScreen = document.getElementById('mod-screen');
+
+document.getElementById('btn-become-mod').addEventListener('click', openModApplication);
+document.getElementById('mod-close').addEventListener('click', () => { modScreen.style.display = 'none'; });
+modScreen.addEventListener('click', e => { if (e.target === modScreen) modScreen.style.display = 'none'; });
+
+async function openModApplication() {
+  if (!currentUser) { toast('Войди в аккаунт', 'e'); return; }
+  modScreen.style.display = 'flex';
+  const body = document.getElementById('mod-body');
+  body.innerHTML = '<div style="color:var(--text2);padding:20px 0;text-align:center;">Загрузка…</div>';
+
+  // Уже модератор?
+  let role = 'user';
+  try {
+    const uDoc = await getDoc(doc(db, 'users', currentUser.uid));
+    role = uDoc.data()?.role || 'user';
+  } catch (_) {}
+  if (role === 'moderator' || role === 'admin') {
+    body.innerHTML = `<div style="padding:14px 0;color:var(--green);font-size:14px;">✅ У тебя уже есть роль <b>${esc(role)}</b>.</div>`;
+    return;
+  }
+
+  // Существующая заявка?
+  let app = null;
+  try {
+    const aDoc = await getDoc(doc(db, 'moderator_applications', currentUser.uid));
+    if (aDoc.exists()) app = aDoc.data();
+  } catch (_) {}
+
+  if (app && app.status === 'pending') {
+    body.innerHTML = `<div style="padding:14px 0;">
+      <div style="color:var(--primary);font-size:15px;font-weight:700;margin-bottom:8px;">⏳ Заявка на рассмотрении</div>
+      <div style="color:var(--text2);font-size:13px;">Ожидай решения администратора. Мы пришлём уведомление.</div>
+    </div>`;
+    return;
+  }
+
+  const rejected = app && app.status === 'rejected';
+  body.innerHTML = `
+    ${rejected ? '<div style="color:var(--red);font-size:13px;margin-bottom:10px;">Прошлая заявка отклонена. Можешь подать повторно.</div>' : ''}
+    <div style="color:var(--text2);font-size:13px;margin-bottom:12px;">Расскажи, почему хочешь стать модератором и чем поможешь сообществу.</div>
+    <textarea id="mod-reason" rows="5" maxlength="500" placeholder="Минимум 50 символов…"
+      style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--r);padding:11px 13px;font-size:14px;resize:vertical;box-sizing:border-box;"></textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+      <span id="mod-count" style="font-size:11px;color:var(--text2);">0 / мин. 50</span>
+    </div>
+    <button class="btn-primary" id="mod-submit" style="margin-top:14px;" disabled>Отправить заявку</button>`;
+
+  const ta = document.getElementById('mod-reason');
+  const cnt = document.getElementById('mod-count');
+  const sub = document.getElementById('mod-submit');
+  ta.addEventListener('input', () => {
+    const len = ta.value.trim().length;
+    cnt.textContent = `${len} / мин. 50`;
+    cnt.style.color = len >= 50 ? 'var(--green)' : 'var(--text2)';
+    sub.disabled = len < 50;
+  });
+  sub.addEventListener('click', submitModApplication);
+}
+
+async function submitModApplication() {
+  const reason = document.getElementById('mod-reason').value.trim();
+  if (reason.length < 50) { toast('Минимум 50 символов', 'e'); return; }
+  const sub = document.getElementById('mod-submit');
+  sub.disabled = true; sub.textContent = 'Отправка…';
+  try {
+    const username = currentUser.displayName || currentUser.email || 'Аноним';
+    await setDoc(doc(db, 'moderator_applications', currentUser.uid), {
+      username, reason, status: 'pending',
+      user_email: currentUser.email || '',
+      created_at: serverTimestamp(),
+    });
+    document.getElementById('mod-body').innerHTML =
+      `<div style="padding:18px 0;text-align:center;">
+        <div style="font-size:34px;">✅</div>
+        <div style="color:var(--green);font-size:16px;font-weight:700;margin-top:8px;">Заявка отправлена!</div>
+        <div style="color:var(--text2);font-size:13px;margin-top:6px;">Ожидай решения администратора.</div>
+      </div>`;
+    toast('Заявка на модератора отправлена', 's');
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'e');
+    sub.disabled = false; sub.textContent = 'Отправить заявку';
+  }
+}
 </script>
 </body>
 </html>
