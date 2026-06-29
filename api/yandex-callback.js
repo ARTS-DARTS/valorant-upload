@@ -15,13 +15,19 @@ const YANDEX_CLIENT_SECRET = (process.env.YANDEX_CLIENT_SECRET ?? '').replace(/�
 const REDIRECT_URI         = 'https://vlineups.ru/api/yandex-callback';
 const APP_SCHEME = 'vlineupapp://yandex';
 
-// HTTP 302 не триггерит shouldOverrideUrlLoading в Android WebView.
-// JS-навигация window.location всегда вызывает onNavigationRequest.
+// Используем JavaScript Bridge для прямой передачи URL во Flutter WebView.
+// FlutterBridge — JS-канал, зарегистрированный через addJavaScriptChannel.
+// Fallback: window.location.replace для браузеров (не WebView).
 function appRedirect(res, url) {
+  const safeUrl = JSON.stringify(url);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.end(
     `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>` +
-    `<script>window.location.replace(${JSON.stringify(url)});</script>` +
+    `<script>` +
+    `var u=${safeUrl};` +
+    `if(window.FlutterBridge){window.FlutterBridge.postMessage(u);}` +
+    `else{window.location.replace(u);}` +
+    `</script>` +
     `</body></html>`
   );
 }
