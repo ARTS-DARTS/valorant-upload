@@ -9,16 +9,21 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST')   return res.status(405).json({ error: 'Method not allowed' });
 
+  const clean    = s => (s ?? '').replace(/﻿/g, '').trim();
   const adminKey = req.headers['x-admin-key'];
-  if (!adminKey || adminKey !== process.env.ADMIN_SECRET) {
+  const secret   = clean(process.env.ADMIN_SECRET);
+  if (!adminKey || adminKey !== secret) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const { title, body, type, targetUid } = req.body || {};
   if (!title || !body) return res.status(400).json({ error: 'title and body required' });
 
+  const OS_APP_ID  = clean(process.env.ONESIGNAL_APP_ID);
+  const OS_REST    = clean(process.env.ONESIGNAL_REST_KEY);
+
   const payload = {
-    app_id:   process.env.ONESIGNAL_APP_ID,
+    app_id:   OS_APP_ID,
     headings: { en: title, ru: title },
     contents: { en: body,  ru: body  },
     data:     { type: type || 'admin_message' },
@@ -36,7 +41,7 @@ export default async function handler(req, res) {
     method:  'POST',
     headers: {
       'Content-Type':  'application/json',
-      'Authorization': `Key ${process.env.ONESIGNAL_REST_KEY}`,
+      'Authorization': `Key ${OS_REST}`,
     },
     body: JSON.stringify(payload),
   });
