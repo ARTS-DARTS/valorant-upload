@@ -13,17 +13,29 @@ function initFirebase() {
 const YANDEX_CLIENT_ID     = (process.env.YANDEX_CLIENT_ID     ?? '').replace(/﻿/g, '').trim();
 const YANDEX_CLIENT_SECRET = (process.env.YANDEX_CLIENT_SECRET ?? '').replace(/﻿/g, '').trim();
 const REDIRECT_URI         = 'https://vlineups.ru/api/yandex-callback';
-const APP_SCHEME           = 'vlineupapp://yandex';
+const APP_SCHEME  = 'vlineupapp://yandex';
+const APP_PACKAGE = 'com.artsdarts.valorantlineups';
 
-// Chrome Custom Tab не перехватывает HTTP 307 на custom scheme — используем HTML+JS редирект
-function appRedirect(res, url) {
-  const safe = url.replace(/"/g, '&quot;');
+// Chrome Custom Tab блокирует кастомные схемы (vlineupapp://) даже через JS.
+// intent:// — единственный надёжный способ открыть приложение из Chrome Custom Tab на Android.
+function appRedirect(res, appUrl) {
+  // appUrl = vlineupapp://yandex?token=xxx...
+  // intent:// = Chrome-specific формат: intent://yandex?...#Intent;scheme=vlineupapp;package=...;end
+  const params = appUrl.replace(APP_SCHEME + '?', '').replace(APP_SCHEME, '');
+  const intentUrl = `intent://yandex${params ? '?' + params : ''}` +
+    `#Intent;scheme=vlineupapp;package=${APP_PACKAGE}` +
+    `;S.browser_fallback_url=${encodeURIComponent('https://vlineups.ru')};end`;
+  const safeIntent = intentUrl.replace(/"/g, '&quot;');
+  const safeApp    = appUrl.replace(/"/g, '&quot;');
   return res.status(200).setHeader('Content-Type', 'text/html').send(
     `<!DOCTYPE html><html><head>` +
-    `<meta http-equiv="refresh" content="0;url=${safe}">` +
+    `<meta http-equiv="refresh" content="0;url=${safeIntent}">` +
     `</head><body>` +
-    `<script>window.location.replace("${safe}");</script>` +
-    `<p>Открываем приложение...</p>` +
+    `<script>` +
+    `try{window.location.replace("${safeIntent}");}catch(e){window.location.replace("${safeApp}");}` +
+    `</script>` +
+    `<p style="font-family:sans-serif;text-align:center;margin-top:40px">Открываем приложение...</p>` +
+    `<p style="font-family:sans-serif;text-align:center"><a href="${safeApp}">Нажмите здесь если не открылось</a></p>` +
     `</body></html>`
   );
 }
