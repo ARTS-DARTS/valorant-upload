@@ -33,6 +33,7 @@ function appRedirect(res, url) {
 }
 
 export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
   const { code, error } = req.query;
 
   if (error || !code) {
