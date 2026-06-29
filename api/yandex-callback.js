@@ -15,11 +15,28 @@ const YANDEX_CLIENT_SECRET = (process.env.YANDEX_CLIENT_SECRET ?? '').replace(/�
 const REDIRECT_URI         = 'https://vlineups.ru/api/yandex-callback';
 const APP_SCHEME = 'vlineupapp://yandex';
 
-// HTTP 302 на custom scheme: Chrome Custom Tab видит vlineupapp://, закрывается,
-// Android возвращает URL в FlutterWebAuth2.authenticate().
+// Chrome Custom Tab НЕ запускает custom-scheme intent из серверного 302 (нет тела → белый экран).
+// Поэтому отдаём HTML с тремя механизмами запуска vlineupapp://:
+//   1. meta-refresh  2. JS window.location  3. кликабельная ссылка (гарантированный фоллбэк).
+// Любой из них откроет Android-intent → его ловит CallbackActivity (flutter_web_auth_2).
 function appRedirect(res, url) {
-  res.writeHead(302, { Location: url });
-  res.end();
+  const jsUrl   = JSON.stringify(url);
+  const attrUrl = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.end(
+    `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<meta http-equiv="refresh" content="0;url=${attrUrl}">` +
+    `<title>Возврат в приложение</title>` +
+    `<style>body{font-family:-apple-system,Roboto,sans-serif;background:#0D0D0D;color:#fff;` +
+    `text-align:center;padding-top:80px}a{color:#FF4655;font-size:18px;font-weight:600;` +
+    `text-decoration:none;display:inline-block;margin-top:24px;padding:14px 28px;` +
+    `border:1px solid #FF4655;border-radius:12px}</style></head>` +
+    `<body><p>Возврат в приложение...</p>` +
+    `<a href="${attrUrl}">Открыть Vlineups</a>` +
+    `<script>window.location.href=${jsUrl};</script>` +
+    `</body></html>`
+  );
 }
 
 export default async function handler(req, res) {
