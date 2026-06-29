@@ -15,9 +15,15 @@ const YANDEX_CLIENT_SECRET = (process.env.YANDEX_CLIENT_SECRET ?? '').replace(/�
 const REDIRECT_URI         = 'https://vlineups.ru/api/yandex-callback';
 const APP_SCHEME = 'vlineupapp://yandex';
 
-// WebView перехватывает vlineupapp:// через navigationDelegate — простой redirect работает
+// HTTP 302 не триггерит shouldOverrideUrlLoading в Android WebView.
+// JS-навигация window.location всегда вызывает onNavigationRequest.
 function appRedirect(res, url) {
-  return res.redirect(url);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.end(
+    `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>` +
+    `<script>window.location.replace(${JSON.stringify(url)});</script>` +
+    `</body></html>`
+  );
 }
 
 export default async function handler(req, res) {
