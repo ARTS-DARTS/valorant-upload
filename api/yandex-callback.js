@@ -15,21 +15,11 @@ const YANDEX_CLIENT_SECRET = (process.env.YANDEX_CLIENT_SECRET ?? '').replace(/�
 const REDIRECT_URI         = 'https://vlineups.ru/api/yandex-callback';
 const APP_SCHEME = 'vlineupapp://yandex';
 
-// Используем JavaScript Bridge для прямой передачи URL во Flutter WebView.
-// FlutterBridge — JS-канал, зарегистрированный через addJavaScriptChannel.
-// Fallback: window.location.replace для браузеров (не WebView).
+// HTTP 302 на custom scheme: Chrome Custom Tab видит vlineupapp://, закрывается,
+// Android возвращает URL в FlutterWebAuth2.authenticate().
 function appRedirect(res, url) {
-  const safeUrl = JSON.stringify(url);
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  return res.end(
-    `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>` +
-    `<script>` +
-    `var u=${safeUrl};` +
-    `if(window.FlutterBridge){window.FlutterBridge.postMessage(u);}` +
-    `else{window.location.replace(u);}` +
-    `</script>` +
-    `</body></html>`
-  );
+  res.writeHead(302, { Location: url });
+  res.end();
 }
 
 export default async function handler(req, res) {
