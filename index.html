@@ -41,6 +41,10 @@
     .btn-google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; background: #fff; color: #111; border: none; padding: 12px; border-radius: var(--r); font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .15s; margin-bottom: 8px; }
     .btn-google:hover { opacity: .88; }
     .btn-google:disabled { opacity: .4; cursor: default; }
+    .btn-yandex { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; background: #FC3F1D; color: #fff; border: none; padding: 12px; border-radius: var(--r); font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+    .btn-yandex:hover { opacity: .88; }
+    .btn-yandex:disabled { opacity: .4; cursor: default; }
+    .y-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: #fff; color: #FC3F1D; border-radius: 50%; font-weight: 800; font-size: 13px; }
     .g-icon { font-size: 15px; font-weight: 900; color: #4285F4; }
     .field-group { margin-bottom: 14px; }
     .flabel { display: block; color: var(--text2); font-size: 11px; font-weight: 700; letter-spacing: .5px; margin-bottom: 5px; }
@@ -191,6 +195,9 @@
     <div id="tab-google">
       <button class="btn-google" id="btn-google">
         <span class="g-icon">G</span> Войти через Google
+      </button>
+      <button class="btn-yandex" id="btn-yandex">
+        <span class="y-icon">Я</span> Войти через Яндекс
       </button>
     </div>
     <div id="tab-email" style="display:none;">
@@ -401,7 +408,8 @@
 <script type="module">
 import { initializeApp }                    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup,
-         signInWithEmailAndPassword, signOut, onAuthStateChanged }
+         signInWithEmailAndPassword, signInWithCustomToken,
+         signOut, onAuthStateChanged }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, doc, collection, getDoc, setDoc,
          writeBatch, serverTimestamp, onSnapshot,
@@ -716,6 +724,36 @@ document.getElementById('btn-google').addEventListener('click', async () => {
     btn.disabled = false;
   }
 });
+
+// ── Яндекс (веб-режим) ──────────────────────────────────────────────────────
+const YANDEX_CLIENT_ID = 'da13eecdffc04135862d930d1d20a62b';
+document.getElementById('btn-yandex').addEventListener('click', () => {
+  const u = 'https://oauth.yandex.ru/authorize?response_type=code'
+    + '&client_id=' + YANDEX_CLIENT_ID
+    + '&redirect_uri=' + encodeURIComponent('https://vlineups.ru/api/yandex-callback')
+    + '&state=web';
+  window.location.href = u;
+});
+
+// При возврате с Яндекса: ?yandex_token=... или ?yandex_error=...
+(async () => {
+  const p = new URLSearchParams(window.location.search);
+  const err = p.get('yandex_error');
+  if (err) {
+    showAuthErr('Яндекс: ' + decodeURIComponent(err));
+    history.replaceState(null, '', window.location.pathname);
+    return;
+  }
+  const token = p.get('yandex_token');
+  if (token) {
+    history.replaceState(null, '', window.location.pathname);
+    try {
+      await signInWithCustomToken(auth, token);
+    } catch (e) {
+      showAuthErr('Вход через Яндекс не удался: ' + e.message);
+    }
+  }
+})();
 
 document.getElementById('btn-email-login').addEventListener('click', async () => {
   const email = document.getElementById('auth-email').value.trim();
