@@ -23,6 +23,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    const state = req.query.state || '';
+
     // 1. Меняем code на access_token
     const tokenRes = await fetch('https://oauth.yandex.ru/token', {
       method: 'POST',
@@ -47,44 +49,69 @@ export default async function handler(req, res) {
     });
     const info = await infoRes.json();
 
-    const yandexId  = String(info.id);
-    const email     = info.default_email || `yandex_${yandexId}@yandex.ru`;
-    const name      = info.display_name  || info.real_name || `Игрок${yandexId.slice(-4)}`;
-    const firebaseUid = `yandex_${yandexId}`;
+    const yandexId = String(info.id);
+    const email    = info.default_email || `yandex_${yandexId}@yandex.ru`;
+    const name     = info.display_name  || info.real_name || `Игрок${yandexId.slice(-4)}`;
 
-    // 3. Создаём Firebase custom token
     initFirebase();
-    const customToken = await getAuth().createCustomToken(firebaseUid, {
-      yandex_id: yandexId,
-      email,
-      name,
-    });
+    const db = getFirestore();
 
-    // 4. Создаём/обновляем документ пользователя в Firestore
-    const db  = getFirestore();
-    const ref = db.collection('users').doc(firebaseUid);
-    const doc = await ref.get();
-    if (!doc.exists) {
-      // Новый пользователь — создаём документ
-      await ref.set({
-        uid:            firebaseUid,
-        name,
-        name_lower:     name.toLowerCase(),
-        user_email:     email,
-        auth_provider:  'yandex',
-        yandex_id:      yandexId,
-        created_at:     FieldValue.serverTimestamp(),
-        is_banned:      false,
-        terms_accepted: true,
-        approved_lineups: 0,
+    // Режим привязки: state=link_<firebaseUid>
+    if (state.startsWith('link_')) {
+      const firebaseUid = state.slice('link_'.length);
+      // Проверяем — вдруг этот Яндекс ID уже привязан к другому аккаунту
+      const alreadySnap = await db.collection('users').where('yandex_id', '==', yandexId).limit(1).get();
+      if (!alreadySnap.empty && alreadySnap.docs[0].id !== firebaseUid) {
+        return res.redirect(`${APP_SCHEME}?error=yandex_already_linked`);
+      }
+      await db.collection('users').doc(firebaseUid).update({
+        yandex_id:            yandexId,
+        yandex_email:         email,
+        auth_provider_linked: 'yandex',
       });
-    } else {
-      await ref.update({ last_seen: FieldValue.serverTimestamp() });
+      return res.redirect(`${APP_SCHEME}?linked=true&yid=${yandexId}`);
     }
 
-    const isNew = !doc.exists;
+    // Проверяем — может уже есть аккаунт с этим yandex_id (soft-link)
+    const linkedSnap = await db.collection('users').where('yandex_id', '==', yandexId).limit(1).get();
+    let firebaseUid;
+    let isNew = false;
 
-    // 5. Редиректим в приложение
+    if (!linkedSnap.empty) {
+      // Пользователь ранее привязал Яндекс к своему аккаунту — входим как он
+      firebaseUid = linkedSnap.docs[0].id;
+      await db.collection('users').doc(firebaseUid).update({ last_seen: FieldValue.serverTimestamp() });
+    } else {
+      // Обычный вход через Яндекс
+      firebaseUid = `yandex_${yandexId}`;
+      const ref = db.collection('users').doc(firebaseUid);
+      const doc = await ref.get();
+      if (!doc.exists) {
+        // Имя из Яндекса кэшируем, но ник пользователь выберет сам в приложении
+        await ref.set({
+          uid:              firebaseUid,
+          name:             '',
+          name_lower:       '',
+          yandex_name:      name,
+          user_email:       email,
+          auth_provider:    'yandex',
+          yandex_id:        yandexId,
+          needs_nickname:   true,
+          created_at:       FieldValue.serverTimestamp(),
+          is_banned:        false,
+          terms_accepted:   true,
+          approved_lineups: 0,
+        });
+        isNew = true;
+      } else {
+        await ref.update({ last_seen: FieldValue.serverTimestamp() });
+      }
+    }
+
+    // 3. Создаём Firebase custom token
+    const customToken = await getAuth().createCustomToken(firebaseUid, { yandex_id: yandexId, email, name });
+
+    // 4. Редиректим в приложение
     return res.redirect(
       `${APP_SCHEME}?token=${encodeURIComponent(customToken)}` +
       `&is_new=${isNew}` +
