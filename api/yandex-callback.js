@@ -98,8 +98,20 @@ export default async function handler(req, res) {
     if (state.startsWith('link_')) {
       const firebaseUid = state.slice('link_'.length);
       const alreadySnap = await db.collection('users').where('yandex_id', '==', yandexId).limit(1).get();
-      if (!alreadySnap.empty && alreadySnap.docs[0].id !== firebaseUid) {
-        return appRedirect(res, `${APP_SCHEME}?error=yandex_already_linked`);
+      if (!alreadySnap.empty) {
+        const existingUid = alreadySnap.docs[0].id;
+        if (existingUid !== firebaseUid) {
+          // Если это автогенерированный пустой аккаунт (yandex_XXX) — очищаем привязку там
+          // чтобы переназначить Яндекс ID на настоящий аккаунт пользователя.
+          // Если это чужой настоящий аккаунт — возвращаем ошибку.
+          if (existingUid.startsWith('yandex_')) {
+            await db.collection('users').doc(existingUid).update({
+              yandex_id: FieldValue.delete(),
+            });
+          } else {
+            return appRedirect(res, `${APP_SCHEME}?error=yandex_already_linked`);
+          }
+        }
       }
       await db.collection('users').doc(firebaseUid).update({
         yandex_id:            yandexId,
