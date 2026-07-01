@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import sendPushHandler from './api/send-push.js';
 import notifyAgentSubscribersHandler from './api/notify-agent-subscribers.js';
+import valorantProxyHandler from './api/valorant-proxy.js';
 import yandexCallbackHandler from './api/yandex-callback.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -38,6 +39,7 @@ app.use(
 
 app.all('/api/send-push', sendPushHandler);
 app.all('/api/notify-agent-subscribers', notifyAgentSubscribersHandler);
+app.all('/api/valorant-proxy', valorantProxyHandler);
 app.all('/api/yandex-callback', yandexCallbackHandler);
 
 app.get('*', (req, res) => {

@@ -370,9 +370,15 @@ function showAuthErr(msg) {
 }
 
 // ── Valorant API ──────────────────────────────────────────────────────────────
+const valorantProxy = url => `/api/valorant-proxy?url=${encodeURIComponent(url)}`;
+const proxiedValorantUrl = url =>
+  url && /^https:\/\/(valorant-api\.com|media\.valorant-api\.com)\//.test(url)
+    ? valorantProxy(url)
+    : url;
+
 async function loadAgents() {
   try {
-    const res  = await fetch('https://valorant-api.com/v1/agents?isPlayableCharacter=true&language=ru-RU');
+    const res  = await fetch(valorantProxy('https://valorant-api.com/v1/agents?isPlayableCharacter=true&language=ru-RU'));
     const data = await res.json();
     agentsList = (data.data || []).sort((a, b) => a.displayName.localeCompare(b.displayName));
     renderAgentsGrid();
@@ -384,7 +390,7 @@ async function loadAgents() {
 
 async function loadMaps() {
   try {
-    const res  = await fetch('https://valorant-api.com/v1/maps');
+    const res  = await fetch(valorantProxy('https://valorant-api.com/v1/maps'));
     const data = await res.json();
     mapsData = data.data || [];
   } catch (_) {}
@@ -394,7 +400,7 @@ function renderAgentsGrid() {
   const grid = document.getElementById('agents-grid');
   grid.innerHTML = agentsList.map(a => `
     <div class="agent-card" data-uuid="${esc(a.uuid)}">
-      <img src="${esc(a.displayIconSmall || a.displayIcon || '')}" alt="${esc(a.displayName)}"
+      <img src="${esc(proxiedValorantUrl(a.displayIconSmall || a.displayIcon || ''))}" alt="${esc(a.displayName)}"
            crossorigin="anonymous"
            onerror="this.style.display='none'">
       <span>${esc(a.displayName)}</span>
@@ -698,11 +704,11 @@ function loadMapMinimap() {
     return;
   }
   const apiUrl = mapsData.find(m => m.displayName === mapName)?.displayIcon;
-  const url    = apiUrl || MAP_FALLBACK_URLS[mapName];
+  const url    = proxiedValorantUrl(apiUrl || MAP_FALLBACK_URLS[mapName]);
   if (url) {
     img.crossOrigin = 'anonymous';
     img.onerror = () => {
-      const fb = MAP_FALLBACK_URLS[mapName];
+      const fb = proxiedValorantUrl(MAP_FALLBACK_URLS[mapName]);
       if (fb && img.src !== fb) { img.src = fb; }
       else {
         img.style.display = 'none';
