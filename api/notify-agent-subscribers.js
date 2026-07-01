@@ -53,18 +53,6 @@ async function sendOneSignal({ title, body, targetUid, data }) {
 async function findSubscriberUids(db, agent) {
   const uids = new Set();
 
-  const groupSnap = await db
-    .collectionGroup('subscriptions')
-    .where('type', '==', 'agent')
-    .where('agent', '==', agent)
-    .get();
-  groupSnap.docs.forEach((subDoc) => {
-    const uid = subDoc.ref.parent.parent?.id;
-    if (uid) uids.add(uid);
-  });
-
-  if (uids.size > 0) return [...uids];
-
   const subId = agentSubDocId(agent);
   const usersSnap = await db.collection('users').select().get();
   const checks = usersSnap.docs.map(async (userDoc) => {
@@ -81,6 +69,21 @@ async function findSubscriberUids(db, agent) {
     }
   });
   await Promise.all(checks);
+  if (uids.size > 0) return [...uids];
+
+  try {
+    const groupSnap = await db
+      .collectionGroup('subscriptions')
+      .where('type', '==', 'agent')
+      .where('agent', '==', agent)
+      .get();
+    groupSnap.docs.forEach((subDoc) => {
+      const uid = subDoc.ref.parent.parent?.id;
+      if (uid) uids.add(uid);
+    });
+  } catch (e) {
+    console.warn('subscription collectionGroup skipped:', e.message);
+  }
   return [...uids];
 }
 
