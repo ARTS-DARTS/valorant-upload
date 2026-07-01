@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { title, body, type, targetUid } = req.body || {};
+  const { title, body, type, targetUid, data: extraData = {} } = req.body || {};
   if (!title || !body) return res.status(400).json({ error: 'title and body required' });
 
   const OS_APP_ID  = clean(process.env.ONESIGNAL_APP_ID);
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     app_id:   OS_APP_ID,
     headings: { en: title, ru: title },
     contents: { en: body,  ru: body  },
-    data:     { type: type || 'admin_message' },
+    data:     { ...extraData, type: type || extraData.type || 'admin_message' },
     priority: 10,
   };
 
