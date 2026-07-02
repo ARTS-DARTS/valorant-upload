@@ -29,7 +29,7 @@ app.use(
     index: false,
     setHeaders(res, filePath) {
       if (filePath.endsWith('app.js') || filePath.endsWith('styles.css')) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
         return;
       }
       res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
