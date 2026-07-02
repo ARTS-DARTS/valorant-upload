@@ -605,6 +605,14 @@ document.getElementById('vid-frame-btn').addEventListener('click', async () => {
 
 // Global keyboard shortcuts for video player
 document.addEventListener('keydown', e => {
+  const target = e.target;
+  const isTyping = target && (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable
+  );
+  if (isTyping) return;
   if (e.code === 'Space' || e.key === ' ') {
     const player = document.getElementById('vid-player');
     if (player && player.src && !player.error) {
