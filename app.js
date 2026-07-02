@@ -381,6 +381,21 @@ const proxiedValorantUrl = url =>
     ? valorantProxy(url)
     : url;
 
+const ABILITY_NAME_FALLBACKS = {
+  'KAY/O': {
+    Grenade: 'ФРАГ/мент',
+    Flash: 'СВЕТО/вая граната',
+    Signature: 'ЭПИ/центр',
+    Ultimate: 'NULL/cmd',
+  },
+};
+
+function normalizeAbilityName(agentName, abilityName, slot = '') {
+  const raw = (abilityName || '').trim();
+  const fallback = ABILITY_NAME_FALLBACKS[agentName]?.[raw] || ABILITY_NAME_FALLBACKS[agentName]?.[slot];
+  return fallback || raw || slot;
+}
+
 async function loadAgents() {
   try {
     const res  = await fetch(valorantProxy('https://valorant-api.com/v1/agents?isPlayableCharacter=true&language=ru-RU'));
@@ -430,9 +445,9 @@ function selectAgent(agent) {
     return;
   }
   row.innerHTML = abilities.map(ab => `
-    <button class="ability-btn" data-key="${esc(ab.displayName || ab.slot || '')}" data-slot="${esc(ab.slot || '')}" title="${esc(ab.displayName || '')}">
+    <button class="ability-btn" data-key="${esc(normalizeAbilityName(agent.displayName, ab.displayName, ab.slot))}" data-slot="${esc(ab.slot || '')}" title="${esc(normalizeAbilityName(agent.displayName, ab.displayName, ab.slot))}">
       <img src="${esc(ab.displayIcon)}" alt="${esc(ab.displayName || '')}">
-      <span>${esc((ab.displayName || '').split(' ')[0])}</span>
+      <span>${esc(normalizeAbilityName(agent.displayName, ab.displayName, ab.slot).split(' ')[0])}</span>
     </button>`).join('');
   row.querySelectorAll('.ability-btn').forEach(b => {
     b.addEventListener('click', () => {
@@ -826,7 +841,9 @@ function updateMarkerIcon() {
   const agent = agentsList.find(a => a.displayName === selectedAgent);
   if (!agent) { img.style.display = 'none'; return; }
   const ability = (agent.abilities || []).find(ab =>
-    ab.displayName === selectedAbility || ab.slot === selectedAbility
+    ab.displayName === selectedAbility ||
+    ab.slot === selectedAbility ||
+    normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === selectedAbility
   );
   if (ability?.displayIcon) {
     img.src = ability.displayIcon;
@@ -916,9 +933,11 @@ function _restoreDraft() {
       selectAgent(agent);
       if (d.ability) {
         const ability = (agent.abilities || []).find(ab =>
-          ab.displayName === d.ability || ab.slot === d.ability
+          ab.displayName === d.ability ||
+          ab.slot === d.ability ||
+          normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === d.ability
         );
-        selectedAbility = ability?.displayName || d.ability;
+        selectedAbility = normalizeAbilityName(agent.displayName, ability?.displayName || d.ability, ability?.slot || d.ability);
         const abilBtn = [...document.querySelectorAll('.ability-btn')].find(btn =>
           btn.dataset.key === selectedAbility || btn.dataset.slot === d.ability
         );
@@ -1006,7 +1025,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     batch.set(lineupRef, {
       map,
       agent:         selectedAgent,
-      ability:       selectedAbility,
+      ability:       normalizeAbilityName(selectedAgent, selectedAbility),
       title,
       description:   desc,
       video_url:     videoUrl || null,
