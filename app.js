@@ -430,7 +430,7 @@ function selectAgent(agent) {
     return;
   }
   row.innerHTML = abilities.map(ab => `
-    <button class="ability-btn" data-key="${esc(ab.slot)}" title="${esc(ab.displayName || '')}">
+    <button class="ability-btn" data-key="${esc(ab.displayName || ab.slot || '')}" data-slot="${esc(ab.slot || '')}" title="${esc(ab.displayName || '')}">
       <img src="${esc(ab.displayIcon)}" alt="${esc(ab.displayName || '')}">
       <span>${esc((ab.displayName || '').split(' ')[0])}</span>
     </button>`).join('');
@@ -817,7 +817,9 @@ function updateMarkerIcon() {
   if (!img) return;
   const agent = agentsList.find(a => a.displayName === selectedAgent);
   if (!agent) { img.style.display = 'none'; return; }
-  const ability = (agent.abilities || []).find(ab => ab.slot === selectedAbility);
+  const ability = (agent.abilities || []).find(ab =>
+    ab.displayName === selectedAbility || ab.slot === selectedAbility
+  );
   if (ability?.displayIcon) {
     img.src = ability.displayIcon;
     img.style.display = 'block';
@@ -905,8 +907,13 @@ function _restoreDraft() {
       if (card) card.classList.add('selected');
       selectAgent(agent);
       if (d.ability) {
-        selectedAbility = d.ability;
-        const abilBtn = document.querySelector(`.ability-btn[data-key="${d.ability}"]`);
+        const ability = (agent.abilities || []).find(ab =>
+          ab.displayName === d.ability || ab.slot === d.ability
+        );
+        selectedAbility = ability?.displayName || d.ability;
+        const abilBtn = [...document.querySelectorAll('.ability-btn')].find(btn =>
+          btn.dataset.key === selectedAbility || btn.dataset.slot === d.ability
+        );
         if (abilBtn) { document.querySelectorAll('.ability-btn').forEach(b => b.classList.remove('selected')); abilBtn.classList.add('selected'); updateMarkerIcon(); }
       }
     }
