@@ -27,6 +27,22 @@ const SEL_REGION     = 'ru-3';
 const SEL_CDN_URL    = 'https://d5adab93-7400-49ad-b1f9-66966c03d203.selstorage.ru';
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
+function rangeConfigId(map, agent, ability) {
+  return (String(map || '') + '__' + String(agent || '') + '__' + String(ability || '')).replace(/[\\/. ]/g, '_');
+}
+
+async function getConfiguredRangeRadius(map, agent, ability) {
+  if (!map || !agent || !ability) return 0;
+  try {
+    const snap = await getDoc(doc(db, 'range_config', rangeConfigId(map, agent, ability)));
+    const radius = Number(snap.data()?.range_radius || 0);
+    return Number.isFinite(radius) ? radius : 0;
+  } catch (e) {
+    console.warn('getConfiguredRangeRadius', e.message);
+    return 0;
+  }
+}
+
 function toast(msg, type = 'i') {
   const container = document.getElementById('toasts');
   if (container.children.length >= 4) container.firstChild?.remove();
@@ -1018,6 +1034,8 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Отправка…';
 
   try {
+    const ability = normalizeAbilityName(selectedAgent, selectedAbility);
+    const rangeRadius = await getConfiguredRangeRadius(map, selectedAgent, ability);
     const batch = writeBatch(db);
     batch.set(doc(db, 'rate_limits', uid), { last_lineup_at: serverTimestamp() }, { merge: true });
 
@@ -1025,7 +1043,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     batch.set(lineupRef, {
       map,
       agent:         selectedAgent,
-      ability:       normalizeAbilityName(selectedAgent, selectedAbility),
+      ability,
       title,
       description:   desc,
       video_url:     videoUrl || null,
@@ -1033,6 +1051,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       position_x: markerX,
       position_y: markerY,
       trajectory: trajectoryPoints,
+      range_radius:  rangeRadius,
       category:      selectedCategory,
       difficulty:    selectedDifficulty,
       status:        'pending',
