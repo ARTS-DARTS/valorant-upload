@@ -43,6 +43,11 @@ function fmtTime(s) {
   const m = Math.floor(s / 60), sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
+function videoContentType(file) {
+  if (file.type) return file.type;
+  if (/\.mov$/i.test(file.name)) return 'video/quicktime';
+  return 'video/mp4';
+}
 
 // ── Cloudinary ────────────────────────────────────────────────────────────────
 function compressImage(file) {
@@ -125,7 +130,7 @@ function uploadVideoToSelectel(file, onProgress) {
       const buffer     = await file.arrayBuffer();
       if (aborted) { reject(new Error('canceled')); return; }
 
-      const contentType   = file.type || 'video/mp4';
+      const contentType   = videoContentType(file);
       const payloadHash   = await _sha256Hex(buffer);
       const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
       const canonHeaders  = `content-type:${contentType}\nhost:${SEL_S3_HOST}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
@@ -491,13 +496,15 @@ dropZone.addEventListener('drop', e => {
 });
 vidInput.addEventListener('change', () => { if (vidInput.files[0]) handleVideoFile(vidInput.files[0]); });
 
-function isMp4Video(file) {
-  return file && (file.type === 'video/mp4' || file.name.toLowerCase().endsWith('.mp4'));
+function isVideoFile(file) {
+  return file && (
+    file.type.startsWith('video/') ||
+    /\.(mp4|mov)$/i.test(file.name)
+  );
 }
 
 async function handleVideoFile(file) {
-  if (!isMp4Video(file)) { toast('Загрузи видео в формате MP4. MOV на части телефонов не открывается.', 'e'); return; }
-  if (!file.type.startsWith('video/')) { toast('Выбери видеофайл', 'e'); return; }
+  if (!isVideoFile(file)) { toast('Выбери видеофайл', 'e'); return; }
   if (file.size > 50 * 1024 * 1024) { toast('Видео превышает 50 МБ', 'e'); return; }
   if (videoXhr) { videoXhr.abort(); videoXhr = null; }
   videoUrl = null;
