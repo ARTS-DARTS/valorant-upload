@@ -236,12 +236,12 @@ let _cooldownInterval = null;
 
 const LEVELS = [
   { min: 0,   name: 'Новобранец', icon: '🎯', color: '#808080', cooldownMinutes: 60 },
-  { min: 3,   name: 'Разведчик',  icon: '🔍', color: '#4FC3F7', cooldownMinutes: 60 },
-  { min: 7,   name: 'Агент',      icon: '⚡', color: '#66BB6A', cooldownMinutes: 50 },
-  { min: 15,  name: 'Специалист', icon: '💎', color: '#AB47BC', cooldownMinutes: 45 },
-  { min: 30,  name: 'Ветеран',    icon: '🔥', color: '#FF7043', cooldownMinutes: 30 },
-  { min: 50,  name: 'Элита',      icon: '👑', color: '#FFD700', cooldownMinutes: 20 },
-  { min: 100, name: 'Легенда',    icon: '🏆', color: '#FF4655', cooldownMinutes: 10 },
+  { min: 3,   name: 'Разведчик',  icon: '🔍', color: '#4FC3F7', cooldownMinutes: 45 },
+  { min: 7,   name: 'Агент',      icon: '⚡', color: '#66BB6A', cooldownMinutes: 30 },
+  { min: 15,  name: 'Специалист', icon: '💎', color: '#AB47BC', cooldownMinutes: 15 },
+  { min: 30,  name: 'Ветеран',    icon: '🔥', color: '#FF7043', cooldownMinutes: 5 },
+  { min: 50,  name: 'Элита',      icon: '👑', color: '#FFD700', cooldownMinutes: 2 },
+  { min: 100, name: 'Легенда',    icon: '🏆', color: '#FF4655', cooldownMinutes: 0 },
 ];
 let _approvedLineups = 0;
 
@@ -1173,9 +1173,12 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     const rangeRadius = await getConfiguredRangeRadius(map, selectedAgent, ability, selectedAbilityAliases());
     const submittedBy = authorDisplayName();
     const batch = writeBatch(db);
-    batch.set(doc(db, 'rate_limits', uid), { last_lineup_at: serverTimestamp() }, { merge: true });
 
     const lineupRef = doc(collection(db, 'lineups'));
+    batch.set(doc(db, 'rate_limits', uid), {
+      last_lineup_at: serverTimestamp(),
+      last_lineup_id: lineupRef.id,
+    }, { merge: true });
     batch.set(lineupRef, {
       map,
       agent:         selectedAgent,
