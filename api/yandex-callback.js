@@ -1,7 +1,11 @@
 // Yandex OAuth callback: code → Yandex token → user info → Firebase custom token → redirect to app
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'node:url';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+
+dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
 function initFirebase() {
   if (!getApps().length) {
