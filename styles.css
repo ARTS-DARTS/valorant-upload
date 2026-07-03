@@ -104,8 +104,8 @@
     .btn-add-shot:hover { border-color: var(--primary); }
 
     /* Map */
-    .map-wrap { position: relative; cursor: crosshair; border-radius: var(--r); overflow: hidden; background: #0a0e1a; border: 1px solid var(--border); user-select: none; }
-    .map-wrap > img.map-img { width: 100%; display: block; }
+    .map-wrap { position: relative; cursor: crosshair; border-radius: var(--r); overflow: hidden; background: #0a0e1a; border: 1px solid var(--border); user-select: none; aspect-ratio: 1 / 1; }
+    .map-wrap > img.map-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
     .map-hint { color: var(--text2); font-size: 12px; margin-top: 6px; }
 
     /* Submit */

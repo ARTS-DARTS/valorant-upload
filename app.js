@@ -31,16 +31,50 @@ function rangeConfigId(map, agent, ability) {
   return (String(map || '') + '__' + String(agent || '') + '__' + String(ability || '')).replace(/[\\/. ]/g, '_');
 }
 
-async function getConfiguredRangeRadius(map, agent, ability) {
-  if (!map || !agent || !ability) return 0;
+function repairMojibake(value) {
+  const s = String(value ?? '').trim();
+  if (!s || !/[ÐÑР]/.test(s)) return s;
   try {
-    const snap = await getDoc(doc(db, 'range_config', rangeConfigId(map, agent, ability)));
-    const radius = Number(snap.data()?.range_radius || 0);
-    return Number.isFinite(radius) ? radius : 0;
-  } catch (e) {
-    console.warn('getConfiguredRangeRadius', e.message);
-    return 0;
+    const cp1251 = 'ЂЃ‚ѓ„…†‡€‰Љ‹ЊЌЋЏђ‘’“”•–— ™љ›њќћџ ЎўЈ¤Ґ¦§Ё©Є«¬­®Ї°±Ііґµ¶·ё№є»јЅѕїАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя';
+    const bytes = [];
+    for (const ch of s) {
+      const code = ch.charCodeAt(0);
+      if (code < 128) {
+        bytes.push(code);
+        continue;
+      }
+      const idx = cp1251.indexOf(ch);
+      if (idx < 0) return s;
+      bytes.push(0x80 + idx);
+    }
+    const repaired = new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes));
+    return /[А-Яа-яЁё]/.test(repaired) ? repaired : s;
+  } catch (_) {
+    return s;
   }
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    const s = repairMojibake(value);
+    if (s) return s;
+  }
+  return '';
+}
+
+async function getConfiguredRangeRadius(map, agent, ability, abilityAliases = []) {
+  if (!map || !agent || !ability) return 0;
+  const names = [...new Set([ability, ...abilityAliases].filter(Boolean).map(String))];
+  for (const name of names) {
+    try {
+      const snap = await getDoc(doc(db, 'range_config', rangeConfigId(map, agent, name)));
+      const radius = Number(snap.data()?.range_radius || 0);
+      if (Number.isFinite(radius) && radius > 0) return radius;
+    } catch (e) {
+      console.warn('getConfiguredRangeRadius', name, e.message);
+    }
+  }
+  return 0;
 }
 
 function toast(msg, type = 'i') {
@@ -182,6 +216,7 @@ function uploadVideoToSelectel(file, onProgress) {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentUser      = null;
+let currentUserProfile = null;
 let agentsList       = [];
 let mapsData         = [];
 let selectedAgent    = null;
@@ -199,17 +234,27 @@ let screenshots = [];
 let _statsUnsub = null;
 let _cooldownInterval = null;
 
+const LEVELS = [
+  { min: 0,   name: 'Новобранец', icon: '🎯', color: '#808080', cooldownMinutes: 60 },
+  { min: 3,   name: 'Разведчик',  icon: '🔍', color: '#4FC3F7', cooldownMinutes: 60 },
+  { min: 7,   name: 'Агент',      icon: '⚡', color: '#66BB6A', cooldownMinutes: 50 },
+  { min: 15,  name: 'Специалист', icon: '💎', color: '#AB47BC', cooldownMinutes: 45 },
+  { min: 30,  name: 'Ветеран',    icon: '🔥', color: '#FF7043', cooldownMinutes: 30 },
+  { min: 50,  name: 'Элита',      icon: '👑', color: '#FFD700', cooldownMinutes: 20 },
+  { min: 100, name: 'Легенда',    icon: '🏆', color: '#FF4655', cooldownMinutes: 10 },
+];
+let _approvedLineups = 0;
+
 function calculateLevel(approved) {
-  if (approved < 3)   return { name: 'Новобранец', icon: '🎯', color: '#808080' };
-  if (approved < 7)   return { name: 'Разведчик',  icon: '🔍', color: '#4FC3F7' };
-  if (approved < 15)  return { name: 'Агент',      icon: '⚡', color: '#66BB6A' };
-  if (approved < 30)  return { name: 'Специалист', icon: '💎', color: '#AB47BC' };
-  if (approved < 50)  return { name: 'Ветеран',    icon: '🔥', color: '#FF7043' };
-  if (approved < 100) return { name: 'Элита',      icon: '👑', color: '#FFD700' };
-  return               { name: 'Легенда',           icon: '🏆', color: '#FF4655' };
+  return LEVELS.reduce((cur, lv) => approved >= lv.min ? lv : cur, LEVELS[0]);
+}
+
+function cooldownMinutesFor(approved) {
+  return calculateLevel(approved).cooldownMinutes;
 }
 
 function _updateLevelDisplay(approved) {
+  _approvedLineups = approved;
   const lv = calculateLevel(approved);
   document.getElementById('level-icon').textContent = lv.icon;
   const nameEl = document.getElementById('level-name');
@@ -247,7 +292,7 @@ async function _updateCooldown(uid) {
     const rateDoc = await getDoc(doc(db, 'rate_limits', uid));
     const lastAt  = rateDoc.data()?.last_lineup_at?.toDate?.();
     if (!lastAt) { _showCooldownReady(); return; }
-    const remainMs = 600000 - (Date.now() - lastAt.getTime());
+    const remainMs = cooldownMinutesFor(_approvedLineups) * 60000 - (Date.now() - lastAt.getTime());
     if (remainMs <= 0) { _showCooldownReady(); return; }
     _startCooldownTimer(remainMs);
   } catch { _showCooldownReady(); }
@@ -291,14 +336,39 @@ function _unsubscribeStats() {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-onAuthStateChanged(auth, user => {
+function authorDisplayName() {
+  return firstText(
+    currentUserProfile?.name,
+    currentUserProfile?.displayName,
+    currentUserProfile?.username,
+    currentUserProfile?.yandex_name,
+    currentUser?.displayName,
+    currentUser?.email
+  );
+}
+
+async function loadCurrentUserProfile(user) {
+  currentUserProfile = null;
+  if (!user) return null;
+  try {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    currentUserProfile = snap.exists() ? snap.data() : null;
+  } catch (e) {
+    console.warn('loadCurrentUserProfile', e.message);
+    currentUserProfile = null;
+  }
+  return currentUserProfile;
+}
+
+onAuthStateChanged(auth, async user => {
   currentUser = user;
   if (user) {
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('form-screen').style.display = '';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'flex';
-    document.getElementById('user-name').textContent = user.displayName || user.email || 'Пользователь';
+    await loadCurrentUserProfile(user);
+    document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
     _subscribeStats(user.uid);
     _updateCooldown(user.uid);
     const av = document.getElementById('user-avatar');
@@ -306,6 +376,7 @@ onAuthStateChanged(auth, user => {
     if (!agentsList.length) loadAgents();
     loadMaps();
   } else {
+    currentUserProfile = null;
     _unsubscribeStats();
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('form-screen').style.display = 'none';
@@ -458,6 +529,7 @@ function selectAgent(agent) {
   const abilities = (agent.abilities || []).filter(ab => ab.displayIcon && ab.slot !== 'Passive');
   if (!abilities.length) {
     row.innerHTML = '<span style="color:var(--text2);font-size:13px;">Нет доступных абилок</span>';
+    validateForm();
     return;
   }
   row.innerHTML = abilities.map(ab => `
@@ -764,6 +836,10 @@ function loadMapMinimap() {
         ph.style.display = '';
       }
     };
+    img.onload = () => {
+      if (markerX != null && markerY != null) setMarkerPosition(markerX, markerY);
+      renderTrajectory();
+    };
     img.src = url;
     img.style.display = 'block';
     ph.style.display = 'none';
@@ -790,20 +866,56 @@ window.setMapMode = setMapMode;
 window.undoTraj  = function() { trajectoryPoints.pop(); renderTrajectory(); _saveDraft(); };
 window.clearTraj = function() { trajectoryPoints = []; renderTrajectory(); _saveDraft(); };
 
+function mapContentRect() {
+  const wrap = document.getElementById('map-wrap');
+  const img = document.getElementById('map-img');
+  const ww = wrap.clientWidth || 1;
+  const wh = wrap.clientHeight || 1;
+  const iw = img.naturalWidth || ww;
+  const ih = img.naturalHeight || wh;
+  const scale = Math.min(ww / iw, wh / ih);
+  const width = iw * scale;
+  const height = ih * scale;
+  return {
+    left: (ww - width) / 2,
+    top: (wh - height) / 2,
+    width,
+    height,
+    wrapWidth: ww,
+    wrapHeight: wh,
+  };
+}
+
+function eventToMapPoint(e) {
+  const wrap = document.getElementById('map-wrap');
+  const rect = wrap.getBoundingClientRect();
+  const content = mapContentRect();
+  const px = e.clientX - rect.left - content.left;
+  const py = e.clientY - rect.top - content.top;
+  return {
+    x: Math.max(0, Math.min(1, px / content.width)),
+    y: Math.max(0, Math.min(1, py / content.height)),
+  };
+}
+
+function setMarkerPosition(x, y) {
+  const marker = document.getElementById('map-marker');
+  const content = mapContentRect();
+  const left = content.left + x * content.width;
+  const top = content.top + y * content.height;
+  marker.style.display = '';
+  marker.style.left = (left / content.wrapWidth * 100) + '%';
+  marker.style.top = (top / content.wrapHeight * 100) + '%';
+}
+
 document.getElementById('map-wrap').addEventListener('click', e => {
   const img = document.getElementById('map-img');
   if (img.style.display === 'none') return;
-  const wrap = document.getElementById('map-wrap');
-  const rect = wrap.getBoundingClientRect();
-  const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  const y = Math.max(0, Math.min(1, (e.clientY - rect.top)  / rect.height));
+  const { x, y } = eventToMapPoint(e);
 
   if (mapMode === 'position') {
     markerX = x; markerY = y;
-    const marker = document.getElementById('map-marker');
-    marker.style.display = '';
-    marker.style.left = (x * 100) + '%';
-    marker.style.top  = (y * 100) + '%';
+    setMarkerPosition(x, y);
     updateMarkerIcon();
   } else {
     trajectoryPoints.push({ x, y });
@@ -819,8 +931,7 @@ function renderTrajectory() {
   const ns  = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
-  const wrap = document.getElementById('map-wrap');
-  const w = wrap.clientWidth, h = wrap.clientHeight;
+  const content = mapContentRect();
   const mid = 'ul-arr';
   const defs = document.createElementNS(ns, 'defs');
   const mkr  = document.createElementNS(ns, 'marker');
@@ -831,7 +942,7 @@ function renderTrajectory() {
   const tri = document.createElementNS(ns, 'polygon');
   tri.setAttribute('points', '0 0, 10 4, 0 8'); tri.setAttribute('fill', '#FF4655');
   mkr.appendChild(tri); defs.appendChild(mkr); svg.appendChild(defs);
-  const coords = trajectoryPoints.map(p => `${(p.x*w).toFixed(1)},${(p.y*h).toFixed(1)}`).join(' ');
+  const coords = trajectoryPoints.map(p => `${(content.left + p.x*content.width).toFixed(1)},${(content.top + p.y*content.height).toFixed(1)}`).join(' ');
   const poly = document.createElementNS(ns, 'polyline');
   poly.setAttribute('points', coords);
   poly.setAttribute('fill', 'none');   poly.setAttribute('stroke', '#FF4655');
@@ -841,8 +952,8 @@ function renderTrajectory() {
   svg.appendChild(poly);
   for (let i = 0; i < trajectoryPoints.length; i++) {
     const dot = document.createElementNS(ns, 'circle');
-    dot.setAttribute('cx', (trajectoryPoints[i].x*w).toFixed(1));
-    dot.setAttribute('cy', (trajectoryPoints[i].y*h).toFixed(1));
+    dot.setAttribute('cx', (content.left + trajectoryPoints[i].x*content.width).toFixed(1));
+    dot.setAttribute('cy', (content.top + trajectoryPoints[i].y*content.height).toFixed(1));
     dot.setAttribute('r', i === 0 ? '5' : '3.5');
     dot.setAttribute('fill', '#FF4655');
     dot.setAttribute('stroke', 'rgba(255,255,255,0.45)'); dot.setAttribute('stroke-width', '0.5');
@@ -929,8 +1040,7 @@ function _restoreDraft() {
         if (d.trajectory?.length) { trajectoryPoints = d.trajectory; renderTrajectory(); }
         if (d.markerX != null) {
           markerX = d.markerX; markerY = d.markerY;
-          const marker = document.getElementById('map-marker');
-          if (marker) { marker.style.display = ''; marker.style.left = (d.markerX*100)+'%'; marker.style.top = (d.markerY*100)+'%'; }
+          setMarkerPosition(d.markerX, d.markerY);
           updateMarkerIcon();
         }
         validateForm();
@@ -995,6 +1105,22 @@ function validateForm() {
   document.getElementById('btn-submit').disabled = !ok;
 }
 
+function selectedAbilityAliases() {
+  const agent = agentsList.find(a => a.displayName === selectedAgent);
+  if (!agent) return [selectedAbility];
+  const ability = (agent.abilities || []).find(ab =>
+    ab.displayName === selectedAbility ||
+    ab.slot === selectedAbility ||
+    normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === selectedAbility
+  );
+  return [
+    ability?.displayName,
+    ability?.slot,
+    selectedAbility,
+    ability ? normalizeAbilityName(agent.displayName, ability.displayName, ability.slot) : null,
+  ];
+}
+
 // ── Submit ────────────────────────────────────────────────────────────────────
 document.getElementById('btn-submit').addEventListener('click', async () => {
   if (!currentUser) { toast('Войди в аккаунт', 'e'); return; }
@@ -1018,8 +1144,9 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       const lastAt = rateDoc.data()?.last_lineup_at?.toDate?.();
       if (lastAt) {
         const diffMin = (Date.now() - lastAt.getTime()) / 60000;
-        if (diffMin < 10) {
-          toast(`Подожди ещё ${Math.ceil(10 - diffMin)} мин.`, 'w');
+        const cooldownMin = cooldownMinutesFor(_approvedLineups);
+        if (diffMin < cooldownMin) {
+          toast(`Подожди ещё ${Math.ceil(cooldownMin - diffMin)} мин.`, 'w');
           return;
         }
       }
@@ -1035,7 +1162,13 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
 
   try {
     const ability = normalizeAbilityName(selectedAgent, selectedAbility);
-    const rangeRadius = await getConfiguredRangeRadius(map, selectedAgent, ability);
+    if (!ability) {
+      toast('Выбери способность агента', 'e');
+      btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
+      return;
+    }
+    const rangeRadius = await getConfiguredRangeRadius(map, selectedAgent, ability, selectedAbilityAliases());
+    const submittedBy = authorDisplayName();
     const batch = writeBatch(db);
     batch.set(doc(db, 'rate_limits', uid), { last_lineup_at: serverTimestamp() }, { merge: true });
 
@@ -1057,7 +1190,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       status:        'pending',
       submitted_at:  serverTimestamp(),
       user_id:       uid,
-      submitted_by:  currentUser.displayName || currentUser.email || '',
+      submitted_by:  submittedBy,
       patch_version: null,
       reputation_up: 0, reputation_down: 0,
       is_outdated:   false,
