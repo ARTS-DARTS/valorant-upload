@@ -15,11 +15,19 @@ const YANDEX_CLIENT_SECRET = (process.env.YANDEX_CLIENT_SECRET ?? '').replace(/�
 const REDIRECT_URI         = 'https://vlineups.ru/api/yandex-callback';
 const APP_SCHEME = 'vlineupapp://yandex';
 const WEB_RETURN = 'https://vlineups.ru/';
+const PUBLIC_AUTH_ERROR = 'service_unavailable';
 
 // Веб-режим (state=web): возвращаем токен на сайт через query-параметр.
 function webRedirect(res, params) {
   res.writeHead(302, { Location: `${WEB_RETURN}?${params}` });
   res.end();
+}
+
+function authErrorRedirect(res, isWeb, reason = PUBLIC_AUTH_ERROR) {
+  const safeReason = encodeURIComponent(reason || PUBLIC_AUTH_ERROR);
+  return isWeb
+    ? webRedirect(res, `yandex_error=${safeReason}`)
+    : appRedirect(res, `${APP_SCHEME}?error=${safeReason}`);
 }
 
 // Chrome Custom Tab НЕ запускает custom-scheme intent из серверного 302 (нет тела → белый экран).
@@ -52,14 +60,17 @@ export default async function handler(req, res) {
   const isWeb = (req.query.state || '') === 'web';
 
   if (error || !code) {
-    const msg = encodeURIComponent(error || 'no_code');
-    return isWeb
-      ? webRedirect(res, `yandex_error=${msg}`)
-      : appRedirect(res, `${APP_SCHEME}?error=${msg}`);
+    console.warn('Yandex auth returned without code:', error || 'no_code');
+    return authErrorRedirect(res, isWeb);
   }
 
   try {
     const state = req.query.state || '';
+
+    if (!YANDEX_CLIENT_ID || !YANDEX_CLIENT_SECRET) {
+      console.error('Yandex OAuth env is not configured');
+      return authErrorRedirect(res, isWeb);
+    }
 
     // 1. Меняем code на access_token
     const tokenRes = await fetch('https://oauth.yandex.ru/token', {
@@ -75,10 +86,12 @@ export default async function handler(req, res) {
     });
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) {
-      console.error('Yandex token error:', tokenData);
-      return isWeb
-        ? webRedirect(res, 'yandex_error=token_failed')
-        : appRedirect(res, `${APP_SCHEME}?error=token_failed`);
+      console.error('Yandex token error:', {
+        status: tokenRes.status,
+        error: tokenData?.error,
+        error_description: tokenData?.error_description,
+      });
+      return authErrorRedirect(res, isWeb);
     }
 
     // 2. Получаем инфо о пользователе
@@ -176,8 +189,6 @@ export default async function handler(req, res) {
     );
   } catch (e) {
     console.error('yandex-callback error:', e);
-    return isWeb
-      ? webRedirect(res, `yandex_error=${encodeURIComponent(e.message)}`)
-      : appRedirect(res, `${APP_SCHEME}?error=${encodeURIComponent(e.message)}`);
+    return authErrorRedirect(res, isWeb);
   }
 }

@@ -410,21 +410,24 @@ document.getElementById('btn-google').addEventListener('click', async () => {
 });
 
 // ── Яндекс (веб-режим) ──────────────────────────────────────────────────────
-const YANDEX_CLIENT_ID = 'da13eecdffc04135862d930d1d20a62b';
 document.getElementById('btn-yandex').addEventListener('click', () => {
-  const u = 'https://oauth.yandex.ru/authorize?response_type=code'
-    + '&client_id=' + YANDEX_CLIENT_ID
-    + '&redirect_uri=' + encodeURIComponent('https://vlineups.ru/api/yandex-callback')
-    + '&state=web';
-  window.location.href = u;
+  window.location.href = '/api/yandex-start?state=web';
 });
+
+function publicYandexAuthError(code) {
+  const key = String(code || '').toLowerCase();
+  if (key === 'service_unavailable' || key === 'token_failed' || key === 'config') {
+    return 'Сервис входа через Яндекс сейчас недоступен. Попробуй позже или войди другим способом.';
+  }
+  return 'Не удалось войти через Яндекс. Попробуй позже или войди другим способом.';
+}
 
 // При возврате с Яндекса: ?yandex_token=... или ?yandex_error=...
 (async () => {
   const p = new URLSearchParams(window.location.search);
   const err = p.get('yandex_error');
   if (err) {
-    showAuthErr('Яндекс: ' + decodeURIComponent(err));
+    showAuthErr(publicYandexAuthError(decodeURIComponent(err)));
     history.replaceState(null, '', window.location.pathname);
     return;
   }
