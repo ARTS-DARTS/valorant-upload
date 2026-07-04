@@ -476,6 +476,9 @@ const ABILITY_NAME_FALLBACKS = {
     Flash: 'СВЕТО/вая граната',
     Signature: 'ЭПИ/центр',
     Ultimate: 'NULL/cmd',
+    'ZERO/point': 'ЭПИ/центр',
+    'FLASH/drive': 'СВЕТО/вая граната',
+    'FRAG/ment': 'ФРАГ/мент',
   },
 };
 
