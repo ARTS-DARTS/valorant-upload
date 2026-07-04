@@ -62,6 +62,13 @@ function firstText(...values) {
   return '';
 }
 
+function normalizeContentCategory(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw === 'smoke') return 'wallbang';
+  return raw;
+}
+
 async function getConfiguredRangeRadius(map, agent, ability, abilityAliases = []) {
   if (!map || !agent || !ability) return 0;
   const names = [...new Set([ability, ...abilityAliases].filter(Boolean).map(String))];
@@ -544,9 +551,13 @@ function selectAgent(agent) {
 // ── Category & Difficulty ─────────────────────────────────────────────────────
 document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => {
   b.addEventListener('click', () => {
+    if (b.disabled || b.classList.contains('locked')) {
+      toast('Эта категория скоро появится. Пока её заполняют админы.', 'i');
+      return;
+    }
     document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
     b.classList.add('selected');
-    selectedCategory = b.dataset.val;
+    selectedCategory = normalizeContentCategory(b.dataset.val);
     validateForm(); _saveDraft();
   });
 });
@@ -1008,8 +1019,13 @@ function _restoreDraft() {
 
   // Category & difficulty
   if (d.category) {
-    const btn = document.querySelector(`#cat-row .pill-btn[data-val="${d.category}"]`);
-    if (btn) { document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); selectedCategory = d.category; }
+    const restoredCategory = normalizeContentCategory(d.category);
+    const btn = document.querySelector(`#cat-row .pill-btn[data-val="${restoredCategory}"]`);
+    if (btn && !btn.disabled && !btn.classList.contains('locked')) {
+      document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedCategory = restoredCategory;
+    }
   }
   if (d.difficulty) {
     const btn = document.querySelector(`#diff-row .pill-btn[data-val="${d.difficulty}"]`);
@@ -1161,6 +1177,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     }
     const rangeRadius = await getConfiguredRangeRadius(map, selectedAgent, ability, selectedAbilityAliases());
     const submittedBy = authorDisplayName();
+    const contentType = normalizeContentCategory(selectedCategory);
     const batch = writeBatch(db);
 
     const lineupRef = doc(collection(db, 'lineups'));
@@ -1180,7 +1197,9 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       position_y: markerY,
       trajectory: trajectoryPoints,
       range_radius:  rangeRadius,
-      category:      selectedCategory,
+      category:      contentType,
+      content_type:  contentType,
+      schema_version: 1,
       difficulty:    selectedDifficulty,
       status:        'pending',
       submitted_at:  serverTimestamp(),

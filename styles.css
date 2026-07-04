@@ -72,6 +72,8 @@
     .pill-btn { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 20px; padding: 6px 14px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text2); transition: .15s; white-space: nowrap; }
     .pill-btn:hover { border-color: var(--primary); color: var(--text1); }
     .pill-btn.selected { border-color: var(--primary); background: rgba(79,195,247,0.12); color: var(--primary); }
+    .pill-btn.locked, .pill-btn:disabled { opacity: .48; cursor: not-allowed; }
+    .pill-btn.locked:hover, .pill-btn:disabled:hover { border-color: var(--border); color: var(--text2); }
     .selected-mode { border-color: var(--primary) !important; color: var(--primary) !important; }
 
     .input-wrap { position: relative; }
