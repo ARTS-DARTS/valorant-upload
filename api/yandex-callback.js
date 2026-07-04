@@ -29,6 +29,7 @@ const REDIRECT_URI         = 'https://vlineups.ru/api/yandex-callback';
 const APP_SCHEME = 'vlineupapp://yandex';
 const WEB_RETURN = 'https://vlineups.ru/';
 const PUBLIC_AUTH_ERROR = 'service_unavailable';
+const AUTH_EXPIRED_ERROR = 'auth_expired';
 
 // Веб-режим (state=web): возвращаем токен на сайт через query-параметр.
 function webRedirect(res, params) {
@@ -41,6 +42,20 @@ function authErrorRedirect(res, isWeb, reason = PUBLIC_AUTH_ERROR) {
   return isWeb
     ? webRedirect(res, `yandex_error=${safeReason}`)
     : appRedirect(res, `${APP_SCHEME}?error=${safeReason}`);
+}
+
+async function readJsonResponse(response, label) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error(`${label} returned invalid JSON`, {
+      status: response.status,
+      length: text.length,
+    });
+    return {};
+  }
 }
 
 // Chrome Custom Tab НЕ запускает custom-scheme intent из серверного 302 (нет тела → белый экран).
@@ -97,21 +112,31 @@ export default async function handler(req, res) {
         redirect_uri:  REDIRECT_URI,
       }),
     });
-    const tokenData = await tokenRes.json();
+    const tokenData = await readJsonResponse(tokenRes, 'Yandex token');
     if (!tokenData.access_token) {
-      console.error('Yandex token error:', {
+      const reason = tokenData?.error === 'invalid_grant' ? AUTH_EXPIRED_ERROR : PUBLIC_AUTH_ERROR;
+      const logPayload = {
         status: tokenRes.status,
         error: tokenData?.error,
         error_description: tokenData?.error_description,
-      });
-      return authErrorRedirect(res, isWeb);
+      };
+      if (reason === AUTH_EXPIRED_ERROR) {
+        console.warn('Yandex auth code expired or was already used:', logPayload);
+      } else {
+        console.error('Yandex token error:', logPayload);
+      }
+      return authErrorRedirect(res, isWeb, reason);
     }
 
     // 2. Получаем инфо о пользователе
     const infoRes = await fetch('https://login.yandex.ru/info?format=json', {
       headers: { 'Authorization': `OAuth ${tokenData.access_token}` },
     });
-    const info = await infoRes.json();
+    const info = await readJsonResponse(infoRes, 'Yandex profile');
+    if (!info?.id) {
+      console.error('Yandex profile response is missing id', { status: infoRes.status });
+      return authErrorRedirect(res, isWeb);
+    }
 
     const yandexId = String(info.id);
     const email    = info.default_email || `yandex_${yandexId}@yandex.ru`;

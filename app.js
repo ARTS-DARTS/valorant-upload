@@ -412,6 +412,9 @@ document.getElementById('btn-yandex').addEventListener('click', () => {
 
 function publicYandexAuthError(code) {
   const key = String(code || '').toLowerCase();
+  if (key === 'auth_expired') {
+    return 'Сессия входа через Яндекс истекла. Нажми "Войти через Яндекс" ещё раз.';
+  }
   if (key === 'service_unavailable' || key === 'token_failed' || key === 'config') {
     return 'Сервис входа через Яндекс сейчас недоступен. Попробуй позже или войди другим способом.';
   }
