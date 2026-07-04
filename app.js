@@ -1,5 +1,5 @@
 import { initializeApp }                    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup,
+import { getAuth,
          signInWithEmailAndPassword, signInWithCustomToken,
          signOut, onAuthStateChanged }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
@@ -385,28 +385,17 @@ onAuthStateChanged(auth, async user => {
   }
 });
 
-document.getElementById('tab-google-btn').addEventListener('click', () => {
-  document.getElementById('tab-google-btn').classList.add('active');
+document.getElementById('tab-yandex-btn').addEventListener('click', () => {
+  document.getElementById('tab-yandex-btn').classList.add('active');
   document.getElementById('tab-email-btn').classList.remove('active');
-  document.getElementById('tab-google').style.display = '';
+  document.getElementById('tab-yandex').style.display = '';
   document.getElementById('tab-email').style.display = 'none';
 });
 document.getElementById('tab-email-btn').addEventListener('click', () => {
   document.getElementById('tab-email-btn').classList.add('active');
-  document.getElementById('tab-google-btn').classList.remove('active');
+  document.getElementById('tab-yandex-btn').classList.remove('active');
   document.getElementById('tab-email').style.display = '';
-  document.getElementById('tab-google').style.display = 'none';
-});
-
-document.getElementById('btn-google').addEventListener('click', async () => {
-  const btn = document.getElementById('btn-google');
-  btn.disabled = true;
-  try {
-    await signInWithPopup(auth, new GoogleAuthProvider());
-  } catch (e) {
-    showAuthErr(e.message);
-    btn.disabled = false;
-  }
+  document.getElementById('tab-yandex').style.display = 'none';
 });
 
 // ── Яндекс (веб-режим) ──────────────────────────────────────────────────────

@@ -9,7 +9,16 @@ dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
 function initFirebase() {
   if (!getApps().length) {
-    const sa = JSON.parse((process.env.FIREBASE_SERVICE_ACCOUNT ?? '').replace(/﻿/g, '').trim());
+    const raw = (process.env.FIREBASE_SERVICE_ACCOUNT ?? '').replace(/﻿/g, '').trim();
+    if (!raw) {
+      throw new Error('Firebase service account env is empty');
+    }
+    let sa;
+    try {
+      sa = JSON.parse(raw);
+    } catch (e) {
+      throw new Error('Firebase service account env is invalid JSON');
+    }
     initializeApp({ credential: cert(sa) });
   }
 }
