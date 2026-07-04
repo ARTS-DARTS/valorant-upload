@@ -114,13 +114,14 @@ export default async function handler(req, res) {
     });
     const tokenData = await readJsonResponse(tokenRes, 'Yandex token');
     if (!tokenData.access_token) {
-      const reason = tokenData?.error === 'invalid_grant' ? AUTH_EXPIRED_ERROR : PUBLIC_AUTH_ERROR;
+      const isExpiredCode = tokenData?.error === 'invalid_grant' || tokenData?.error === 'bad_verification_code';
+      const reason = isExpiredCode ? AUTH_EXPIRED_ERROR : PUBLIC_AUTH_ERROR;
       const logPayload = {
         status: tokenRes.status,
         error: tokenData?.error,
         error_description: tokenData?.error_description,
       };
-      if (reason === AUTH_EXPIRED_ERROR) {
+      if (isExpiredCode) {
         console.warn('Yandex auth code expired or was already used:', logPayload);
       } else {
         console.error('Yandex token error:', logPayload);
