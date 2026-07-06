@@ -917,6 +917,16 @@ function setMarkerPosition(x, y) {
   marker.style.top = (top / content.wrapHeight * 100) + '%';
 }
 
+function trajectoryFromMarker(points = trajectoryPoints) {
+  const clean = (Array.isArray(points) ? points : [])
+    .map(p => ({ x: Number(p?.x), y: Number(p?.y) }))
+    .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+  if (markerX === null || markerY === null || !clean.length) return clean;
+  const path = clean.map(p => ({ ...p }));
+  path[0] = { x: markerX, y: markerY };
+  return path;
+}
+
 document.getElementById('map-wrap').addEventListener('click', e => {
   const img = document.getElementById('map-img');
   if (img.style.display === 'none') return;
@@ -924,9 +934,14 @@ document.getElementById('map-wrap').addEventListener('click', e => {
 
   if (mapMode === 'position') {
     markerX = x; markerY = y;
+    if (trajectoryPoints.length) trajectoryPoints[0] = { x, y };
     setMarkerPosition(x, y);
     updateMarkerIcon();
+    renderTrajectory();
   } else {
+    if (markerX !== null && trajectoryPoints.length === 0) {
+      trajectoryPoints.push({ x: markerX, y: markerY });
+    }
     trajectoryPoints.push({ x, y });
     renderTrajectory();
   }
@@ -941,6 +956,7 @@ function renderTrajectory() {
   const svg = document.createElementNS(ns, 'svg');
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
   const content = mapContentRect();
+  const path = trajectoryFromMarker();
   const mid = 'ul-arr';
   const defs = document.createElementNS(ns, 'defs');
   const mkr  = document.createElementNS(ns, 'marker');
@@ -951,7 +967,7 @@ function renderTrajectory() {
   const tri = document.createElementNS(ns, 'polygon');
   tri.setAttribute('points', '0 0, 10 4, 0 8'); tri.setAttribute('fill', '#FF4655');
   mkr.appendChild(tri); defs.appendChild(mkr); svg.appendChild(defs);
-  const coords = trajectoryPoints.map(p => `${(content.left + p.x*content.width).toFixed(1)},${(content.top + p.y*content.height).toFixed(1)}`).join(' ');
+  const coords = path.map(p => `${(content.left + p.x*content.width).toFixed(1)},${(content.top + p.y*content.height).toFixed(1)}`).join(' ');
   const poly = document.createElementNS(ns, 'polyline');
   poly.setAttribute('points', coords);
   poly.setAttribute('fill', 'none');   poly.setAttribute('stroke', '#FF4655');
@@ -959,10 +975,10 @@ function renderTrajectory() {
   poly.setAttribute('stroke-linejoin', 'round'); poly.setAttribute('stroke-linecap', 'round');
   poly.setAttribute('marker-end', `url(#${mid})`);
   svg.appendChild(poly);
-  for (let i = 0; i < trajectoryPoints.length; i++) {
+  for (let i = 0; i < path.length; i++) {
     const dot = document.createElementNS(ns, 'circle');
-    dot.setAttribute('cx', (content.left + trajectoryPoints[i].x*content.width).toFixed(1));
-    dot.setAttribute('cy', (content.top + trajectoryPoints[i].y*content.height).toFixed(1));
+    dot.setAttribute('cx', (content.left + path[i].x*content.width).toFixed(1));
+    dot.setAttribute('cy', (content.top + path[i].y*content.height).toFixed(1));
     dot.setAttribute('r', i === 0 ? '5' : '3.5');
     dot.setAttribute('fill', '#FF4655');
     dot.setAttribute('stroke', 'rgba(255,255,255,0.45)'); dot.setAttribute('stroke-width', '0.5');
@@ -1201,7 +1217,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       screenshots:   screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
       position_x: markerX,
       position_y: markerY,
-      trajectory: trajectoryPoints,
+      trajectory: trajectoryFromMarker(),
       range_radius:  rangeRadius,
       category:      contentType,
       content_type:  contentType,
