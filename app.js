@@ -69,6 +69,12 @@ function normalizeContentCategory(value) {
   return raw;
 }
 
+const ENABLED_UPLOAD_CONTENT_TYPES = new Set(['lineup']);
+
+function canSubmitContentCategory(value) {
+  return ENABLED_UPLOAD_CONTENT_TYPES.has(normalizeContentCategory(value));
+}
+
 async function getConfiguredRangeRadius(map, agent, ability, abilityAliases = []) {
   if (!map || !agent || !ability) return 0;
   const names = [...new Set([ability, ...abilityAliases].filter(Boolean).map(String))];
@@ -564,6 +570,13 @@ document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => {
     document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
     b.classList.add('selected');
     selectedCategory = normalizeContentCategory(b.dataset.val);
+    if (!canSubmitContentCategory(selectedCategory)) {
+      selectedCategory = null;
+      b.classList.remove('selected');
+      toast('Эта категория пока закрыта для отправки.', 'i');
+      validateForm(); _saveDraft();
+      return;
+    }
     validateForm(); _saveDraft();
   });
 });
@@ -1129,6 +1142,7 @@ function validateForm() {
     selectedAgent &&
     selectedAbility &&
     selectedCategory &&
+    canSubmitContentCategory(selectedCategory) &&
     selectedDifficulty &&
     document.getElementById('inp-title').value.trim().length > 0 &&
     markerX !== null;
@@ -1161,6 +1175,9 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
 
   if (!map || !selectedAgent || !selectedAbility || !selectedCategory || !selectedDifficulty) {
     toast('Заполни все обязательные поля', 'e'); return;
+  }
+  if (!canSubmitContentCategory(selectedCategory)) {
+    toast('Эта категория пока закрыта для отправки.', 'e'); return;
   }
   if (!title) { toast('Введи название', 'e'); return; }
   if (title.length > 100) { toast('Название слишком длинное', 'e'); return; }
@@ -1200,6 +1217,11 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     const rangeRadius = await getConfiguredRangeRadius(map, selectedAgent, ability, selectedAbilityAliases());
     const submittedBy = authorDisplayName();
     const contentType = normalizeContentCategory(selectedCategory);
+    if (!canSubmitContentCategory(contentType)) {
+      toast('Эта категория пока закрыта для отправки.', 'e');
+      btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
+      return;
+    }
     const batch = writeBatch(db);
 
     const lineupRef = doc(collection(db, 'lineups'));
