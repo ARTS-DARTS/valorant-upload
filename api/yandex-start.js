@@ -24,6 +24,7 @@ export default function handler(req, res) {
   url.searchParams.set('client_id', YANDEX_CLIENT_ID);
   url.searchParams.set('redirect_uri', REDIRECT_URI);
   url.searchParams.set('state', state);
+  url.searchParams.set('force_confirm', 'yes');
 
   res.writeHead(302, { Location: url.toString() });
   res.end();

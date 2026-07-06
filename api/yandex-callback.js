@@ -31,6 +31,8 @@ const WEB_RETURN = 'https://vlineups.ru/';
 const ADMIN_RETURN = 'https://arts-darts.github.io/valorant-admin/admin_panel.html';
 const PUBLIC_AUTH_ERROR = 'service_unavailable';
 const AUTH_EXPIRED_ERROR = 'auth_expired';
+const WEB_ACCOUNT_MISSING_ERROR = 'web_account_missing';
+const WEB_PROFILE_INCOMPLETE_ERROR = 'web_profile_incomplete';
 
 // Веб-режим (state=web/admin): возвращаем токен через query-параметр.
 function webRedirect(res, params, target = WEB_RETURN) {
@@ -43,6 +45,12 @@ function authErrorRedirect(res, webTarget, reason = PUBLIC_AUTH_ERROR) {
   return webTarget
     ? webRedirect(res, `yandex_error=${safeReason}`, webTarget)
     : appRedirect(res, `${APP_SCHEME}?error=${safeReason}`);
+}
+
+function hasUsableNickname(data = {}) {
+  const name = String(data.name || data.username || data.displayName || '').trim();
+  const lower = String(data.name_lower || '').trim();
+  return Boolean(name && lower);
 }
 
 async function readJsonResponse(response, label) {
@@ -180,8 +188,15 @@ export default async function handler(req, res) {
 
     if (!linkedSnap.empty) {
       firebaseUid = linkedSnap.docs[0].id;
+      const linkedData = linkedSnap.docs[0].data() || {};
+      if (webTarget && !hasUsableNickname(linkedData)) {
+        return authErrorRedirect(res, webTarget, WEB_PROFILE_INCOMPLETE_ERROR);
+      }
       await db.collection('users').doc(firebaseUid).update({ last_seen: FieldValue.serverTimestamp() });
     } else {
+      if (webTarget) {
+        return authErrorRedirect(res, webTarget, WEB_ACCOUNT_MISSING_ERROR);
+      }
       firebaseUid = `yandex_${yandexId}`;
       const ref = db.collection('users').doc(firebaseUid);
       const doc = await ref.get();
