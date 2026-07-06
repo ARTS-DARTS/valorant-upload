@@ -28,19 +28,20 @@ const YANDEX_CLIENT_SECRET = (process.env.YANDEX_CLIENT_SECRET ?? '').replace(/�
 const REDIRECT_URI         = 'https://vlineups.ru/api/yandex-callback';
 const APP_SCHEME = 'vlineupapp://yandex';
 const WEB_RETURN = 'https://vlineups.ru/';
+const ADMIN_RETURN = 'https://arts-darts.github.io/valorant-admin/admin_panel.html';
 const PUBLIC_AUTH_ERROR = 'service_unavailable';
 const AUTH_EXPIRED_ERROR = 'auth_expired';
 
-// Веб-режим (state=web): возвращаем токен на сайт через query-параметр.
-function webRedirect(res, params) {
-  res.writeHead(302, { Location: `${WEB_RETURN}?${params}` });
+// Веб-режим (state=web/admin): возвращаем токен через query-параметр.
+function webRedirect(res, params, target = WEB_RETURN) {
+  res.writeHead(302, { Location: `${target}?${params}` });
   res.end();
 }
 
-function authErrorRedirect(res, isWeb, reason = PUBLIC_AUTH_ERROR) {
+function authErrorRedirect(res, webTarget, reason = PUBLIC_AUTH_ERROR) {
   const safeReason = encodeURIComponent(reason || PUBLIC_AUTH_ERROR);
-  return isWeb
-    ? webRedirect(res, `yandex_error=${safeReason}`)
+  return webTarget
+    ? webRedirect(res, `yandex_error=${safeReason}`, webTarget)
     : appRedirect(res, `${APP_SCHEME}?error=${safeReason}`);
 }
 
@@ -85,19 +86,18 @@ function appRedirect(res, url) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const { code, error } = req.query;
-  const isWeb = (req.query.state || '') === 'web';
+  const state = req.query.state || '';
+  const webTarget = state === 'admin' ? ADMIN_RETURN : state === 'web' ? WEB_RETURN : '';
 
   if (error || !code) {
     console.warn('Yandex auth returned without code:', error || 'no_code');
-    return authErrorRedirect(res, isWeb);
+    return authErrorRedirect(res, webTarget);
   }
 
   try {
-    const state = req.query.state || '';
-
     if (!YANDEX_CLIENT_ID || !YANDEX_CLIENT_SECRET) {
       console.error('Yandex OAuth env is not configured');
-      return authErrorRedirect(res, isWeb);
+      return authErrorRedirect(res, webTarget);
     }
 
     // 1. Меняем code на access_token
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
       } else {
         console.error('Yandex token error:', logPayload);
       }
-      return authErrorRedirect(res, isWeb, reason);
+      return authErrorRedirect(res, webTarget, reason);
     }
 
     // 2. Получаем инфо о пользователе
@@ -136,7 +136,7 @@ export default async function handler(req, res) {
     const info = await readJsonResponse(infoRes, 'Yandex profile');
     if (!info?.id) {
       console.error('Yandex profile response is missing id', { status: infoRes.status });
-      return authErrorRedirect(res, isWeb);
+      return authErrorRedirect(res, webTarget);
     }
 
     const yandexId = String(info.id);
@@ -210,11 +210,12 @@ export default async function handler(req, res) {
     const customToken = await getAuth().createCustomToken(firebaseUid, { yandex_id: yandexId, email, name });
 
     // 4a. Веб-режим: возвращаем токен на сайт через query-параметр
-    if (isWeb) {
+    if (webTarget) {
       return webRedirect(res,
         `yandex_token=${encodeURIComponent(customToken)}` +
         `&is_new=${isNew}` +
-        `&name=${encodeURIComponent(name)}`
+        `&name=${encodeURIComponent(name)}`,
+        webTarget
       );
     }
 
@@ -228,6 +229,6 @@ export default async function handler(req, res) {
     );
   } catch (e) {
     console.error('yandex-callback error:', e);
-    return authErrorRedirect(res, isWeb);
+    return authErrorRedirect(res, webTarget);
   }
 }
