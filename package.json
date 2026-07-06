@@ -2,7 +2,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check api/send-push.js && node --check api/notify-agent-subscribers.js && node --check api/valorant-proxy.js && node --check api/yandex-start.js && node --check api/yandex-callback.js && node --check app.js"
+    "check": "node --check server.js && node --check api/send-push.js && node --check api/notify-agent-subscribers.js && node --check api/valorant-proxy.js && node --check api/yandex-start.js && node --check api/yandex-callback.js && node --check api/moderator-application.js && node --check app.js"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

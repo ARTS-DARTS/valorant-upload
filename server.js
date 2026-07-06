@@ -8,6 +8,7 @@ import notifyAgentSubscribersHandler from './api/notify-agent-subscribers.js';
 import valorantProxyHandler from './api/valorant-proxy.js';
 import yandexCallbackHandler from './api/yandex-callback.js';
 import yandexStartHandler from './api/yandex-start.js';
+import moderatorApplicationHandler from './api/moderator-application.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,6 +44,7 @@ app.all('/api/notify-agent-subscribers', notifyAgentSubscribersHandler);
 app.all('/api/valorant-proxy', valorantProxyHandler);
 app.all('/api/yandex-start', yandexStartHandler);
 app.all('/api/yandex-callback', yandexCallbackHandler);
+app.all('/api/moderator-application', moderatorApplicationHandler);
 
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
