@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-08T17:24:16+03:00';
+const SITE_VERSION = '2026-07-08T19:22:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -360,6 +360,7 @@ let myLineupsSearch = '';
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
 let _cooldownInterval = null;
+let _profileUnsub = null;
 
 const LEVELS = [
   { min: 0,   name: 'Новобранец', icon: '🎯', color: '#808080', cooldownMinutes: 60 },
@@ -371,6 +372,12 @@ const LEVELS = [
   { min: 100, name: 'Легенда',    icon: '🏆', color: '#FF4655', cooldownMinutes: 0 },
 ];
 let _approvedLineups = 0;
+
+function effectiveApprovedLineups(factualApproved = 0) {
+  const storedApproved = Number(currentUserProfile?.approved_lineups || 0);
+  const bonusLineups = Number(currentUserProfile?.bonus_lineups || 0);
+  return Math.max(storedApproved, factualApproved) + bonusLineups;
+}
 
 function calculateLevel(approved) {
   return LEVELS.reduce((cur, lv) => approved >= lv.min ? lv : cur, LEVELS[0]);
@@ -447,7 +454,7 @@ function _subscribeStats(uid) {
     document.getElementById('stat-approved').textContent = approved;
     document.getElementById('stat-pending').textContent  = pending;
     document.getElementById('stat-rejected').textContent = rejected;
-    _updateLevelDisplay(approved);
+    _updateLevelDisplay(effectiveApprovedLineups(approved));
     renderAuthorWorkspace();
     document.getElementById('stats-loader').style.display = 'none';
     document.getElementById('stats-cards').style.display  = 'flex';
@@ -472,6 +479,22 @@ function _unsubscribeStats() {
   if (nameEl) { nameEl.textContent = '—'; nameEl.style.color = ''; }
   document.getElementById('level-icon').textContent = '—';
   _showCooldownReady();
+}
+
+function _subscribeUserProfile(uid) {
+  if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
+  _profileUnsub = onSnapshot(doc(db, 'users', uid), snap => {
+    currentUserProfile = snap.exists() ? snap.data() : null;
+    const approvedDocs = currentUserLineups.filter(x => x.status === 'approved').length;
+    _updateLevelDisplay(effectiveApprovedLineups(approvedDocs));
+    updateUploadGate();
+    renderAuthorWorkspace();
+    _updateCooldown(uid);
+  }, e => console.warn('profile listener', e.message));
+}
+
+function _unsubscribeUserProfile() {
+  if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
 }
 
 // ── Author workspace ─────────────────────────────────────────────────────────
@@ -715,18 +738,21 @@ function renderCabinetStats() {
   const target = document.getElementById('cabinet-stats-grid');
   if (!target) return;
   const approved = currentUserLineups.filter(x => x.status === 'approved').length;
+  const effectiveApproved = effectiveApprovedLineups(approved);
+  const bonusLineups = Number(currentUserProfile?.bonus_lineups || 0);
   const rejected = currentUserLineups.filter(x => x.status === 'rejected').length;
   const pending = currentUserLineups.filter(x => x.status !== 'approved' && x.status !== 'rejected').length;
   const viewed = Number(currentUserProfile?.lineups_viewed || 0);
-  const lv = calculateLevel(approved);
+  const lv = calculateLevel(effectiveApproved);
   target.innerHTML = `
     <div class="cabinet-stat"><span>Статус</span><b style="color:${esc(lv.color)}">${esc(lv.icon)} ${esc(lv.name)}</b></div>
-    <div class="cabinet-stat"><span>Одобрено</span><b style="color:var(--green)">${approved}</b></div>
+    <div class="cabinet-stat"><span>Счётчик</span><b style="color:var(--green)">${effectiveApproved}</b></div>
     <div class="cabinet-stat"><span>На проверке</span><b style="color:var(--orange)">${pending}</b></div>
     <div class="cabinet-stat"><span>Просмотрено</span><b>${viewed}</b></div>
     <div class="cabinet-stat"><span>Отклонено</span><b style="color:var(--red)">${rejected}</b></div>
+    <div class="cabinet-stat"><span>Одобрено факт</span><b>${approved}${bonusLineups ? ` +${bonusLineups}` : ''}</b></div>
     <div class="cabinet-stat"><span>Всего отправлено</span><b>${currentUserLineups.length}</b></div>
-    <div class="cabinet-stat"><span>КД отправки</span><b>${cooldownMinutesFor(approved)}м</b></div>
+    <div class="cabinet-stat"><span>КД отправки</span><b>${cooldownMinutesFor(effectiveApproved)}м</b></div>
     <div class="cabinet-stat"><span>Доступ</span><b>${canCurrentUserUpload() ? 'Можно' : `${Math.min(viewed, UPLOAD_REQUIRED_VIEWS)}/${UPLOAD_REQUIRED_VIEWS}`}</b></div>`;
 }
 
@@ -785,6 +811,7 @@ onAuthStateChanged(auth, async user => {
     await loadCurrentUserProfile(user);
     document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
     updateUploadGate();
+    _subscribeUserProfile(user.uid);
     _subscribeStats(user.uid);
     _updateCooldown(user.uid);
     const av = document.getElementById('user-avatar');
@@ -794,6 +821,7 @@ onAuthStateChanged(auth, async user => {
   } else {
     currentUserProfile = null;
     updateUploadGate();
+    _unsubscribeUserProfile();
     _unsubscribeStats();
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('form-screen').style.display = 'none';
@@ -1710,6 +1738,7 @@ function showSuccess() {
 
 window.addEventListener('beforeunload', () => {
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
+  if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
   _clearCooldownTimer();
 });
 
