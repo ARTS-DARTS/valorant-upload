@@ -101,6 +101,8 @@ async function logUploadError(error, context = {}) {
       context,
       uid: auth.currentUser.uid,
       user_id: auth.currentUser.uid,
+      user_name: currentUserProfile?.name || currentUserProfile?.username || currentUserProfile?.displayName || auth.currentUser.displayName || '',
+      user_email: currentUserProfile?.email || currentUserProfile?.user_email || auth.currentUser.email || '',
       platform: 'web',
       appVersion: 'upload-site',
       url: location.href,
