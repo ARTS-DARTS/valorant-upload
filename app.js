@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-08T20:44:59+03:00';
+const SITE_VERSION = '2026-07-08T21:41:12+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -112,6 +112,64 @@ async function logUploadError(error, context = {}) {
   } catch (e) {
     console.warn('logUploadError', e.message);
   }
+}
+
+function diagnosticTimestamp(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value.toDate === 'function') return value.toDate().toISOString();
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  return String(value);
+}
+
+function userDiagnostics(profile = currentUserProfile || {}) {
+  const info = userTrialInfo(profile);
+  const role = String(profile.role || 'user');
+  return {
+    uid: auth.currentUser?.uid || '',
+    name: profile.name || profile.username || profile.displayName || auth.currentUser?.displayName || '',
+    email: profile.email || profile.user_email || auth.currentUser?.email || '',
+    role,
+    is_admin_or_moderator: role === 'admin' || role === 'moderator',
+    can_upload: role === 'admin' || role === 'moderator' || info.verified,
+    gate_message: role === 'admin' || role === 'moderator' || info.verified ? '' : uploadGateMessage(),
+    lineups_viewed: info.viewed,
+    approved_lineups: Number(profile.approved_lineups || 0),
+    bonus_lineups: Number(profile.bonus_lineups || 0),
+    verified_not_fake: !!profile.verified_not_fake,
+    pre_tracking: info.preTracking,
+    created_at: diagnosticTimestamp(profile.created_at),
+    last_seen: diagnosticTimestamp(profile.last_seen),
+  };
+}
+
+function submitFormDiagnostics({ title = '', desc = '', map = '', ability = '', contentType = '' } = {}) {
+  const reasons = [];
+  if (!currentUser) reasons.push('no_current_user');
+  if (!map) reasons.push('missing_map');
+  if (!selectedAgent) reasons.push('missing_agent');
+  if (!ability) reasons.push('missing_normalized_ability');
+  if (!selectedAbility) reasons.push('missing_selected_ability');
+  if (!selectedCategory) reasons.push('missing_category');
+  if (!canSubmitContentCategory(contentType || selectedCategory)) reasons.push('content_type_closed');
+  if (!selectedDifficulty) reasons.push('missing_difficulty');
+  if (!title.trim()) reasons.push('missing_title');
+  if (title.length > 100) reasons.push('title_too_long');
+  if (desc.length > 1000) reasons.push('description_too_long');
+  if (markerX === null || markerY === null) reasons.push('missing_marker');
+  if (screenshots.some(s => s.uploading)) reasons.push('screenshots_uploading');
+  return {
+    client_ok: reasons.length === 0,
+    client_block_reasons: reasons,
+    title_length: title.length,
+    description_length: desc.length,
+    has_video: !!videoUrl,
+    screenshots_total: screenshots.length,
+    screenshots_uploaded: screenshots.filter(s => s.cloudUrl).length,
+    marker_x: markerX,
+    marker_y: markerY,
+    trajectory_points: trajectoryPoints.length,
+  };
 }
 
 function userTrialInfo(u = {}) {
@@ -1663,20 +1721,37 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   if (markerX === null) { toast('Поставь метку на карте', 'e'); return; }
 
   const uid = currentUser.uid;
+  let rateLimitDiagnostics = { read: false };
   try {
     const rateDoc = await getDoc(doc(db, 'rate_limits', uid));
+    rateLimitDiagnostics = {
+      read: true,
+      exists: rateDoc.exists(),
+      last_lineup_at: diagnosticTimestamp(rateDoc.data()?.last_lineup_at),
+      last_lineup_id: rateDoc.data()?.last_lineup_id || '',
+      cooldown_minutes: cooldownMinutesFor(_approvedLineups),
+      approved_for_cooldown: _approvedLineups,
+    };
     if (rateDoc.exists()) {
       const lastAt = rateDoc.data()?.last_lineup_at?.toDate?.();
       if (lastAt) {
         const diffMin = (Date.now() - lastAt.getTime()) / 60000;
         const cooldownMin = cooldownMinutesFor(_approvedLineups);
+        rateLimitDiagnostics.minutes_since_last_lineup = Math.floor(diffMin * 10) / 10;
+        rateLimitDiagnostics.remaining_minutes = Math.max(0, Math.ceil(cooldownMin - diffMin));
         if (diffMin < cooldownMin) {
           toast(`Подожди ещё ${Math.ceil(cooldownMin - diffMin)} мин.`, 'w');
           return;
         }
       }
     }
-  } catch (_) {}
+  } catch (rateError) {
+    rateLimitDiagnostics = {
+      read: false,
+      error_code: String(rateError?.code || ''),
+      error_message: String(rateError?.message || rateError || '').slice(0, 500),
+    };
+  }
 
   if (screenshots.some(s => s.uploading)) {
     toast('Подожди — фото ещё загружаются…', 'i'); return;
@@ -1685,16 +1760,21 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   const btn = document.getElementById('btn-submit');
   btn.disabled = true; btn.textContent = 'Отправка…';
 
+  let normalizedAbility = '';
+  let contentType = '';
+  let rangeRadius = null;
+  let lineupId = '';
+  let submittedPayloadDiagnostics = {};
   try {
-    const ability = normalizeAbilityName(selectedAgent, selectedAbility);
-    if (!ability) {
+    normalizedAbility = normalizeAbilityName(selectedAgent, selectedAbility);
+    if (!normalizedAbility) {
       toast('Выбери способность агента', 'e');
       btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
       return;
     }
-    const rangeRadius = await getConfiguredRangeRadius(map, selectedAgent, ability, selectedAbilityAliases());
+    rangeRadius = await getConfiguredRangeRadius(map, selectedAgent, normalizedAbility, selectedAbilityAliases());
     const submittedBy = authorDisplayName();
-    const contentType = normalizeContentCategory(selectedCategory);
+    contentType = normalizeContentCategory(selectedCategory);
     if (!canSubmitContentCategory(contentType)) {
       toast('Эта категория пока закрыта для отправки.', 'e');
       btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
@@ -1703,6 +1783,26 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     const batch = writeBatch(db);
 
     const lineupRef = doc(collection(db, 'lineups'));
+    lineupId = lineupRef.id;
+    submittedPayloadDiagnostics = {
+      lineup_id: lineupId,
+      map,
+      agent: selectedAgent,
+      selected_ability: selectedAbility,
+      normalized_ability: normalizedAbility,
+      ability_aliases: selectedAbilityAliases(),
+      category: selectedCategory,
+      content_type: contentType,
+      difficulty: selectedDifficulty,
+      range_radius: rangeRadius,
+      user_id: uid,
+      submitted_by: submittedBy,
+      submitted_at: 'serverTimestamp()',
+      rate_limit_last_lineup_at: 'serverTimestamp()',
+      source: 'web',
+      schema_version: 1,
+      ...submitFormDiagnostics({ title, desc, map, ability: normalizedAbility, contentType }),
+    };
     batch.set(doc(db, 'rate_limits', uid), {
       last_lineup_at: serverTimestamp(),
       last_lineup_id: lineupRef.id,
@@ -1710,7 +1810,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     batch.set(lineupRef, {
       map,
       agent:         selectedAgent,
-      ability,
+      ability:       normalizedAbility,
       title,
       description:   desc,
       video_url:     videoUrl || null,
@@ -1739,11 +1839,22 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   } catch (e) {
     await logUploadError(e, {
       action: 'submit_lineup',
+      stage: 'batch_commit',
       map,
       agent: selectedAgent,
       ability: selectedAbility,
+      normalized_ability: normalizedAbility,
       category: selectedCategory,
-      lineups_viewed: Number(currentUserProfile?.lineups_viewed || 0),
+      content_type: contentType,
+      lineup_id: lineupId,
+      user: userDiagnostics(),
+      rate_limit: rateLimitDiagnostics,
+      payload: submittedPayloadDiagnostics,
+      rules_expectation: {
+        isValidLineupData_expected: !!submittedPayloadDiagnostics.client_ok,
+        userCanCreateLineup_expected: !!userDiagnostics().can_upload,
+        lineupNotOnCooldown_expected: !rateLimitDiagnostics.remaining_minutes,
+      },
     });
     toast('Ошибка отправки: ' + toSafeErrorMessage(e), 'e');
     btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
