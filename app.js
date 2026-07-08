@@ -321,6 +321,8 @@ let mapMode = 'position';
 let videoUrl = null;
 let videoXhr = null;
 let screenshots = [];
+let currentUserLineups = [];
+let activeWorkspaceTab = 'upload';
 
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
@@ -395,20 +397,30 @@ function _subscribeStats(uid) {
   const q = query(collection(db, 'lineups'), where('user_id', '==', uid));
   _statsUnsub = onSnapshot(q, snap => {
     let approved = 0, pending = 0, rejected = 0;
+    currentUserLineups = [];
     snap.forEach(d => {
-      const s = d.data().status;
+      const data = d.data();
+      currentUserLineups.push({ id: d.id, ...data });
+      const s = data.status;
       if (s === 'approved') approved++;
       else if (s === 'rejected') rejected++;
       else pending++;
+    });
+    currentUserLineups.sort((a, b) => {
+      const at = b.submitted_at?.toMillis?.() || b.created_at?.toMillis?.() || 0;
+      const bt = a.submitted_at?.toMillis?.() || a.created_at?.toMillis?.() || 0;
+      return at - bt;
     });
     document.getElementById('stat-approved').textContent = approved;
     document.getElementById('stat-pending').textContent  = pending;
     document.getElementById('stat-rejected').textContent = rejected;
     _updateLevelDisplay(approved);
+    renderAuthorWorkspace();
     document.getElementById('stats-loader').style.display = 'none';
     document.getElementById('stats-cards').style.display  = 'flex';
   }, () => {
     document.getElementById('stats-loader').textContent = 'Ошибка загрузки';
+    renderAuthorWorkspace();
   });
 }
 
@@ -421,11 +433,146 @@ function _unsubscribeStats() {
   ['stat-approved', 'stat-pending', 'stat-rejected'].forEach(id => {
     document.getElementById(id).textContent = '—';
   });
+  currentUserLineups = [];
+  renderAuthorWorkspace();
   const nameEl = document.getElementById('level-name');
   if (nameEl) { nameEl.textContent = '—'; nameEl.style.color = ''; }
   document.getElementById('level-icon').textContent = '—';
   _showCooldownReady();
 }
+
+// ── Author workspace ─────────────────────────────────────────────────────────
+function initWorkspaceTabs() {
+  document.querySelectorAll('.workspace-tab').forEach(btn => {
+    btn.addEventListener('click', () => switchWorkspaceTab(btn.dataset.workspaceTab || 'upload'));
+  });
+  document.getElementById('btn-refresh-workspace')?.addEventListener('click', async () => {
+    if (currentUser) {
+      await loadCurrentUserProfile(currentUser);
+      updateUploadGate();
+      renderAuthorWorkspace();
+      toast('Кабинет обновлён', 's');
+    }
+  });
+}
+
+function switchWorkspaceTab(tab) {
+  activeWorkspaceTab = tab || 'upload';
+  document.querySelectorAll('.workspace-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.workspaceTab === activeWorkspaceTab);
+  });
+  document.querySelectorAll('.workspace-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.id === `workspace-${activeWorkspaceTab}`);
+  });
+  renderAuthorWorkspace();
+}
+
+function statusLabel(status) {
+  if (status === 'approved') return 'Одобрен';
+  if (status === 'rejected') return 'Отклонён';
+  return 'На проверке';
+}
+
+function formatDocDate(docData) {
+  const date = docData.submitted_at?.toDate?.() || docData.created_at?.toDate?.();
+  if (!date) return 'без даты';
+  return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function renderLineupList(targetId, items, emptyTitle, emptyText) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  if (!currentUser) {
+    target.innerHTML = `<div class="empty-state"><strong>Войди в аккаунт</strong>Здесь появятся твои материалы.</div>`;
+    return;
+  }
+  if (!items.length) {
+    target.innerHTML = `<div class="empty-state"><strong>${esc(emptyTitle)}</strong>${esc(emptyText)}</div>`;
+    return;
+  }
+  target.innerHTML = items.map(item => {
+    const status = item.status || 'pending';
+    const title = firstText(item.title, 'Без названия');
+    const meta = [
+      item.map,
+      item.agent,
+      item.ability,
+      item.difficulty,
+      formatDocDate(item),
+    ].filter(Boolean);
+    return `
+      <article class="lineup-card">
+        <div>
+          <div class="lineup-title">${esc(title)}</div>
+          <div class="lineup-meta">
+            ${meta.map(value => `<span class="lineup-chip">${esc(value)}</span>`).join('')}
+          </div>
+        </div>
+        <span class="status-chip ${esc(status)}">${esc(statusLabel(status))}</span>
+      </article>`;
+  }).join('');
+}
+
+function renderDrafts() {
+  const target = document.getElementById('drafts-list');
+  if (!target) return;
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem('vl_lineup_draft')); } catch (_) {}
+  if (!draft || (!draft.title && !draft.map && !draft.agent && !draft.videoUrl && !draft.screenshots?.length)) {
+    target.innerHTML = '<div class="empty-state"><strong>Черновиков нет</strong>Начни заполнять форму, и сайт сохранит незавершённый лайнап на этом устройстве.</div>';
+    return;
+  }
+  const meta = [draft.map, draft.agent, draft.ability, draft.difficulty].filter(Boolean);
+  target.innerHTML = `
+    <article class="lineup-card">
+      <div>
+        <div class="lineup-title">${esc(firstText(draft.title, 'Черновик лайнапа'))}</div>
+        <div class="lineup-meta">
+          ${meta.map(value => `<span class="lineup-chip">${esc(value)}</span>`).join('')}
+          <span class="lineup-chip">На этом устройстве</span>
+        </div>
+      </div>
+      <span class="status-chip pending">Черновик</span>
+    </article>`;
+}
+
+function renderCabinetStats() {
+  const target = document.getElementById('cabinet-stats-grid');
+  if (!target) return;
+  const approved = currentUserLineups.filter(x => x.status === 'approved').length;
+  const rejected = currentUserLineups.filter(x => x.status === 'rejected').length;
+  const pending = currentUserLineups.filter(x => x.status !== 'approved' && x.status !== 'rejected').length;
+  const viewed = Number(currentUserProfile?.lineups_viewed || 0);
+  const lv = calculateLevel(approved);
+  target.innerHTML = `
+    <div class="cabinet-stat"><span>Статус</span><b style="color:${esc(lv.color)}">${esc(lv.icon)} ${esc(lv.name)}</b></div>
+    <div class="cabinet-stat"><span>Одобрено</span><b style="color:var(--green)">${approved}</b></div>
+    <div class="cabinet-stat"><span>На проверке</span><b style="color:var(--orange)">${pending}</b></div>
+    <div class="cabinet-stat"><span>Просмотрено</span><b>${viewed}</b></div>
+    <div class="cabinet-stat"><span>Отклонено</span><b style="color:var(--red)">${rejected}</b></div>
+    <div class="cabinet-stat"><span>Всего отправлено</span><b>${currentUserLineups.length}</b></div>
+    <div class="cabinet-stat"><span>КД отправки</span><b>${cooldownMinutesFor(approved)}м</b></div>
+    <div class="cabinet-stat"><span>Доступ</span><b>${canCurrentUserUpload() ? 'Можно' : `${Math.min(viewed, UPLOAD_REQUIRED_VIEWS)}/${UPLOAD_REQUIRED_VIEWS}`}</b></div>`;
+}
+
+function renderAuthorWorkspace() {
+  renderLineupList(
+    'my-lineups-list',
+    currentUserLineups,
+    'Лайнапов пока нет',
+    'Отправь первый лайнап, и он появится здесь со статусом проверки.'
+  );
+  renderLineupList(
+    'rejected-lineups-list',
+    currentUserLineups.filter(x => x.status === 'rejected'),
+    'Отклонённых нет',
+    'Если модератор отклонит материал, он появится здесь для будущей доработки.'
+  );
+  renderDrafts();
+  renderCabinetStats();
+}
+
+initWorkspaceTabs();
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function authorDisplayName() {
