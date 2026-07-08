@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-08T16:30:43+03:00';
+const SITE_VERSION = '2026-07-08T17:24:16+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -83,7 +83,8 @@ function toSafeErrorMessage(error) {
   const code = String(error?.code || '').toLowerCase();
   const msg = String(error?.message || error || '');
   if (code.includes('permission-denied') || /permission|permission-denied|insufficient/i.test(msg)) {
-    return uploadGateMessage();
+    if (!canCurrentUserUpload()) return uploadGateMessage();
+    return 'Сервер не принял лайнап. Обнови страницу и попробуй ещё раз. Ошибка уже записана в логи.';
   }
   return msg || 'Неизвестная ошибка';
 }
@@ -123,6 +124,9 @@ function userTrialInfo(u = {}) {
 function uploadGateMessage() {
   const viewed = Number(currentUserProfile?.lineups_viewed || 0);
   const left = Math.max(0, UPLOAD_REQUIRED_VIEWS - viewed);
+  if (left <= 0) {
+    return 'Просмотры уже выполнены. Обнови страницу и попробуй отправить ещё раз.';
+  }
   return `Чтобы выкладывать лайнапы, сначала посмотри ${UPLOAD_REQUIRED_VIEWS} лайнапов в приложении. Осталось: ${left}. Спасибо!`;
 }
 
@@ -1587,6 +1591,8 @@ function selectedAbilityAliases() {
 // ── Submit ────────────────────────────────────────────────────────────────────
 document.getElementById('btn-submit').addEventListener('click', async () => {
   if (!currentUser) { toast('Войди в аккаунт', 'e'); return; }
+  await loadCurrentUserProfile(currentUser);
+  updateUploadGate();
   if (!canCurrentUserUpload()) {
     updateUploadGate();
     toast(uploadGateMessage(), 'w');
