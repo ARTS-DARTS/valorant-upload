@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-08T16:11:00+03:00';
+const SITE_VERSION = '2026-07-08T16:15:23+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -473,6 +473,23 @@ function initWorkspaceTabs() {
   document.querySelectorAll('.workspace-tab').forEach(btn => {
     btn.addEventListener('click', () => switchWorkspaceTab(btn.dataset.workspaceTab || 'upload'));
   });
+  document.querySelectorAll('.lineup-list').forEach(list => {
+    list.addEventListener('click', event => {
+      const card = event.target.closest('.lineup-card[data-lineup-id]');
+      if (card) openLineupDetail(card.dataset.lineupId);
+    });
+    list.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const card = event.target.closest('.lineup-card[data-lineup-id]');
+      if (!card) return;
+      event.preventDefault();
+      openLineupDetail(card.dataset.lineupId);
+    });
+  });
+  document.getElementById('detail-close')?.addEventListener('click', closeLineupDetail);
+  document.getElementById('lineup-detail-screen')?.addEventListener('click', event => {
+    if (event.target.id === 'lineup-detail-screen') closeLineupDetail();
+  });
   document.getElementById('btn-refresh-workspace')?.addEventListener('click', async () => {
     if (currentUser) {
       await loadCurrentUserProfile(currentUser);
@@ -500,10 +517,18 @@ function statusLabel(status) {
   return 'На проверке';
 }
 
-function formatDocDate(docData) {
+function docDate(docData) {
   const date = docData.submitted_at?.toDate?.() || docData.created_at?.toDate?.();
-  if (!date) return 'без даты';
-  return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  return date || null;
+}
+
+function formatClockDate(docData) {
+  const date = docDate(docData);
+  if (!date) return { time: '--:--', date: 'без даты' };
+  return {
+    time: date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+    date: date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+  };
 }
 
 function renderLineupList(targetId, items, emptyTitle, emptyText) {
@@ -520,24 +545,78 @@ function renderLineupList(targetId, items, emptyTitle, emptyText) {
   target.innerHTML = items.map(item => {
     const status = item.status || 'pending';
     const title = firstText(item.title, 'Без названия');
+    const stamp = formatClockDate(item);
     const meta = [
       item.map,
       item.agent,
       item.ability,
       item.difficulty,
-      formatDocDate(item),
     ].filter(Boolean);
     return `
-      <article class="lineup-card">
+      <article class="lineup-card clickable" data-lineup-id="${esc(item.id)}" tabindex="0" role="button" aria-label="Открыть лайнап ${esc(title)}">
         <div>
           <div class="lineup-title">${esc(title)}</div>
           <div class="lineup-meta">
             ${meta.map(value => `<span class="lineup-chip">${esc(value)}</span>`).join('')}
+            <span class="lineup-chip lineup-date-chip"><b>${esc(stamp.time)}</b><span>${esc(stamp.date)}</span></span>
           </div>
         </div>
         <span class="status-chip ${esc(status)}">${esc(statusLabel(status))}</span>
       </article>`;
   }).join('');
+}
+
+function findOwnLineup(id) {
+  return currentUserLineups.find(item => item.id === id) || null;
+}
+
+function openLineupDetail(lineupId) {
+  const item = findOwnLineup(lineupId);
+  if (!item) {
+    toast('Лайнап не найден в списке', 'e');
+    return;
+  }
+  const screen = document.getElementById('lineup-detail-screen');
+  const titleEl = document.getElementById('detail-title');
+  const body = document.getElementById('detail-body');
+  if (!screen || !titleEl || !body) return;
+
+  const title = firstText(item.title, 'Без названия');
+  const stamp = formatClockDate(item);
+  const description = firstText(item.description, 'Описание не добавлено.');
+  const rejection = firstText(item.rejection_reason, item.reject_reason, item.moderation_reason);
+  const shots = Array.isArray(item.screenshots) ? item.screenshots.filter(Boolean) : [];
+  const status = item.status || 'pending';
+
+  titleEl.textContent = title;
+  body.innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-tile"><span>Статус</span><b>${esc(statusLabel(status))}</b></div>
+      <div class="detail-tile"><span>Карта</span><b>${esc(firstText(item.map, '—'))}</b></div>
+      <div class="detail-tile"><span>Агент</span><b>${esc(firstText(item.agent, '—'))}</b></div>
+      <div class="detail-tile"><span>Дата</span><b>${esc(stamp.time)}<br>${esc(stamp.date)}</b></div>
+      <div class="detail-tile"><span>Абилка</span><b>${esc(firstText(item.ability, '—'))}</b></div>
+      <div class="detail-tile"><span>Сложность</span><b>${esc(firstText(item.difficulty, '—'))}</b></div>
+      <div class="detail-tile"><span>Категория</span><b>${esc(firstText(item.content_type, item.category, 'lineup'))}</b></div>
+      <div class="detail-tile"><span>ID</span><b>${esc(item.id)}</b></div>
+    </div>
+    ${rejection ? `<div class="detail-section"><div class="detail-section-title">Причина отклонения</div><div class="detail-warning">${esc(rejection)}</div></div>` : ''}
+    <div class="detail-section">
+      <div class="detail-section-title">Описание</div>
+      <div class="detail-text">${esc(description)}</div>
+    </div>
+    ${item.video_url ? `<div class="detail-section"><div class="detail-section-title">Видео</div><video class="detail-video" controls preload="metadata" src="${esc(item.video_url)}"></video></div>` : ''}
+    ${shots.length ? `<div class="detail-section"><div class="detail-section-title">Скриншоты</div><div class="detail-shots">${shots.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt=""></a>`).join('')}</div></div>` : ''}
+  `;
+  screen.style.display = 'flex';
+}
+
+function closeLineupDetail() {
+  const screen = document.getElementById('lineup-detail-screen');
+  if (!screen) return;
+  screen.style.display = 'none';
+  const video = screen.querySelector('video');
+  if (video) video.pause();
 }
 
 function renderDrafts() {

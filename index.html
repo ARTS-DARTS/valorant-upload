@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 26.07.08 16:11</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 16:15 · 08.07.2026</div>
   <div class="user-info" id="header-user" style="display:none;">
     <img id="user-avatar" src="" alt="" style="display:none;">
     <span id="user-name"></span>
@@ -319,6 +319,20 @@
     <div class="success-title">Лайнап отправлен!</div>
     <div class="success-sub">Он появится после проверки модератором.<br>Спасибо за вклад в базу лайнапов!</div>
     <button class="btn-primary" id="btn-another">Отправить ещё один</button>
+  </div>
+</div>
+
+<!-- Own lineup detail modal -->
+<div id="lineup-detail-screen" style="display:none;" class="success-overlay">
+  <div class="lineup-detail-card">
+    <div class="lineup-detail-head">
+      <div>
+        <div class="workspace-kicker">Карточка лайнапа</div>
+        <h2 id="detail-title">Лайнап</h2>
+      </div>
+      <button id="detail-close" class="modal-close" type="button">✕</button>
+    </div>
+    <div id="detail-body"></div>
   </div>
 </div>
 
