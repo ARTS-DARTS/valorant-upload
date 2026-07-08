@@ -21,6 +21,8 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
+const SITE_VERSION = '2026-07-08T16:11:00+03:00';
+const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
 const SEL_SECRET_KEY = 'e2ffe93a51ba4c05abadc810d9c0edfc';
@@ -153,6 +155,31 @@ window.addEventListener('error', event => {
 window.addEventListener('unhandledrejection', event => {
   logUploadError(event.reason || 'Unhandled rejection', { action: 'unhandledrejection' });
 });
+
+function showSiteUpdateBanner() {
+  document.getElementById('site-update-banner')?.classList.add('show');
+}
+
+async function checkSiteVersion() {
+  try {
+    const res = await fetch(`/site-version.json?v=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const liveVersion = String(data.version || '').trim();
+    if (liveVersion && liveVersion !== SITE_VERSION) showSiteUpdateBanner();
+  } catch (_) {}
+}
+
+function initSiteVersionWatcher() {
+  document.getElementById('btn-reload-site')?.addEventListener('click', () => {
+    location.reload();
+  });
+  checkSiteVersion();
+  setInterval(checkSiteVersion, SITE_VERSION_POLL_MS);
+}
 
 async function getConfiguredRangeRadius(map, agent, ability, abilityAliases = []) {
   if (!map || !agent || !ability) return 0;
@@ -573,6 +600,7 @@ function renderAuthorWorkspace() {
 }
 
 initWorkspaceTabs();
+initSiteVersionWatcher();
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function authorDisplayName() {
