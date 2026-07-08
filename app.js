@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-08T19:22:00+03:00';
+const SITE_VERSION = '2026-07-08T20:44:59+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -166,6 +166,10 @@ function showSiteUpdateBanner() {
   document.getElementById('site-update-banner')?.classList.add('show');
 }
 
+function hideSiteUpdateBanner() {
+  document.getElementById('site-update-banner')?.classList.remove('show');
+}
+
 async function checkSiteVersion() {
   try {
     const res = await fetch(`/site-version.json?v=${Date.now()}`, {
@@ -176,6 +180,7 @@ async function checkSiteVersion() {
     const data = await res.json();
     const liveVersion = String(data.version || '').trim();
     if (liveVersion && liveVersion !== SITE_VERSION) showSiteUpdateBanner();
+    else hideSiteUpdateBanner();
   } catch (_) {}
 }
 
@@ -1271,15 +1276,15 @@ function renderScreenshots() {
 
 // ── Map minimap ───────────────────────────────────────────────────────────────
 const MAP_FALLBACK_URLS = {
-  'Haven':    'https://media.valorant-api.com/maps/2bee0dc9-4bbe-4143-b2b1-1c5d92c14786/displayicon.png',
+  'Haven':    'https://media.valorant-api.com/maps/2bee0dc9-4ffe-519b-1cbd-7fbe763a6047/displayicon.png',
   'Bind':     'https://media.valorant-api.com/maps/2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba/displayicon.png',
   'Ascent':   'https://media.valorant-api.com/maps/7eaecc1b-4337-bbf6-6ab9-04b8f06b3319/displayicon.png',
   'Split':    'https://media.valorant-api.com/maps/d960549e-485c-e861-8d71-aa9d1aed12a2/displayicon.png',
   'Icebox':   'https://media.valorant-api.com/maps/e2ad5c54-4114-a870-9641-8ea21279579a/displayicon.png',
   'Breeze':   'https://media.valorant-api.com/maps/2fb9a4fd-47b8-4e7d-a969-74b4046ebd53/displayicon.png',
   'Fracture': 'https://media.valorant-api.com/maps/b529448b-4d60-346e-e89e-00a4c527a405/displayicon.png',
-  'Pearl':    'https://media.valorant-api.com/maps/33bb57b4-4e5b-8d85-0505-b8c5b8b36136/displayicon.png',
-  'Lotus':    'https://media.valorant-api.com/maps/2fe4ed3a-450a-01bc-1236-069b34a8b785/displayicon.png',
+  'Pearl':    'https://media.valorant-api.com/maps/fd267378-4d1d-484f-ff52-77821ed10dc2/displayicon.png',
+  'Lotus':    'https://media.valorant-api.com/maps/2fe4ed3a-450a-948b-6d6b-e89a78e680a9/displayicon.png',
   'Sunset':   'https://media.valorant-api.com/maps/92584fbe-486a-b1b2-9faa-39eb02e28435/displayicon.png',
   'Abyss':    'https://media.valorant-api.com/maps/224b0a95-48b9-d703-cc5f-3e8e0f488ea8/displayicon.png',
   'Corrode':  'https://media.valorant-api.com/maps/1c18ab1f-420d-0d8b-71d0-77ad3c439115/displayicon.png',
@@ -1291,6 +1296,8 @@ function loadMapMinimap() {
   const img     = document.getElementById('map-img');
   const ph      = document.getElementById('map-placeholder');
   const marker  = document.getElementById('map-marker');
+  img.onload = null;
+  img.onerror = null;
   if (!mapName) {
     img.style.display = 'none'; ph.style.display = '';
     marker.style.display = 'none';
@@ -1299,25 +1306,36 @@ function loadMapMinimap() {
     return;
   }
   const apiUrl = mapsData.find(m => m.displayName === mapName)?.displayIcon;
-  const url    = proxiedValorantUrl(apiUrl || MAP_FALLBACK_URLS[mapName]);
-  if (url) {
-    img.crossOrigin = 'anonymous';
-    img.onerror = () => {
-      const fb = proxiedValorantUrl(MAP_FALLBACK_URLS[mapName]);
-      if (fb && img.src !== fb) { img.src = fb; }
-      else {
-        img.style.display = 'none';
-        ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Карта недоступна</div>`;
-        ph.style.display = '';
+  const fallbackUrl = MAP_FALLBACK_URLS[mapName];
+  const candidates = [...new Set([
+    proxiedValorantUrl(apiUrl),
+    proxiedValorantUrl(fallbackUrl),
+    fallbackUrl,
+  ].filter(Boolean))];
+  if (candidates.length) {
+    let attempt = 0;
+    const fail = () => {
+      attempt += 1;
+      if (attempt < candidates.length) {
+        img.src = candidates[attempt];
+        return;
       }
+      img.style.display = 'none';
+      ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Карта недоступна. Обнови страницу или выбери карту ещё раз.</div>`;
+      ph.style.display = '';
     };
+    img.crossOrigin = 'anonymous';
+    img.onerror = fail;
     img.onload = () => {
+      img.style.display = 'block';
+      ph.style.display = 'none';
       if (markerX != null && markerY != null) setMarkerPosition(markerX, markerY);
       renderTrajectory();
     };
-    img.src = url;
-    img.style.display = 'block';
-    ph.style.display = 'none';
+    img.style.display = 'none';
+    ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Загружаем карту…</div>`;
+    ph.style.display = '';
+    img.src = candidates[0];
     marker.style.display = 'none';
     markerX = markerY = null; trajectoryPoints = [];
     renderTrajectory();
