@@ -64,6 +64,12 @@
     .workspace-panel { display: none; }
     .workspace-panel.active { display: block; }
     .author-list-shell { max-width: 980px; margin: 0 auto; padding: 14px 16px 60px; }
+    .list-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .list-filter-row { display: flex; flex-wrap: wrap; gap: 7px; }
+    .filter-chip { border: 1px solid var(--border); background: var(--surface); color: var(--text2); border-radius: 999px; padding: 7px 11px; font-size: 12px; font-weight: 800; cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
+    .filter-chip:hover { border-color: rgba(79,195,247,.45); color: var(--text1); }
+    .filter-chip.active { border-color: var(--primary); color: var(--primary); background: rgba(79,195,247,.12); }
+    .list-search { max-width: 320px; flex: 1; }
     .lineup-list { display: grid; gap: 10px; }
     .lineup-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
     .lineup-card.clickable { cursor: pointer; transition: border-color .15s, transform .15s; }
@@ -98,6 +104,10 @@
     .detail-tile { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r); padding: 10px; min-width: 0; }
     .detail-tile span { display: block; color: var(--text2); font-size: 10px; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; }
     .detail-tile b { display: block; color: var(--text1); font-size: 13px; overflow-wrap: anywhere; }
+    .detail-id-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; color: var(--text2); font-size: 11px; }
+    .detail-id-row code { color: var(--text2); overflow-wrap: anywhere; }
+    .copy-id-btn { border: 1px solid var(--border); background: transparent; color: var(--text2); border-radius: var(--r); padding: 6px 10px; font-size: 11px; font-weight: 800; cursor: pointer; flex-shrink: 0; }
+    .copy-id-btn:hover { border-color: var(--primary); color: var(--primary); }
     .detail-section { margin-top: 14px; }
     .detail-section-title { color: var(--primary); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
     .detail-text { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 12px; color: var(--text1); line-height: 1.55; white-space: pre-wrap; }
@@ -224,6 +234,8 @@
       .author-list-shell { padding: 10px 10px 60px; }
       .lineup-card { grid-template-columns: 1fr; }
       .status-chip { justify-self: start; }
+      .list-tools { align-items: stretch; flex-direction: column; }
+      .list-search { max-width: none; }
       .cabinet-stats-grid, .materials-grid { grid-template-columns: 1fr; }
       .detail-grid { grid-template-columns: 1fr 1fr; }
       .lineup-detail-card { padding: 16px; }

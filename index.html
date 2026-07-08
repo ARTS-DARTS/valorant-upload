@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 16:15 · 08.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 16:30 · 08.07.2026</div>
   <div class="user-info" id="header-user" style="display:none;">
     <img id="user-avatar" src="" alt="" style="display:none;">
     <span id="user-name"></span>
@@ -246,6 +246,15 @@
   <div class="workspace-panel" id="workspace-mine">
     <div class="author-list-shell">
       <div class="section-title">МОИ ЛАЙНАПЫ</div>
+      <div class="list-tools">
+        <div class="list-filter-row" id="my-status-filter">
+          <button class="filter-chip active" data-status="all" type="button">Все</button>
+          <button class="filter-chip" data-status="pending" type="button">На проверке</button>
+          <button class="filter-chip" data-status="approved" type="button">Одобренные</button>
+          <button class="filter-chip" data-status="rejected" type="button">Отклонённые</button>
+        </div>
+        <input class="finput list-search" id="my-lineups-search" type="search" placeholder="Поиск по названию, карте, агенту или абилке">
+      </div>
       <div class="lineup-list" id="my-lineups-list"></div>
     </div>
   </div>

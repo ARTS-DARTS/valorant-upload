@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-08T16:15:23+03:00';
+const SITE_VERSION = '2026-07-08T16:30:43+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -350,6 +350,8 @@ let videoXhr = null;
 let screenshots = [];
 let currentUserLineups = [];
 let activeWorkspaceTab = 'upload';
+let myLineupsStatusFilter = 'all';
+let myLineupsSearch = '';
 
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
@@ -473,6 +475,19 @@ function initWorkspaceTabs() {
   document.querySelectorAll('.workspace-tab').forEach(btn => {
     btn.addEventListener('click', () => switchWorkspaceTab(btn.dataset.workspaceTab || 'upload'));
   });
+  document.querySelectorAll('#my-status-filter .filter-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      myLineupsStatusFilter = btn.dataset.status || 'all';
+      document.querySelectorAll('#my-status-filter .filter-chip').forEach(chip => {
+        chip.classList.toggle('active', chip === btn);
+      });
+      renderAuthorWorkspace();
+    });
+  });
+  document.getElementById('my-lineups-search')?.addEventListener('input', event => {
+    myLineupsSearch = event.target.value.trim().toLowerCase();
+    renderAuthorWorkspace();
+  });
   document.querySelectorAll('.lineup-list').forEach(list => {
     list.addEventListener('click', event => {
       const card = event.target.closest('.lineup-card[data-lineup-id]');
@@ -489,6 +504,11 @@ function initWorkspaceTabs() {
   document.getElementById('detail-close')?.addEventListener('click', closeLineupDetail);
   document.getElementById('lineup-detail-screen')?.addEventListener('click', event => {
     if (event.target.id === 'lineup-detail-screen') closeLineupDetail();
+  });
+  document.getElementById('copy-lineup-id')?.addEventListener('click', event => {
+    const id = event.currentTarget.dataset.lineupId || '';
+    if (!id) return;
+    navigator.clipboard?.writeText(id).then(() => toast('ID скопирован', 's')).catch(() => toast('Не удалось скопировать ID', 'e'));
   });
   document.getElementById('btn-refresh-workspace')?.addEventListener('click', async () => {
     if (currentUser) {
@@ -515,6 +535,43 @@ function statusLabel(status) {
   if (status === 'approved') return 'Одобрен';
   if (status === 'rejected') return 'Отклонён';
   return 'На проверке';
+}
+
+function difficultyLabel(value) {
+  const labels = { easy: 'Легко', medium: 'Средне', hard: 'Сложно' };
+  return labels[String(value || '').toLowerCase()] || firstText(value, '—');
+}
+
+function categoryLabel(value) {
+  const normalized = normalizeContentCategory(value);
+  const labels = {
+    lineup: 'Лайнап',
+    combo: 'Комбо',
+    wallbang: 'Прострел',
+    defense: 'Защита',
+  };
+  return labels[normalized] || firstText(value, '—');
+}
+
+function searchableText(item) {
+  return [
+    item.title,
+    item.map,
+    item.agent,
+    item.ability,
+    difficultyLabel(item.difficulty),
+    categoryLabel(item.content_type || item.category),
+    statusLabel(item.status),
+  ].map(v => String(v || '').toLowerCase()).join(' ');
+}
+
+function filteredOwnLineups() {
+  return currentUserLineups.filter(item => {
+    const status = item.status || 'pending';
+    if (myLineupsStatusFilter !== 'all' && status !== myLineupsStatusFilter) return false;
+    if (myLineupsSearch && !searchableText(item).includes(myLineupsSearch)) return false;
+    return true;
+  });
 }
 
 function docDate(docData) {
@@ -550,7 +607,8 @@ function renderLineupList(targetId, items, emptyTitle, emptyText) {
       item.map,
       item.agent,
       item.ability,
-      item.difficulty,
+      difficultyLabel(item.difficulty),
+      categoryLabel(item.content_type || item.category),
     ].filter(Boolean);
     return `
       <article class="lineup-card clickable" data-lineup-id="${esc(item.id)}" tabindex="0" role="button" aria-label="Открыть лайнап ${esc(title)}">
@@ -596,9 +654,8 @@ function openLineupDetail(lineupId) {
       <div class="detail-tile"><span>Агент</span><b>${esc(firstText(item.agent, '—'))}</b></div>
       <div class="detail-tile"><span>Дата</span><b>${esc(stamp.time)}<br>${esc(stamp.date)}</b></div>
       <div class="detail-tile"><span>Абилка</span><b>${esc(firstText(item.ability, '—'))}</b></div>
-      <div class="detail-tile"><span>Сложность</span><b>${esc(firstText(item.difficulty, '—'))}</b></div>
-      <div class="detail-tile"><span>Категория</span><b>${esc(firstText(item.content_type, item.category, 'lineup'))}</b></div>
-      <div class="detail-tile"><span>ID</span><b>${esc(item.id)}</b></div>
+      <div class="detail-tile"><span>Сложность</span><b>${esc(difficultyLabel(item.difficulty))}</b></div>
+      <div class="detail-tile"><span>Категория</span><b>${esc(categoryLabel(item.content_type || item.category))}</b></div>
     </div>
     ${rejection ? `<div class="detail-section"><div class="detail-section-title">Причина отклонения</div><div class="detail-warning">${esc(rejection)}</div></div>` : ''}
     <div class="detail-section">
@@ -607,7 +664,15 @@ function openLineupDetail(lineupId) {
     </div>
     ${item.video_url ? `<div class="detail-section"><div class="detail-section-title">Видео</div><video class="detail-video" controls preload="metadata" src="${esc(item.video_url)}"></video></div>` : ''}
     ${shots.length ? `<div class="detail-section"><div class="detail-section-title">Скриншоты</div><div class="detail-shots">${shots.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt=""></a>`).join('')}</div></div>` : ''}
+    <div class="detail-id-row">
+      <code>ID: ${esc(item.id)}</code>
+      <button class="copy-id-btn" id="copy-lineup-id" type="button" data-lineup-id="${esc(item.id)}">Скопировать ID</button>
+    </div>
   `;
+  body.querySelector('#copy-lineup-id')?.addEventListener('click', event => {
+    const id = event.currentTarget.dataset.lineupId || '';
+    navigator.clipboard?.writeText(id).then(() => toast('ID скопирован', 's')).catch(() => toast('Не удалось скопировать ID', 'e'));
+  });
   screen.style.display = 'flex';
 }
 
@@ -628,7 +693,7 @@ function renderDrafts() {
     target.innerHTML = '<div class="empty-state"><strong>Черновиков нет</strong>Начни заполнять форму, и сайт сохранит незавершённый лайнап на этом устройстве.</div>';
     return;
   }
-  const meta = [draft.map, draft.agent, draft.ability, draft.difficulty].filter(Boolean);
+  const meta = [draft.map, draft.agent, draft.ability, difficultyLabel(draft.difficulty), categoryLabel(draft.category)].filter(Boolean);
   target.innerHTML = `
     <article class="lineup-card">
       <div>
@@ -664,9 +729,9 @@ function renderCabinetStats() {
 function renderAuthorWorkspace() {
   renderLineupList(
     'my-lineups-list',
-    currentUserLineups,
-    'Лайнапов пока нет',
-    'Отправь первый лайнап, и он появится здесь со статусом проверки.'
+    filteredOwnLineups(),
+    currentUserLineups.length ? 'Ничего не найдено' : 'Лайнапов пока нет',
+    currentUserLineups.length ? 'Попробуй другой статус или поисковый запрос.' : 'Отправь первый лайнап, и он появится здесь со статусом проверки.'
   );
   renderLineupList(
     'rejected-lineups-list',
