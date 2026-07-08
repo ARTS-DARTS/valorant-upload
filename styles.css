@@ -45,6 +45,7 @@
     .btn-primary:hover { opacity: .88; }
     .btn-primary:disabled { opacity: .4; cursor: default; }
     .auth-err { color: var(--red); font-size: 12px; margin-top: 10px; text-align: center; display: none; }
+    .upload-gate { margin: 12px 0; padding: 12px 14px; border: 1px solid rgba(245,158,11,.32); background: rgba(245,158,11,.10); color: #facc15; border-radius: var(--r); font-size: 13px; line-height: 1.45; }
 
     .section-title { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--primary); margin-bottom: 8px; margin-top: 24px; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; margin-bottom: 14px; }

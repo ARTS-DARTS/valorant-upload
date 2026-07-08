@@ -29,7 +29,7 @@
     <div class="auth-sub">Загрузи свой лайнап в базу</div>
     <div class="auth-tabs">
       <button class="auth-tab active" id="tab-yandex-btn">Яндекс</button>
-      <button class="auth-tab" id="tab-email-btn">Email</button>
+      <button class="auth-tab" id="tab-email-btn">Ник / Email</button>
     </div>
     <div id="tab-yandex">
       <button class="btn-yandex" id="btn-yandex">
@@ -38,8 +38,8 @@
     </div>
     <div id="tab-email" style="display:none;">
       <div class="field-group">
-        <label class="flabel">Email</label>
-        <input class="finput" type="email" id="auth-email" placeholder="your@email.com" autocomplete="email">
+        <label class="flabel">Ник или Email</label>
+        <input class="finput" type="text" id="auth-email" placeholder="Ник или your@email.com" autocomplete="username">
       </div>
       <div class="field-group">
         <label class="flabel">Пароль</label>
@@ -176,6 +176,7 @@
       </div>
     </div>
 
+    <div class="upload-gate" id="upload-gate" style="display:none;"></div>
     <button class="btn-submit" id="btn-submit" disabled>⬆ Отправить лайнап</button>
   </div><!-- /.main -->
   <aside class="stats-sidebar" id="stats-sidebar">

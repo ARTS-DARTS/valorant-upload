@@ -4,8 +4,8 @@ import { getAuth,
          signOut, onAuthStateChanged }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, doc, collection, getDoc, setDoc,
-         writeBatch, serverTimestamp, onSnapshot,
-         query, where }                      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+          writeBatch, serverTimestamp, onSnapshot,
+          query, where, getDocs, limit }      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -19,6 +19,8 @@ const cfg = {
 const app  = initializeApp(cfg);
 const auth = getAuth(app);
 const db   = getFirestore(app);
+const UPLOAD_REQUIRED_VIEWS = 5;
+const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
 const SEL_SECRET_KEY = 'e2ffe93a51ba4c05abadc810d9c0edfc';
@@ -74,6 +76,83 @@ const ENABLED_UPLOAD_CONTENT_TYPES = new Set(['lineup']);
 function canSubmitContentCategory(value) {
   return ENABLED_UPLOAD_CONTENT_TYPES.has(normalizeContentCategory(value));
 }
+
+function toSafeErrorMessage(error) {
+  const code = String(error?.code || '').toLowerCase();
+  const msg = String(error?.message || error || '');
+  if (code.includes('permission-denied') || /permission|permission-denied|insufficient/i.test(msg)) {
+    return uploadGateMessage();
+  }
+  return msg || 'Неизвестная ошибка';
+}
+
+async function logUploadError(error, context = {}) {
+  if (!auth.currentUser) return;
+  try {
+    await setDoc(doc(collection(db, 'app_errors')), {
+      type: 'web',
+      source: 'upload_site',
+      message: String(error?.message || error || 'Unknown upload site error').slice(0, 1000),
+      code: String(error?.code || '').slice(0, 100),
+      stack: String(error?.stack || '').slice(0, 4000),
+      context,
+      uid: auth.currentUser.uid,
+      user_id: auth.currentUser.uid,
+      platform: 'web',
+      appVersion: 'upload-site',
+      url: location.href,
+      userAgent: navigator.userAgent,
+      timestamp: serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('logUploadError', e.message);
+  }
+}
+
+function userTrialInfo(u = {}) {
+  const viewed = Number(u.lineups_viewed || 0);
+  const approved = Number(u.approved_lineups || 0);
+  const created = u.created_at?.toDate?.() ?? null;
+  const preTracking = created !== null && created < USER_TRACKING_START;
+  const verified = !!u.verified_not_fake || viewed >= UPLOAD_REQUIRED_VIEWS || approved > 0 || preTracking;
+  return { viewed, approved, verified, preTracking };
+}
+
+function uploadGateMessage() {
+  const viewed = Number(currentUserProfile?.lineups_viewed || 0);
+  const left = Math.max(0, UPLOAD_REQUIRED_VIEWS - viewed);
+  return `Чтобы выкладывать лайнапы, сначала посмотри ${UPLOAD_REQUIRED_VIEWS} лайнапов в приложении. Осталось: ${left}. Спасибо!`;
+}
+
+function canCurrentUserUpload() {
+  const role = String(currentUserProfile?.role || 'user');
+  return role === 'admin' || role === 'moderator' || userTrialInfo(currentUserProfile || {}).verified;
+}
+
+function updateUploadGate() {
+  const box = document.getElementById('upload-gate');
+  if (!box) return;
+  if (!currentUser || canCurrentUserUpload()) {
+    box.style.display = 'none';
+    box.textContent = '';
+    return;
+  }
+  box.style.display = 'block';
+  box.textContent = uploadGateMessage();
+}
+
+window.addEventListener('error', event => {
+  logUploadError(event.error || event.message, {
+    action: 'window_error',
+    filename: event.filename,
+    line: event.lineno,
+    column: event.colno,
+  });
+});
+
+window.addEventListener('unhandledrejection', event => {
+  logUploadError(event.reason || 'Unhandled rejection', { action: 'unhandledrejection' });
+});
 
 async function getConfiguredRangeRadius(map, agent, ability, abilityAliases = []) {
   if (!map || !agent || !ability) return 0;
@@ -382,6 +461,7 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('header-user').style.display = 'flex';
     await loadCurrentUserProfile(user);
     document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
+    updateUploadGate();
     _subscribeStats(user.uid);
     _updateCooldown(user.uid);
     const av = document.getElementById('user-avatar');
@@ -390,6 +470,7 @@ onAuthStateChanged(auth, async user => {
     loadMaps();
   } else {
     currentUserProfile = null;
+    updateUploadGate();
     _unsubscribeStats();
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('form-screen').style.display = 'none';
@@ -454,18 +535,31 @@ function publicYandexAuthError(code) {
 })();
 
 document.getElementById('btn-email-login').addEventListener('click', async () => {
-  const email = document.getElementById('auth-email').value.trim();
+  const login = document.getElementById('auth-email').value.trim();
   const pass  = document.getElementById('auth-password').value;
-  if (!email || !pass) { showAuthErr('Заполни email и пароль'); return; }
+  if (!login || !pass) { showAuthErr('Заполни ник/email и пароль'); return; }
   const btn = document.getElementById('btn-email-login');
   btn.disabled = true; btn.textContent = 'Вход…';
   try {
+    const email = await resolveLoginToEmail(login);
     await signInWithEmailAndPassword(auth, email, pass);
   } catch (e) {
-    showAuthErr(e.code === 'auth/invalid-credential' ? 'Неверный email или пароль' : e.message);
+    await logUploadError(e, { action: 'login', login: login.includes('@') ? 'email' : 'nickname' });
+    showAuthErr(e.code === 'auth/invalid-credential' ? 'Неверный ник/email или пароль' : e.message);
     btn.disabled = false; btn.textContent = 'Войти';
   }
 });
+
+async function resolveLoginToEmail(login) {
+  if (login.includes('@')) return login;
+  const lower = login.toLowerCase().trim();
+  const snap = await getDocs(query(collection(db, 'users'), where('name_lower', '==', lower), limit(1)));
+  if (snap.empty) throw new Error('Ник не найден. Попробуй email или войди через Яндекс.');
+  const u = snap.docs[0].data();
+  const email = firstText(u.user_email, u.email, u.yandex_email, u.linked_yandex_email);
+  if (!email) throw new Error('У этого ника нет входа по паролю. Попробуй Яндекс.');
+  return email;
+}
 
 document.getElementById('btn-signout').addEventListener('click', () => signOut(auth));
 
@@ -1174,6 +1268,11 @@ function selectedAbilityAliases() {
 // ── Submit ────────────────────────────────────────────────────────────────────
 document.getElementById('btn-submit').addEventListener('click', async () => {
   if (!currentUser) { toast('Войди в аккаунт', 'e'); return; }
+  if (!canCurrentUserUpload()) {
+    updateUploadGate();
+    toast(uploadGateMessage(), 'w');
+    return;
+  }
 
   const title = document.getElementById('inp-title').value.trim();
   const desc  = document.getElementById('inp-desc').value.trim();
@@ -1265,7 +1364,15 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     await batch.commit();
     showSuccess();
   } catch (e) {
-    toast('Ошибка отправки: ' + e.message, 'e');
+    await logUploadError(e, {
+      action: 'submit_lineup',
+      map,
+      agent: selectedAgent,
+      ability: selectedAbility,
+      category: selectedCategory,
+      lineups_viewed: Number(currentUserProfile?.lineups_viewed || 0),
+    });
+    toast('Ошибка отправки: ' + toSafeErrorMessage(e), 'e');
     btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
   }
 });
