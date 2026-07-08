@@ -17,6 +17,7 @@
     .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; height: 54px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
     .logo { font-size: 16px; font-weight: 800; letter-spacing: 2px; color: var(--primary); }
     .logo span { color: var(--text1); }
+    .site-update { margin-right: auto; margin-left: 22px; color: var(--text2); font-size: 12px; letter-spacing: .4px; white-space: nowrap; }
     .user-info { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text2); }
     .user-info img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
     .btn-out { background: transparent; border: 1px solid var(--border); color: var(--text2); padding: 5px 12px; border-radius: var(--r); cursor: pointer; font-size: 12px; transition: .15s; }
@@ -160,4 +161,5 @@
     }
     @media (max-width: 500px) {
       .auth-card { padding: 28px 18px; }
+      .site-update { display: none; }
     }
