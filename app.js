@@ -3,7 +3,7 @@ import { getAuth,
          signInWithEmailAndPassword, signInWithCustomToken,
          signOut, onAuthStateChanged }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, doc, collection, getDoc, setDoc, deleteDoc,
+import { getFirestore, doc, collection, getDoc, setDoc, deleteDoc, writeBatch,
           serverTimestamp, onSnapshot,
           query, where, getDocs, limit }      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -193,6 +193,19 @@ function uploadGateMessage() {
 function canCurrentUserUpload() {
   const role = String(currentUserProfile?.role || 'user');
   return role === 'admin' || role === 'moderator' || userTrialInfo(currentUserProfile || {}).verified;
+}
+
+function safePlay(player) {
+  const playPromise = player?.play?.();
+  if (playPromise && typeof playPromise.catch === 'function') {
+    playPromise.catch(error => {
+      const msg = String(error?.message || error || '');
+      if (/interrupted by a call to pause|interrupted by a new load request|play\(\) request was interrupted/i.test(msg)) {
+        return;
+      }
+      logUploadError(error, { action: 'media_play' });
+    });
+  }
 }
 
 function updateUploadGate() {
@@ -1353,7 +1366,7 @@ vidPlayer.addEventListener('pause', () => { vidPlayBtn.textContent = '▶'; });
 vidScrubber.addEventListener('input', () => {
   vidPlayer.currentTime = (vidScrubber.value / 100) * vidPlayer.duration;
 });
-vidPlayBtn.addEventListener('click', () => vidPlayer.paused ? vidPlayer.play() : vidPlayer.pause());
+vidPlayBtn.addEventListener('click', () => vidPlayer.paused ? safePlay(vidPlayer) : vidPlayer.pause());
 document.getElementById('vid-remove-btn').addEventListener('click', () => {
   vidPlayer.src = '';
   videoUrl = null;
@@ -1408,7 +1421,7 @@ document.addEventListener('keydown', e => {
     const player = document.getElementById('vid-player');
     if (player && player.src && !player.error) {
       e.preventDefault();
-      if (player.paused) { player.play(); } else { player.pause(); }
+      if (player.paused) { safePlay(player); } else { player.pause(); }
     }
   }
   if (e.code === 'ArrowRight') {
@@ -1960,8 +1973,9 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       schema_version: 1,
       ...submitFormDiagnostics({ title, desc, map, ability: normalizedAbility, contentType }),
     };
-    submitStage = 'lineup_create';
-    await setDoc(lineupRef, {
+    submitStage = 'lineup_create_batch';
+    const batch = writeBatch(db);
+    batch.set(lineupRef, {
       map,
       agent:         selectedAgent,
       ability:       normalizedAbility,
@@ -1988,23 +2002,11 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       source:        'web',
       ...(resubmissionSourceId ? { resubmitted_from: resubmissionSourceId } : {}),
     });
-
-    submitStage = 'rate_limit_update';
-    try {
-      await setDoc(doc(db, 'rate_limits', uid), {
-        last_lineup_at: serverTimestamp(),
-        last_lineup_id: lineupRef.id,
-      }, { merge: true });
-    } catch (rateWriteError) {
-      await logUploadError(rateWriteError, {
-        action: 'submit_lineup_rate_limit_update',
-        stage: submitStage,
-        lineup_id: lineupId,
-        user: userDiagnostics(),
-        rate_limit: rateLimitDiagnostics,
-        payload: submittedPayloadDiagnostics,
-      });
-    }
+    batch.set(doc(db, 'rate_limits', uid), {
+      last_lineup_at: serverTimestamp(),
+      last_lineup_id: lineupRef.id,
+    }, { merge: true });
+    await batch.commit();
 
     showSuccess();
   } catch (e) {
