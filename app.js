@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-09T04:31:54+03:00';
+const SITE_VERSION = '2026-07-09T04:39:33+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -609,6 +609,27 @@ function initWorkspaceTabs() {
     event.preventDefault();
     startRejectedResubmission(btn.dataset.resubmitLineupId || '');
   });
+  document.getElementById('resubmit-banner')?.addEventListener('click', event => {
+    const btn = event.target.closest('[data-cancel-resubmission]');
+    if (!btn) return;
+    event.preventDefault();
+    cancelResubmissionDraft();
+  });
+  document.getElementById('drafts-list')?.addEventListener('click', event => {
+    const resume = event.target.closest('[data-draft-action="resume"]');
+    const remove = event.target.closest('[data-draft-action="delete"]');
+    if (resume) {
+      event.preventDefault();
+      switchWorkspaceTab('upload');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    if (remove) {
+      event.preventDefault();
+      resetUploadForm();
+      renderAuthorWorkspace();
+      toast('Черновик удалён', 's');
+    }
+  });
   document.getElementById('btn-refresh-workspace')?.addEventListener('click', async () => {
     if (currentUser) {
       await loadCurrentUserProfile(currentUser);
@@ -708,6 +729,7 @@ function renderLineupList(targetId, items, emptyTitle, emptyText) {
       item.ability,
       difficultyLabel(item.difficulty),
       categoryLabel(item.content_type || item.category),
+      item.resubmitted_from ? 'Повторная отправка' : '',
     ].filter(Boolean);
     return `
       <article class="lineup-card clickable" data-lineup-id="${esc(item.id)}" tabindex="0" role="button" aria-label="Открыть лайнап ${esc(title)}">
@@ -742,6 +764,7 @@ function openLineupDetail(lineupId) {
   const stamp = formatClockDate(item);
   const description = firstText(item.description, 'Описание не добавлено.');
   const rejection = firstText(item.rejection_reason, item.reject_reason, item.moderation_reason);
+  const source = item.resubmitted_from ? findOwnLineup(item.resubmitted_from) : null;
   const shots = Array.isArray(item.screenshots) ? item.screenshots.filter(Boolean) : [];
   const status = item.status || 'pending';
 
@@ -755,6 +778,7 @@ function openLineupDetail(lineupId) {
       <div class="detail-tile"><span>Абилка</span><b>${esc(firstText(item.ability, '—'))}</b></div>
       <div class="detail-tile"><span>Сложность</span><b>${esc(difficultyLabel(item.difficulty))}</b></div>
       <div class="detail-tile"><span>Категория</span><b>${esc(categoryLabel(item.content_type || item.category))}</b></div>
+      ${item.resubmitted_from ? `<div class="detail-tile"><span>Доработка</span><b>${esc(source ? firstText(source.title, source.id) : item.resubmitted_from)}</b></div>` : ''}
     </div>
     ${rejection ? `<div class="detail-section"><div class="detail-section-title">Причина отклонения</div><div class="detail-warning">${esc(rejection)}</div></div>` : ''}
     <div class="detail-section">
@@ -823,6 +847,35 @@ function startRejectedResubmission(lineupId) {
   toast('Отклонённый лайнап перенесён в форму. Проверь правки и отправь заново.', 's');
 }
 
+function renderResubmissionBanner() {
+  const banner = document.getElementById('resubmit-banner');
+  if (!banner) return;
+  if (!resubmissionSourceId) {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+    return;
+  }
+  const source = findOwnLineup(resubmissionSourceId);
+  const title = firstText(source?.title, resubmissionSourceId);
+  const reason = source ? firstText(source.rejection_reason, source.reject_reason, source.moderation_reason) : '';
+  banner.innerHTML = `
+    <div>
+      <strong>Доработка отклонённого лайнапа</strong>
+      <span>${esc(title)}${reason ? ` · ${esc(reason)}` : ''}</span>
+    </div>
+    <button class="copy-id-btn" type="button" data-cancel-resubmission>Отменить</button>
+  `;
+  banner.style.display = '';
+}
+
+function cancelResubmissionDraft() {
+  resubmissionSourceId = '';
+  _saveDraft();
+  renderResubmissionBanner();
+  renderDrafts();
+  toast('Связь с отклонённым лайнапом снята', 's');
+}
+
 function renderDrafts() {
   const target = document.getElementById('drafts-list');
   if (!target) return;
@@ -840,9 +893,13 @@ function renderDrafts() {
         <div class="lineup-meta">
           ${meta.map(value => `<span class="lineup-chip">${esc(value)}</span>`).join('')}
           <span class="lineup-chip">На этом устройстве</span>
+          ${draft.resubmissionSourceId ? '<span class="lineup-chip">Доработка отклонённого</span>' : ''}
         </div>
       </div>
-      <span class="status-chip pending">Черновик</span>
+      <div class="draft-actions">
+        <button class="copy-id-btn" type="button" data-draft-action="resume">Продолжить</button>
+        <button class="copy-id-btn danger" type="button" data-draft-action="delete">Удалить</button>
+      </div>
     </article>`;
 }
 
@@ -883,6 +940,7 @@ function renderAuthorWorkspace() {
   );
   renderDrafts();
   renderCabinetStats();
+  renderResubmissionBanner();
 }
 
 initWorkspaceTabs();
@@ -1619,6 +1677,7 @@ function _saveDraft() {
 function _clearDraft() {
   try { localStorage.removeItem(_DRAFT_KEY); } catch(_) {}
   resubmissionSourceId = '';
+  renderResubmissionBanner();
 }
 
 function _restoreDraft() {
@@ -1626,6 +1685,7 @@ function _restoreDraft() {
   try { d = JSON.parse(localStorage.getItem(_DRAFT_KEY)); } catch(_) {}
   if (!d) return;
   resubmissionSourceId = d.resubmissionSourceId || '';
+  renderResubmissionBanner();
 
   // Text fields
   if (d.title) { const el = document.getElementById('inp-title'); if (el) { el.value = d.title; document.getElementById('title-count').textContent = d.title.length; } }
