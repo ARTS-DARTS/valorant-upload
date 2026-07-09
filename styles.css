@@ -116,6 +116,8 @@
     .detail-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
     .detail-shots a { display: block; border-radius: var(--r); overflow: hidden; border: 1px solid var(--border); background: var(--bg); }
     .detail-shots img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; }
+    .detail-actions { margin-top: 16px; display: flex; justify-content: flex-end; }
+    .detail-action-primary { width: auto; padding: 10px 14px; font-size: 13px; }
 
     .section-title { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--primary); margin-bottom: 8px; margin-top: 24px; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; margin-bottom: 14px; }
@@ -239,6 +241,8 @@
       .cabinet-stats-grid, .materials-grid { grid-template-columns: 1fr; }
       .detail-grid { grid-template-columns: 1fr 1fr; }
       .lineup-detail-card { padding: 16px; }
+      .detail-actions { justify-content: stretch; }
+      .detail-action-primary { width: 100%; }
     }
     @media (max-width: 500px) {
       .auth-card { padding: 28px 18px; }

@@ -4,7 +4,7 @@ import { getAuth,
          signOut, onAuthStateChanged }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, doc, collection, getDoc, setDoc,
-          writeBatch, serverTimestamp, onSnapshot,
+          serverTimestamp, onSnapshot,
           query, where, getDocs, limit }      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const cfg = {
@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-08T21:41:12+03:00';
+const SITE_VERSION = '2026-07-09T04:31:54+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -421,6 +421,7 @@ let currentUserLineups = [];
 let activeWorkspaceTab = 'upload';
 let myLineupsStatusFilter = 'all';
 let myLineupsSearch = '';
+let resubmissionSourceId = '';
 
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
@@ -602,6 +603,12 @@ function initWorkspaceTabs() {
     if (!id) return;
     navigator.clipboard?.writeText(id).then(() => toast('ID скопирован', 's')).catch(() => toast('Не удалось скопировать ID', 'e'));
   });
+  document.getElementById('detail-body')?.addEventListener('click', event => {
+    const btn = event.target.closest('[data-resubmit-lineup-id]');
+    if (!btn) return;
+    event.preventDefault();
+    startRejectedResubmission(btn.dataset.resubmitLineupId || '');
+  });
   document.getElementById('btn-refresh-workspace')?.addEventListener('click', async () => {
     if (currentUser) {
       await loadCurrentUserProfile(currentUser);
@@ -756,6 +763,10 @@ function openLineupDetail(lineupId) {
     </div>
     ${item.video_url ? `<div class="detail-section"><div class="detail-section-title">Видео</div><video class="detail-video" controls preload="metadata" src="${esc(item.video_url)}"></video></div>` : ''}
     ${shots.length ? `<div class="detail-section"><div class="detail-section-title">Скриншоты</div><div class="detail-shots">${shots.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt=""></a>`).join('')}</div></div>` : ''}
+    ${status === 'rejected' ? `
+      <div class="detail-actions">
+        <button class="btn-primary detail-action-primary" type="button" data-resubmit-lineup-id="${esc(item.id)}">Доработать и отправить заново</button>
+      </div>` : ''}
     <div class="detail-id-row">
       <code>ID: ${esc(item.id)}</code>
       <button class="copy-id-btn" id="copy-lineup-id" type="button" data-lineup-id="${esc(item.id)}">Скопировать ID</button>
@@ -774,6 +785,42 @@ function closeLineupDetail() {
   screen.style.display = 'none';
   const video = screen.querySelector('video');
   if (video) video.pause();
+}
+
+function rejectedLineupDraft(item) {
+  const shots = Array.isArray(item.screenshots) ? item.screenshots.filter(Boolean) : [];
+  return {
+    map: item.map || '',
+    agent: item.agent || '',
+    ability: item.ability || '',
+    category: normalizeContentCategory(item.content_type || item.category || 'lineup'),
+    difficulty: item.difficulty || '',
+    title: item.title || '',
+    desc: item.description || '',
+    markerX: item.position_x ?? item.marker_x ?? null,
+    markerY: item.position_y ?? item.marker_y ?? null,
+    mapMode: 'position',
+    trajectory: Array.isArray(item.trajectory) ? item.trajectory : [],
+    videoUrl: item.video_url || '',
+    screenshots: shots,
+    resubmissionSourceId: item.id,
+  };
+}
+
+function startRejectedResubmission(lineupId) {
+  const item = findOwnLineup(lineupId);
+  if (!item || item.status !== 'rejected') {
+    toast('Повторно отправить можно только отклонённый материал', 'w');
+    return;
+  }
+  try {
+    localStorage.setItem(_DRAFT_KEY, JSON.stringify(rejectedLineupDraft(item)));
+  } catch (_) {}
+  closeLineupDetail();
+  resetUploadForm({ keepDraft: true });
+  _restoreDraft();
+  switchWorkspaceTab('upload');
+  toast('Отклонённый лайнап перенесён в форму. Проверь правки и отправь заново.', 's');
 }
 
 function renderDrafts() {
@@ -1564,18 +1611,21 @@ function _saveDraft() {
       trajectory: trajectoryPoints,
       videoUrl,
       screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
+      resubmissionSourceId,
     }));
   } catch(_) {}
 }
 
 function _clearDraft() {
   try { localStorage.removeItem(_DRAFT_KEY); } catch(_) {}
+  resubmissionSourceId = '';
 }
 
 function _restoreDraft() {
   let d;
   try { d = JSON.parse(localStorage.getItem(_DRAFT_KEY)); } catch(_) {}
   if (!d) return;
+  resubmissionSourceId = d.resubmissionSourceId || '';
 
   // Text fields
   if (d.title) { const el = document.getElementById('inp-title'); if (el) { el.value = d.title; document.getElementById('title-count').textContent = d.title.length; } }
@@ -1764,14 +1814,17 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   let contentType = '';
   let rangeRadius = null;
   let lineupId = '';
+  let submitStage = 'prepare';
   let submittedPayloadDiagnostics = {};
   try {
+    submitStage = 'normalize_ability';
     normalizedAbility = normalizeAbilityName(selectedAgent, selectedAbility);
     if (!normalizedAbility) {
       toast('Выбери способность агента', 'e');
       btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
       return;
     }
+    submitStage = 'load_range_radius';
     rangeRadius = await getConfiguredRangeRadius(map, selectedAgent, normalizedAbility, selectedAbilityAliases());
     const submittedBy = authorDisplayName();
     contentType = normalizeContentCategory(selectedCategory);
@@ -1780,8 +1833,6 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
       return;
     }
-    const batch = writeBatch(db);
-
     const lineupRef = doc(collection(db, 'lineups'));
     lineupId = lineupRef.id;
     submittedPayloadDiagnostics = {
@@ -1799,15 +1850,13 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       submitted_by: submittedBy,
       submitted_at: 'serverTimestamp()',
       rate_limit_last_lineup_at: 'serverTimestamp()',
+      resubmitted_from: resubmissionSourceId || '',
       source: 'web',
       schema_version: 1,
       ...submitFormDiagnostics({ title, desc, map, ability: normalizedAbility, contentType }),
     };
-    batch.set(doc(db, 'rate_limits', uid), {
-      last_lineup_at: serverTimestamp(),
-      last_lineup_id: lineupRef.id,
-    }, { merge: true });
-    batch.set(lineupRef, {
+    submitStage = 'lineup_create';
+    await setDoc(lineupRef, {
       map,
       agent:         selectedAgent,
       ability:       normalizedAbility,
@@ -1832,14 +1881,31 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       is_outdated:   false,
       likes_count:   0,
       source:        'web',
+      ...(resubmissionSourceId ? { resubmitted_from: resubmissionSourceId } : {}),
     });
 
-    await batch.commit();
+    submitStage = 'rate_limit_update';
+    try {
+      await setDoc(doc(db, 'rate_limits', uid), {
+        last_lineup_at: serverTimestamp(),
+        last_lineup_id: lineupRef.id,
+      }, { merge: true });
+    } catch (rateWriteError) {
+      await logUploadError(rateWriteError, {
+        action: 'submit_lineup_rate_limit_update',
+        stage: submitStage,
+        lineup_id: lineupId,
+        user: userDiagnostics(),
+        rate_limit: rateLimitDiagnostics,
+        payload: submittedPayloadDiagnostics,
+      });
+    }
+
     showSuccess();
   } catch (e) {
     await logUploadError(e, {
       action: 'submit_lineup',
-      stage: 'batch_commit',
+      stage: submitStage,
       map,
       agent: selectedAgent,
       ability: selectedAbility,
@@ -1867,14 +1933,8 @@ function showSuccess() {
   if (currentUser) _updateCooldown(currentUser.uid);
 }
 
-window.addEventListener('beforeunload', () => {
-  if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
-  if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
-  _clearCooldownTimer();
-});
-
-document.getElementById('btn-another').addEventListener('click', () => {
-  _clearDraft();
+function resetUploadForm({ keepDraft = false } = {}) {
+  if (!keepDraft) _clearDraft();
   selectedAgent = null; selectedAbility = null;
   selectedCategory = null; selectedDifficulty = null;
   markerX = null; markerY = null;
@@ -1905,7 +1965,15 @@ document.getElementById('btn-another').addEventListener('click', () => {
   document.getElementById('btn-submit').disabled = true;
   document.getElementById('btn-submit').textContent = '⬆ Отправить лайнап';
   window.scrollTo(0, 0);
+}
+
+window.addEventListener('beforeunload', () => {
+  if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
+  if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
+  _clearCooldownTimer();
 });
+
+document.getElementById('btn-another').addEventListener('click', () => resetUploadForm());
 
 // ── Moderator application ─────────────────────────────────────────────────────
 // Firestore: moderator_applications/{uid} { username, reason, status, created_at }
