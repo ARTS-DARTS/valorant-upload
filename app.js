@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-09T14:47:40+03:00';
+const SITE_VERSION = '2026-07-09T20:26:22+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -641,17 +641,22 @@ function initWorkspaceTabs() {
     event.preventDefault();
     cancelResubmissionDraft();
   });
+  document.getElementById('btn-save-draft')?.addEventListener('click', event => {
+    event.preventDefault();
+    saveCurrentDraftSnapshot();
+  });
   document.getElementById('drafts-list')?.addEventListener('click', event => {
     const resume = event.target.closest('[data-draft-action="resume"]');
     const remove = event.target.closest('[data-draft-action="delete"]');
     if (resume) {
       event.preventDefault();
+      resumeSavedDraft(resume.dataset.draftId || '');
       switchWorkspaceTab('upload');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     if (remove) {
       event.preventDefault();
-      resetUploadForm();
+      deleteSavedDraft(remove.dataset.draftId || '');
       renderAuthorWorkspace();
       toast('Черновик удалён', 's');
     }
@@ -937,28 +942,31 @@ function cancelResubmissionDraft() {
 function renderDrafts() {
   const target = document.getElementById('drafts-list');
   if (!target) return;
-  let draft = null;
-  try { draft = JSON.parse(localStorage.getItem('vl_lineup_draft')); } catch (_) {}
-  if (!draft || (!draft.title && !draft.map && !draft.agent && !draft.videoUrl && !draft.screenshots?.length)) {
-    target.innerHTML = '<div class="empty-state"><strong>Черновиков нет</strong>Начни заполнять форму, и сайт сохранит незавершённый лайнап на этом устройстве.</div>';
+  const drafts = getSavedDrafts();
+  if (!drafts.length) {
+    target.innerHTML = '<div class="empty-state"><strong>Черновиков нет</strong>Заполни форму и нажми «Сохранить черновик», чтобы держать несколько заготовок на этом устройстве.</div>';
     return;
   }
-  const meta = [draft.map, draft.agent, draft.ability, difficultyLabel(draft.difficulty), categoryLabel(draft.category)].filter(Boolean);
-  target.innerHTML = `
-    <article class="lineup-card">
+  target.innerHTML = drafts.map(draft => {
+    const meta = [draft.map, draft.agent, draft.ability, difficultyLabel(draft.difficulty), categoryLabel(draft.category)].filter(Boolean);
+    const date = draft.updatedAt ? new Date(draft.updatedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    return `
+    <article class="lineup-card" data-draft-id="${esc(draft.id || '')}">
       <div>
         <div class="lineup-title">${esc(firstText(draft.title, 'Черновик лайнапа'))}</div>
         <div class="lineup-meta">
           ${meta.map(value => `<span class="lineup-chip">${esc(value)}</span>`).join('')}
           <span class="lineup-chip">На этом устройстве</span>
+          ${date ? `<span class="lineup-chip">${esc(date)}</span>` : ''}
           ${draft.resubmissionSourceId ? '<span class="lineup-chip">Доработка отклонённого</span>' : ''}
         </div>
       </div>
       <div class="draft-actions">
-        <button class="copy-id-btn" type="button" data-draft-action="resume">Продолжить</button>
-        <button class="copy-id-btn danger" type="button" data-draft-action="delete">Удалить</button>
+        <button class="copy-id-btn" type="button" data-draft-action="resume" data-draft-id="${esc(draft.id || '')}">Продолжить</button>
+        <button class="copy-id-btn danger" type="button" data-draft-action="delete" data-draft-id="${esc(draft.id || '')}">Удалить</button>
       </div>
     </article>`;
+  }).join('');
 }
 
 function renderCabinetStats() {
@@ -1712,35 +1720,149 @@ function updateMarkerIcon() {
 
 // ── Draft persistence ─────────────────────────────────────────────────────────
 const _DRAFT_KEY = 'vl_lineup_draft';
+const _DRAFTS_KEY = 'vl_lineup_drafts';
+const _ACTIVE_DRAFT_ID_KEY = 'vl_active_lineup_draft_id';
+const _DRAFT_MIGRATED_KEY = 'vl_lineup_draft_migrated_v2';
+
+function collectDraftData() {
+  return {
+    map:        document.getElementById('sel-map')?.value || '',
+    agent:      selectedAgent,
+    ability:    selectedAbility,
+    category:   selectedCategory,
+    difficulty: selectedDifficulty,
+    title:      document.getElementById('inp-title')?.value || '',
+    desc:       document.getElementById('inp-desc')?.value || '',
+    markerX, markerY, mapMode,
+    trajectory: trajectoryPoints,
+    videoUrl,
+    screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
+    resubmissionSourceId,
+  };
+}
+
+function hasDraftContent(draft) {
+  return !!(
+    draft &&
+    (draft.title || draft.desc || draft.map || draft.agent || draft.ability ||
+      draft.videoUrl || draft.markerX != null || draft.trajectory?.length ||
+      draft.screenshots?.length || draft.resubmissionSourceId)
+  );
+}
+
+function getSavedDrafts() {
+  let drafts = [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(_DRAFTS_KEY) || '[]');
+    if (Array.isArray(parsed)) drafts = parsed;
+  } catch (_) {}
+  try {
+    if (!localStorage.getItem(_DRAFT_MIGRATED_KEY)) {
+      const legacy = JSON.parse(localStorage.getItem(_DRAFT_KEY) || 'null');
+      if (hasDraftContent(legacy)) {
+        const now = Date.now();
+        drafts = [{
+          ...legacy,
+          id: `draft_${now}_legacy`,
+          createdAt: now,
+          updatedAt: now,
+        }, ...drafts];
+        localStorage.setItem(_DRAFTS_KEY, JSON.stringify(drafts));
+      }
+      localStorage.setItem(_DRAFT_MIGRATED_KEY, '1');
+    }
+  } catch (_) {}
+  return drafts.filter(hasDraftContent).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+}
+
+function writeSavedDrafts(drafts) {
+  try {
+    localStorage.setItem(_DRAFTS_KEY, JSON.stringify(drafts.filter(hasDraftContent).slice(0, 30)));
+  } catch (_) {
+    toast('Не удалось сохранить черновик: память браузера заполнена', 'e');
+  }
+}
+
+function saveCurrentDraftSnapshot() {
+  const draft = collectDraftData();
+  if (!hasDraftContent(draft)) {
+    toast('Черновик пустой', 'w');
+    return;
+  }
+  const now = Date.now();
+  const id = `draft_${now}_${Math.random().toString(36).slice(2, 8)}`;
+  const saved = { ...draft, id, createdAt: now, updatedAt: now };
+  writeSavedDrafts([saved, ...getSavedDrafts()]);
+  try {
+    localStorage.setItem(_ACTIVE_DRAFT_ID_KEY, id);
+    localStorage.setItem(_DRAFT_KEY, JSON.stringify(saved));
+  } catch (_) {}
+  renderDrafts();
+  renderAuthorWorkspace();
+  toast('Черновик сохранён', 's');
+}
+
+function deleteSavedDraft(id) {
+  if (!id) return;
+  writeSavedDrafts(getSavedDrafts().filter(draft => draft.id !== id));
+  try {
+    if (localStorage.getItem(_ACTIVE_DRAFT_ID_KEY) === id) {
+      localStorage.removeItem(_ACTIVE_DRAFT_ID_KEY);
+      localStorage.removeItem(_DRAFT_KEY);
+    }
+  } catch (_) {}
+}
+
+function deleteActiveSavedDraft() {
+  let activeId = '';
+  try { activeId = localStorage.getItem(_ACTIVE_DRAFT_ID_KEY) || ''; } catch (_) {}
+  if (activeId) deleteSavedDraft(activeId);
+}
+
+function resumeSavedDraft(id) {
+  const draft = getSavedDrafts().find(item => item.id === id);
+  if (!draft) {
+    toast('Черновик не найден', 'e');
+    return;
+  }
+  try {
+    localStorage.setItem(_ACTIVE_DRAFT_ID_KEY, id);
+    localStorage.setItem(_DRAFT_KEY, JSON.stringify(draft));
+  } catch (_) {}
+  resetUploadForm({ keepDraft: true });
+  _restoreDraft(draft);
+  toast('Черновик открыт', 's');
+}
+
+function updateActiveSavedDraft(draft) {
+  let activeId = '';
+  try { activeId = localStorage.getItem(_ACTIVE_DRAFT_ID_KEY) || ''; } catch (_) {}
+  if (!activeId) return;
+  const drafts = getSavedDrafts();
+  const idx = drafts.findIndex(item => item.id === activeId);
+  if (idx === -1) return;
+  drafts[idx] = { ...drafts[idx], ...draft, id: activeId, updatedAt: Date.now() };
+  writeSavedDrafts(drafts);
+}
 
 function _saveDraft() {
   try {
-    localStorage.setItem(_DRAFT_KEY, JSON.stringify({
-      map:        document.getElementById('sel-map')?.value || '',
-      agent:      selectedAgent,
-      ability:    selectedAbility,
-      category:   selectedCategory,
-      difficulty: selectedDifficulty,
-      title:      document.getElementById('inp-title')?.value || '',
-      desc:       document.getElementById('inp-desc')?.value || '',
-      markerX, markerY, mapMode,
-      trajectory: trajectoryPoints,
-      videoUrl,
-      screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
-      resubmissionSourceId,
-    }));
+    const draft = collectDraftData();
+    localStorage.setItem(_DRAFT_KEY, JSON.stringify(draft));
+    updateActiveSavedDraft(draft);
   } catch(_) {}
 }
 
 function _clearDraft() {
   try { localStorage.removeItem(_DRAFT_KEY); } catch(_) {}
+  try { localStorage.removeItem(_ACTIVE_DRAFT_ID_KEY); } catch(_) {}
   resubmissionSourceId = '';
   renderResubmissionBanner();
 }
 
-function _restoreDraft() {
-  let d;
-  try { d = JSON.parse(localStorage.getItem(_DRAFT_KEY)); } catch(_) {}
+function _restoreDraft(sourceDraft = null) {
+  let d = sourceDraft;
+  try { if (!d) d = JSON.parse(localStorage.getItem(_DRAFT_KEY)); } catch(_) {}
   if (!d) return;
   resubmissionSourceId = d.resubmissionSourceId || '';
   renderResubmissionBanner();
@@ -2035,6 +2157,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
 });
 
 function showSuccess() {
+  deleteActiveSavedDraft();
   _clearDraft();
   document.getElementById('success-screen').style.display = 'flex';
   if (currentUser) _updateCooldown(currentUser.uid);
