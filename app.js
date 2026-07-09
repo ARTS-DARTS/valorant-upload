@@ -3,7 +3,7 @@ import { getAuth,
          signInWithEmailAndPassword, signInWithCustomToken,
          signOut, onAuthStateChanged }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, doc, collection, getDoc, setDoc,
+import { getFirestore, doc, collection, getDoc, setDoc, deleteDoc,
           serverTimestamp, onSnapshot,
           query, where, getDocs, limit }      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-09T04:39:33+03:00';
+const SITE_VERSION = '2026-07-09T04:49:41+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -583,6 +583,13 @@ function initWorkspaceTabs() {
   });
   document.querySelectorAll('.lineup-list').forEach(list => {
     list.addEventListener('click', event => {
+      const deleteBtn = event.target.closest('[data-delete-lineup-id]');
+      if (deleteBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        deleteRejectedLineup(deleteBtn.dataset.deleteLineupId || '');
+        return;
+      }
       const card = event.target.closest('.lineup-card[data-lineup-id]');
       if (card) openLineupDetail(card.dataset.lineupId);
     });
@@ -604,10 +611,16 @@ function initWorkspaceTabs() {
     navigator.clipboard?.writeText(id).then(() => toast('ID скопирован', 's')).catch(() => toast('Не удалось скопировать ID', 'e'));
   });
   document.getElementById('detail-body')?.addEventListener('click', event => {
-    const btn = event.target.closest('[data-resubmit-lineup-id]');
-    if (!btn) return;
+    const deleteBtn = event.target.closest('[data-delete-lineup-id]');
+    if (deleteBtn) {
+      event.preventDefault();
+      deleteRejectedLineup(deleteBtn.dataset.deleteLineupId || '');
+      return;
+    }
+    const resubmitBtn = event.target.closest('[data-resubmit-lineup-id]');
+    if (!resubmitBtn) return;
     event.preventDefault();
-    startRejectedResubmission(btn.dataset.resubmitLineupId || '');
+    startRejectedResubmission(resubmitBtn.dataset.resubmitLineupId || '');
   });
   document.getElementById('resubmit-banner')?.addEventListener('click', event => {
     const btn = event.target.closest('[data-cancel-resubmission]');
@@ -740,7 +753,10 @@ function renderLineupList(targetId, items, emptyTitle, emptyText) {
             <span class="lineup-chip lineup-date-chip"><b>${esc(stamp.time)}</b><span>${esc(stamp.date)}</span></span>
           </div>
         </div>
-        <span class="status-chip ${esc(status)}">${esc(statusLabel(status))}</span>
+        <div class="lineup-card-actions">
+          <span class="status-chip ${esc(status)}">${esc(statusLabel(status))}</span>
+          ${status === 'rejected' ? `<button class="copy-id-btn danger" type="button" data-delete-lineup-id="${esc(item.id)}">Удалить</button>` : ''}
+        </div>
       </article>`;
   }).join('');
 }
@@ -789,6 +805,7 @@ function openLineupDetail(lineupId) {
     ${shots.length ? `<div class="detail-section"><div class="detail-section-title">Скриншоты</div><div class="detail-shots">${shots.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt=""></a>`).join('')}</div></div>` : ''}
     ${status === 'rejected' ? `
       <div class="detail-actions">
+        <button class="copy-id-btn danger" type="button" data-delete-lineup-id="${esc(item.id)}">Удалить</button>
         <button class="btn-primary detail-action-primary" type="button" data-resubmit-lineup-id="${esc(item.id)}">Доработать и отправить заново</button>
       </div>` : ''}
     <div class="detail-id-row">
@@ -801,6 +818,34 @@ function openLineupDetail(lineupId) {
     navigator.clipboard?.writeText(id).then(() => toast('ID скопирован', 's')).catch(() => toast('Не удалось скопировать ID', 'e'));
   });
   screen.style.display = 'flex';
+}
+
+async function deleteRejectedLineup(lineupId) {
+  const item = findOwnLineup(lineupId);
+  if (!item || item.status !== 'rejected') {
+    toast('Удалить можно только отклонённый лайнап', 'w');
+    return;
+  }
+  if (!confirm('Удалить отклонённый лайнап? Это уберёт его из кабинета автора.')) return;
+  try {
+    await deleteDoc(doc(db, 'lineups', lineupId));
+    if (resubmissionSourceId === lineupId) {
+      resubmissionSourceId = '';
+      _saveDraft();
+      renderResubmissionBanner();
+      renderDrafts();
+    }
+    closeLineupDetail();
+    toast('Отклонённый лайнап удалён', 's');
+  } catch (e) {
+    await logUploadError(e, {
+      action: 'delete_rejected_lineup',
+      lineup_id: lineupId,
+      status: item.status || '',
+      user: userDiagnostics(),
+    });
+    toast('Не удалось удалить лайнап: ' + toSafeErrorMessage(e), 'e');
+  }
 }
 
 function closeLineupDetail() {

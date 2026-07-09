@@ -87,6 +87,7 @@
     .status-chip.approved { background: rgba(34,197,94,.12); color: var(--green); border: 1px solid rgba(34,197,94,.28); }
     .status-chip.pending { background: rgba(245,158,11,.12); color: var(--orange); border: 1px solid rgba(245,158,11,.28); }
     .status-chip.rejected { background: rgba(239,68,68,.12); color: var(--red); border: 1px solid rgba(239,68,68,.28); }
+    .lineup-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .empty-state { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--r); padding: 24px; color: var(--text2); font-size: 14px; line-height: 1.5; }
     .empty-state strong { display: block; color: var(--text1); font-size: 16px; margin-bottom: 4px; }
     .cabinet-stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -111,6 +112,7 @@
     .detail-id-row code { color: var(--text2); overflow-wrap: anywhere; }
     .copy-id-btn { border: 1px solid var(--border); background: transparent; color: var(--text2); border-radius: var(--r); padding: 6px 10px; font-size: 11px; font-weight: 800; cursor: pointer; flex-shrink: 0; }
     .copy-id-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .copy-id-btn.danger { color: #fecaca; border-color: rgba(239,68,68,.35); }
     .copy-id-btn.danger:hover { border-color: var(--red); color: var(--red); }
     .draft-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .detail-section { margin-top: 14px; }
@@ -121,7 +123,7 @@
     .detail-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
     .detail-shots a { display: block; border-radius: var(--r); overflow: hidden; border: 1px solid var(--border); background: var(--bg); }
     .detail-shots img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; }
-    .detail-actions { margin-top: 16px; display: flex; justify-content: flex-end; }
+    .detail-actions { margin-top: 16px; display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
     .detail-action-primary { width: auto; padding: 10px 14px; font-size: 13px; }
 
     .section-title { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--primary); margin-bottom: 8px; margin-top: 24px; }
@@ -241,8 +243,9 @@
       .main { padding: 16px 0 60px; width: 100%; }
       .author-list-shell { padding: 10px 10px 60px; }
       .lineup-card { grid-template-columns: 1fr; }
+      .lineup-card-actions { justify-content: flex-start; }
       .draft-actions { justify-content: stretch; }
-      .draft-actions .copy-id-btn { flex: 1; }
+      .draft-actions .copy-id-btn, .lineup-card-actions .copy-id-btn { flex: 1; }
       .status-chip { justify-self: start; }
       .list-tools { align-items: stretch; flex-direction: column; }
       .list-search { max-width: none; }
@@ -250,7 +253,7 @@
       .detail-grid { grid-template-columns: 1fr 1fr; }
       .lineup-detail-card { padding: 16px; }
       .detail-actions { justify-content: stretch; }
-      .detail-action-primary { width: 100%; }
+      .detail-actions .copy-id-btn, .detail-action-primary { flex: 1; width: auto; }
     }
     @media (max-width: 500px) {
       .auth-card { padding: 28px 18px; }
