@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T18:43:00+03:00';
+const SITE_VERSION = '2026-07-10T18:56:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -1684,10 +1684,12 @@ let outputPlaybackRaf = null;
 let outputPlaybackStartedAt = 0;
 let outputPlaybackStartTime = 0;
 let outputPlaybackTime = null;
+const freezeFrameImages = new Map();
 const editorEls = {
   scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
   stage: document.getElementById('vid-stage'),
+  freezeOverlay: document.getElementById('freeze-frame-overlay'),
   zoomFrame: document.getElementById('zoom-preview-frame'),
   playhead: document.getElementById('timeline-playhead'),
   trimRange: document.getElementById('video-trim-range'),
@@ -1843,6 +1845,34 @@ function segmentForOutputTime(outputTime) {
   }) || null;
 }
 
+function captureCurrentVideoFrame() {
+  if (!vidPlayer.videoWidth || !vidPlayer.videoHeight) return '';
+  try {
+    const canvas = document.createElement('canvas');
+    const maxWidth = 960;
+    const scale = Math.min(1, maxWidth / vidPlayer.videoWidth);
+    canvas.width = Math.max(1, Math.round(vidPlayer.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(vidPlayer.videoHeight * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(vidPlayer, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  } catch (error) {
+    console.warn('Cannot capture freeze frame', error);
+    return '';
+  }
+}
+
+function setFreezeOverlay(src) {
+  if (!editorEls.freezeOverlay) return;
+  if (src) {
+    if (editorEls.freezeOverlay.src !== src) editorEls.freezeOverlay.src = src;
+    editorEls.freezeOverlay.classList.add('show');
+  } else {
+    editorEls.freezeOverlay.classList.remove('show');
+    editorEls.freezeOverlay.removeAttribute('src');
+  }
+}
+
 function stopOutputPlayback({ keepPreview = true } = {}) {
   if (outputPlaybackRaf) {
     cancelAnimationFrame(outputPlaybackRaf);
@@ -1854,6 +1884,7 @@ function stopOutputPlayback({ keepPreview = true } = {}) {
   outputPlaybackStartTime = 0;
   outputPlaybackTime = null;
   if (keepPreview && currentOut !== null) timelinePreviewOutputTime = currentOut;
+  setFreezeOverlay('');
   if (!vidPlayer.paused) vidPlayer.pause();
   if (vidPlayBtn) vidPlayBtn.textContent = '▶';
   renderVideoEditor();
@@ -1870,7 +1901,9 @@ function showOutputFrame(outputTime) {
     if (Math.abs((vidPlayer.currentTime || 0) - segment.sourceAt) > 0.03) {
       vidPlayer.currentTime = segment.sourceAt;
     }
+    setFreezeOverlay(freezeFrameImages.get(segment.id) || '');
   } else {
+    setFreezeOverlay('');
     const local = Math.max(0, Math.min(segment.duration, out - segment.outputStart));
     const sourceTime = segment.sourceStart + local;
     if (Math.abs((vidPlayer.currentTime || 0) - sourceTime) > 0.12) {
@@ -1919,7 +1952,22 @@ function toggleEditorPlayback() {
     return;
   }
   timelinePreviewOutputTime = null;
+  setFreezeOverlay('');
   vidPlayer.paused ? safePlay(vidPlayer) : vidPlayer.pause();
+}
+
+function renderVideoTransport() {
+  const sourceDuration = videoDuration();
+  const outputDuration = editedOutputDuration() || sourceDuration;
+  const outputTime = currentOutputTime();
+  const displayDuration = outputDuration || sourceDuration || 0;
+  if (outputPlaybackActive || timelinePreviewOutputTime !== null || (videoEdit.freezeFrames || []).length) {
+    if (vidScrubber && displayDuration) vidScrubber.value = String(Math.max(0, Math.min(100, outputTime / displayDuration * 100)));
+    if (vidTimeEl) vidTimeEl.textContent = `${fmtTime(outputTime)} / ${fmtTime(displayDuration)}`;
+    return;
+  }
+  if (vidScrubber && sourceDuration) vidScrubber.value = String((vidPlayer.currentTime / sourceDuration) * 100);
+  if (vidTimeEl) vidTimeEl.textContent = fmtTime(vidPlayer.currentTime) + ' / ' + fmtTime(sourceDuration);
 }
 
 function renderVideoEditor() {
@@ -1981,6 +2029,7 @@ function renderVideoEditor() {
     editorEls.effectMarkers.innerHTML = zoomHtml;
   }
   if (editorEls.timeLabel) editorEls.timeLabel.textContent = `${fmtTime(vidPlayer.currentTime || 0)} / ${fmtTime(duration)} · итог ${fmtTime(outputDuration)}`;
+  renderVideoTransport();
   if (editorEls.zoomValue) editorEls.zoomValue.textContent = `${Number(editorEls.zoomScale?.value || 1.4).toFixed(1)}x`;
   applyVideoEditPreview();
   if (editorEls.summary) {
@@ -2045,6 +2094,8 @@ function applyTimelineTool(time, outputTime = null) {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   vidPlayer.pause();
+  const segment = outputTime === null ? null : segmentForOutputTime(outputTime);
+  setFreezeOverlay(segment?.type === 'freeze' ? (freezeFrameImages.get(segment.id) || '') : '');
   timelinePreviewOutputTime = outputTime === null ? sourceToOutputTime(time) : Math.max(0, Math.min(editedOutputDuration(), outputTime));
   vidPlayer.currentTime = clampTime(time);
   renderVideoEditor();
@@ -2067,6 +2118,8 @@ function resetVideoEdit() {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   timelinePreviewOutputTime = null;
+  freezeFrameImages.clear();
+  setFreezeOverlay('');
   videoEdit = createDefaultVideoEdit();
   videoEdit.trimEnd = videoDuration();
   saveVideoEdit();
@@ -2198,6 +2251,8 @@ editorEls.shell?.addEventListener('pointermove', event => {
     clearFreezeHold();
     vidPlayer.pause();
     timelinePreviewOutputTime = outputTime;
+    const segment = segmentForOutputTime(outputTime);
+    setFreezeOverlay(segment?.type === 'freeze' ? (freezeFrameImages.get(segment.id) || '') : '');
     vidPlayer.currentTime = time;
   }
   renderVideoEditor();
@@ -2284,6 +2339,8 @@ document.getElementById('edit-freeze')?.addEventListener('click', () => {
 function toggleFreezeAt(time) {
   const at = Math.round(clampTime(time) * 10) / 10;
   const freeze = { id: `freeze_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, at, duration: 2 };
+  const frame = captureCurrentVideoFrame();
+  if (frame) freezeFrameImages.set(freeze.id, frame);
   videoEdit.freezeFrames = [...(videoEdit.freezeFrames || []), freeze];
   selectedEditorItem = { type: 'freeze', id: freeze.id };
   toast('Стоп-кадр +2 сек добавлен', 's');
@@ -2293,6 +2350,7 @@ function deleteSelectedEditorItem() {
   if (!selectedEditorItem) { toast('Сначала выбери блок на таймлайне', 'i'); return; }
   if (selectedEditorItem.type === 'freeze') {
     videoEdit.freezeFrames = (videoEdit.freezeFrames || []).filter(item => item.id !== selectedEditorItem.id);
+    freezeFrameImages.delete(selectedEditorItem.id);
     selectedEditorItem = null;
     toast('Стоп-кадр удалён', 's');
     saveVideoEdit();
@@ -2399,8 +2457,6 @@ vidPlayer.addEventListener('timeupdate', () => {
     vidPlayer.currentTime = videoEdit.trimStart;
     playedFreezeHolds.clear();
   }
-  vidScrubber.value = (vidPlayer.currentTime / vidPlayer.duration) * 100;
-  vidTimeEl.textContent = fmtTime(vidPlayer.currentTime) + ' / ' + fmtTime(vidPlayer.duration);
   renderVideoEditor();
   lastVideoTime = vidPlayer.currentTime;
 });
@@ -2424,15 +2480,24 @@ vidPlayer.addEventListener('seeking', () => { clearFreezeHold(); if (!outputPlay
 vidScrubber.addEventListener('input', () => {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
-  timelinePreviewOutputTime = null;
   playedFreezeHolds.clear();
-  vidPlayer.currentTime = (vidScrubber.value / 100) * vidPlayer.duration;
+  const ratio = Number(vidScrubber.value || 0) / 100;
+  if ((videoEdit.freezeFrames || []).length) {
+    const outputTime = ratio * editedOutputDuration();
+    applyTimelineTool(outputToSourceTime(outputTime), outputTime);
+  } else {
+    timelinePreviewOutputTime = null;
+    setFreezeOverlay('');
+    vidPlayer.currentTime = ratio * vidPlayer.duration;
+  }
 });
 vidPlayBtn.addEventListener('click', toggleEditorPlayback);
 document.getElementById('vid-remove-btn').addEventListener('click', () => {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   timelinePreviewOutputTime = null;
+  freezeFrameImages.clear();
+  setFreezeOverlay('');
   vidPlayer.src = '';
   videoUrl = null;
   videoEdit = createDefaultVideoEdit();
