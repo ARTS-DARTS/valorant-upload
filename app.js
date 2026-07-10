@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T16:08:00+03:00';
+const SITE_VERSION = '2026-07-10T16:24:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -439,6 +439,8 @@ let authorMaterialsLoaded = false;
 let authorMaterialsLoading = false;
 let authorMaterialsError = '';
 let materialEditorId = '';
+let materialVideoUploading = false;
+let materialVideoUploadSeq = 0;
 let activeWorkspaceTab = 'upload';
 let myLineupsStatusFilter = 'all';
 let myLineupsSearch = '';
@@ -702,6 +704,12 @@ function initWorkspaceTabs() {
       event.preventDefault();
       saveAuthorMaterial();
     }
+  });
+  document.getElementById('material-form-shell')?.addEventListener('change', event => {
+    const input = event.target.closest('#material-video-file');
+    if (!input) return;
+    const file = input.files?.[0];
+    if (file) uploadMaterialVideoFile(file);
   });
   document.getElementById('materials-list')?.addEventListener('click', event => {
     const edit = event.target.closest('[data-material-edit]');
@@ -1127,7 +1135,8 @@ async function loadAuthorMaterials({ force = false } = {}) {
 
 function materialCardHtml(material) {
   const published = material.is_published !== false;
-  const url = String(material.url || '').trim();
+  const videoUrl = String(material.video_url || '').trim();
+  const legacyUrl = String(material.url || '').trim();
   return `
     <article class="material-item" data-material-id="${esc(material.id || '')}">
       <div>
@@ -1137,7 +1146,10 @@ function materialCardHtml(material) {
           <h3>${esc(firstText(material.title, 'Материал'))}</h3>
         </div>
         ${material.description ? `<div class="material-desc">${esc(material.description)}</div>` : ''}
-        ${url ? `<a class="material-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Открыть материал</a>` : ''}
+        ${videoUrl ? `
+          <video class="material-video" src="${esc(videoUrl)}" controls preload="metadata"></video>
+          <a class="material-link" href="${esc(videoUrl)}" download rel="noopener noreferrer">Скачать видео</a>
+        ` : legacyUrl ? `<a class="material-link" href="${esc(legacyUrl)}" target="_blank" rel="noopener noreferrer">Открыть материал</a>` : ''}
       </div>
       ${isCurrentUserAdmin() ? `
         <div class="material-actions">
@@ -1150,6 +1162,8 @@ function materialCardHtml(material) {
 
 function openMaterialForm(id = '') {
   if (!isCurrentUserAdmin()) return;
+  materialVideoUploading = false;
+  materialVideoUploadSeq++;
   materialEditorId = id || '__new__';
   renderMaterialForm();
   document.getElementById('material-title')?.focus();
@@ -1157,6 +1171,8 @@ function openMaterialForm(id = '') {
 
 function closeMaterialForm() {
   materialEditorId = '';
+  materialVideoUploading = false;
+  materialVideoUploadSeq++;
   renderMaterialForm();
 }
 
@@ -1169,23 +1185,26 @@ function renderMaterialForm() {
     return;
   }
   const material = materialEditorId === '__new__'
-    ? { type: 'video', title: '', description: '', url: '', is_published: true }
+    ? { type: 'video', title: '', description: '', video_url: '', video_file_name: '', video_size: 0, is_published: true }
     : authorMaterials.find(item => item.id === materialEditorId) || {};
+  const videoUrl = String(material.video_url || '').trim();
   shell.style.display = '';
   shell.innerHTML = `
     <div class="material-form-grid">
-      <select class="finput" id="material-type">
-        ${['video', 'guide', 'checklist', 'example', 'link'].map(type =>
-          `<option value="${type}" ${String(material.type || 'video') === type ? 'selected' : ''}>${esc(materialTypeLabel(type))}</option>`
-        ).join('')}
-      </select>
       <input class="finput" id="material-title" maxlength="90" placeholder="Название материала" value="${esc(material.title || '')}">
+      <input class="finput" id="material-video-file" type="file" accept="video/mp4,video/quicktime,video/*">
     </div>
     <div class="field-group">
       <textarea class="finput" id="material-description" maxlength="1000" placeholder="Короткое описание для авторов">${esc(material.description || '')}</textarea>
     </div>
-    <div class="field-group">
-      <input class="finput" id="material-url" maxlength="500" placeholder="Ссылка на видео, документ, изображение или гайд" value="${esc(material.url || '')}">
+    <input type="hidden" id="material-video-url" value="${esc(videoUrl)}">
+    <input type="hidden" id="material-video-name" value="${esc(material.video_file_name || '')}">
+    <input type="hidden" id="material-video-size" value="${esc(material.video_size || 0)}">
+    <div class="material-upload-state" id="material-upload-state">
+      ${videoUrl ? 'Видео загружено. Можно заменить его новым файлом.' : 'Выбери видеофайл, он загрузится в хранилище автоматически.'}
+    </div>
+    <div class="material-video-preview" id="material-video-preview">
+      ${videoUrl ? `<video class="material-video" src="${esc(videoUrl)}" controls preload="metadata"></video>` : ''}
     </div>
     <label class="lineup-meta" style="margin-bottom:12px;">
       <input type="checkbox" id="material-published" ${material.is_published === false ? '' : 'checked'}>
@@ -1200,29 +1219,64 @@ function renderMaterialForm() {
 function materialFormPayload() {
   const title = document.getElementById('material-title')?.value.trim() || '';
   const description = document.getElementById('material-description')?.value.trim() || '';
-  const url = document.getElementById('material-url')?.value.trim() || '';
-  const type = document.getElementById('material-type')?.value || 'link';
+  const videoUrl = document.getElementById('material-video-url')?.value.trim() || '';
+  const videoFileName = document.getElementById('material-video-name')?.value.trim() || '';
+  const videoSize = Number(document.getElementById('material-video-size')?.value || 0);
   const isPublished = !!document.getElementById('material-published')?.checked;
   if (!title) throw new Error('Укажи название материала');
-  if (!description && !url) throw new Error('Добавь описание или ссылку');
-  if (url) {
-    try {
-      const parsed = new URL(url);
-      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
-    } catch (_) {
-      throw new Error('Ссылка должна начинаться с http:// или https://');
-    }
-  }
+  if (materialVideoUploading) throw new Error('Дождись окончания загрузки видео');
+  if (!videoUrl) throw new Error('Загрузи видео для материала');
   return {
-    type,
+    type: 'video',
     title,
     description,
-    url,
+    url: '',
+    video_url: videoUrl,
+    video_file_name: videoFileName,
+    video_size: Number.isFinite(videoSize) ? videoSize : 0,
     is_published: isPublished,
     updated_at: serverTimestamp(),
     updated_by: currentUser?.uid || '',
     updated_by_name: authorDisplayName(),
   };
+}
+
+async function uploadMaterialVideoFile(file) {
+  if (!isCurrentUserAdmin()) return;
+  if (!isVideoFile(file)) { toast('Выбери видеофайл', 'e'); return; }
+  if (file.size > 100 * 1024 * 1024) { toast('Видео превышает 100 МБ', 'e'); return; }
+
+  const seq = ++materialVideoUploadSeq;
+  materialVideoUploading = true;
+  const state = document.getElementById('material-upload-state');
+  const preview = document.getElementById('material-video-preview');
+  const saveBtn = document.querySelector('[data-material-save]');
+  if (saveBtn) saveBtn.disabled = true;
+  if (state) state.textContent = 'Загрузка видео: 0%';
+  if (preview) preview.innerHTML = '';
+  try {
+    const url = await uploadVideoToSelectel(file, pct => {
+      if (seq !== materialVideoUploadSeq) return;
+      if (state) state.textContent = `Загрузка видео: ${Math.round(pct * 100)}%`;
+    });
+    if (seq !== materialVideoUploadSeq) return;
+    document.getElementById('material-video-url').value = url;
+    document.getElementById('material-video-name').value = file.name;
+    document.getElementById('material-video-size').value = String(file.size);
+    if (state) state.textContent = 'Видео загружено. Можно сохранять материал.';
+    if (preview) preview.innerHTML = `<video class="material-video" src="${esc(url)}" controls preload="metadata"></video>`;
+    toast('Видео загружено', 's');
+  } catch (e) {
+    if (seq !== materialVideoUploadSeq) return;
+    document.getElementById('material-video-url').value = '';
+    if (state) state.textContent = 'Не удалось загрузить видео. Попробуй выбрать файл ещё раз.';
+    toast('Ошибка загрузки видео: ' + (e.message || e), 'e');
+  } finally {
+    if (seq === materialVideoUploadSeq) {
+      materialVideoUploading = false;
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
 }
 
 async function saveAuthorMaterial() {

@@ -100,8 +100,10 @@
     .materials-add-btn { width: auto; padding: 10px 14px; flex-shrink: 0; }
     .materials-list { display: grid; gap: 10px; margin-bottom: 16px; }
     .material-form-shell { background: var(--surface); border: 1px solid rgba(79,195,247,.28); border-radius: var(--r); padding: 14px; margin-bottom: 10px; }
-    .material-form-grid { display: grid; grid-template-columns: 160px 1fr; gap: 10px; margin-bottom: 10px; }
+    .material-form-grid { display: grid; grid-template-columns: 1fr 260px; gap: 10px; margin-bottom: 10px; }
     .material-form-shell textarea { min-height: 96px; resize: vertical; }
+    .material-upload-state { border: 1px dashed var(--border); border-radius: var(--r); padding: 10px 12px; color: var(--text2); font-size: 12px; margin-bottom: 10px; }
+    .material-video-preview { margin-bottom: 10px; }
     .material-form-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .material-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
     .material-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 7px; }
@@ -109,6 +111,7 @@
     .material-badge { border: 1px solid rgba(79,195,247,.28); background: rgba(79,195,247,.12); color: var(--primary); border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 900; }
     .material-badge.hidden { border-color: rgba(245,158,11,.30); background: rgba(245,158,11,.12); color: var(--orange); }
     .material-desc { color: var(--text2); font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .material-video { display: block; width: min(100%, 520px); max-height: 320px; margin-top: 12px; border-radius: var(--r); background: #000; border: 1px solid var(--border); }
     .material-link { display: inline-flex; margin-top: 9px; color: var(--primary); font-size: 13px; font-weight: 800; text-decoration: none; overflow-wrap: anywhere; }
     .material-link:hover { text-decoration: underline; }
     .material-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
