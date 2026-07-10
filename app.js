@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T14:02:36+03:00';
+const SITE_VERSION = '2026-07-10T14:04:09+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -566,6 +566,7 @@ function _subscribeUserProfile(uid) {
   if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
   _profileUnsub = onSnapshot(doc(db, 'users', uid), snap => {
     currentUserProfile = snap.exists() ? snap.data() : null;
+    updateAdminOnlyWorkspace();
     const approvedDocs = currentUserLineups.filter(x => x.status === 'approved').length;
     _updateLevelDisplay(effectiveApprovedLineups(approvedDocs));
     updateUploadGate();
@@ -669,43 +670,6 @@ function initWorkspaceTabs() {
       toast('Черновик удалён', 's');
     }
   });
-  document.getElementById('materials-list')?.addEventListener('click', event => {
-    const btn = event.target.closest('[data-material-action]');
-    if (!btn) return;
-    event.preventDefault();
-    const url = btn.dataset.materialUrl || '';
-    const type = btn.dataset.materialType || '';
-    const action = btn.dataset.materialAction || '';
-    if (!url) return;
-    if (action === 'open') {
-      window.open(url, '_blank', 'noopener');
-      return;
-    }
-    if (action === 'copy') {
-      navigator.clipboard?.writeText(url)
-        .then(() => toast('Ссылка скопирована', 's'))
-        .catch(() => toast('Не удалось скопировать ссылку', 'e'));
-      return;
-    }
-    if (action === 'use-video') {
-      useMaterialVideo(url);
-      switchWorkspaceTab('upload');
-      toast('Видео добавлено в текущий черновик', 's');
-      return;
-    }
-    if (action === 'use-shot') {
-      useMaterialScreenshot(url);
-      switchWorkspaceTab('upload');
-      toast('Скриншот добавлен в текущий черновик', 's');
-      return;
-    }
-    if (type === 'video') window.open(url, '_blank', 'noopener');
-  });
-  document.getElementById('btn-refresh-materials')?.addEventListener('click', event => {
-    event.preventDefault();
-    renderMaterials();
-    toast('Материалы обновлены', 's');
-  });
   document.getElementById('btn-refresh-workspace')?.addEventListener('click', async () => {
     if (currentUser) {
       await loadCurrentUserProfile(currentUser);
@@ -718,6 +682,7 @@ function initWorkspaceTabs() {
 
 function switchWorkspaceTab(tab) {
   activeWorkspaceTab = tab || 'upload';
+  if (activeWorkspaceTab === 'materials' && !isCurrentUserAdmin()) activeWorkspaceTab = 'upload';
   document.querySelectorAll('.workspace-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.workspaceTab === activeWorkspaceTab);
   });
@@ -747,6 +712,20 @@ function categoryLabel(value) {
     defense: 'Защита',
   };
   return labels[normalized] || firstText(value, '—');
+}
+
+function isCurrentUserAdmin() {
+  return String(currentUserProfile?.role || '').toLowerCase() === 'admin';
+}
+
+function updateAdminOnlyWorkspace() {
+  const canSeeAdminMaterials = isCurrentUserAdmin();
+  document.querySelectorAll('[data-admin-only="true"]').forEach(el => {
+    el.style.display = canSeeAdminMaterials ? '' : 'none';
+  });
+  if (!canSeeAdminMaterials && activeWorkspaceTab === 'materials') {
+    switchWorkspaceTab('upload');
+  }
 }
 
 function searchableText(item) {
@@ -1050,101 +1029,14 @@ function renderDrafts() {
   }).join('');
 }
 
-function materialSourceTitle(item, fallback = 'Материал') {
-  return firstText(item?.title, item?.map, item?.agent, fallback);
-}
-
-function collectMaterialItems() {
-  const items = [];
-  currentUserLineups.forEach(lineup => {
-    const title = materialSourceTitle(lineup, 'Лайнап');
-    const source = statusLabel(lineup.status || 'pending');
-    if (lineup.video_url) {
-      items.push({
-        id: `lineup_${lineup.id}_video`,
-        type: 'video',
-        url: lineup.video_url,
-        title,
-        source,
-        meta: [lineup.map, lineup.agent, lineup.ability].filter(Boolean).join(' · '),
-      });
-    }
-    (Array.isArray(lineup.screenshots) ? lineup.screenshots : []).filter(Boolean).forEach((url, index) => {
-      items.push({
-        id: `lineup_${lineup.id}_shot_${index}`,
-        type: 'shot',
-        url,
-        title,
-        source,
-        meta: [lineup.map, lineup.agent, `Скрин ${index + 1}`].filter(Boolean).join(' · '),
-      });
-    });
-  });
-  getSavedDrafts().forEach(draft => {
-    const title = materialSourceTitle(draft, 'Черновик');
-    if (draft.videoUrl) {
-      items.push({
-        id: `${draft.id || 'draft'}_video`,
-        type: 'video',
-        url: draft.videoUrl,
-        title,
-        source: 'Черновик',
-        meta: [draft.map, draft.agent, draft.ability].filter(Boolean).join(' · '),
-      });
-    }
-    (Array.isArray(draft.screenshots) ? draft.screenshots : []).filter(Boolean).forEach((url, index) => {
-      items.push({
-        id: `${draft.id || 'draft'}_shot_${index}`,
-        type: 'shot',
-        url,
-        title,
-        source: 'Черновик',
-        meta: [draft.map, draft.agent, `Скрин ${index + 1}`].filter(Boolean).join(' · '),
-      });
-    });
-  });
-  const seen = new Set();
-  return items.filter(item => {
-    const key = `${item.type}:${item.url}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 function renderMaterials() {
   const target = document.getElementById('materials-list');
   if (!target) return;
-  if (!currentUser) {
-    target.innerHTML = '<div class="empty-state"><strong>Войди в аккаунт</strong>После входа здесь появятся твои видео и скриншоты.</div>';
+  if (!isCurrentUserAdmin()) {
+    target.innerHTML = '<div class="empty-state"><strong>Нет доступа</strong>Этот раздел доступен только администраторам.</div>';
     return;
   }
-  const items = collectMaterialItems();
-  if (!items.length) {
-    target.innerHTML = '<div class="empty-state"><strong>Материалов пока нет</strong>Загрузи видео или скриншоты в лайнап, либо сохрани черновик с медиа.</div>';
-    return;
-  }
-  target.innerHTML = items.map(item => `
-    <article class="material-library-card" data-material-id="${esc(item.id)}">
-      <div class="material-preview ${esc(item.type)}">
-        ${item.type === 'video'
-          ? `<video src="${esc(item.url)}" preload="metadata" muted playsinline></video><span>Видео</span>`
-          : `<img src="${esc(item.url)}" alt="" loading="lazy"><span>Скрин</span>`}
-      </div>
-      <div class="material-library-body">
-        <div class="lineup-title">${esc(item.title)}</div>
-        <div class="lineup-meta">
-          <span class="lineup-chip">${esc(item.source)}</span>
-          ${item.meta ? `<span class="lineup-chip">${esc(item.meta)}</span>` : ''}
-        </div>
-        <div class="material-library-actions">
-          <button class="copy-id-btn" type="button" data-material-action="${item.type === 'video' ? 'use-video' : 'use-shot'}" data-material-type="${esc(item.type)}" data-material-url="${esc(item.url)}">В черновик</button>
-          <button class="copy-id-btn" type="button" data-material-action="open" data-material-type="${esc(item.type)}" data-material-url="${esc(item.url)}">Открыть</button>
-          <button class="copy-id-btn" type="button" data-material-action="copy" data-material-type="${esc(item.type)}" data-material-url="${esc(item.url)}">Ссылка</button>
-        </div>
-      </div>
-    </article>
-  `).join('');
+  target.innerHTML = '<div class="empty-state"><strong>Админская библиотека пока пустая</strong>Пользовательские лайнапы и черновики сюда больше не попадают. Следующим шагом можно добавить загрузку и хранение материалов админами.</div>';
 }
 
 function renderCabinetStats() {
@@ -1224,6 +1116,7 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'flex';
     await loadCurrentUserProfile(user);
+    updateAdminOnlyWorkspace();
     document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
     updateUploadGate();
     _subscribeUserProfile(user.uid);
@@ -1235,6 +1128,7 @@ onAuthStateChanged(auth, async user => {
     loadMaps();
   } else {
     currentUserProfile = null;
+    updateAdminOnlyWorkspace();
     updateUploadGate();
     _unsubscribeUserProfile();
     _unsubscribeStats();
@@ -1543,21 +1437,6 @@ async function handleVideoFile(file) {
   }
 }
 
-function useMaterialVideo(url) {
-  if (!url) return;
-  if (videoXhr) { videoXhr.abort(); videoXhr = null; }
-  videoUrl = url;
-  dropZone.style.display = 'none';
-  document.getElementById('vid-upload-progress').style.display = 'none';
-  document.getElementById('vid-player-wrap').style.display = '';
-  vidPlayer.crossOrigin = 'anonymous';
-  vidPlayer.src = url;
-  vidPlayer.load();
-  validateForm();
-  _saveDraft();
-  renderMaterials();
-}
-
 vidPlayer.addEventListener('timeupdate', () => {
   if (!vidPlayer.duration) return;
   vidScrubber.value = (vidPlayer.currentTime / vidPlayer.duration) * 100;
@@ -1672,23 +1551,6 @@ document.getElementById('shot-file-input').addEventListener('change', e => {
     });
   });
 });
-
-function useMaterialScreenshot(url) {
-  if (!url) return;
-  if (screenshots.some(item => item.cloudUrl === url)) {
-    toast('Этот скриншот уже есть в текущем черновике', 'i');
-    return;
-  }
-  if (screenshots.length >= 5) {
-    toast('Максимум 5 скриншотов', 'w');
-    return;
-  }
-  screenshots.push({ localUrl: url, cloudUrl: url, uploading: false });
-  renderScreenshots();
-  validateForm();
-  _saveDraft();
-  renderMaterials();
-}
 
 function renderScreenshots() {
   const row = document.getElementById('shots-row');

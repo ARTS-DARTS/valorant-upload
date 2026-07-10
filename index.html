@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 14:02 · 10.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 14:04 · 10.07.2026</div>
   <div class="user-info" id="header-user" style="display:none;">
     <img id="user-avatar" src="" alt="" style="display:none;">
     <span id="user-name"></span>
@@ -73,7 +73,7 @@
       <button class="workspace-tab" data-workspace-tab="rejected">Отклонённые</button>
       <button class="workspace-tab" data-workspace-tab="drafts">Черновики</button>
       <button class="workspace-tab" data-workspace-tab="stats">Статистика</button>
-      <button class="workspace-tab" data-workspace-tab="materials">Материалы</button>
+      <button class="workspace-tab" data-workspace-tab="materials" data-admin-only="true" style="display:none;">Материалы</button>
     </nav>
   </div>
 
@@ -289,10 +289,9 @@
       <div class="section-title">МАТЕРИАЛЫ ДЛЯ АВТОРОВ</div>
       <div class="materials-toolbar">
         <div>
-          <strong>Медиа-библиотека</strong>
-          <span>Видео и скриншоты из твоих лайнапов и черновиков.</span>
+          <strong>Админские материалы</strong>
+          <span>Закрытый раздел для материалов, которые загружают админы.</span>
         </div>
-        <button class="copy-id-btn" id="btn-refresh-materials" type="button">Обновить</button>
       </div>
       <div class="materials-list" id="materials-list"></div>
       <div class="materials-grid">
