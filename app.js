@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T19:27:00+03:00';
+const SITE_VERSION = '2026-07-10T19:41:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -1677,6 +1677,7 @@ let freezeHoldRenderInterval = null;
 let playedFreezeHolds = new Set();
 let lastVideoTime = 0;
 let timelinePixelsPerSecond = 52;
+let timelineMagnetEnabled = true;
 let videoEditorHotkeysActive = false;
 let timelinePreviewOutputTime = null;
 let outputPlaybackActive = false;
@@ -1700,6 +1701,7 @@ const editorEls = {
   summary: document.getElementById('editor-summary'),
   hint: document.getElementById('editor-mode-hint'),
   timelineZoom: document.getElementById('timeline-zoom'),
+  magnet: document.getElementById('timeline-magnet'),
   trimStart: document.getElementById('edit-trim-start'),
   trimEnd: document.getElementById('edit-trim-end'),
   volume: document.getElementById('edit-volume'),
@@ -2154,6 +2156,74 @@ function outputTimeFromTimelineEvent(event) {
   return ratio * editedOutputDuration();
 }
 
+function timelineSnapPoints() {
+  const outputDuration = editedOutputDuration();
+  const points = new Set([0, outputDuration]);
+  buildTimelineSegments().forEach(segment => {
+    points.add(segment.outputStart);
+    points.add(segment.outputStart + segment.duration);
+  });
+  (videoEdit.splits || []).forEach(time => points.add(sourceToOutputTime(time)));
+  (videoEdit.freezeFrames || []).forEach(freeze => {
+    const segment = buildTimelineSegments().find(item => item.type === 'freeze' && item.id === freeze.id);
+    const start = segment?.outputStart ?? sourceToOutputTime(freeze.at);
+    points.add(start);
+    points.add(start + Number(freeze.duration || 2));
+  });
+  (videoEdit.zoomKeyframes || []).forEach(zoom => {
+    const start = sourceToOutputTime(zoom.at);
+    points.add(start);
+    points.add(start + Number(zoom.duration || 2));
+  });
+  return [...points].filter(Number.isFinite).sort((a, b) => a - b);
+}
+
+function snapOutputTime(outputTime) {
+  const outputDuration = editedOutputDuration();
+  const raw = Math.max(0, Math.min(outputDuration, Number(outputTime || 0)));
+  if (!timelineMagnetEnabled) return raw;
+  const threshold = Math.max(0.07, Math.min(0.28, 12 / Math.max(1, timelinePixelsPerSecond)));
+  let best = raw;
+  let bestDistance = threshold;
+  timelineSnapPoints().forEach(point => {
+    const distance = Math.abs(point - raw);
+    if (distance <= bestDistance) {
+      best = point;
+      bestDistance = distance;
+    }
+  });
+  return Math.max(0, Math.min(outputDuration, best));
+}
+
+function timelineTimesFromEvent(event) {
+  const outputTime = snapOutputTime(outputTimeFromTimelineEvent(event));
+  return { outputTime, sourceTime: clampTime(outputToSourceTime(outputTime)) };
+}
+
+function autoScrollTimelineWhileDragging(event) {
+  if (!editorEls.scroll || !timelineDrag) return;
+  const maxScroll = editorEls.scroll.scrollWidth - editorEls.scroll.clientWidth;
+  if (maxScroll <= 0) return;
+  const rect = editorEls.scroll.getBoundingClientRect();
+  const edge = 46;
+  let delta = 0;
+  if (event.clientX > rect.right - edge) {
+    delta = Math.min(32, edge - (rect.right - event.clientX));
+  } else if (event.clientX < rect.left + edge) {
+    delta = -Math.min(32, edge - (event.clientX - rect.left));
+  }
+  if (!delta) return;
+  editorEls.scroll.scrollLeft = Math.max(0, Math.min(maxScroll, editorEls.scroll.scrollLeft + delta));
+}
+
+function syncMagnetButton() {
+  editorEls.magnet?.classList.toggle('active', timelineMagnetEnabled);
+  editorEls.magnet?.setAttribute('aria-pressed', timelineMagnetEnabled ? 'true' : 'false');
+  if (editorEls.magnet) editorEls.magnet.title = timelineMagnetEnabled
+    ? 'Магнит включён: прилипает к стыкам клипов'
+    : 'Магнит выключен';
+}
+
 function applyTimelineTool(time, outputTime = null) {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
@@ -2218,8 +2288,8 @@ editorEls.shell?.addEventListener('click', event => {
     suppressTimelineClick = false;
     return;
   }
-  const outputTime = outputTimeFromTimelineEvent(event);
-  applyTimelineTool(outputToSourceTime(outputTime), outputTime);
+  const { outputTime, sourceTime } = timelineTimesFromEvent(event);
+  applyTimelineTool(sourceTime, outputTime);
 });
 editorEls.shell?.addEventListener('pointerdown', event => {
   const duration = videoDuration();
@@ -2274,15 +2344,20 @@ editorEls.shell?.addEventListener('pointerdown', event => {
 editorEls.shell?.addEventListener('pointermove', event => {
   if (!timelineDrag) return;
   timelineDrag.moved = true;
-  const time = clampTime(timeFromTimelineEvent(event));
-  const outputTime = outputTimeFromTimelineEvent(event);
+  autoScrollTimelineWhileDragging(event);
+  const rawTime = clampTime(timeFromTimelineEvent(event));
+  const { outputTime, sourceTime } = timelineTimesFromEvent(event);
+  const time = sourceTime;
   if (timelineDrag.kind === 'start') {
     videoEdit.trimStart = Math.min(time, videoEdit.trimEnd || videoDuration());
   } else if (timelineDrag.kind === 'end') {
     videoEdit.trimEnd = Math.max(time, videoEdit.trimStart);
   } else if (timelineDrag.kind === 'freeze') {
     const freeze = (videoEdit.freezeFrames || []).find(item => item.id === timelineDrag.id);
-    if (freeze) freeze.at = clampTime(time - (timelineDrag.offset || 0));
+    if (freeze) {
+      const rawStart = clampTime(rawTime - (timelineDrag.offset || 0));
+      freeze.at = clampTime(outputToSourceTime(snapOutputTime(sourceToOutputTime(rawStart))));
+    }
   } else if (timelineDrag.kind === 'freeze-resize') {
     const freeze = (videoEdit.freezeFrames || []).find(item => item.id === timelineDrag.id);
     if (freeze) {
@@ -2298,7 +2373,10 @@ editorEls.shell?.addEventListener('pointermove', event => {
     }
   } else if (timelineDrag.kind === 'zoom') {
     const zoom = (videoEdit.zoomKeyframes || []).find(item => item.id === timelineDrag.id);
-    if (zoom) zoom.at = clampTime(time - (timelineDrag.offset || 0));
+    if (zoom) {
+      const rawStart = clampTime(rawTime - (timelineDrag.offset || 0));
+      zoom.at = clampTime(outputToSourceTime(snapOutputTime(sourceToOutputTime(rawStart))));
+    }
   } else if (timelineDrag.kind === 'zoom-resize') {
     const zoom = (videoEdit.zoomKeyframes || []).find(item => item.id === timelineDrag.id);
     if (zoom) {
@@ -2390,6 +2468,12 @@ editorEls.timelineZoom?.addEventListener('input', event => {
   timelinePixelsPerSecond = Number(event.target.value || 52);
   renderVideoEditor();
 });
+editorEls.magnet?.addEventListener('click', () => {
+  timelineMagnetEnabled = !timelineMagnetEnabled;
+  syncMagnetButton();
+  toast(timelineMagnetEnabled ? 'Магнит включён' : 'Магнит выключен', 'i');
+});
+syncMagnetButton();
 document.getElementById('timeline-zoom-in')?.addEventListener('click', () => {
   timelinePixelsPerSecond = Math.min(120, timelinePixelsPerSecond + 8);
   if (editorEls.timelineZoom) editorEls.timelineZoom.value = String(timelinePixelsPerSecond);

@@ -215,8 +215,10 @@
     .editor-mode-hint { margin-top: 9px; color: var(--text2); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 8px 10px; font-size: 12px; line-height: 1.4; }
     .timeline-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 8px; color: var(--text2); font-size: 12px; }
     .timeline-head span:first-child { color: var(--text1); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .timeline-zoom { display: grid; grid-template-columns: auto minmax(160px, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .timeline-zoom { display: grid; grid-template-columns: auto minmax(160px, 1fr) auto auto; gap: 8px; align-items: center; margin-bottom: 8px; }
     .timeline-zoom input { width: 100%; accent-color: var(--primary); }
+    .magnet-toggle { min-width: 36px; }
+    .magnet-toggle.active { border-color: var(--primary); color: var(--primary); background: rgba(79,195,247,.14); box-shadow: 0 0 0 3px rgba(79,195,247,.10); }
     .timeline-scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 8px; scrollbar-width: thin; }
     .timeline-shell { position: relative; display: grid; gap: 6px; padding-top: 18px; user-select: none; touch-action: none; min-width: 900px; }
     .timeline-ruler { position: absolute; left: 0; right: 0; top: 0; height: 14px; border-radius: 999px; background: repeating-linear-gradient(90deg, rgba(148,163,184,.35) 0 1px, transparent 1px 10%); opacity: .75; }
