@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T17:43:00+03:00';
+const SITE_VERSION = '2026-07-10T17:55:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -2267,27 +2267,55 @@ document.addEventListener('pointerdown', event => {
   videoEditorHotkeysActive = !!(wrap && wrap.contains(event.target));
 }, true);
 
+function hasVideoForHotkeys() {
+  const player = document.getElementById('vid-player');
+  return !!(player && (player.currentSrc || player.src) && !player.error);
+}
+
+function isTextTypingTarget(target) {
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+  if (target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return true;
+  if (target.tagName !== 'INPUT') return false;
+  const type = String(target.type || 'text').toLowerCase();
+  return ['text', 'email', 'password', 'search', 'url', 'tel', 'number'].includes(type);
+}
+
+function handleVideoEditorSpace(event, shouldToggle) {
+  const isSpace = event.code === 'Space' || event.key === ' ' || event.key === 'Spacebar';
+  if (!isSpace || !hasVideoForHotkeys()) return false;
+  const wrap = document.getElementById('vid-player-wrap');
+  const insideEditor = !!(wrap && wrap.contains(event.target));
+  if (!insideEditor && !videoEditorHotkeysActive) return false;
+  if (isTextTypingTarget(event.target) && !insideEditor) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+  if (document.activeElement && document.activeElement !== document.body && !isTextTypingTarget(document.activeElement)) {
+    document.activeElement.blur?.();
+  }
+  if (shouldToggle) {
+    const player = document.getElementById('vid-player');
+    if (player.paused) { safePlay(player); } else { player.pause(); }
+  }
+  return true;
+}
+
+['keydown', 'keypress', 'keyup'].forEach(type => {
+  window.addEventListener(type, event => {
+    handleVideoEditorSpace(event, type === 'keydown');
+  }, true);
+});
+
 document.addEventListener('keydown', e => {
   const target = e.target;
   const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
   const player = document.getElementById('vid-player');
-  if (isSpace && videoEditorHotkeysActive && player && player.src && !player.error) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation?.();
-    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur?.();
-    if (player.paused) { safePlay(player); } else { player.pause(); }
-    return;
-  }
-  const isTyping = target && (
-    target.tagName === 'INPUT' ||
-    target.tagName === 'TEXTAREA' ||
-    target.tagName === 'SELECT' ||
-    target.isContentEditable
-  );
+  if (handleVideoEditorSpace(e, true)) return;
+  const isTyping = isTextTypingTarget(target);
   if (isTyping) return;
   if (isSpace) {
-    if (player && player.src && !player.error) {
+    if (player && (player.currentSrc || player.src) && !player.error) {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation?.();
@@ -2296,13 +2324,13 @@ document.addEventListener('keydown', e => {
     }
   }
   if (e.code === 'ArrowRight') {
-    if (player && player.src && !player.error) {
+    if (player && (player.currentSrc || player.src) && !player.error) {
       e.preventDefault();
       player.currentTime = Math.min(player.duration, player.currentTime + 5);
     }
   }
   if (e.code === 'ArrowLeft') {
-    if (player && player.src && !player.error) {
+    if (player && (player.currentSrc || player.src) && !player.error) {
       e.preventDefault();
       player.currentTime = Math.max(0, player.currentTime - 5);
     }
