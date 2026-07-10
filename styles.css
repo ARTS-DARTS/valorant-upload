@@ -187,7 +187,10 @@
     .drop-icon { font-size: 32px; margin-bottom: 8px; }
     .progress-wrap { margin-top: 12px; background: var(--surface2); border-radius: 20px; overflow: hidden; height: 8px; }
     .progress-bar { height: 100%; background: var(--primary); border-radius: 20px; transition: width .2s; }
-    .vid-player { width: 100%; border-radius: var(--r); background: #000; display: block; max-height: 300px; }
+    .vid-stage { position: relative; overflow: hidden; border-radius: var(--r); background: #000; }
+    .vid-player { width: 100%; border-radius: var(--r); background: #000; display: block; max-height: 300px; transform-origin: 50% 50%; transition: transform .16s ease, filter .16s ease; }
+    .zoom-frame { position: absolute; left: 50%; top: 50%; width: 46%; height: 46%; transform: translate(-50%, -50%); border: 2px solid rgba(34,197,94,.85); border-radius: var(--r); color: #bbf7d0; background: rgba(34,197,94,.08); display: none; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; text-transform: uppercase; pointer-events: none; box-shadow: 0 0 20px rgba(34,197,94,.25); }
+    .zoom-frame.show { display: flex; }
     .vid-controls { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
     .scrubber { flex: 1; min-width: 120px; accent-color: var(--primary); cursor: pointer; }
     .time-display { font-size: 12px; color: var(--text2); white-space: nowrap; }
@@ -201,14 +204,20 @@
     .editor-toolbar, .editor-actions { display: flex; gap: 7px; flex-wrap: wrap; }
     .editor-tool { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); border-radius: var(--r); padding: 7px 10px; font-size: 12px; font-weight: 800; cursor: pointer; }
     .editor-tool.active { border-color: var(--primary); color: var(--primary); background: rgba(79,195,247,.12); }
+    .editor-mode-hint { margin-top: 9px; color: var(--text2); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 8px 10px; font-size: 12px; line-height: 1.4; }
     .timeline-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 8px; color: var(--text2); font-size: 12px; }
     .timeline-head span:first-child { color: var(--text1); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .timeline-shell { position: relative; display: grid; gap: 6px; padding-top: 18px; user-select: none; }
+    .timeline-shell { position: relative; display: grid; gap: 6px; padding-top: 18px; user-select: none; touch-action: none; }
     .timeline-ruler { position: absolute; left: 0; right: 0; top: 0; height: 14px; border-radius: 999px; background: repeating-linear-gradient(90deg, rgba(148,163,184,.35) 0 1px, transparent 1px 10%); opacity: .75; }
     .timeline-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primary); box-shadow: 0 0 10px rgba(79,195,247,.8); z-index: 5; pointer-events: none; }
+    .timeline-playhead::before { content: ""; position: absolute; left: 50%; top: -5px; width: 14px; height: 14px; border-radius: 50%; background: var(--primary); transform: translateX(-50%); box-shadow: 0 0 0 4px rgba(79,195,247,.18); }
     .timeline-lane { position: relative; height: 42px; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; background: var(--surface); cursor: pointer; }
     .lane-label { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); z-index: 3; color: var(--text1); font-size: 11px; font-weight: 900; text-transform: uppercase; text-shadow: 0 1px 4px #000; }
     .timeline-range { position: absolute; top: 8px; bottom: 8px; border-radius: 6px; background: linear-gradient(90deg, rgba(79,195,247,.35), rgba(34,197,94,.25)); border: 1px solid rgba(79,195,247,.55); }
+    .trim-handle { position: absolute; top: -5px; bottom: -5px; width: 14px; border-radius: 6px; background: #dbeafe; border: 2px solid var(--primary); cursor: ew-resize; }
+    .trim-handle.start { left: -7px; }
+    .trim-handle.end { right: -7px; }
+    .timeline-shell.dragging .timeline-playhead::before, .trim-handle:hover { box-shadow: 0 0 0 5px rgba(79,195,247,.22); }
     .timeline-marker { position: absolute; top: 5px; bottom: 5px; width: 3px; border-radius: 999px; transform: translateX(-50%); }
     .timeline-marker.split { background: #f59e0b; }
     .timeline-marker.freeze { background: #e879f9; }
@@ -221,6 +230,9 @@
     .editor-check input { accent-color: var(--primary); }
     .effects-panel { display: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
     .effects-panel.open { display: grid; }
+    .zoom-panel { display: none; grid-template-columns: minmax(160px, 1fr) auto; gap: 10px; align-items: end; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .zoom-panel.open { display: grid; }
+    .zoom-value { color: var(--green); font-size: 18px; font-weight: 900; line-height: 36px; }
 
     /* Screenshots */
     .shots-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
