@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 16:42 · 10.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 17:05 · 10.07.2026</div>
   <div class="user-info" id="header-user" style="display:none;">
     <img id="user-avatar" src="" alt="" style="display:none;">
     <span id="user-name"></span>
@@ -182,17 +182,19 @@
             <span id="editor-time-label">0:00 / 0:00</span>
             <span id="editor-summary">Видео без правок</span>
           </div>
-          <div class="timeline-shell" id="timeline-shell">
-            <div class="timeline-ruler" id="timeline-ruler"></div>
-            <div class="timeline-playhead" id="timeline-playhead"></div>
-            <div class="timeline-lane video-lane" id="video-lane">
-              <span class="lane-label">Видео</span>
-              <div class="timeline-range" id="video-trim-range"></div>
-              <div class="timeline-markers" id="video-markers"></div>
-            </div>
-            <div class="timeline-lane audio-lane" id="audio-lane">
-              <span class="lane-label">Звук</span>
-              <div class="audio-wave" id="audio-wave"></div>
+          <div class="timeline-scroll" id="timeline-scroll">
+            <div class="timeline-shell" id="timeline-shell">
+              <div class="timeline-ruler" id="timeline-ruler"></div>
+              <div class="timeline-playhead" id="timeline-playhead"></div>
+              <div class="timeline-lane video-lane" id="video-lane">
+                <span class="lane-label">Видео</span>
+                <div class="timeline-range" id="video-trim-range"></div>
+                <div class="timeline-markers" id="video-markers"></div>
+              </div>
+              <div class="timeline-lane audio-lane" id="audio-lane">
+                <span class="lane-label">Звук</span>
+                <div class="audio-wave" id="audio-wave"></div>
+              </div>
             </div>
           </div>
           <div class="editor-grid">
@@ -213,8 +215,9 @@
             <button class="btn-sm" id="edit-set-in" type="button">Поставить старт</button>
             <button class="btn-sm" id="edit-set-out" type="button">Поставить конец</button>
             <button class="btn-sm" id="edit-split" type="button">Разрезать тут</button>
-            <button class="btn-sm" id="edit-freeze" type="button">Стоп-кадр</button>
+            <button class="btn-sm" id="edit-freeze" type="button">Добавить стоп-кадр 2с</button>
             <button class="btn-sm" id="edit-zoom" type="button">Добавить зум</button>
+            <button class="btn-sm danger-soft" id="edit-delete-selected" type="button">Удалить выбранное</button>
             <button class="btn-sm" id="edit-reset" type="button">Сбросить монтаж</button>
           </div>
           <div class="zoom-panel" id="zoom-panel">

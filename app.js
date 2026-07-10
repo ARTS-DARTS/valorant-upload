@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T16:42:00+03:00';
+const SITE_VERSION = '2026-07-10T17:05:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -1670,7 +1670,12 @@ const vidPlayBtn  = document.getElementById('vid-play-btn');
 let activeEditorMode = 'trim';
 let timelineDrag = null;
 let suppressTimelineClick = false;
+let selectedEditorItem = null;
+let freezeHoldTimer = null;
+let playedFreezeHolds = new Set();
+let lastVideoTime = 0;
 const editorEls = {
+  scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
   stage: document.getElementById('vid-stage'),
   zoomFrame: document.getElementById('zoom-preview-frame'),
@@ -1729,8 +1734,9 @@ function normalizedVideoEdit() {
     splits: [...new Set((videoEdit.splits || []).map(clampTime).filter(t => t > 0 && (!duration || t < duration)))]
       .sort((a, b) => a - b),
     freezeFrames: (videoEdit.freezeFrames || []).map(item => ({
+      id: item.id || `freeze_${Math.round(Number(item.at || 0) * 1000)}_${Math.random().toString(36).slice(2, 7)}`,
       at: clampTime(item.at),
-      duration: Math.max(0.2, Number(item.duration || 1)),
+      duration: 2,
     })).sort((a, b) => a.at - b.at),
     zoomKeyframes: (videoEdit.zoomKeyframes || []).map(item => ({
       at: clampTime(item.at),
@@ -1748,10 +1754,21 @@ function normalizedVideoEdit() {
   };
 }
 
+function editedOutputDuration() {
+  const duration = videoDuration();
+  const end = videoEdit.trimEnd || duration;
+  const base = Math.max(0, end - videoEdit.trimStart);
+  const frozen = (videoEdit.freezeFrames || []).reduce((sum, item) => sum + Number(item.duration || 2), 0);
+  return base + frozen;
+}
+
 function renderVideoEditor() {
   const duration = videoDuration();
   videoEdit = normalizedVideoEdit();
   const end = videoEdit.trimEnd || duration;
+  if (editorEls.shell && duration) {
+    editorEls.shell.style.width = `${Math.max(900, Math.round(duration * 52))}px`;
+  }
   if (editorEls.trimStart) editorEls.trimStart.value = videoEdit.trimStart.toFixed(1);
   if (editorEls.trimEnd) editorEls.trimEnd.value = (end || 0).toFixed(1);
   if (editorEls.volume) editorEls.volume.value = String(videoEdit.audio.volume);
@@ -1773,21 +1790,26 @@ function renderVideoEditor() {
   }
   if (editorEls.markers) {
     const splitHtml = videoEdit.splits.map(t => `<span class="timeline-marker split" title="Разрез ${fmtTime(t)}" style="left:${pct(t)}%"></span>`).join('');
-    const freezeHtml = videoEdit.freezeFrames.map(f => `<span class="timeline-marker freeze" title="Стоп-кадр ${fmtTime(f.at)}" style="left:${pct(f.at)}%"></span>`).join('');
+    const freezeHtml = videoEdit.freezeFrames.map(f => `
+      <span class="timeline-freeze-block ${selectedEditorItem?.type === 'freeze' && selectedEditorItem.id === f.id ? 'selected' : ''}"
+        data-freeze-id="${esc(f.id)}"
+        title="Стоп-кадр 2 сек на ${fmtTime(f.at)}"
+        style="left:${pct(f.at)}%;width:${Math.max(2.5, pct(f.duration))}%">+2с</span>`).join('');
     const zoomHtml = videoEdit.zoomKeyframes.map(z => `<span class="timeline-marker zoom" title="Зум ${z.scale}x" style="left:${pct(z.at)}%"></span>`).join('');
     editorEls.markers.innerHTML = splitHtml + freezeHtml + zoomHtml;
   }
-  if (editorEls.timeLabel) editorEls.timeLabel.textContent = `${fmtTime(vidPlayer.currentTime || 0)} / ${fmtTime(duration)}`;
+  if (editorEls.timeLabel) editorEls.timeLabel.textContent = `${fmtTime(vidPlayer.currentTime || 0)} / ${fmtTime(duration)} · итог ${fmtTime(editedOutputDuration())}`;
   if (editorEls.zoomValue) editorEls.zoomValue.textContent = `${Number(editorEls.zoomScale?.value || 1.4).toFixed(1)}x`;
   applyVideoEditPreview();
   if (editorEls.summary) {
     const parts = [];
     if (videoEdit.trimStart > 0 || (duration && end < duration)) parts.push(`обрезка ${fmtTime(videoEdit.trimStart)}-${fmtTime(end)}`);
     if (videoEdit.splits.length) parts.push(`разрезов: ${videoEdit.splits.length}`);
-    if (videoEdit.freezeFrames.length) parts.push(`стоп-кадров: ${videoEdit.freezeFrames.length}`);
+    if (videoEdit.freezeFrames.length) parts.push(`стоп-кадров: ${videoEdit.freezeFrames.length} (+${fmtTime(videoEdit.freezeFrames.length * 2)})`);
     if (videoEdit.zoomKeyframes.length) parts.push(`зумов: ${videoEdit.zoomKeyframes.length}`);
     if (videoEdit.audio.muted) parts.push('звук выключен');
     if (videoEdit.chromaKey.enabled) parts.push('хромакей');
+    if (parts.length) parts.push(`итог: ${fmtTime(editedOutputDuration())}`);
     editorEls.summary.textContent = parts.length ? parts.join(' · ') : 'Видео без правок';
   }
 }
@@ -1800,10 +1822,10 @@ function setEditorMode(mode) {
   editorEls.effectsPanel?.classList.toggle('open', activeEditorMode === 'effects');
   editorEls.zoomPanel?.classList.toggle('open', activeEditorMode === 'zoom');
   const hints = {
-    trim: 'Тяни голубую головку по таймлайну. Для обрезки тяни белые края зелёного отрезка или жми “Поставить старт/конец”.',
-    split: 'Клик по дорожке ставит разрез в выбранной секунде. Повторный клик рядом убирает разрез.',
-    freeze: 'Клик по дорожке добавляет стоп-кадр в этой секунде. Повторный клик рядом убирает его.',
-    zoom: 'Выбери силу зума ниже, затем кликни по дорожке или нажми “Добавить зум”. Зум сразу виден на видео.',
+    trim: 'Клик или drag по таймлайну только перематывает. Для обрезки тяни белые края зелёного отрезка или жми “Поставить старт/конец”.',
+    split: 'Перемотай на нужное место и нажми “Разрезать тут”. Обычный клик по таймлайну больше не добавляет разрез.',
+    freeze: 'Перемотай на кадр и нажми “Добавить стоп-кадр 2с”. Появится фиолетовый блок, его можно двигать и удалить.',
+    zoom: 'Выбери силу зума, перемотай на нужный момент и нажми “Добавить зум”. Зум сразу виден на видео.',
     effects: 'Футаж сейчас сохраняет настройки звука и хромакея в заявке. Финальный рендер делает модерация/обработка.',
   };
   if (editorEls.hint) editorEls.hint.textContent = hints[activeEditorMode] || hints.trim;
@@ -1832,20 +1854,6 @@ function timeFromTimelineEvent(event) {
 
 function applyTimelineTool(time) {
   vidPlayer.currentTime = clampTime(time);
-  if (activeEditorMode === 'split') {
-    videoEdit.splits = addUniqueTime(videoEdit.splits || [], time);
-    toast('Разрез отмечен на таймлайне', 's');
-    saveVideoEdit();
-    return;
-  }
-  if (activeEditorMode === 'freeze') {
-    toggleFreezeAt(time);
-    return;
-  }
-  if (activeEditorMode === 'zoom') {
-    addZoomAt(time);
-    return;
-  }
   renderVideoEditor();
 }
 
@@ -1890,6 +1898,19 @@ editorEls.shell?.addEventListener('click', event => {
 editorEls.shell?.addEventListener('pointerdown', event => {
   const duration = videoDuration();
   if (!duration) return;
+  const freezeBlock = event.target.closest('[data-freeze-id]');
+  if (freezeBlock) {
+    const id = freezeBlock.dataset.freezeId || '';
+    const freeze = (videoEdit.freezeFrames || []).find(item => item.id === id);
+    selectedEditorItem = { type: 'freeze', id };
+    timelineDrag = { kind: 'freeze', id, moved: false, offset: freeze ? timeFromTimelineEvent(event) - freeze.at : 0 };
+    suppressTimelineClick = true;
+    editorEls.shell.setPointerCapture?.(event.pointerId);
+    editorEls.shell.classList.add('dragging');
+    renderVideoEditor();
+    event.preventDefault();
+    return;
+  }
   const handle = event.target.closest('[data-trim-handle]');
   timelineDrag = { kind: handle?.dataset.trimHandle || 'playhead', moved: false };
   editorEls.shell.setPointerCapture?.(event.pointerId);
@@ -1904,6 +1925,9 @@ editorEls.shell?.addEventListener('pointermove', event => {
     videoEdit.trimStart = Math.min(time, videoEdit.trimEnd || videoDuration());
   } else if (timelineDrag.kind === 'end') {
     videoEdit.trimEnd = Math.max(time, videoEdit.trimStart);
+  } else if (timelineDrag.kind === 'freeze') {
+    const freeze = (videoEdit.freezeFrames || []).find(item => item.id === timelineDrag.id);
+    if (freeze) freeze.at = clampTime(time - (timelineDrag.offset || 0));
   } else {
     vidPlayer.currentTime = time;
   }
@@ -1912,12 +1936,13 @@ editorEls.shell?.addEventListener('pointermove', event => {
 editorEls.shell?.addEventListener('pointerup', event => {
   if (!timelineDrag) return;
   const wasTrim = timelineDrag.kind === 'start' || timelineDrag.kind === 'end';
+  const wasFreeze = timelineDrag.kind === 'freeze';
   editorEls.shell.releasePointerCapture?.(event.pointerId);
   editorEls.shell.classList.remove('dragging');
   const moved = timelineDrag.moved;
   timelineDrag = null;
-  suppressTimelineClick = moved;
-  if (wasTrim && moved) saveVideoEdit();
+  suppressTimelineClick = moved || wasFreeze;
+  if ((wasTrim || wasFreeze) && moved) saveVideoEdit();
 });
 editorEls.shell?.addEventListener('pointercancel', () => {
   timelineDrag = null;
@@ -1972,13 +1997,21 @@ document.getElementById('edit-freeze')?.addEventListener('click', () => {
 });
 function toggleFreezeAt(time) {
   const at = Math.round(clampTime(time) * 10) / 10;
-  const exists = (videoEdit.freezeFrames || []).some(item => Math.abs(item.at - at) < 0.11);
-  videoEdit.freezeFrames = exists
-    ? videoEdit.freezeFrames.filter(item => Math.abs(item.at - at) >= 0.11)
-    : [...(videoEdit.freezeFrames || []), { at, duration: 1 }];
-  toast(exists ? 'Стоп-кадр убран' : 'Стоп-кадр добавлен', 's');
+  const freeze = { id: `freeze_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, at, duration: 2 };
+  videoEdit.freezeFrames = [...(videoEdit.freezeFrames || []), freeze];
+  selectedEditorItem = { type: 'freeze', id: freeze.id };
+  toast('Стоп-кадр +2 сек добавлен', 's');
   saveVideoEdit();
 }
+document.getElementById('edit-delete-selected')?.addEventListener('click', () => {
+  if (!selectedEditorItem) { toast('Сначала выбери блок на таймлайне', 'i'); return; }
+  if (selectedEditorItem.type === 'freeze') {
+    videoEdit.freezeFrames = (videoEdit.freezeFrames || []).filter(item => item.id !== selectedEditorItem.id);
+    selectedEditorItem = null;
+    toast('Стоп-кадр удалён', 's');
+    saveVideoEdit();
+  }
+});
 document.getElementById('edit-zoom')?.addEventListener('click', () => {
   addZoomAt(vidPlayer.currentTime);
 });
@@ -2058,21 +2091,44 @@ vidPlayer.addEventListener('timeupdate', () => {
   if (!vidPlayer.duration) return;
   const end = videoEdit.trimEnd || vidPlayer.duration;
   if (vidPlayer.currentTime < videoEdit.trimStart) vidPlayer.currentTime = videoEdit.trimStart;
+  const currentTime = vidPlayer.currentTime;
+  const hold = (videoEdit.freezeFrames || []).find(item =>
+    !playedFreezeHolds.has(item.id) &&
+    item.at >= lastVideoTime &&
+    item.at <= currentTime + 0.08 &&
+    !vidPlayer.paused
+  );
+  if (hold && !freezeHoldTimer) {
+    playedFreezeHolds.add(hold.id);
+    vidPlayer.pause();
+    vidPlayer.currentTime = hold.at;
+    toast('Стоп-кадр 2 сек', 'i');
+    freezeHoldTimer = setTimeout(() => {
+      freezeHoldTimer = null;
+      vidPlayer.currentTime = Math.min(hold.at + 0.05, end);
+      safePlay(vidPlayer);
+    }, Math.max(200, Number(hold.duration || 2) * 1000));
+  }
   if (vidPlayer.currentTime > end) {
     vidPlayer.pause();
     vidPlayer.currentTime = videoEdit.trimStart;
+    playedFreezeHolds.clear();
   }
   vidScrubber.value = (vidPlayer.currentTime / vidPlayer.duration) * 100;
   vidTimeEl.textContent = fmtTime(vidPlayer.currentTime) + ' / ' + fmtTime(vidPlayer.duration);
   renderVideoEditor();
+  lastVideoTime = vidPlayer.currentTime;
 });
 vidPlayer.addEventListener('loadedmetadata', () => {
   if (!videoEdit.trimEnd) videoEdit.trimEnd = videoDuration();
   renderVideoEditor();
 });
-vidPlayer.addEventListener('play',  () => { vidPlayBtn.textContent = '⏸'; });
+vidPlayer.addEventListener('play',  () => { vidPlayBtn.textContent = '⏸'; lastVideoTime = vidPlayer.currentTime; });
 vidPlayer.addEventListener('pause', () => { vidPlayBtn.textContent = '▶'; });
+vidPlayer.addEventListener('seeking', () => { lastVideoTime = vidPlayer.currentTime; });
 vidScrubber.addEventListener('input', () => {
+  if (freezeHoldTimer) { clearTimeout(freezeHoldTimer); freezeHoldTimer = null; }
+  playedFreezeHolds.clear();
   vidPlayer.currentTime = (vidScrubber.value / 100) * vidPlayer.duration;
 });
 vidPlayBtn.addEventListener('click', () => vidPlayer.paused ? safePlay(vidPlayer) : vidPlayer.pause());

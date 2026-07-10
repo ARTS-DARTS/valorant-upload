@@ -197,6 +197,8 @@
     .btn-sm { background: var(--surface2); border: 1px solid var(--border); color: var(--text1); padding: 6px 12px; border-radius: var(--r); cursor: pointer; font-size: 12px; transition: .15s; }
     .btn-sm:hover { border-color: var(--primary); color: var(--primary); }
     .btn-sm:disabled { opacity: .4; cursor: default; }
+    .btn-sm.danger-soft { color: #fecaca; border-color: rgba(239,68,68,.35); }
+    .btn-sm.danger-soft:hover { border-color: var(--red); color: var(--red); }
     .btn-frame { background: rgba(79,195,247,0.12); border: 1px solid var(--primary); color: var(--primary); padding: 6px 14px; border-radius: var(--r); cursor: pointer; font-size: 12px; font-weight: 700; transition: .15s; }
     .btn-frame:hover { background: rgba(79,195,247,0.22); }
     .btn-frame:disabled { opacity: .4; cursor: default; }
@@ -207,7 +209,8 @@
     .editor-mode-hint { margin-top: 9px; color: var(--text2); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 8px 10px; font-size: 12px; line-height: 1.4; }
     .timeline-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 8px; color: var(--text2); font-size: 12px; }
     .timeline-head span:first-child { color: var(--text1); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .timeline-shell { position: relative; display: grid; gap: 6px; padding-top: 18px; user-select: none; touch-action: none; }
+    .timeline-scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 8px; scrollbar-width: thin; }
+    .timeline-shell { position: relative; display: grid; gap: 6px; padding-top: 18px; user-select: none; touch-action: none; min-width: 900px; }
     .timeline-ruler { position: absolute; left: 0; right: 0; top: 0; height: 14px; border-radius: 999px; background: repeating-linear-gradient(90deg, rgba(148,163,184,.35) 0 1px, transparent 1px 10%); opacity: .75; }
     .timeline-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primary); box-shadow: 0 0 10px rgba(79,195,247,.8); z-index: 5; pointer-events: none; }
     .timeline-playhead::before { content: ""; position: absolute; left: 50%; top: -5px; width: 14px; height: 14px; border-radius: 50%; background: var(--primary); transform: translateX(-50%); box-shadow: 0 0 0 4px rgba(79,195,247,.18); }
@@ -222,6 +225,9 @@
     .timeline-marker.split { background: #f59e0b; }
     .timeline-marker.freeze { background: #e879f9; }
     .timeline-marker.zoom { background: #22c55e; }
+    .timeline-freeze-block { position: absolute; top: 6px; bottom: 6px; min-width: 28px; border-radius: 7px; border: 2px solid rgba(232,121,249,.92); background: rgba(232,121,249,.20); color: #f5d0fe; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; cursor: grab; pointer-events: auto; z-index: 4; }
+    .timeline-freeze-block.selected { background: rgba(232,121,249,.36); box-shadow: 0 0 0 3px rgba(232,121,249,.18); }
+    .timeline-freeze-block:active { cursor: grabbing; }
     .audio-wave { position: absolute; inset: 7px 8px; background: repeating-linear-gradient(90deg, rgba(79,195,247,.25) 0 3px, transparent 3px 7px); mask-image: linear-gradient(180deg, transparent 0 18%, #000 18% 82%, transparent 82% 100%); }
     .editor-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0; align-items: end; }
     .editor-field { color: var(--text2); font-size: 11px; font-weight: 800; display: grid; gap: 5px; }
