@@ -94,6 +94,16 @@
     .cabinet-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; }
     .cabinet-stat span { display: block; color: var(--text2); font-size: 11px; font-weight: 800; text-transform: uppercase; margin-bottom: 8px; }
     .cabinet-stat b { display: block; color: var(--primary); font-size: 28px; line-height: 1; }
+    .materials-toolbar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .materials-toolbar strong { display: block; color: var(--text1); font-size: 15px; margin-bottom: 4px; }
+    .materials-toolbar span { display: block; color: var(--text2); font-size: 12px; line-height: 1.4; }
+    .materials-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .material-library-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px; display: grid; grid-template-columns: 112px 1fr; gap: 12px; min-width: 0; }
+    .material-preview { position: relative; overflow: hidden; border-radius: var(--r); border: 1px solid var(--border); background: var(--bg); aspect-ratio: 16 / 10; }
+    .material-preview img, .material-preview video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .material-preview span { position: absolute; left: 6px; bottom: 6px; padding: 3px 6px; border-radius: 999px; background: rgba(10,14,26,.78); color: var(--text1); font-size: 10px; font-weight: 900; text-transform: uppercase; }
+    .material-library-body { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+    .material-library-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
     .materials-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
     .material-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; display: flex; gap: 12px; align-items: flex-start; }
     .material-icon { width: 34px; height: 34px; border-radius: var(--r); background: rgba(79,195,247,.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -249,7 +259,9 @@
       .status-chip { justify-self: start; }
       .list-tools { align-items: stretch; flex-direction: column; }
       .list-search { max-width: none; }
-      .cabinet-stats-grid, .materials-grid { grid-template-columns: 1fr; }
+      .cabinet-stats-grid, .materials-grid, .materials-list { grid-template-columns: 1fr; }
+      .materials-toolbar { align-items: stretch; flex-direction: column; }
+      .material-library-card { grid-template-columns: 96px 1fr; }
       .detail-grid { grid-template-columns: 1fr 1fr; }
       .lineup-detail-card { padding: 16px; }
       .detail-actions { justify-content: stretch; }

@@ -630,6 +630,12 @@ function initWorkspaceTabs() {
       deleteRejectedLineup(deleteBtn.dataset.deleteLineupId || '');
       return;
     }
+    const copyBtn = event.target.closest('[data-copy-lineup-id]');
+    if (copyBtn) {
+      event.preventDefault();
+      createDraftFromLineup(copyBtn.dataset.copyLineupId || '');
+      return;
+    }
     const resubmitBtn = event.target.closest('[data-resubmit-lineup-id]');
     if (!resubmitBtn) return;
     event.preventDefault();
@@ -660,6 +666,43 @@ function initWorkspaceTabs() {
       renderAuthorWorkspace();
       toast('Черновик удалён', 's');
     }
+  });
+  document.getElementById('materials-list')?.addEventListener('click', event => {
+    const btn = event.target.closest('[data-material-action]');
+    if (!btn) return;
+    event.preventDefault();
+    const url = btn.dataset.materialUrl || '';
+    const type = btn.dataset.materialType || '';
+    const action = btn.dataset.materialAction || '';
+    if (!url) return;
+    if (action === 'open') {
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+    if (action === 'copy') {
+      navigator.clipboard?.writeText(url)
+        .then(() => toast('Ссылка скопирована', 's'))
+        .catch(() => toast('Не удалось скопировать ссылку', 'e'));
+      return;
+    }
+    if (action === 'use-video') {
+      useMaterialVideo(url);
+      switchWorkspaceTab('upload');
+      toast('Видео добавлено в текущий черновик', 's');
+      return;
+    }
+    if (action === 'use-shot') {
+      useMaterialScreenshot(url);
+      switchWorkspaceTab('upload');
+      toast('Скриншот добавлен в текущий черновик', 's');
+      return;
+    }
+    if (type === 'video') window.open(url, '_blank', 'noopener');
+  });
+  document.getElementById('btn-refresh-materials')?.addEventListener('click', event => {
+    event.preventDefault();
+    renderMaterials();
+    toast('Материалы обновлены', 's');
   });
   document.getElementById('btn-refresh-workspace')?.addEventListener('click', async () => {
     if (currentUser) {
@@ -821,11 +864,11 @@ function openLineupDetail(lineupId) {
     </div>
     ${item.video_url ? `<div class="detail-section"><div class="detail-section-title">Видео</div><video class="detail-video" controls preload="metadata" src="${esc(item.video_url)}"></video></div>` : ''}
     ${shots.length ? `<div class="detail-section"><div class="detail-section-title">Скриншоты</div><div class="detail-shots">${shots.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt=""></a>`).join('')}</div></div>` : ''}
-    ${status === 'rejected' ? `
-      <div class="detail-actions">
-        <button class="copy-id-btn danger" type="button" data-delete-lineup-id="${esc(item.id)}">Удалить</button>
-        <button class="btn-primary detail-action-primary" type="button" data-resubmit-lineup-id="${esc(item.id)}">Доработать и отправить заново</button>
-      </div>` : ''}
+    <div class="detail-actions">
+      ${status === 'rejected' ? `<button class="copy-id-btn danger" type="button" data-delete-lineup-id="${esc(item.id)}">Удалить</button>` : ''}
+      <button class="copy-id-btn" type="button" data-copy-lineup-id="${esc(item.id)}">Создать черновик-копию</button>
+      ${status === 'rejected' ? `<button class="btn-primary detail-action-primary" type="button" data-resubmit-lineup-id="${esc(item.id)}">Доработать и отправить заново</button>` : ''}
+    </div>
     <div class="detail-id-row">
       <code>ID: ${esc(item.id)}</code>
       <button class="copy-id-btn" id="copy-lineup-id" type="button" data-lineup-id="${esc(item.id)}">Скопировать ID</button>
@@ -892,6 +935,42 @@ function rejectedLineupDraft(item) {
     screenshots: shots,
     resubmissionSourceId: item.id,
   };
+}
+
+function lineupCopyDraft(item) {
+  return {
+    ...rejectedLineupDraft(item),
+    title: item.title ? `${item.title} — копия` : '',
+    resubmissionSourceId: '',
+  };
+}
+
+function createDraftFromLineup(lineupId) {
+  const item = findOwnLineup(lineupId);
+  if (!item) {
+    toast('Лайнап не найден', 'e');
+    return;
+  }
+  const draft = lineupCopyDraft(item);
+  const now = Date.now();
+  const saved = {
+    ...draft,
+    id: `draft_${now}_${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: now,
+    updatedAt: now,
+  };
+  writeSavedDrafts([saved, ...getSavedDrafts()]);
+  try {
+    localStorage.setItem(_ACTIVE_DRAFT_ID_KEY, saved.id);
+    localStorage.setItem(_DRAFT_KEY, JSON.stringify(saved));
+  } catch (_) {}
+  closeLineupDetail();
+  resetUploadForm({ keepDraft: true });
+  _restoreDraft(saved);
+  switchWorkspaceTab('upload');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  renderAuthorWorkspace();
+  toast('Копия лайнапа открыта как черновик', 's');
 }
 
 function startRejectedResubmission(lineupId) {
@@ -969,6 +1048,103 @@ function renderDrafts() {
   }).join('');
 }
 
+function materialSourceTitle(item, fallback = 'Материал') {
+  return firstText(item?.title, item?.map, item?.agent, fallback);
+}
+
+function collectMaterialItems() {
+  const items = [];
+  currentUserLineups.forEach(lineup => {
+    const title = materialSourceTitle(lineup, 'Лайнап');
+    const source = statusLabel(lineup.status || 'pending');
+    if (lineup.video_url) {
+      items.push({
+        id: `lineup_${lineup.id}_video`,
+        type: 'video',
+        url: lineup.video_url,
+        title,
+        source,
+        meta: [lineup.map, lineup.agent, lineup.ability].filter(Boolean).join(' · '),
+      });
+    }
+    (Array.isArray(lineup.screenshots) ? lineup.screenshots : []).filter(Boolean).forEach((url, index) => {
+      items.push({
+        id: `lineup_${lineup.id}_shot_${index}`,
+        type: 'shot',
+        url,
+        title,
+        source,
+        meta: [lineup.map, lineup.agent, `Скрин ${index + 1}`].filter(Boolean).join(' · '),
+      });
+    });
+  });
+  getSavedDrafts().forEach(draft => {
+    const title = materialSourceTitle(draft, 'Черновик');
+    if (draft.videoUrl) {
+      items.push({
+        id: `${draft.id || 'draft'}_video`,
+        type: 'video',
+        url: draft.videoUrl,
+        title,
+        source: 'Черновик',
+        meta: [draft.map, draft.agent, draft.ability].filter(Boolean).join(' · '),
+      });
+    }
+    (Array.isArray(draft.screenshots) ? draft.screenshots : []).filter(Boolean).forEach((url, index) => {
+      items.push({
+        id: `${draft.id || 'draft'}_shot_${index}`,
+        type: 'shot',
+        url,
+        title,
+        source: 'Черновик',
+        meta: [draft.map, draft.agent, `Скрин ${index + 1}`].filter(Boolean).join(' · '),
+      });
+    });
+  });
+  const seen = new Set();
+  return items.filter(item => {
+    const key = `${item.type}:${item.url}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function renderMaterials() {
+  const target = document.getElementById('materials-list');
+  if (!target) return;
+  if (!currentUser) {
+    target.innerHTML = '<div class="empty-state"><strong>Войди в аккаунт</strong>После входа здесь появятся твои видео и скриншоты.</div>';
+    return;
+  }
+  const items = collectMaterialItems();
+  if (!items.length) {
+    target.innerHTML = '<div class="empty-state"><strong>Материалов пока нет</strong>Загрузи видео или скриншоты в лайнап, либо сохрани черновик с медиа.</div>';
+    return;
+  }
+  target.innerHTML = items.map(item => `
+    <article class="material-library-card" data-material-id="${esc(item.id)}">
+      <div class="material-preview ${esc(item.type)}">
+        ${item.type === 'video'
+          ? `<video src="${esc(item.url)}" preload="metadata" muted playsinline></video><span>Видео</span>`
+          : `<img src="${esc(item.url)}" alt="" loading="lazy"><span>Скрин</span>`}
+      </div>
+      <div class="material-library-body">
+        <div class="lineup-title">${esc(item.title)}</div>
+        <div class="lineup-meta">
+          <span class="lineup-chip">${esc(item.source)}</span>
+          ${item.meta ? `<span class="lineup-chip">${esc(item.meta)}</span>` : ''}
+        </div>
+        <div class="material-library-actions">
+          <button class="copy-id-btn" type="button" data-material-action="${item.type === 'video' ? 'use-video' : 'use-shot'}" data-material-type="${esc(item.type)}" data-material-url="${esc(item.url)}">В черновик</button>
+          <button class="copy-id-btn" type="button" data-material-action="open" data-material-type="${esc(item.type)}" data-material-url="${esc(item.url)}">Открыть</button>
+          <button class="copy-id-btn" type="button" data-material-action="copy" data-material-type="${esc(item.type)}" data-material-url="${esc(item.url)}">Ссылка</button>
+        </div>
+      </div>
+    </article>
+  `).join('');
+}
+
 function renderCabinetStats() {
   const target = document.getElementById('cabinet-stats-grid');
   if (!target) return;
@@ -1006,6 +1182,7 @@ function renderAuthorWorkspace() {
   );
   renderDrafts();
   renderCabinetStats();
+  renderMaterials();
   renderResubmissionBanner();
 }
 
@@ -1364,6 +1541,21 @@ async function handleVideoFile(file) {
   }
 }
 
+function useMaterialVideo(url) {
+  if (!url) return;
+  if (videoXhr) { videoXhr.abort(); videoXhr = null; }
+  videoUrl = url;
+  dropZone.style.display = 'none';
+  document.getElementById('vid-upload-progress').style.display = 'none';
+  document.getElementById('vid-player-wrap').style.display = '';
+  vidPlayer.crossOrigin = 'anonymous';
+  vidPlayer.src = url;
+  vidPlayer.load();
+  validateForm();
+  _saveDraft();
+  renderMaterials();
+}
+
 vidPlayer.addEventListener('timeupdate', () => {
   if (!vidPlayer.duration) return;
   vidScrubber.value = (vidPlayer.currentTime / vidPlayer.duration) * 100;
@@ -1478,6 +1670,23 @@ document.getElementById('shot-file-input').addEventListener('change', e => {
     });
   });
 });
+
+function useMaterialScreenshot(url) {
+  if (!url) return;
+  if (screenshots.some(item => item.cloudUrl === url)) {
+    toast('Этот скриншот уже есть в текущем черновике', 'i');
+    return;
+  }
+  if (screenshots.length >= 5) {
+    toast('Максимум 5 скриншотов', 'w');
+    return;
+  }
+  screenshots.push({ localUrl: url, cloudUrl: url, uploading: false });
+  renderScreenshots();
+  validateForm();
+  _saveDraft();
+  renderMaterials();
+}
 
 function renderScreenshots() {
   const row = document.getElementById('shots-row');
