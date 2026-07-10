@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T17:31:00+03:00';
+const SITE_VERSION = '2026-07-10T17:43:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -1675,6 +1675,7 @@ let freezeHoldTimer = null;
 let playedFreezeHolds = new Set();
 let lastVideoTime = 0;
 let timelinePixelsPerSecond = 52;
+let videoEditorHotkeysActive = false;
 const editorEls = {
   scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
@@ -2261,8 +2262,23 @@ document.getElementById('vid-frame-btn').addEventListener('click', async () => {
 });
 
 // Global keyboard shortcuts for video player
+document.addEventListener('pointerdown', event => {
+  const wrap = document.getElementById('vid-player-wrap');
+  videoEditorHotkeysActive = !!(wrap && wrap.contains(event.target));
+}, true);
+
 document.addEventListener('keydown', e => {
   const target = e.target;
+  const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
+  const player = document.getElementById('vid-player');
+  if (isSpace && videoEditorHotkeysActive && player && player.src && !player.error) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation?.();
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur?.();
+    if (player.paused) { safePlay(player); } else { player.pause(); }
+    return;
+  }
   const isTyping = target && (
     target.tagName === 'INPUT' ||
     target.tagName === 'TEXTAREA' ||
@@ -2270,24 +2286,22 @@ document.addEventListener('keydown', e => {
     target.isContentEditable
   );
   if (isTyping) return;
-  if (e.code === 'Space' || e.key === ' ') {
-    const player = document.getElementById('vid-player');
+  if (isSpace) {
     if (player && player.src && !player.error) {
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation?.();
       if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur?.();
       if (player.paused) { safePlay(player); } else { player.pause(); }
     }
   }
   if (e.code === 'ArrowRight') {
-    const player = document.getElementById('vid-player');
     if (player && player.src && !player.error) {
       e.preventDefault();
       player.currentTime = Math.min(player.duration, player.currentTime + 5);
     }
   }
   if (e.code === 'ArrowLeft') {
-    const player = document.getElementById('vid-player');
     if (player && player.src && !player.error) {
       e.preventDefault();
       player.currentTime = Math.max(0, player.currentTime - 5);
