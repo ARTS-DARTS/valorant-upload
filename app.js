@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T14:14:12+03:00';
+const SITE_VERSION = '2026-07-10T16:08:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -434,6 +434,11 @@ let videoXhr = null;
 let videoEdit = createDefaultVideoEdit();
 let screenshots = [];
 let currentUserLineups = [];
+let authorMaterials = [];
+let authorMaterialsLoaded = false;
+let authorMaterialsLoading = false;
+let authorMaterialsError = '';
+let materialEditorId = '';
 let activeWorkspaceTab = 'upload';
 let myLineupsStatusFilter = 'all';
 let myLineupsSearch = '';
@@ -674,22 +679,58 @@ function initWorkspaceTabs() {
   document.getElementById('btn-refresh-workspace')?.addEventListener('click', async () => {
     if (currentUser) {
       await loadCurrentUserProfile(currentUser);
+      if (activeWorkspaceTab === 'materials') {
+        await loadAuthorMaterials({ force: true });
+      }
       updateUploadGate();
       renderAuthorWorkspace();
       toast('Кабинет обновлён', 's');
+    }
+  });
+  document.getElementById('btn-material-add')?.addEventListener('click', event => {
+    event.preventDefault();
+    openMaterialForm();
+  });
+  document.getElementById('material-form-shell')?.addEventListener('click', event => {
+    const cancel = event.target.closest('[data-material-cancel]');
+    const save = event.target.closest('[data-material-save]');
+    if (cancel) {
+      event.preventDefault();
+      closeMaterialForm();
+    }
+    if (save) {
+      event.preventDefault();
+      saveAuthorMaterial();
+    }
+  });
+  document.getElementById('materials-list')?.addEventListener('click', event => {
+    const edit = event.target.closest('[data-material-edit]');
+    const remove = event.target.closest('[data-material-delete]');
+    const toggle = event.target.closest('[data-material-toggle]');
+    if (edit) {
+      event.preventDefault();
+      openMaterialForm(edit.dataset.materialEdit || '');
+    }
+    if (remove) {
+      event.preventDefault();
+      deleteAuthorMaterial(remove.dataset.materialDelete || '');
+    }
+    if (toggle) {
+      event.preventDefault();
+      toggleAuthorMaterial(toggle.dataset.materialToggle || '');
     }
   });
 }
 
 function switchWorkspaceTab(tab) {
   activeWorkspaceTab = tab || 'upload';
-  if (activeWorkspaceTab === 'materials' && !isCurrentUserAdmin()) activeWorkspaceTab = 'upload';
   document.querySelectorAll('.workspace-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.workspaceTab === activeWorkspaceTab);
   });
   document.querySelectorAll('.workspace-panel').forEach(panel => {
     panel.classList.toggle('active', panel.id === `workspace-${activeWorkspaceTab}`);
   });
+  if (activeWorkspaceTab === 'materials') loadAuthorMaterials();
   renderAuthorWorkspace();
 }
 
@@ -720,12 +761,12 @@ function isCurrentUserAdmin() {
 }
 
 function updateAdminOnlyWorkspace() {
-  const canSeeAdminMaterials = isCurrentUserAdmin();
+  const canManageAdminMaterials = isCurrentUserAdmin();
   document.querySelectorAll('[data-admin-only="true"]').forEach(el => {
-    el.style.display = canSeeAdminMaterials ? '' : 'none';
+    el.style.display = canManageAdminMaterials ? '' : 'none';
   });
-  if (!canSeeAdminMaterials && activeWorkspaceTab === 'materials') {
-    switchWorkspaceTab('upload');
+  if (!canManageAdminMaterials && materialEditorId) {
+    closeMaterialForm();
   }
 }
 
@@ -1033,11 +1074,212 @@ function renderDrafts() {
 function renderMaterials() {
   const target = document.getElementById('materials-list');
   if (!target) return;
-  if (!isCurrentUserAdmin()) {
-    target.innerHTML = '<div class="empty-state"><strong>Нет доступа</strong>Этот раздел доступен только администраторам.</div>';
+  renderMaterialForm();
+  if (authorMaterialsError) {
+    target.innerHTML = `<div class="empty-state"><strong>Не удалось загрузить материалы</strong>${esc(authorMaterialsError)}</div>`;
     return;
   }
-  target.innerHTML = '<div class="empty-state"><strong>Админская библиотека пока пустая</strong>Пользовательские лайнапы и черновики сюда больше не попадают. Следующим шагом можно добавить загрузку и хранение материалов админами.</div>';
+  if (!authorMaterialsLoaded) {
+    if (!authorMaterialsLoading) loadAuthorMaterials();
+    target.innerHTML = '<div class="empty-state"><strong>Загрузка материалов…</strong>Сейчас подтянем библиотеку для авторов.</div>';
+    return;
+  }
+  const visibleMaterials = isCurrentUserAdmin()
+    ? authorMaterials
+    : authorMaterials.filter(item => item.is_published !== false);
+  if (!visibleMaterials.length) {
+    target.innerHTML = '<div class="empty-state"><strong>Материалов пока нет</strong>Когда администратор добавит материал, он появится здесь.</div>';
+    return;
+  }
+  target.innerHTML = visibleMaterials.map(material => materialCardHtml(material)).join('');
+}
+
+function materialTypeLabel(value) {
+  const labels = { video: 'Видео', guide: 'Гайд', checklist: 'Чек-лист', example: 'Пример', link: 'Ссылка' };
+  return labels[String(value || '').toLowerCase()] || 'Материал';
+}
+
+function materialDateValue(item) {
+  return item.updated_at?.toMillis?.() || item.created_at?.toMillis?.() || 0;
+}
+
+async function loadAuthorMaterials({ force = false } = {}) {
+  if (authorMaterialsLoading || (authorMaterialsLoaded && !force)) return;
+  authorMaterialsLoading = true;
+  authorMaterialsError = '';
+  renderMaterials();
+  try {
+    const q = isCurrentUserAdmin()
+      ? query(collection(db, 'author_materials'), limit(80))
+      : query(collection(db, 'author_materials'), where('is_published', '==', true), limit(80));
+    const snap = await getDocs(q);
+    authorMaterials = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    authorMaterials.sort((a, b) => materialDateValue(b) - materialDateValue(a));
+    authorMaterialsLoaded = true;
+  } catch (e) {
+    console.warn('loadAuthorMaterials', e.message);
+    authorMaterialsError = 'Обнови раздел или страницу чуть позже.';
+  } finally {
+    authorMaterialsLoading = false;
+    renderMaterials();
+  }
+}
+
+function materialCardHtml(material) {
+  const published = material.is_published !== false;
+  const url = String(material.url || '').trim();
+  return `
+    <article class="material-item" data-material-id="${esc(material.id || '')}">
+      <div>
+        <div class="material-item-head">
+          <span class="material-badge">${esc(materialTypeLabel(material.type))}</span>
+          ${published ? '' : '<span class="material-badge hidden">Скрыт</span>'}
+          <h3>${esc(firstText(material.title, 'Материал'))}</h3>
+        </div>
+        ${material.description ? `<div class="material-desc">${esc(material.description)}</div>` : ''}
+        ${url ? `<a class="material-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Открыть материал</a>` : ''}
+      </div>
+      ${isCurrentUserAdmin() ? `
+        <div class="material-actions">
+          <button class="copy-id-btn" type="button" data-material-edit="${esc(material.id || '')}">Изменить</button>
+          <button class="copy-id-btn" type="button" data-material-toggle="${esc(material.id || '')}">${published ? 'Скрыть' : 'Опубликовать'}</button>
+          <button class="copy-id-btn danger" type="button" data-material-delete="${esc(material.id || '')}">Удалить</button>
+        </div>` : ''}
+    </article>`;
+}
+
+function openMaterialForm(id = '') {
+  if (!isCurrentUserAdmin()) return;
+  materialEditorId = id || '__new__';
+  renderMaterialForm();
+  document.getElementById('material-title')?.focus();
+}
+
+function closeMaterialForm() {
+  materialEditorId = '';
+  renderMaterialForm();
+}
+
+function renderMaterialForm() {
+  const shell = document.getElementById('material-form-shell');
+  if (!shell) return;
+  if (!isCurrentUserAdmin() || !materialEditorId) {
+    shell.style.display = 'none';
+    shell.innerHTML = '';
+    return;
+  }
+  const material = materialEditorId === '__new__'
+    ? { type: 'video', title: '', description: '', url: '', is_published: true }
+    : authorMaterials.find(item => item.id === materialEditorId) || {};
+  shell.style.display = '';
+  shell.innerHTML = `
+    <div class="material-form-grid">
+      <select class="finput" id="material-type">
+        ${['video', 'guide', 'checklist', 'example', 'link'].map(type =>
+          `<option value="${type}" ${String(material.type || 'video') === type ? 'selected' : ''}>${esc(materialTypeLabel(type))}</option>`
+        ).join('')}
+      </select>
+      <input class="finput" id="material-title" maxlength="90" placeholder="Название материала" value="${esc(material.title || '')}">
+    </div>
+    <div class="field-group">
+      <textarea class="finput" id="material-description" maxlength="1000" placeholder="Короткое описание для авторов">${esc(material.description || '')}</textarea>
+    </div>
+    <div class="field-group">
+      <input class="finput" id="material-url" maxlength="500" placeholder="Ссылка на видео, документ, изображение или гайд" value="${esc(material.url || '')}">
+    </div>
+    <label class="lineup-meta" style="margin-bottom:12px;">
+      <input type="checkbox" id="material-published" ${material.is_published === false ? '' : 'checked'}>
+      <span class="lineup-chip">Показывать пользователям</span>
+    </label>
+    <div class="material-form-actions">
+      <button class="copy-id-btn" type="button" data-material-cancel>Отмена</button>
+      <button class="btn-primary detail-action-primary" type="button" data-material-save>${materialEditorId === '__new__' ? 'Добавить' : 'Сохранить'}</button>
+    </div>`;
+}
+
+function materialFormPayload() {
+  const title = document.getElementById('material-title')?.value.trim() || '';
+  const description = document.getElementById('material-description')?.value.trim() || '';
+  const url = document.getElementById('material-url')?.value.trim() || '';
+  const type = document.getElementById('material-type')?.value || 'link';
+  const isPublished = !!document.getElementById('material-published')?.checked;
+  if (!title) throw new Error('Укажи название материала');
+  if (!description && !url) throw new Error('Добавь описание или ссылку');
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+    } catch (_) {
+      throw new Error('Ссылка должна начинаться с http:// или https://');
+    }
+  }
+  return {
+    type,
+    title,
+    description,
+    url,
+    is_published: isPublished,
+    updated_at: serverTimestamp(),
+    updated_by: currentUser?.uid || '',
+    updated_by_name: authorDisplayName(),
+  };
+}
+
+async function saveAuthorMaterial() {
+  if (!isCurrentUserAdmin() || !materialEditorId) return;
+  const btn = document.querySelector('[data-material-save]');
+  try {
+    const payload = materialFormPayload();
+    if (btn) { btn.disabled = true; btn.textContent = 'Сохранение…'; }
+    const isNew = materialEditorId === '__new__';
+    const ref = isNew ? doc(collection(db, 'author_materials')) : doc(db, 'author_materials', materialEditorId);
+    await setDoc(ref, {
+      ...payload,
+      ...(isNew ? {
+        created_at: serverTimestamp(),
+        created_by: currentUser?.uid || '',
+        created_by_name: authorDisplayName(),
+      } : {}),
+    }, { merge: true });
+    materialEditorId = '';
+    await loadAuthorMaterials({ force: true });
+    toast(isNew ? 'Материал добавлен' : 'Материал сохранён', 's');
+  } catch (e) {
+    toast(e.message || 'Не удалось сохранить материал', 'e');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Сохранить'; }
+  }
+}
+
+async function toggleAuthorMaterial(id) {
+  if (!isCurrentUserAdmin() || !id) return;
+  const material = authorMaterials.find(item => item.id === id);
+  if (!material) return;
+  try {
+    await setDoc(doc(db, 'author_materials', id), {
+      is_published: material.is_published === false,
+      updated_at: serverTimestamp(),
+      updated_by: currentUser?.uid || '',
+      updated_by_name: authorDisplayName(),
+    }, { merge: true });
+    await loadAuthorMaterials({ force: true });
+    toast(material.is_published === false ? 'Материал опубликован' : 'Материал скрыт', 's');
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'e');
+  }
+}
+
+async function deleteAuthorMaterial(id) {
+  if (!isCurrentUserAdmin() || !id) return;
+  if (!confirm('Удалить материал? Пользователи больше его не увидят.')) return;
+  try {
+    await deleteDoc(doc(db, 'author_materials', id));
+    if (materialEditorId === id) closeMaterialForm();
+    await loadAuthorMaterials({ force: true });
+    toast('Материал удалён', 's');
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'e');
+  }
 }
 
 function renderCabinetStats() {
