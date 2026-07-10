@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T17:55:00+03:00';
+const SITE_VERSION = '2026-07-10T18:04:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -1672,6 +1672,8 @@ let timelineDrag = null;
 let suppressTimelineClick = false;
 let selectedEditorItem = null;
 let freezeHoldTimer = null;
+let freezeHoldActive = null;
+let freezeHoldRenderInterval = null;
 let playedFreezeHolds = new Set();
 let lastVideoTime = 0;
 let timelinePixelsPerSecond = 52;
@@ -1792,9 +1794,17 @@ function sourceToOutputTime(sourceTime) {
   const source = clampTime(sourceTime);
   let out = Math.max(0, source - (videoEdit.trimStart || 0));
   for (const freeze of videoEdit.freezeFrames || []) {
-    if (freeze.at <= source) out += Number(freeze.duration || 2);
+    if (freeze.at < source) out += Number(freeze.duration || 2);
   }
   return Math.max(0, out);
+}
+
+function currentOutputTime() {
+  if (freezeHoldActive) {
+    const elapsed = (performance.now() - freezeHoldActive.startedAt) / 1000;
+    return freezeHoldActive.outputStart + Math.min(freezeHoldActive.duration, Math.max(0, elapsed));
+  }
+  return sourceToOutputTime(vidPlayer.currentTime || 0);
 }
 
 function outputToSourceTime(outputTime) {
@@ -1828,7 +1838,7 @@ function renderVideoEditor() {
 
   const pct = outputDuration ? (value) => Math.max(0, Math.min(100, value / outputDuration * 100)) : () => 0;
   const sourcePct = duration ? (value) => Math.max(0, Math.min(100, value / duration * 100)) : () => 0;
-  const currentPct = pct(sourceToOutputTime(vidPlayer.currentTime || 0));
+  const currentPct = pct(currentOutputTime());
   if (editorEls.playhead) editorEls.playhead.style.left = `${currentPct}%`;
   if (editorEls.trimRange) {
     editorEls.trimRange.style.left = '0%';
@@ -1936,9 +1946,22 @@ function saveVideoEdit() {
 }
 
 function resetVideoEdit() {
+  clearFreezeHold();
   videoEdit = createDefaultVideoEdit();
   videoEdit.trimEnd = videoDuration();
   saveVideoEdit();
+}
+
+function clearFreezeHold() {
+  if (freezeHoldTimer) {
+    clearTimeout(freezeHoldTimer);
+    freezeHoldTimer = null;
+  }
+  if (freezeHoldRenderInterval) {
+    clearInterval(freezeHoldRenderInterval);
+    freezeHoldRenderInterval = null;
+  }
+  freezeHoldActive = null;
 }
 
 dropZone.addEventListener('click', () => vidInput.click());
@@ -2191,8 +2214,16 @@ vidPlayer.addEventListener('timeupdate', () => {
     vidPlayer.pause();
     vidPlayer.currentTime = hold.at;
     toast('Стоп-кадр 2 сек', 'i');
+    const freezeSegment = buildTimelineSegments().find(segment => segment.type === 'freeze' && segment.id === hold.id);
+    freezeHoldActive = {
+      id: hold.id,
+      outputStart: freezeSegment?.outputStart ?? sourceToOutputTime(hold.at),
+      duration: Number(hold.duration || 2),
+      startedAt: performance.now(),
+    };
+    freezeHoldRenderInterval = setInterval(renderVideoEditor, 80);
     freezeHoldTimer = setTimeout(() => {
-      freezeHoldTimer = null;
+      clearFreezeHold();
       vidPlayer.currentTime = Math.min(hold.at + 0.05, end);
       safePlay(vidPlayer);
     }, Math.max(200, Number(hold.duration || 2) * 1000));
@@ -2213,14 +2244,15 @@ vidPlayer.addEventListener('loadedmetadata', () => {
 });
 vidPlayer.addEventListener('play',  () => { vidPlayBtn.textContent = '⏸'; lastVideoTime = vidPlayer.currentTime; });
 vidPlayer.addEventListener('pause', () => { vidPlayBtn.textContent = '▶'; });
-vidPlayer.addEventListener('seeking', () => { lastVideoTime = vidPlayer.currentTime; });
+vidPlayer.addEventListener('seeking', () => { clearFreezeHold(); lastVideoTime = vidPlayer.currentTime; });
 vidScrubber.addEventListener('input', () => {
-  if (freezeHoldTimer) { clearTimeout(freezeHoldTimer); freezeHoldTimer = null; }
+  clearFreezeHold();
   playedFreezeHolds.clear();
   vidPlayer.currentTime = (vidScrubber.value / 100) * vidPlayer.duration;
 });
 vidPlayBtn.addEventListener('click', () => vidPlayer.paused ? safePlay(vidPlayer) : vidPlayer.pause());
 document.getElementById('vid-remove-btn').addEventListener('click', () => {
+  clearFreezeHold();
   vidPlayer.src = '';
   videoUrl = null;
   videoEdit = createDefaultVideoEdit();
