@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 14:04 · 10.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 14:14 · 10.07.2026</div>
   <div class="user-info" id="header-user" style="display:none;">
     <img id="user-avatar" src="" alt="" style="display:none;">
     <span id="user-name"></span>
@@ -165,6 +165,63 @@
           <span class="time-display" id="vid-time">0:00 / 0:00</span>
           <button class="btn-frame" id="vid-frame-btn">📷 Кадр</button>
           <button class="btn-sm" id="vid-remove-btn">✕ Удалить</button>
+        </div>
+        <div class="video-editor" id="video-editor">
+          <div class="editor-toolbar">
+            <button class="editor-tool active" type="button" data-editor-mode="trim">Обрезка</button>
+            <button class="editor-tool" type="button" data-editor-mode="split">Разрез</button>
+            <button class="editor-tool" type="button" data-editor-mode="freeze">Стоп-кадр</button>
+            <button class="editor-tool" type="button" data-editor-mode="zoom">Зум</button>
+            <button class="editor-tool" type="button" data-editor-mode="effects">Футаж</button>
+          </div>
+          <div class="timeline-head">
+            <span id="editor-time-label">0:00 / 0:00</span>
+            <span id="editor-summary">Видео без правок</span>
+          </div>
+          <div class="timeline-shell" id="timeline-shell">
+            <div class="timeline-ruler" id="timeline-ruler"></div>
+            <div class="timeline-playhead" id="timeline-playhead"></div>
+            <div class="timeline-lane video-lane" id="video-lane">
+              <span class="lane-label">Видео</span>
+              <div class="timeline-range" id="video-trim-range"></div>
+              <div class="timeline-markers" id="video-markers"></div>
+            </div>
+            <div class="timeline-lane audio-lane" id="audio-lane">
+              <span class="lane-label">Звук</span>
+              <div class="audio-wave" id="audio-wave"></div>
+            </div>
+          </div>
+          <div class="editor-grid">
+            <label class="editor-field">Старт
+              <input class="finput" type="number" id="edit-trim-start" min="0" step="0.1" value="0">
+            </label>
+            <label class="editor-field">Конец
+              <input class="finput" type="number" id="edit-trim-end" min="0" step="0.1" value="0">
+            </label>
+            <label class="editor-field">Громкость
+              <input type="range" id="edit-volume" min="0" max="1" step="0.05" value="1">
+            </label>
+            <label class="editor-check">
+              <input type="checkbox" id="edit-muted"> Без звука
+            </label>
+          </div>
+          <div class="editor-actions">
+            <button class="btn-sm" id="edit-set-in" type="button">Поставить старт</button>
+            <button class="btn-sm" id="edit-set-out" type="button">Поставить конец</button>
+            <button class="btn-sm" id="edit-split" type="button">Разрезать тут</button>
+            <button class="btn-sm" id="edit-freeze" type="button">Стоп-кадр</button>
+            <button class="btn-sm" id="edit-zoom" type="button">Зум keyframe</button>
+            <button class="btn-sm" id="edit-reset" type="button">Сбросить монтаж</button>
+          </div>
+          <div class="effects-panel" id="effects-panel">
+            <label class="editor-check"><input type="checkbox" id="edit-chroma-enabled"> Хромакей зелёного</label>
+            <label class="editor-field">Сила хромакея
+              <input type="range" id="edit-chroma-strength" min="0" max="1" step="0.05" value="0.35">
+            </label>
+            <label class="editor-field">Плавный зум
+              <input type="range" id="edit-zoom-scale" min="1" max="3" step="0.1" value="1.4">
+            </label>
+          </div>
         </div>
       </div>
     </div>

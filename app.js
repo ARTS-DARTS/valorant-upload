@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T14:04:09+03:00';
+const SITE_VERSION = '2026-07-10T14:14:12+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -431,6 +431,7 @@ let trajectoryPoints = [];
 let mapMode = 'position';
 let videoUrl = null;
 let videoXhr = null;
+let videoEdit = createDefaultVideoEdit();
 let screenshots = [];
 let currentUserLineups = [];
 let activeWorkspaceTab = 'upload';
@@ -1370,6 +1371,145 @@ const vidPlayer   = document.getElementById('vid-player');
 const vidScrubber = document.getElementById('vid-scrubber');
 const vidTimeEl   = document.getElementById('vid-time');
 const vidPlayBtn  = document.getElementById('vid-play-btn');
+const editorEls = {
+  shell: document.getElementById('timeline-shell'),
+  playhead: document.getElementById('timeline-playhead'),
+  trimRange: document.getElementById('video-trim-range'),
+  markers: document.getElementById('video-markers'),
+  wave: document.getElementById('audio-wave'),
+  timeLabel: document.getElementById('editor-time-label'),
+  summary: document.getElementById('editor-summary'),
+  trimStart: document.getElementById('edit-trim-start'),
+  trimEnd: document.getElementById('edit-trim-end'),
+  volume: document.getElementById('edit-volume'),
+  muted: document.getElementById('edit-muted'),
+  chromaEnabled: document.getElementById('edit-chroma-enabled'),
+  chromaStrength: document.getElementById('edit-chroma-strength'),
+  zoomScale: document.getElementById('edit-zoom-scale'),
+  effectsPanel: document.getElementById('effects-panel'),
+};
+
+function createDefaultVideoEdit() {
+  return {
+    version: 1,
+    trimStart: 0,
+    trimEnd: 0,
+    splits: [],
+    freezeFrames: [],
+    zoomKeyframes: [],
+    audio: { muted: false, volume: 1 },
+    chromaKey: { enabled: false, color: '#00ff00', strength: 0.35 },
+    footageOverlays: [],
+  };
+}
+
+function videoDuration() {
+  return Number.isFinite(vidPlayer.duration) ? vidPlayer.duration : 0;
+}
+
+function clampTime(value) {
+  const duration = videoDuration();
+  const n = Number(value || 0);
+  if (!duration) return Math.max(0, n);
+  return Math.max(0, Math.min(duration, n));
+}
+
+function normalizedVideoEdit() {
+  const duration = videoDuration();
+  const trimStart = clampTime(videoEdit.trimStart);
+  const trimEnd = clampTime(videoEdit.trimEnd || duration);
+  return {
+    ...videoEdit,
+    trimStart: Math.min(trimStart, trimEnd),
+    trimEnd: Math.max(trimStart, trimEnd),
+    splits: [...new Set((videoEdit.splits || []).map(clampTime).filter(t => t > 0 && (!duration || t < duration)))]
+      .sort((a, b) => a - b),
+    freezeFrames: (videoEdit.freezeFrames || []).map(item => ({
+      at: clampTime(item.at),
+      duration: Math.max(0.2, Number(item.duration || 1)),
+    })).sort((a, b) => a.at - b.at),
+    zoomKeyframes: (videoEdit.zoomKeyframes || []).map(item => ({
+      at: clampTime(item.at),
+      scale: Math.max(1, Math.min(3, Number(item.scale || 1.4))),
+    })).sort((a, b) => a.at - b.at),
+    audio: {
+      muted: !!videoEdit.audio?.muted,
+      volume: Math.max(0, Math.min(1, Number(videoEdit.audio?.volume ?? 1))),
+    },
+    chromaKey: {
+      enabled: !!videoEdit.chromaKey?.enabled,
+      color: videoEdit.chromaKey?.color || '#00ff00',
+      strength: Math.max(0, Math.min(1, Number(videoEdit.chromaKey?.strength ?? 0.35))),
+    },
+  };
+}
+
+function renderVideoEditor() {
+  const duration = videoDuration();
+  videoEdit = normalizedVideoEdit();
+  const end = videoEdit.trimEnd || duration;
+  if (editorEls.trimStart) editorEls.trimStart.value = videoEdit.trimStart.toFixed(1);
+  if (editorEls.trimEnd) editorEls.trimEnd.value = (end || 0).toFixed(1);
+  if (editorEls.volume) editorEls.volume.value = String(videoEdit.audio.volume);
+  if (editorEls.muted) editorEls.muted.checked = videoEdit.audio.muted;
+  if (editorEls.chromaEnabled) editorEls.chromaEnabled.checked = videoEdit.chromaKey.enabled;
+  if (editorEls.chromaStrength) editorEls.chromaStrength.value = String(videoEdit.chromaKey.strength);
+  vidPlayer.muted = videoEdit.audio.muted;
+  vidPlayer.volume = videoEdit.audio.volume;
+
+  const pct = duration ? (value) => Math.max(0, Math.min(100, value / duration * 100)) : () => 0;
+  const currentPct = pct(vidPlayer.currentTime || 0);
+  if (editorEls.playhead) editorEls.playhead.style.left = `${currentPct}%`;
+  if (editorEls.trimRange) {
+    const startPct = pct(videoEdit.trimStart);
+    const endPct = pct(end);
+    editorEls.trimRange.style.left = `${startPct}%`;
+    editorEls.trimRange.style.width = `${Math.max(0, endPct - startPct)}%`;
+  }
+  if (editorEls.markers) {
+    const splitHtml = videoEdit.splits.map(t => `<span class="timeline-marker split" title="Разрез ${fmtTime(t)}" style="left:${pct(t)}%"></span>`).join('');
+    const freezeHtml = videoEdit.freezeFrames.map(f => `<span class="timeline-marker freeze" title="Стоп-кадр ${fmtTime(f.at)}" style="left:${pct(f.at)}%"></span>`).join('');
+    const zoomHtml = videoEdit.zoomKeyframes.map(z => `<span class="timeline-marker zoom" title="Зум ${z.scale}x" style="left:${pct(z.at)}%"></span>`).join('');
+    editorEls.markers.innerHTML = splitHtml + freezeHtml + zoomHtml;
+  }
+  if (editorEls.timeLabel) editorEls.timeLabel.textContent = `${fmtTime(vidPlayer.currentTime || 0)} / ${fmtTime(duration)}`;
+  if (editorEls.summary) {
+    const parts = [];
+    if (videoEdit.trimStart > 0 || (duration && end < duration)) parts.push(`обрезка ${fmtTime(videoEdit.trimStart)}-${fmtTime(end)}`);
+    if (videoEdit.splits.length) parts.push(`разрезов: ${videoEdit.splits.length}`);
+    if (videoEdit.freezeFrames.length) parts.push(`стоп-кадров: ${videoEdit.freezeFrames.length}`);
+    if (videoEdit.zoomKeyframes.length) parts.push(`зумов: ${videoEdit.zoomKeyframes.length}`);
+    if (videoEdit.audio.muted) parts.push('звук выключен');
+    if (videoEdit.chromaKey.enabled) parts.push('хромакей');
+    editorEls.summary.textContent = parts.length ? parts.join(' · ') : 'Видео без правок';
+  }
+}
+
+function setEditorMode(mode) {
+  document.querySelectorAll('[data-editor-mode]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.editorMode === mode);
+  });
+  editorEls.effectsPanel?.classList.toggle('open', mode === 'effects');
+}
+
+function addUniqueTime(list, time) {
+  const t = Math.round(clampTime(time) * 10) / 10;
+  if (!t && t !== 0) return list;
+  if (list.some(v => Math.abs(v - t) < 0.11)) return list.filter(v => Math.abs(v - t) >= 0.11);
+  return [...list, t].sort((a, b) => a - b);
+}
+
+function saveVideoEdit() {
+  videoEdit = normalizedVideoEdit();
+  renderVideoEditor();
+  _saveDraft();
+}
+
+function resetVideoEdit() {
+  videoEdit = createDefaultVideoEdit();
+  videoEdit.trimEnd = videoDuration();
+  saveVideoEdit();
+}
 
 dropZone.addEventListener('click', () => vidInput.click());
 dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
@@ -1380,6 +1520,75 @@ dropZone.addEventListener('drop', e => {
   if (file) handleVideoFile(file);
 });
 vidInput.addEventListener('change', () => { if (vidInput.files[0]) handleVideoFile(vidInput.files[0]); });
+document.querySelectorAll('[data-editor-mode]').forEach(btn => {
+  btn.addEventListener('click', () => setEditorMode(btn.dataset.editorMode || 'trim'));
+});
+editorEls.shell?.addEventListener('click', event => {
+  const duration = videoDuration();
+  if (!duration) return;
+  const rect = editorEls.shell.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+  vidPlayer.currentTime = ratio * duration;
+  renderVideoEditor();
+});
+editorEls.trimStart?.addEventListener('change', event => {
+  videoEdit.trimStart = clampTime(event.target.value);
+  if (videoEdit.trimEnd && videoEdit.trimStart > videoEdit.trimEnd) videoEdit.trimEnd = videoEdit.trimStart;
+  saveVideoEdit();
+});
+editorEls.trimEnd?.addEventListener('change', event => {
+  videoEdit.trimEnd = clampTime(event.target.value);
+  if (videoEdit.trimEnd < videoEdit.trimStart) videoEdit.trimStart = videoEdit.trimEnd;
+  saveVideoEdit();
+});
+editorEls.volume?.addEventListener('input', event => {
+  videoEdit.audio.volume = Number(event.target.value || 1);
+  saveVideoEdit();
+});
+editorEls.muted?.addEventListener('change', event => {
+  videoEdit.audio.muted = !!event.target.checked;
+  saveVideoEdit();
+});
+editorEls.chromaEnabled?.addEventListener('change', event => {
+  videoEdit.chromaKey.enabled = !!event.target.checked;
+  saveVideoEdit();
+});
+editorEls.chromaStrength?.addEventListener('input', event => {
+  videoEdit.chromaKey.strength = Number(event.target.value || 0.35);
+  saveVideoEdit();
+});
+document.getElementById('edit-set-in')?.addEventListener('click', () => {
+  videoEdit.trimStart = clampTime(vidPlayer.currentTime);
+  if (videoEdit.trimEnd && videoEdit.trimStart > videoEdit.trimEnd) videoEdit.trimEnd = videoEdit.trimStart;
+  saveVideoEdit();
+});
+document.getElementById('edit-set-out')?.addEventListener('click', () => {
+  videoEdit.trimEnd = clampTime(vidPlayer.currentTime);
+  if (videoEdit.trimEnd < videoEdit.trimStart) videoEdit.trimStart = videoEdit.trimEnd;
+  saveVideoEdit();
+});
+document.getElementById('edit-split')?.addEventListener('click', () => {
+  videoEdit.splits = addUniqueTime(videoEdit.splits || [], vidPlayer.currentTime);
+  saveVideoEdit();
+});
+document.getElementById('edit-freeze')?.addEventListener('click', () => {
+  const at = Math.round(clampTime(vidPlayer.currentTime) * 10) / 10;
+  const exists = (videoEdit.freezeFrames || []).some(item => Math.abs(item.at - at) < 0.11);
+  videoEdit.freezeFrames = exists
+    ? videoEdit.freezeFrames.filter(item => Math.abs(item.at - at) >= 0.11)
+    : [...(videoEdit.freezeFrames || []), { at, duration: 1 }];
+  saveVideoEdit();
+});
+document.getElementById('edit-zoom')?.addEventListener('click', () => {
+  const at = Math.round(clampTime(vidPlayer.currentTime) * 10) / 10;
+  const scale = Number(editorEls.zoomScale?.value || 1.4);
+  videoEdit.zoomKeyframes = [
+    ...(videoEdit.zoomKeyframes || []).filter(item => Math.abs(item.at - at) >= 0.11),
+    { at, scale },
+  ];
+  saveVideoEdit();
+});
+document.getElementById('edit-reset')?.addEventListener('click', resetVideoEdit);
 
 function isVideoFile(file) {
   return file && (
@@ -1414,6 +1623,7 @@ async function handleVideoFile(file) {
     prog.style.display = 'none';
     dropZone.style.display = '';
     videoUrl = null; videoXhr = null;
+    videoEdit = createDefaultVideoEdit();
     validateForm();
   };
 
@@ -1426,8 +1636,10 @@ async function handleVideoFile(file) {
     vidPlayer.crossOrigin = 'anonymous';
     vidPlayer.src = url;
     document.getElementById('vid-player-wrap').style.display = '';
+    videoEdit = createDefaultVideoEdit();
     toast('Видео загружено ✅', 's');
     validateForm(); _saveDraft();
+    renderVideoEditor();
   } catch (e) {
     if (e.message === 'canceled') return;
     videoXhr = null;
@@ -1439,8 +1651,19 @@ async function handleVideoFile(file) {
 
 vidPlayer.addEventListener('timeupdate', () => {
   if (!vidPlayer.duration) return;
+  const end = videoEdit.trimEnd || vidPlayer.duration;
+  if (vidPlayer.currentTime < videoEdit.trimStart) vidPlayer.currentTime = videoEdit.trimStart;
+  if (vidPlayer.currentTime > end) {
+    vidPlayer.pause();
+    vidPlayer.currentTime = videoEdit.trimStart;
+  }
   vidScrubber.value = (vidPlayer.currentTime / vidPlayer.duration) * 100;
   vidTimeEl.textContent = fmtTime(vidPlayer.currentTime) + ' / ' + fmtTime(vidPlayer.duration);
+  renderVideoEditor();
+});
+vidPlayer.addEventListener('loadedmetadata', () => {
+  if (!videoEdit.trimEnd) videoEdit.trimEnd = videoDuration();
+  renderVideoEditor();
 });
 vidPlayer.addEventListener('play',  () => { vidPlayBtn.textContent = '⏸'; });
 vidPlayer.addEventListener('pause', () => { vidPlayBtn.textContent = '▶'; });
@@ -1451,6 +1674,7 @@ vidPlayBtn.addEventListener('click', () => vidPlayer.paused ? safePlay(vidPlayer
 document.getElementById('vid-remove-btn').addEventListener('click', () => {
   vidPlayer.src = '';
   videoUrl = null;
+  videoEdit = createDefaultVideoEdit();
   document.getElementById('vid-player-wrap').style.display = 'none';
   dropZone.style.display = '';
   vidInput.value = '';
@@ -1809,6 +2033,7 @@ function collectDraftData() {
     markerX, markerY, mapMode,
     trajectory: trajectoryPoints,
     videoUrl,
+    videoEdit: videoUrl ? normalizedVideoEdit() : createDefaultVideoEdit(),
     screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
     resubmissionSourceId,
   };
@@ -1819,7 +2044,9 @@ function hasDraftContent(draft) {
     draft &&
     (draft.title || draft.desc || draft.map || draft.agent || draft.ability ||
       draft.videoUrl || draft.markerX != null || draft.trajectory?.length ||
-      draft.screenshots?.length || draft.resubmissionSourceId)
+      draft.screenshots?.length || draft.videoEdit?.splits?.length ||
+      draft.videoEdit?.freezeFrames?.length || draft.videoEdit?.zoomKeyframes?.length ||
+      draft.resubmissionSourceId)
   );
 }
 
@@ -2010,12 +2237,16 @@ function _restoreDraft(sourceDraft = null) {
   // Video
   if (d.videoUrl) {
     videoUrl = d.videoUrl;
+    videoEdit = { ...createDefaultVideoEdit(), ...(d.videoEdit || {}) };
     const dropZ = document.getElementById('drop-zone');
     const wrap  = document.getElementById('vid-player-wrap');
     const vid   = document.getElementById('vid-player');
     if (dropZ) dropZ.style.display = 'none';
     if (wrap)  wrap.style.display = '';
     if (vid)   { vid.crossOrigin = 'anonymous'; vid.src = d.videoUrl; }
+    renderVideoEditor();
+  } else {
+    videoEdit = createDefaultVideoEdit();
   }
 
   // Screenshots (already uploaded — use cloud URL for display)
@@ -2166,6 +2397,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       resubmitted_from: resubmissionSourceId || '',
       source: 'web',
       schema_version: 1,
+      has_video_edit: !!videoUrl,
       ...submitFormDiagnostics({ title, desc, map, ability: normalizedAbility, contentType }),
     };
     submitStage = 'lineup_create_batch';
@@ -2177,6 +2409,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       title,
       description:   desc,
       video_url:     videoUrl || null,
+      video_edit:    videoUrl ? normalizedVideoEdit() : null,
       screenshots:   screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
       position_x: markerX,
       position_y: markerY,
@@ -2243,7 +2476,7 @@ function resetUploadForm({ keepDraft = false } = {}) {
   markerX = null; markerY = null;
   trajectoryPoints = [];
   mapMode = 'position';
-  videoUrl = null; screenshots = [];
+  videoUrl = null; videoEdit = createDefaultVideoEdit(); screenshots = [];
 
   document.getElementById('sel-map').value = '';
   document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
