@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T18:31:00+03:00';
+const SITE_VERSION = '2026-07-10T18:43:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -1679,6 +1679,11 @@ let lastVideoTime = 0;
 let timelinePixelsPerSecond = 52;
 let videoEditorHotkeysActive = false;
 let timelinePreviewOutputTime = null;
+let outputPlaybackActive = false;
+let outputPlaybackRaf = null;
+let outputPlaybackStartedAt = 0;
+let outputPlaybackStartTime = 0;
+let outputPlaybackTime = null;
 const editorEls = {
   scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
@@ -1804,6 +1809,9 @@ function sourceToOutputTime(sourceTime) {
 }
 
 function currentOutputTime() {
+  if (outputPlaybackTime !== null) {
+    return Math.max(0, Math.min(editedOutputDuration(), outputPlaybackTime));
+  }
   if (freezeHoldActive) {
     const elapsed = (performance.now() - freezeHoldActive.startedAt) / 1000;
     return freezeHoldActive.outputStart + Math.min(freezeHoldActive.duration, Math.max(0, elapsed));
@@ -1824,6 +1832,94 @@ function outputToSourceTime(outputTime) {
     return segment.sourceStart + local;
   }
   return videoEdit.trimEnd || videoDuration();
+}
+
+function segmentForOutputTime(outputTime) {
+  const out = Math.max(0, Number(outputTime || 0));
+  const segments = buildTimelineSegments();
+  return segments.find((segment, index) => {
+    const end = segment.outputStart + segment.duration;
+    return out >= segment.outputStart && (out < end || index === segments.length - 1);
+  }) || null;
+}
+
+function stopOutputPlayback({ keepPreview = true } = {}) {
+  if (outputPlaybackRaf) {
+    cancelAnimationFrame(outputPlaybackRaf);
+    outputPlaybackRaf = null;
+  }
+  const currentOut = outputPlaybackTime;
+  outputPlaybackActive = false;
+  outputPlaybackStartedAt = 0;
+  outputPlaybackStartTime = 0;
+  outputPlaybackTime = null;
+  if (keepPreview && currentOut !== null) timelinePreviewOutputTime = currentOut;
+  if (!vidPlayer.paused) vidPlayer.pause();
+  if (vidPlayBtn) vidPlayBtn.textContent = '▶';
+  renderVideoEditor();
+}
+
+function showOutputFrame(outputTime) {
+  const total = editedOutputDuration();
+  const out = Math.max(0, Math.min(total, Number(outputTime || 0)));
+  const segment = segmentForOutputTime(out);
+  if (!segment) return;
+  outputPlaybackTime = out;
+  if (segment.type === 'freeze') {
+    if (!vidPlayer.paused) vidPlayer.pause();
+    if (Math.abs((vidPlayer.currentTime || 0) - segment.sourceAt) > 0.03) {
+      vidPlayer.currentTime = segment.sourceAt;
+    }
+  } else {
+    const local = Math.max(0, Math.min(segment.duration, out - segment.outputStart));
+    const sourceTime = segment.sourceStart + local;
+    if (Math.abs((vidPlayer.currentTime || 0) - sourceTime) > 0.12) {
+      vidPlayer.currentTime = sourceTime;
+    }
+    if (vidPlayer.paused && outputPlaybackActive) safePlay(vidPlayer);
+  }
+  renderVideoEditor();
+}
+
+function tickOutputPlayback() {
+  if (!outputPlaybackActive) return;
+  const out = outputPlaybackStartTime + (performance.now() - outputPlaybackStartedAt) / 1000;
+  const total = editedOutputDuration();
+  if (out >= total) {
+    showOutputFrame(total);
+    stopOutputPlayback({ keepPreview: true });
+    return;
+  }
+  showOutputFrame(out);
+  outputPlaybackRaf = requestAnimationFrame(tickOutputPlayback);
+}
+
+function startOutputPlayback(startOutput = null) {
+  if (!videoDuration()) return;
+  clearFreezeHold();
+  playedFreezeHolds.clear();
+  timelinePreviewOutputTime = null;
+  outputPlaybackStartTime = startOutput === null
+    ? (outputPlaybackTime ?? currentOutputTime())
+    : Math.max(0, Math.min(editedOutputDuration(), startOutput));
+  outputPlaybackStartedAt = performance.now();
+  outputPlaybackActive = true;
+  if (vidPlayBtn) vidPlayBtn.textContent = '⏸';
+  showOutputFrame(outputPlaybackStartTime);
+  outputPlaybackRaf = requestAnimationFrame(tickOutputPlayback);
+}
+
+function toggleEditorPlayback() {
+  if (outputPlaybackActive) {
+    stopOutputPlayback({ keepPreview: true });
+    return;
+  }
+  if ((videoEdit.freezeFrames || []).length) {
+    startOutputPlayback(timelinePreviewOutputTime);
+    return;
+  }
+  timelinePreviewOutputTime = null;
+  vidPlayer.paused ? safePlay(vidPlayer) : vidPlayer.pause();
 }
 
 function renderVideoEditor() {
@@ -1946,6 +2042,7 @@ function outputTimeFromTimelineEvent(event) {
 }
 
 function applyTimelineTool(time, outputTime = null) {
+  stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   vidPlayer.pause();
   timelinePreviewOutputTime = outputTime === null ? sourceToOutputTime(time) : Math.max(0, Math.min(editedOutputDuration(), outputTime));
@@ -1967,6 +2064,7 @@ function saveVideoEdit() {
 }
 
 function resetVideoEdit() {
+  stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   timelinePreviewOutputTime = null;
   videoEdit = createDefaultVideoEdit();
@@ -2096,6 +2194,7 @@ editorEls.shell?.addEventListener('pointermove', event => {
       }
     }
   } else {
+    stopOutputPlayback({ keepPreview: false });
     clearFreezeHold();
     vidPlayer.pause();
     timelinePreviewOutputTime = outputTime;
@@ -2294,34 +2393,9 @@ vidPlayer.addEventListener('timeupdate', () => {
   if (!vidPlayer.duration) return;
   const end = videoEdit.trimEnd || vidPlayer.duration;
   if (vidPlayer.currentTime < videoEdit.trimStart) vidPlayer.currentTime = videoEdit.trimStart;
-  const currentTime = vidPlayer.currentTime;
-  const hold = (videoEdit.freezeFrames || []).find(item =>
-    !playedFreezeHolds.has(item.id) &&
-    item.at >= lastVideoTime &&
-    item.at <= currentTime + 0.08 &&
-    !vidPlayer.paused
-  );
-  if (hold && !freezeHoldTimer) {
-    playedFreezeHolds.add(hold.id);
-    vidPlayer.pause();
-    vidPlayer.currentTime = hold.at;
-    toast('Стоп-кадр 2 сек', 'i');
-    const freezeSegment = buildTimelineSegments().find(segment => segment.type === 'freeze' && segment.id === hold.id);
-    freezeHoldActive = {
-      id: hold.id,
-      outputStart: freezeSegment?.outputStart ?? sourceToOutputTime(hold.at),
-      duration: Number(hold.duration || 2),
-      startedAt: performance.now(),
-    };
-    freezeHoldRenderInterval = setInterval(renderVideoEditor, 80);
-    freezeHoldTimer = setTimeout(() => {
-      clearFreezeHold();
-      vidPlayer.currentTime = Math.min(hold.at + 0.05, end);
-      safePlay(vidPlayer);
-    }, Math.max(200, Number(hold.duration || 2) * 1000));
-  }
   if (vidPlayer.currentTime > end) {
-    vidPlayer.pause();
+    if (outputPlaybackActive) stopOutputPlayback({ keepPreview: true });
+    else vidPlayer.pause();
     vidPlayer.currentTime = videoEdit.trimStart;
     playedFreezeHolds.clear();
   }
@@ -2334,17 +2408,29 @@ vidPlayer.addEventListener('loadedmetadata', () => {
   if (!videoEdit.trimEnd) videoEdit.trimEnd = videoDuration();
   renderVideoEditor();
 });
-vidPlayer.addEventListener('play',  () => { timelinePreviewOutputTime = null; vidPlayBtn.textContent = '⏸'; lastVideoTime = vidPlayer.currentTime; });
-vidPlayer.addEventListener('pause', () => { vidPlayBtn.textContent = '▶'; });
-vidPlayer.addEventListener('seeking', () => { clearFreezeHold(); lastVideoTime = vidPlayer.currentTime; });
+vidPlayer.addEventListener('play',  () => {
+  if ((videoEdit.freezeFrames || []).length && !outputPlaybackActive) {
+    vidPlayer.pause();
+    startOutputPlayback(timelinePreviewOutputTime ?? sourceToOutputTime(vidPlayer.currentTime || 0));
+    return;
+  }
+  timelinePreviewOutputTime = null;
+  if (!outputPlaybackActive) outputPlaybackTime = null;
+  vidPlayBtn.textContent = '⏸';
+  lastVideoTime = vidPlayer.currentTime;
+});
+vidPlayer.addEventListener('pause', () => { if (!outputPlaybackActive) vidPlayBtn.textContent = '▶'; });
+vidPlayer.addEventListener('seeking', () => { clearFreezeHold(); if (!outputPlaybackActive) outputPlaybackTime = null; lastVideoTime = vidPlayer.currentTime; });
 vidScrubber.addEventListener('input', () => {
+  stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   timelinePreviewOutputTime = null;
   playedFreezeHolds.clear();
   vidPlayer.currentTime = (vidScrubber.value / 100) * vidPlayer.duration;
 });
-vidPlayBtn.addEventListener('click', () => vidPlayer.paused ? safePlay(vidPlayer) : vidPlayer.pause());
+vidPlayBtn.addEventListener('click', toggleEditorPlayback);
 document.getElementById('vid-remove-btn').addEventListener('click', () => {
+  stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   timelinePreviewOutputTime = null;
   vidPlayer.src = '';
@@ -2421,8 +2507,7 @@ function handleVideoEditorSpace(event, shouldToggle) {
     document.activeElement.blur?.();
   }
   if (shouldToggle) {
-    const player = document.getElementById('vid-player');
-    if (player.paused) { safePlay(player); } else { player.pause(); }
+    toggleEditorPlayback();
   }
   return true;
 }
@@ -2454,7 +2539,7 @@ document.addEventListener('keydown', e => {
       e.stopPropagation();
       e.stopImmediatePropagation?.();
       if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur?.();
-      if (player.paused) { safePlay(player); } else { player.pause(); }
+      toggleEditorPlayback();
     }
   }
   if (e.code === 'ArrowRight') {
