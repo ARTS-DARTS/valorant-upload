@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T18:22:00+03:00';
+const SITE_VERSION = '2026-07-10T18:31:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -1678,6 +1678,7 @@ let playedFreezeHolds = new Set();
 let lastVideoTime = 0;
 let timelinePixelsPerSecond = 52;
 let videoEditorHotkeysActive = false;
+let timelinePreviewOutputTime = null;
 const editorEls = {
   scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
@@ -1806,6 +1807,9 @@ function currentOutputTime() {
   if (freezeHoldActive) {
     const elapsed = (performance.now() - freezeHoldActive.startedAt) / 1000;
     return freezeHoldActive.outputStart + Math.min(freezeHoldActive.duration, Math.max(0, elapsed));
+  }
+  if (timelinePreviewOutputTime !== null && vidPlayer.paused) {
+    return Math.max(0, Math.min(editedOutputDuration(), timelinePreviewOutputTime));
   }
   return sourceToOutputTime(vidPlayer.currentTime || 0);
 }
@@ -1941,7 +1945,10 @@ function outputTimeFromTimelineEvent(event) {
   return ratio * editedOutputDuration();
 }
 
-function applyTimelineTool(time) {
+function applyTimelineTool(time, outputTime = null) {
+  clearFreezeHold();
+  vidPlayer.pause();
+  timelinePreviewOutputTime = outputTime === null ? sourceToOutputTime(time) : Math.max(0, Math.min(editedOutputDuration(), outputTime));
   vidPlayer.currentTime = clampTime(time);
   renderVideoEditor();
 }
@@ -1961,6 +1968,7 @@ function saveVideoEdit() {
 
 function resetVideoEdit() {
   clearFreezeHold();
+  timelinePreviewOutputTime = null;
   videoEdit = createDefaultVideoEdit();
   videoEdit.trimEnd = videoDuration();
   saveVideoEdit();
@@ -1995,7 +2003,8 @@ editorEls.shell?.addEventListener('click', event => {
     suppressTimelineClick = false;
     return;
   }
-  applyTimelineTool(timeFromTimelineEvent(event));
+  const outputTime = outputTimeFromTimelineEvent(event);
+  applyTimelineTool(outputToSourceTime(outputTime), outputTime);
 });
 editorEls.shell?.addEventListener('pointerdown', event => {
   const duration = videoDuration();
@@ -2050,6 +2059,7 @@ editorEls.shell?.addEventListener('pointermove', event => {
   if (!timelineDrag) return;
   timelineDrag.moved = true;
   const time = clampTime(timeFromTimelineEvent(event));
+  const outputTime = outputTimeFromTimelineEvent(event);
   if (timelineDrag.kind === 'start') {
     videoEdit.trimStart = Math.min(time, videoEdit.trimEnd || videoDuration());
   } else if (timelineDrag.kind === 'end') {
@@ -2086,6 +2096,9 @@ editorEls.shell?.addEventListener('pointermove', event => {
       }
     }
   } else {
+    clearFreezeHold();
+    vidPlayer.pause();
+    timelinePreviewOutputTime = outputTime;
     vidPlayer.currentTime = time;
   }
   renderVideoEditor();
@@ -2321,17 +2334,19 @@ vidPlayer.addEventListener('loadedmetadata', () => {
   if (!videoEdit.trimEnd) videoEdit.trimEnd = videoDuration();
   renderVideoEditor();
 });
-vidPlayer.addEventListener('play',  () => { vidPlayBtn.textContent = '⏸'; lastVideoTime = vidPlayer.currentTime; });
+vidPlayer.addEventListener('play',  () => { timelinePreviewOutputTime = null; vidPlayBtn.textContent = '⏸'; lastVideoTime = vidPlayer.currentTime; });
 vidPlayer.addEventListener('pause', () => { vidPlayBtn.textContent = '▶'; });
 vidPlayer.addEventListener('seeking', () => { clearFreezeHold(); lastVideoTime = vidPlayer.currentTime; });
 vidScrubber.addEventListener('input', () => {
   clearFreezeHold();
+  timelinePreviewOutputTime = null;
   playedFreezeHolds.clear();
   vidPlayer.currentTime = (vidScrubber.value / 100) * vidPlayer.duration;
 });
 vidPlayBtn.addEventListener('click', () => vidPlayer.paused ? safePlay(vidPlayer) : vidPlayer.pause());
 document.getElementById('vid-remove-btn').addEventListener('click', () => {
   clearFreezeHold();
+  timelinePreviewOutputTime = null;
   vidPlayer.src = '';
   videoUrl = null;
   videoEdit = createDefaultVideoEdit();
