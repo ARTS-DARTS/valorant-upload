@@ -250,9 +250,17 @@
     .editor-check input { accent-color: var(--primary); }
     .effects-panel { display: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
     .effects-panel.open { display: grid; }
-    .zoom-panel { display: none; grid-template-columns: minmax(160px, 1fr) auto; gap: 10px; align-items: end; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .zoom-panel { display: none; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
     .zoom-panel.open { display: grid; }
-    .zoom-value { color: var(--green); font-size: 18px; font-weight: 900; line-height: 36px; }
+    .transform-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; color: var(--text1); font-size: 12px; }
+    .transform-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.12); }
+    .transform-grid { display: grid; grid-template-columns: minmax(74px, .8fr) minmax(0, 1fr) minmax(0, 1fr); gap: 7px 10px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: var(--r); background: rgba(7,11,22,.72); }
+    .transform-grid label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: center; color: var(--text2); font-size: 11px; font-weight: 800; }
+    .transform-grid .finput { height: 28px; padding: 4px 7px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .transform-grid input[type="range"] { width: 100%; accent-color: var(--primary); }
+    .transform-label { color: var(--text2); font-size: 11px; font-weight: 800; text-align: right; }
+    .transform-actions { display: flex; justify-content: flex-end; }
+    .zoom-value { color: var(--green); font-size: 14px; font-weight: 900; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
     /* Screenshots */
     .shots-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }

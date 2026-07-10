@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 19:03 · 10.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 19:16 · 10.07.2026</div>
   <div class="user-info" id="header-user" style="display:none;">
     <img id="user-avatar" src="" alt="" style="display:none;">
     <span id="user-name"></span>
@@ -231,10 +231,28 @@
             <button class="btn-sm" id="edit-reset" type="button">Сбросить монтаж</button>
           </div>
           <div class="zoom-panel" id="zoom-panel">
-            <label class="editor-field">Сила зума
-              <input type="range" id="edit-zoom-scale" min="1" max="3" step="0.1" value="1.4">
-            </label>
-            <span class="zoom-value" id="edit-zoom-value">1.4x</span>
+            <div class="transform-head">
+              <span class="transform-dot"></span>
+              <strong>Transform</strong>
+              <span class="zoom-value" id="edit-zoom-value">1.40x</span>
+            </div>
+            <div class="transform-grid">
+              <span class="transform-label">Zoom</span>
+              <label>X <input class="finput" type="number" id="edit-zoom-scale-x" min="1" max="4" step="0.05" value="1.4"></label>
+              <label>Y <input class="finput" type="number" id="edit-zoom-scale-y" min="1" max="4" step="0.05" value="1.4"></label>
+              <span class="transform-label">Position</span>
+              <label>X <input class="finput" type="number" id="edit-zoom-pos-x" min="-100" max="100" step="1" value="0"></label>
+              <label>Y <input class="finput" type="number" id="edit-zoom-pos-y" min="-100" max="100" step="1" value="0"></label>
+              <span class="transform-label">Rotation</span>
+              <input type="range" id="edit-zoom-rotation-range" min="-45" max="45" step="1" value="0">
+              <label><input class="finput" type="number" id="edit-zoom-rotation" min="-45" max="45" step="1" value="0"></label>
+              <span class="transform-label">Anchor</span>
+              <label>X <input class="finput" type="number" id="edit-zoom-anchor-x" min="0" max="100" step="1" value="50"></label>
+              <label>Y <input class="finput" type="number" id="edit-zoom-anchor-y" min="0" max="100" step="1" value="50"></label>
+            </div>
+            <div class="transform-actions">
+              <button class="btn-sm" id="edit-zoom-reset" type="button">Сбросить transform</button>
+            </div>
           </div>
           <div class="effects-panel" id="effects-panel">
             <label class="editor-check"><input type="checkbox" id="edit-chroma-enabled"> Хромакей зелёного</label>
