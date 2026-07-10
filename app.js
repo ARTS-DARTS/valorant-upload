@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-10T19:41:00+03:00';
+const SITE_VERSION = '2026-07-10T21:56:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
@@ -2453,6 +2453,98 @@ function bindZoomTransformInput(el, key, map = value => value) {
     updateSelectedZoomTransform({ [key]: map(Number(event.target.value || 0)) });
   });
 }
+
+function clampTransformInputValue(el, value) {
+  const min = Number(el?.getAttribute('min'));
+  const max = Number(el?.getAttribute('max'));
+  let next = Number.isFinite(value) ? value : Number(el?.value || 0);
+  if (Number.isFinite(min)) next = Math.max(min, next);
+  if (Number.isFinite(max)) next = Math.min(max, next);
+  return next;
+}
+
+function formatTransformInputValue(el, value) {
+  const step = String(el?.getAttribute('step') || '1');
+  const decimals = step.includes('.') ? step.split('.')[1].length : 0;
+  return clampTransformInputValue(el, value).toFixed(decimals);
+}
+
+function enterTransformTextEdit(el) {
+  if (!el) return;
+  el.readOnly = false;
+  el.classList.add('editing');
+  el.focus();
+  requestAnimationFrame(() => el.select());
+}
+
+function exitTransformTextEdit(el) {
+  if (!el) return;
+  el.value = formatTransformInputValue(el, Number(String(el.value).replace(',', '.')));
+  el.readOnly = true;
+  el.classList.remove('editing');
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function bindTransformDragNumber(el) {
+  if (!el) return;
+  let drag = null;
+  el.addEventListener('dblclick', event => {
+    event.preventDefault();
+    enterTransformTextEdit(el);
+  });
+  el.addEventListener('blur', () => exitTransformTextEdit(el));
+  el.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      exitTransformTextEdit(el);
+      el.blur();
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      el.readOnly = true;
+      el.classList.remove('editing');
+      el.blur();
+      syncZoomTransformPanel();
+    }
+  });
+  el.addEventListener('pointerdown', event => {
+    if (!el.readOnly || event.button !== 0) return;
+    if (event.detail >= 2) {
+      enterTransformTextEdit(el);
+      event.preventDefault();
+      return;
+    }
+    drag = {
+      x: event.clientX,
+      start: Number(String(el.value).replace(',', '.')) || 0,
+      moved: false,
+    };
+    el.setPointerCapture?.(event.pointerId);
+    el.classList.add('dragging');
+    event.preventDefault();
+  });
+  el.addEventListener('pointermove', event => {
+    if (!drag) return;
+    const dx = event.clientX - drag.x;
+    if (Math.abs(dx) > 2) drag.moved = true;
+    if (!drag.moved) return;
+    const step = Number(el.getAttribute('step') || 1) || 1;
+    const multiplier = event.shiftKey ? 0.2 : event.altKey ? 0.05 : 0.25;
+    const next = drag.start + dx * step * multiplier;
+    el.value = formatTransformInputValue(el, next);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const finishDrag = event => {
+    if (!drag) return;
+    el.releasePointerCapture?.(event.pointerId);
+    el.classList.remove('dragging');
+    if (drag.moved) saveVideoEdit();
+    drag = null;
+  };
+  el.addEventListener('pointerup', finishDrag);
+  el.addEventListener('pointercancel', finishDrag);
+}
+
 bindZoomTransformInput(editorEls.zoomScaleX, 'scaleX', value => Math.max(1, Math.min(4, value || 1)));
 bindZoomTransformInput(editorEls.zoomScaleY, 'scaleY', value => Math.max(1, Math.min(4, value || 1)));
 bindZoomTransformInput(editorEls.zoomPosX, 'posX', value => Math.max(-100, Math.min(100, value)));
@@ -2461,6 +2553,15 @@ bindZoomTransformInput(editorEls.zoomRotation, 'rotation', value => Math.max(-45
 bindZoomTransformInput(editorEls.zoomRotationRange, 'rotation', value => Math.max(-45, Math.min(45, value)));
 bindZoomTransformInput(editorEls.zoomAnchorX, 'anchorX', value => Math.max(0, Math.min(100, value)));
 bindZoomTransformInput(editorEls.zoomAnchorY, 'anchorY', value => Math.max(0, Math.min(100, value)));
+[
+  editorEls.zoomScaleX,
+  editorEls.zoomScaleY,
+  editorEls.zoomPosX,
+  editorEls.zoomPosY,
+  editorEls.zoomRotation,
+  editorEls.zoomAnchorX,
+  editorEls.zoomAnchorY,
+].forEach(bindTransformDragNumber);
 document.getElementById('edit-zoom-reset')?.addEventListener('click', () => {
   updateSelectedZoomTransform({ scaleX: 1.4, scaleY: 1.4, scale: 1.4, posX: 0, posY: 0, rotation: 0, anchorX: 50, anchorY: 50 });
 });
