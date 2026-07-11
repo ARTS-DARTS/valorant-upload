@@ -1929,6 +1929,24 @@ function updateSelectedZoomTransform(patch) {
   saveVideoEdit();
 }
 
+function zoomPanForAnchor(anchorX, anchorY, scale) {
+  const rect = editorEls.stage?.getBoundingClientRect();
+  const width = rect?.width || 0;
+  const height = rect?.height || 0;
+  const safeScale = Math.max(1, Number(scale || 1));
+  if (!width || !height || safeScale <= 1) return { x: 0, y: 0 };
+  const targetX = (anchorX / 100) * width;
+  const targetY = (anchorY / 100) * height;
+  const rawX = width / 2 - targetX;
+  const rawY = height / 2 - targetY;
+  const maxX = (width * (safeScale - 1)) / (2 * safeScale);
+  const maxY = (height * (safeScale - 1)) / (2 * safeScale);
+  return {
+    x: Math.max(-maxX, Math.min(maxX, rawX)),
+    y: Math.max(-maxY, Math.min(maxY, rawY)),
+  };
+}
+
 function updateZoomAreaFromPoint(clientX, clientY) {
   let zoom = selectedZoomClip() || activeZoomClipAt(vidPlayer.currentTime || 0);
   if (!zoom) {
@@ -1946,8 +1964,8 @@ function updateZoomAreaFromPoint(clientX, clientY) {
   updateSelectedZoomTransform({
     anchorX,
     anchorY,
-    posX: Number(zoom.posX || 0),
-    posY: Number(zoom.posY || 0),
+    posX: 0,
+    posY: 0,
   });
   syncZoomTransformPanel();
   applyVideoEditPreview();
@@ -2147,13 +2165,15 @@ function applyVideoEditPreview() {
   const activeZoom = activeZoomClipAt(time);
   const scaleX = activeZoom ? Number(activeZoom.scaleX ?? activeZoom.scale ?? 1) : 1;
   const scaleY = activeZoom ? Number(activeZoom.scaleY ?? activeZoom.scale ?? 1) : 1;
+  const scale = Math.max(scaleX, scaleY, 1);
   const posX = activeZoom ? Number(activeZoom.posX || 0) : 0;
   const posY = activeZoom ? Number(activeZoom.posY || 0) : 0;
   const rotation = activeZoom ? Number(activeZoom.rotation || 0) : 0;
   const anchorX = activeZoom ? Number(activeZoom.anchorX ?? 50) : 50;
   const anchorY = activeZoom ? Number(activeZoom.anchorY ?? 50) : 50;
-  const transformOrigin = `${anchorX}% ${anchorY}%`;
-  const transform = `translate(${posX}px, ${posY}px) rotate(${rotation}deg) scale(${scaleX}, ${scaleY})`;
+  const pan = zoomPanForAnchor(anchorX, anchorY, scale);
+  const transformOrigin = '50% 50%';
+  const transform = `scale(${scale}) translate(${pan.x + posX}px, ${pan.y + posY}px) rotate(${rotation}deg)`;
   vidPlayer.style.transformOrigin = transformOrigin;
   vidPlayer.style.transform = transform;
   if (editorEls.freezeOverlay) {
@@ -2163,13 +2183,13 @@ function applyVideoEditPreview() {
   vidPlayer.style.filter = videoEdit.chromaKey?.enabled ? `saturate(${1 + videoEdit.chromaKey.strength}) contrast(1.08)` : '';
   editorEls.zoomFrame?.classList.toggle('show', scaleX > 1.01 || scaleY > 1.01 || activeEditorMode === 'zoom');
   if (editorEls.zoomFrame) {
-    const frameWidth = Math.max(22, Math.min(72, 100 / Math.max(scaleX, 1)));
-    const frameHeight = Math.max(22, Math.min(72, 100 / Math.max(scaleY, 1)));
+    const frameWidth = Math.max(22, Math.min(72, 100 / Math.max(scale, 1)));
+    const frameHeight = Math.max(22, Math.min(72, 100 / Math.max(scale, 1)));
     editorEls.zoomFrame.style.left = `${anchorX}%`;
     editorEls.zoomFrame.style.top = `${anchorY}%`;
     editorEls.zoomFrame.style.width = `${frameWidth}%`;
     editorEls.zoomFrame.style.height = `${frameHeight}%`;
-    editorEls.zoomFrame.textContent = activeZoom ? `${scaleX.toFixed(2)}x/${scaleY.toFixed(2)}x` : 'Зум';
+    editorEls.zoomFrame.textContent = activeZoom ? `${scale.toFixed(2)}x` : 'Зум';
   }
 }
 
