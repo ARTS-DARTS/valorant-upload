@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T21:21:20+03:00';
+const SITE_VERSION = '2026-07-11T21:26:56+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -428,6 +428,7 @@ function fmtTime(s) {
 function videoContentType(file) {
   if (file.type) return file.type;
   if (/\.mov$/i.test(file.name)) return 'video/quicktime';
+  if (/\.webm$/i.test(file.name)) return 'video/webm';
   return 'video/mp4';
 }
 
@@ -1322,7 +1323,7 @@ function renderMaterialForm() {
   shell.innerHTML = `
     <div class="material-form-grid">
       <input class="finput" id="material-title" maxlength="90" placeholder="Название материала" value="${esc(material.title || '')}">
-      <input class="finput" id="material-video-file" type="file" accept="video/mp4,video/quicktime,video/*">
+      <input class="finput" id="material-video-file" type="file" accept="video/mp4,video/quicktime,video/webm,video/*,.mp4,.mov,.webm">
     </div>
     <div class="field-group">
       <textarea class="finput" id="material-description" maxlength="1000" placeholder="Короткое описание для авторов">${esc(material.description || '')}</textarea>
@@ -3339,7 +3340,7 @@ async function addMaterialFootageToTimeline(id) {
   });
 }
 async function handleFootageFile(file) {
-  if (!isVideoFile(file)) { toast('Выбери .mp4 или .mov футаж', 'e'); return; }
+  if (!isVideoFile(file)) { toast('Выбери .mp4, .mov или .webm футаж', 'e'); return; }
   if (file.size > 50 * 1024 * 1024) { toast('Футаж превышает 50 МБ', 'e'); return; }
   if (editorEls.footageStatus) editorEls.footageStatus.textContent = 'Подготовка футажа...';
   const meta = await readVideoMetadata(file);
@@ -3403,7 +3404,7 @@ document.getElementById('edit-reset')?.addEventListener('click', resetVideoEdit)
 function isVideoFile(file) {
   return file && (
     file.type.startsWith('video/') ||
-    /\.(mp4|mov)$/i.test(file.name)
+    /\.(mp4|mov|webm)$/i.test(file.name)
   );
 }
 
