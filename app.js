@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T18:30:28+03:00';
+const SITE_VERSION = '2026-07-11T20:37:45+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1809,6 +1809,7 @@ let lastVideoTime = 0;
 let timelinePixelsPerSecond = 52;
 let timelineMagnetEnabled = true;
 let activeEffectTrack = 0;
+const EFFECT_TRACK_HEIGHT = 36;
 let videoEditorHotkeysActive = false;
 let timelinePreviewOutputTime = null;
 let outputPlaybackActive = false;
@@ -2327,16 +2328,20 @@ function renderVideoEditor() {
   }
   if (editorEls.effectMarkers) {
     const trackCount = Math.max(1, Number(videoEdit.effectTracks || 1));
-    if (editorEls.effectLane) editorEls.effectLane.style.height = `${trackCount * 36}px`;
+    const laneHeight = trackCount * EFFECT_TRACK_HEIGHT;
+    if (editorEls.effectLane) {
+      editorEls.effectLane.style.setProperty('--effect-lane-height', `${laneHeight}px`);
+      editorEls.effectLane.style.height = `${laneHeight}px`;
+    }
     const rowsHtml = Array.from({ length: trackCount }, (_, track) => `
-      <div class="effect-track-row ${track === activeEffectTrack ? 'active' : ''}" data-effect-track="${track}" style="top:${track * 36}px;">
+      <div class="effect-track-row ${track === activeEffectTrack ? 'active' : ''} ${selectedEditorItem?.type === 'effectTrack' && selectedEditorItem.track === track ? 'selected' : ''}" data-effect-track="${track}" style="top:${track * EFFECT_TRACK_HEIGHT}px;">
         <span class="effect-track-label">Эффекты ${track + 1}</span>
       </div>`).join('');
     const zoomHtml = videoEdit.zoomKeyframes.map(z => `
       <span class="timeline-zoom-block ${selectedEditorItem?.type === 'zoom' && selectedEditorItem.id === z.id ? 'selected' : ''}"
         data-zoom-id="${esc(z.id)}"
         title="Зум ${Number(z.scale || 1).toFixed(1)}x, дорожка ${Number(z.track || 0) + 1}, ${fmtTime(z.duration)}"
-        style="top:${Number(z.track || 0) * 36 + 6}px;bottom:auto;height:24px;left:${pct(sourceToOutputTime(z.at))}%;width:${Math.max(2.5, pct(z.duration))}%">
+        style="top:${Number(z.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;left:${pct(sourceToOutputTime(z.at))}%;width:${Math.max(2.5, pct(z.duration))}%">
         <span class="zoom-resize start" data-zoom-edge="start"></span>
         ${Number(z.scale || 1).toFixed(1)}x
         <span class="zoom-resize end" data-zoom-edge="end"></span>
@@ -2613,7 +2618,7 @@ editorEls.shell?.addEventListener('pointerdown', event => {
   const effectTrackRow = event.target.closest('[data-effect-track]');
   if (effectTrackRow) {
     activeEffectTrack = Math.max(0, Math.min((videoEdit.effectTracks || 1) - 1, Number(effectTrackRow.dataset.effectTrack || 0)));
-    selectedEditorItem = null;
+    selectedEditorItem = { type: 'effectTrack', track: activeEffectTrack };
     suppressTimelineClick = true;
     renderVideoEditor();
     event.preventDefault();
@@ -2954,6 +2959,10 @@ function toggleFreezeAt(time) {
 }
 function deleteSelectedEditorItem() {
   if (!selectedEditorItem) { toast('Сначала выбери блок на таймлайне', 'i'); return; }
+  if (selectedEditorItem.type === 'effectTrack') {
+    removeEffectTrack(selectedEditorItem.track);
+    return;
+  }
   if (selectedEditorItem.type === 'freeze') {
     videoEdit.freezeFrames = (videoEdit.freezeFrames || []).filter(item => item.id !== selectedEditorItem.id);
     freezeFrameImages.delete(selectedEditorItem.id);
@@ -2983,9 +2992,31 @@ document.getElementById('edit-zoom')?.addEventListener('click', () => {
 document.getElementById('edit-add-effect-track')?.addEventListener('click', () => {
   videoEdit.effectTracks = Math.max(1, Math.min(8, Number(videoEdit.effectTracks || 1) + 1));
   activeEffectTrack = videoEdit.effectTracks - 1;
-  selectedEditorItem = null;
+  selectedEditorItem = { type: 'effectTrack', track: activeEffectTrack };
   toast(`Добавлена дорожка эффектов ${videoEdit.effectTracks}`, 's');
   saveVideoEdit();
+});
+function removeEffectTrack(track = activeEffectTrack) {
+  const trackCount = Math.max(1, Number(videoEdit.effectTracks || 1));
+  const removeTrack = Math.max(0, Math.min(trackCount - 1, Number(track || 0)));
+  if (trackCount <= 1) {
+    toast('Нельзя удалить последнюю дорожку эффектов', 'i');
+    return;
+  }
+  videoEdit.zoomKeyframes = (videoEdit.zoomKeyframes || [])
+    .filter(item => Number(item.track || 0) !== removeTrack)
+    .map(item => ({
+      ...item,
+      track: Number(item.track || 0) > removeTrack ? Number(item.track || 0) - 1 : Number(item.track || 0),
+    }));
+  videoEdit.effectTracks = trackCount - 1;
+  activeEffectTrack = Math.max(0, Math.min(videoEdit.effectTracks - 1, removeTrack));
+  selectedEditorItem = { type: 'effectTrack', track: activeEffectTrack };
+  toast(`Дорожка эффектов ${removeTrack + 1} удалена`, 's');
+  saveVideoEdit();
+}
+document.getElementById('edit-remove-effect-track')?.addEventListener('click', () => {
+  removeEffectTrack(activeEffectTrack);
 });
 function addZoomAt(time, { silent = false } = {}) {
   const at = Math.round(clampTime(time) * 10) / 10;

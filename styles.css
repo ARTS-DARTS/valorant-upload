@@ -234,7 +234,7 @@
     .magnet-toggle { min-width: 36px; }
     .magnet-toggle.active { border-color: var(--primary); color: var(--primary); background: rgba(79,195,247,.14); box-shadow: 0 0 0 3px rgba(79,195,247,.10); }
     .timeline-scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 8px; scrollbar-width: thin; }
-    .timeline-shell { position: relative; display: grid; gap: 6px; padding-top: 18px; user-select: none; touch-action: none; min-width: 900px; }
+    .timeline-shell { --effect-track-height: 36px; position: relative; display: grid; gap: 6px; padding-top: 18px; user-select: none; touch-action: none; min-width: 900px; }
     .timeline-ruler { position: absolute; left: 0; right: 0; top: 0; height: 14px; border-radius: 999px; background: repeating-linear-gradient(90deg, rgba(148,163,184,.35) 0 1px, transparent 1px 10%); opacity: .75; }
     .timeline-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primary); box-shadow: 0 0 10px rgba(79,195,247,.8); z-index: 5; pointer-events: none; }
     .timeline-playhead::before { content: ""; position: absolute; left: 50%; top: -5px; width: 14px; height: 14px; border-radius: 50%; background: var(--primary); transform: translateX(-50%); box-shadow: 0 0 0 4px rgba(79,195,247,.18); }
@@ -247,10 +247,11 @@
     .trim-handle.end { right: -7px; }
     .timeline-shell.dragging .timeline-playhead::before, .trim-handle:hover { box-shadow: 0 0 0 5px rgba(79,195,247,.22); }
     .timeline-effect-markers { position: absolute; inset: 0; }
-    .effect-lane { height: 36px; min-height: 36px; }
-    .effect-track-row { position: absolute; left: 0; right: 0; height: 36px; border-top: 1px solid rgba(148,163,184,.10); }
+    .effect-lane { height: var(--effect-lane-height, var(--effect-track-height)); min-height: var(--effect-track-height); }
+    .effect-track-row { position: absolute; left: 0; right: 0; height: var(--effect-track-height); border-top: 1px solid rgba(148,163,184,.10); }
     .effect-track-row:first-child { border-top: 0; }
     .effect-track-row.active { background: rgba(34,197,94,.06); }
+    .effect-track-row.selected { box-shadow: inset 0 0 0 1px rgba(79,195,247,.45); }
     .effect-track-label { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); z-index: 3; color: var(--text1); font-size: 11px; font-weight: 900; text-transform: uppercase; text-shadow: 0 1px 4px #000; pointer-events: none; }
     .timeline-marker { position: absolute; top: 5px; bottom: 5px; width: 3px; border-radius: 999px; transform: translateX(-50%); }
     .timeline-marker.split { background: #f59e0b; cursor: pointer; pointer-events: auto; z-index: 4; }
