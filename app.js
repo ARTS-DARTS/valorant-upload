@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T23:13:00+03:00';
+const SITE_VERSION = '2026-07-12T00:24:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -306,8 +306,9 @@ async function checkSiteVersion() {
 function initSiteVersionWatcher() {
   document.getElementById('btn-reload-site')?.addEventListener('click', () => {
     const url = new URL(window.location.href);
-    url.searchParams.set('site_refresh', Date.now().toString());
-    window.location.replace(url.toString());
+    url.searchParams.set('site_refresh', `${SITE_VERSION}_${Date.now()}`);
+    window.location.assign(url.toString());
+    setTimeout(() => window.location.reload(), 250);
   });
   checkSiteVersion();
   setInterval(checkSiteVersion, SITE_VERSION_POLL_MS);
@@ -1822,9 +1823,10 @@ let timelinePixelsPerSecond = 52;
 let timelineMagnetEnabled = true;
 let activeEffectTrack = 0;
 const EFFECT_TRACK_HEIGHT = 36;
-const VIDEO_EDIT_UNDO_KEY = 'vlineups_video_edit_undo';
+const VIDEO_EDIT_UNDO_KEY = 'vlineups_video_edit_undo_v2';
 const VIDEO_EDIT_UNDO_LIMIT = 12;
 let videoEditUndoStack = [];
+let lastCommittedVideoEditState = null;
 let resetConfirmTimer = null;
 let videoEditorHotkeysActive = false;
 let timelinePreviewOutputTime = null;
@@ -2865,6 +2867,11 @@ function cloneVideoEditState(edit = videoEdit) {
   return JSON.parse(JSON.stringify(edit || createDefaultVideoEdit()));
 }
 
+function serializedVideoEditState(edit) {
+  try { return JSON.stringify(edit || createDefaultVideoEdit()); }
+  catch (_) { return ''; }
+}
+
 function writeVideoEditUndoStack() {
   try { localStorage.setItem(VIDEO_EDIT_UNDO_KEY, JSON.stringify(videoEditUndoStack)); } catch (_) {}
   if (editorEls.undo) editorEls.undo.disabled = !videoEditUndoStack.length;
@@ -2886,6 +2893,10 @@ function pushVideoEditUndo() {
   writeVideoEditUndoStack();
 }
 
+function rememberCommittedVideoEdit() {
+  lastCommittedVideoEditState = cloneVideoEditState(videoEdit);
+}
+
 function undoVideoEdit() {
   const previous = videoEditUndoStack.pop();
   if (!previous) { toast('Нечего отменять', 'i'); return; }
@@ -2901,7 +2912,16 @@ function undoVideoEdit() {
 
 function saveVideoEdit({ skipUndo = false } = {}) {
   if (!skipUndo) clearResetConfirmation();
+  if (!skipUndo && lastCommittedVideoEditState) {
+    const currentBeforeNormalize = cloneVideoEditState(videoEdit);
+    if (serializedVideoEditState(currentBeforeNormalize) !== serializedVideoEditState(lastCommittedVideoEditState)) {
+      videoEditUndoStack.push(cloneVideoEditState(lastCommittedVideoEditState));
+      if (videoEditUndoStack.length > VIDEO_EDIT_UNDO_LIMIT) videoEditUndoStack.shift();
+      writeVideoEditUndoStack();
+    }
+  }
   videoEdit = normalizedVideoEdit();
+  rememberCommittedVideoEdit();
   renderVideoEditor();
   _saveDraft();
 }
@@ -2936,6 +2956,7 @@ function resetVideoEdit() {
 }
 
 loadVideoEditUndoStack();
+rememberCommittedVideoEdit();
 
 function clearFreezeHold() {
   if (freezeHoldTimer) {
@@ -3792,6 +3813,7 @@ async function handleVideoFile(file) {
     dropZone.style.display = '';
     videoUrl = null; videoXhr = null;
     videoEdit = createDefaultVideoEdit();
+    rememberCommittedVideoEdit();
     validateForm();
   };
 
@@ -3807,6 +3829,7 @@ async function handleVideoFile(file) {
     videoEdit = createDefaultVideoEdit();
     videoEditUndoStack = [];
     writeVideoEditUndoStack();
+    rememberCommittedVideoEdit();
     toast('Видео загружено ✅', 's');
     validateForm(); _saveDraft();
     renderVideoEditor();
@@ -3895,6 +3918,7 @@ document.getElementById('vid-remove-btn').addEventListener('click', () => {
   vidPlayer.src = '';
   videoUrl = null;
   videoEdit = createDefaultVideoEdit();
+  rememberCommittedVideoEdit();
   document.getElementById('vid-player-wrap').style.display = 'none';
   dropZone.style.display = '';
   vidInput.value = '';
@@ -3982,16 +4006,17 @@ document.addEventListener('keydown', e => {
   const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
   const player = document.getElementById('vid-player');
   if (handleVideoEditorSpace(e, true)) return;
-  const isTyping = isTextTypingTarget(target);
-  if (isTyping) return;
   const wrap = document.getElementById('vid-player-wrap');
   const insideEditor = !!(wrap && wrap.contains(target));
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && (insideEditor || videoEditorHotkeysActive)) {
     e.preventDefault();
     e.stopPropagation();
+    e.stopImmediatePropagation?.();
     undoVideoEdit();
     return;
   }
+  const isTyping = isTextTypingTarget(target);
+  if (isTyping) return;
   if ((e.code === 'Delete' || e.code === 'Backspace') && selectedEditorItem && (insideEditor || videoEditorHotkeysActive)) {
     e.preventDefault();
     e.stopPropagation();
@@ -4519,6 +4544,7 @@ function _restoreDraft(sourceDraft = null) {
   if (d.videoUrl) {
     videoUrl = d.videoUrl;
     videoEdit = { ...createDefaultVideoEdit(), ...(d.videoEdit || {}) };
+    rememberCommittedVideoEdit();
     const dropZ = document.getElementById('drop-zone');
     const wrap  = document.getElementById('vid-player-wrap');
     const vid   = document.getElementById('vid-player');
@@ -4528,6 +4554,7 @@ function _restoreDraft(sourceDraft = null) {
     renderVideoEditor();
   } else {
     videoEdit = createDefaultVideoEdit();
+    rememberCommittedVideoEdit();
   }
 
   // Screenshots (already uploaded — use cloud URL for display)
@@ -4759,6 +4786,7 @@ function resetUploadForm({ keepDraft = false } = {}) {
   trajectoryPoints = [];
   mapMode = 'position';
   videoUrl = null; videoEdit = createDefaultVideoEdit(); screenshots = [];
+  rememberCommittedVideoEdit();
   videoEditUndoStack = [];
   writeVideoEditUndoStack();
   stopOutputPlayback({ keepPreview: false });

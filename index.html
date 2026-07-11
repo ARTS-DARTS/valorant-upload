@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-12T00-24">
 </head>
 <body>
 
@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 23:13 · 11.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 00:24 · 12.07.2026</div>
   <div class="user-info" id="header-user" style="display:none;">
     <img id="user-avatar" src="" alt="" style="display:none;">
     <span id="user-name"></span>
@@ -25,7 +25,7 @@
 
 <div class="site-update-banner" id="site-update-banner" role="status" aria-live="polite">
   <span>Вышло обновление сайта, обновите страницу.</span>
-  <button type="button" id="btn-reload-site">Обновить</button>
+  <button type="button" id="btn-reload-site" onclick="const u=new URL(window.location.href);u.searchParams.set('site_refresh',Date.now().toString());window.location.assign(u.toString());setTimeout(()=>window.location.reload(),250);">Обновить</button>
 </div>
 
 <!-- Auth screen -->
@@ -503,6 +503,6 @@
 
 <div id="toasts"></div>
 
-<script type="module" src="/app.js"></script>
+<script type="module" src="/app.js?v=2026-07-12T00-24"></script>
 </body>
 </html>

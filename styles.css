@@ -203,14 +203,14 @@
     .progress-bar { height: 100%; background: var(--primary); border-radius: 20px; transition: width .2s; }
     .vid-stage { position: relative; overflow: hidden; border-radius: var(--r); background: #000; }
     .vid-player { position: relative; z-index: 1; width: 100%; border-radius: var(--r); background: #000; display: block; max-height: 300px; transform-origin: 50% 50%; transition: transform .32s cubic-bezier(.2,.8,.2,1), filter .18s ease; }
-    .footage-preview-overlay { position: absolute; left: 50%; top: 50%; width: 35%; height: auto; max-width: none; max-height: none; object-fit: contain; display: none; pointer-events: none; z-index: 5; background: transparent; transform: translate(-50%, -50%); transform-origin: 50% 50%; }
+    .footage-preview-overlay { position: absolute; left: 50%; top: 50%; width: 35%; height: auto; max-width: none; max-height: none; object-fit: contain; display: none; pointer-events: none; z-index: 7; background: transparent; transform: translate(-50%, -50%); transform-origin: 50% 50%; }
     .footage-preview-overlay.show { display: block; }
     .footage-preview-overlay.processing-chroma { display: block; opacity: 0; }
     .footage-preview-overlay.interactive { pointer-events: auto; cursor: move; touch-action: none; }
-    .footage-chroma-canvas { position: absolute; left: 50%; top: 50%; width: 35%; height: auto; max-width: none; max-height: none; object-fit: contain; display: none; pointer-events: none; z-index: 5; background: transparent; transform: translate(-50%, -50%); transform-origin: 50% 50%; }
+    .footage-chroma-canvas { position: absolute; left: 50%; top: 50%; width: 35%; height: auto; max-width: none; max-height: none; object-fit: contain; display: none; pointer-events: none; z-index: 7; background: transparent; transform: translate(-50%, -50%); transform-origin: 50% 50%; }
     .footage-chroma-canvas.show { display: block; }
     .footage-chroma-canvas.interactive { pointer-events: auto; cursor: move; touch-action: none; }
-    .footage-transform-frame { position: absolute; left: 50%; top: 50%; width: 35%; aspect-ratio: 1 / 1; display: none; z-index: 8; transform: translate(-50%, -50%); transform-origin: 50% 50%; border: 2px solid rgba(255,255,255,.95); box-shadow: 0 0 0 1px rgba(0,0,0,.45); cursor: move; touch-action: none; }
+    .footage-transform-frame { position: absolute; left: 50%; top: 50%; width: 35%; aspect-ratio: 1 / 1; display: none; z-index: 9; transform: translate(-50%, -50%); transform-origin: 50% 50%; border: 2px solid rgba(255,255,255,.95); box-shadow: 0 0 0 1px rgba(0,0,0,.45); cursor: move; touch-action: none; }
     .footage-transform-frame.show { display: block; }
     .footage-resize-handle { position: absolute; width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.65); background: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.75); }
     .footage-resize-handle.nw { left: -7px; top: -7px; cursor: nwse-resize; }
