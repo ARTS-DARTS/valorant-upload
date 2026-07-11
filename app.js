@@ -21,54 +21,54 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T14:29:53+03:00';
+const SITE_VERSION = '2026-07-11T14:44:56+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
 const DESCRIPTION_SAMPLES = [
   {
-    title: 'Угол ящика и стены',
-    text: 'Подходим в угол ящика и стены (1 фото), целимся прицелом (2 фото), нажимаем ЛКМ и получаем результат (3 фото).',
+    title: 'Three screenshots',
+    text: '1 фото: куда встать.\n2 фото: куда прицелиться.\n3 фото: куда попадает лайнап.',
   },
   {
-    title: 'Ориентир прицела',
-    text: 'Подходим в угол (1 фото), ставим прицел по ориентиру (2 фото), целимся способностью (3 фото), нажимаем ЛКМ и получаем результат (4 фото).',
+    title: 'Four screenshots',
+    text: '1 фото: куда встать.\n2 фото: куда прицелиться.\n3 фото: чем прицелиться, желательно с приближением.\n4 фото: куда попадает лайнап.',
   },
   {
-    title: 'Упор к стене',
-    text: 'Подходим в упор к стене (1 фото), затем целимся на верхушку таблички (2 фото). Прыжок + ЛКМ (3 фото), результат: Site + Market.',
+    title: 'Position to target',
+    text: 'Название пишем на английском: позиция откуда + куда прилетает.\nПример: A Screens from A Lobby.\nОписание: 1 фото - позиция, 2 фото - прицел, 3 фото - прицеливание способностью, 4 фото - результат.',
   },
   {
-    title: 'Упор к углу',
-    text: 'Подходим в упор к углу (1 фото), затем целимся на цветы, которые находятся сзади от угла (2 фото). Натягиваем тетиву с отскоком как на скриншоте (3 фото), затем получаем результат (4 фото).',
+    title: 'Only target',
+    text: 'Название пишем на английском и указываем только куда прилетает.\nПример: B Site + B Market.\nОписание: 1 фото - место, где стоять; 2 фото - ориентир прицела; 3 фото - способность с приближением; 4 фото - точка попадания.',
   },
   {
-    title: 'Упор к барьеру',
-    text: 'Подходим в упор к барьеру (1 фото), затем целимся на мид (2 фото). Натягиваем тетиву с отскоком как на скриншоте (3 фото), получаем результат (4 фото).',
+    title: 'Sova lineup',
+    text: '1 фото: позиция игрока.\n2 фото: ориентир обычного прицела.\n3 фото: прицеливание дротиком/шоком с приближением и нужной силой.\n4 фото: место попадания способности.',
   },
   {
-    title: 'Под рекламу',
-    text: 'Подходим в упор к углу (1 фото), затем целимся под рекламу (2 фото). Натягиваем тетиву с отскоком как на скриншоте (3 фото), получаем результат (4 фото).',
+    title: 'Viper lineup',
+    text: '1 фото: точная позиция, куда встать.\n2 фото: ориентир прицела.\n3 фото: прицеливание молли/смоком с приближением.\n4 фото: зона, куда прилетает состав.',
   },
   {
-    title: 'Окно с трубы',
-    text: 'Подходим в упор к трубе (1 фото), затем целимся на окно (2 фото). Натягиваем тетиву с отскоком как на скриншоте (3 фото), получаем результат (4 фото).',
+    title: 'Killjoy lineup',
+    text: '1 фото: позиция перед броском.\n2 фото: ориентир для прицела.\n3 фото: прицеливание гранатой с приближением.\n4 фото: место раскрытия/попадания способности.',
   },
   {
-    title: 'Дефолт через способность',
-    text: 'Подходим в упор дефолта (1 фото), целимся способностью (2 фото), натягиваем тетиву (3 фото), получаем результат (4 фото).',
+    title: 'Post plant',
+    text: '1 фото: безопасная позиция после установки Spike.\n2 фото: куда поставить прицел.\n3 фото: чем и как прицелиться с приближением.\n4 фото: попадание по Spike или зоне дефьюза.',
   },
   {
-    title: 'Пиксельный ориентир',
-    text: 'Встаём в указанную позицию (1 фото), совмещаем прицел с пикселем на текстуре (2 фото), используем способность без движения и проверяем приземление по результату (3 фото).',
+    title: 'Retake utility',
+    text: '1 фото: позиция для ретейка.\n2 фото: ориентир прицела.\n3 фото: прицеливание способностью с приближением.\n4 фото: зона, которую закрывает или очищает лайнап.',
   },
   {
-    title: 'Быстрый лайнап после плента',
-    text: 'После установки Spike занимаем безопасную позицию (1 фото), наводимся по отмеченному ориентиру (2 фото), используем способность по таймингу дефьюза и контролируем результат (3 фото).',
+    title: 'English title examples',
+    text: 'Примеры названий:\nA Screens from A Lobby\nA Site from Lobby\nSpike from Vine\nA Site Gen\nB Site + B Market\nB Default from B Main',
   },
   {
-    title: 'Ретейк через смок',
-    text: 'Становимся у края укрытия (1 фото), целимся в верхнюю точку ориентира (2 фото), бросаем способность на ретейк и получаем зону контроля для выхода команды (3 фото).',
+    title: 'Title rule',
+    text: 'Название только на английском языке. Пиши либо откуда и куда летит лайнап, либо только куда он прилетает. Без лишних слов, без русского текста, только позиции.',
   },
 ];
 
@@ -416,6 +416,9 @@ function copyTextToClipboard(text) {
   const ok = document.execCommand('copy');
   area.remove();
   return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+}
+function hasCyrillic(text) {
+  return /[А-Яа-яЁё]/.test(String(text || ''));
 }
 function fmtTime(s) {
   if (!isFinite(s)) return '0:00';
@@ -2260,6 +2263,9 @@ function renderVideoEditor() {
   const sourcePct = duration ? (value) => Math.max(0, Math.min(100, value / duration * 100)) : () => 0;
   const currentPct = pct(currentOutputTime());
   if (editorEls.playhead) editorEls.playhead.style.left = `${currentPct}%`;
+  if (outputPlaybackActive || (!vidPlayer.paused && !outputPlaybackActive) || timelineDrag?.kind === 'playhead') {
+    keepTimelinePlayheadVisible(currentPct);
+  }
   if (editorEls.trimRange) {
     editorEls.trimRange.style.left = '0%';
     editorEls.trimRange.style.width = '100%';
@@ -2441,6 +2447,22 @@ function autoScrollTimelineWhileDragging(event) {
   }
   if (!delta) return;
   editorEls.scroll.scrollLeft = Math.max(0, Math.min(maxScroll, editorEls.scroll.scrollLeft + delta));
+}
+
+function keepTimelinePlayheadVisible(currentPct) {
+  if (!editorEls.scroll || !editorEls.shell) return;
+  const maxScroll = editorEls.scroll.scrollWidth - editorEls.scroll.clientWidth;
+  if (maxScroll <= 0) return;
+  const playheadX = currentPct / 100 * editorEls.shell.scrollWidth;
+  const leftGuard = editorEls.scroll.scrollLeft + 96;
+  const rightGuard = editorEls.scroll.scrollLeft + editorEls.scroll.clientWidth - 96;
+  let nextScroll = editorEls.scroll.scrollLeft;
+  if (playheadX > rightGuard) nextScroll = playheadX - editorEls.scroll.clientWidth + 96;
+  else if (playheadX < leftGuard) nextScroll = playheadX - 96;
+  nextScroll = Math.max(0, Math.min(maxScroll, nextScroll));
+  if (Math.abs(nextScroll - editorEls.scroll.scrollLeft) > 1) {
+    editorEls.scroll.scrollLeft = nextScroll;
+  }
 }
 
 function syncMagnetButton() {
@@ -3742,6 +3764,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     toast('Эта категория пока закрыта для отправки.', 'e'); return;
   }
   if (!title) { toast('Введи название', 'e'); return; }
+  if (hasCyrillic(title)) { toast('Название должно быть на английском: только позиции, например A Screens from A Lobby', 'e'); return; }
   if (title.length > 100) { toast('Название слишком длинное', 'e'); return; }
   if (desc.length > 1000) { toast('Описание слишком длинное', 'e'); return; }
   if (markerX === null) { toast('Поставь метку на карте', 'e'); return; }
