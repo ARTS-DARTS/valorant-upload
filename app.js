@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T21:02:38+03:00';
+const SITE_VERSION = '2026-07-11T21:16:33+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1829,6 +1829,7 @@ const editorEls = {
   scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
   stage: document.getElementById('vid-stage'),
+  footagePreview: document.getElementById('footage-preview-overlay'),
   freezeOverlay: document.getElementById('freeze-frame-overlay'),
   zoomFrame: document.getElementById('zoom-preview-frame'),
   playhead: document.getElementById('timeline-playhead'),
@@ -2107,6 +2108,16 @@ function activeZoomClipAt(time) {
 
 function activeZoomClipAtOutput(outputTime) {
   return (videoEdit.zoomKeyframes || [])
+    .slice()
+    .reverse()
+    .find(item => {
+      const start = sourceToOutputTime(item.at);
+      return outputTime >= start && outputTime <= start + Number(item.duration || 2);
+    }) || null;
+}
+
+function activeFootageClipAtOutput(outputTime) {
+  return (videoEdit.footageOverlays || [])
     .slice()
     .reverse()
     .find(item => {
@@ -2431,6 +2442,30 @@ function applyVideoEditPreview() {
   if (editorEls.freezeOverlay) {
     editorEls.freezeOverlay.style.transformOrigin = transformOrigin;
     editorEls.freezeOverlay.style.transform = transform;
+  }
+  const activeFootage = activeFootageClipAtOutput(currentOutputTime());
+  if (editorEls.footagePreview) {
+    if (activeFootage?.url) {
+      if (editorEls.footagePreview.src !== activeFootage.url) {
+        editorEls.footagePreview.src = activeFootage.url;
+      }
+      editorEls.footagePreview.muted = activeFootage.muted !== false;
+      const clipStart = sourceToOutputTime(activeFootage.at);
+      const localTime = Math.max(0, currentOutputTime() - clipStart);
+      if (Number.isFinite(localTime) && Math.abs((editorEls.footagePreview.currentTime || 0) - localTime) > 0.12) {
+        try { editorEls.footagePreview.currentTime = localTime; } catch (_) {}
+      }
+      if ((outputPlaybackActive || !vidPlayer.paused) && editorEls.footagePreview.paused) {
+        safePlay(editorEls.footagePreview);
+      } else if (!outputPlaybackActive && vidPlayer.paused && !editorEls.footagePreview.paused) {
+        editorEls.footagePreview.pause();
+      }
+      editorEls.footagePreview.classList.add('show');
+    } else {
+      editorEls.footagePreview.pause();
+      editorEls.footagePreview.classList.remove('show');
+      editorEls.footagePreview.removeAttribute('src');
+    }
   }
   vidPlayer.style.filter = videoEdit.chromaKey?.enabled ? `saturate(${1 + videoEdit.chromaKey.strength}) contrast(1.08)` : '';
   editorEls.zoomFrame?.classList.toggle('show', !!activeZoom && (scaleX > 1.01 || scaleY > 1.01));
