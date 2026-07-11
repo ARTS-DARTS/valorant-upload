@@ -21,9 +21,56 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T14:21:33+03:00';
+const SITE_VERSION = '2026-07-11T14:29:53+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
+
+const DESCRIPTION_SAMPLES = [
+  {
+    title: 'Угол ящика и стены',
+    text: 'Подходим в угол ящика и стены (1 фото), целимся прицелом (2 фото), нажимаем ЛКМ и получаем результат (3 фото).',
+  },
+  {
+    title: 'Ориентир прицела',
+    text: 'Подходим в угол (1 фото), ставим прицел по ориентиру (2 фото), целимся способностью (3 фото), нажимаем ЛКМ и получаем результат (4 фото).',
+  },
+  {
+    title: 'Упор к стене',
+    text: 'Подходим в упор к стене (1 фото), затем целимся на верхушку таблички (2 фото). Прыжок + ЛКМ (3 фото), результат: Site + Market.',
+  },
+  {
+    title: 'Упор к углу',
+    text: 'Подходим в упор к углу (1 фото), затем целимся на цветы, которые находятся сзади от угла (2 фото). Натягиваем тетиву с отскоком как на скриншоте (3 фото), затем получаем результат (4 фото).',
+  },
+  {
+    title: 'Упор к барьеру',
+    text: 'Подходим в упор к барьеру (1 фото), затем целимся на мид (2 фото). Натягиваем тетиву с отскоком как на скриншоте (3 фото), получаем результат (4 фото).',
+  },
+  {
+    title: 'Под рекламу',
+    text: 'Подходим в упор к углу (1 фото), затем целимся под рекламу (2 фото). Натягиваем тетиву с отскоком как на скриншоте (3 фото), получаем результат (4 фото).',
+  },
+  {
+    title: 'Окно с трубы',
+    text: 'Подходим в упор к трубе (1 фото), затем целимся на окно (2 фото). Натягиваем тетиву с отскоком как на скриншоте (3 фото), получаем результат (4 фото).',
+  },
+  {
+    title: 'Дефолт через способность',
+    text: 'Подходим в упор дефолта (1 фото), целимся способностью (2 фото), натягиваем тетиву (3 фото), получаем результат (4 фото).',
+  },
+  {
+    title: 'Пиксельный ориентир',
+    text: 'Встаём в указанную позицию (1 фото), совмещаем прицел с пикселем на текстуре (2 фото), используем способность без движения и проверяем приземление по результату (3 фото).',
+  },
+  {
+    title: 'Быстрый лайнап после плента',
+    text: 'После установки Spike занимаем безопасную позицию (1 фото), наводимся по отмеченному ориентиру (2 фото), используем способность по таймингу дефьюза и контролируем результат (3 фото).',
+  },
+  {
+    title: 'Ретейк через смок',
+    text: 'Становимся у края укрытия (1 фото), целимся в верхнюю точку ориентира (2 фото), бросаем способность на ретейк и получаем зону контроля для выхода команды (3 фото).',
+  },
+];
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
 const SEL_SECRET_KEY = 'e2ffe93a51ba4c05abadc810d9c0edfc';
@@ -266,6 +313,62 @@ function initSiteVersionWatcher() {
   setInterval(checkSiteVersion, SITE_VERSION_POLL_MS);
 }
 
+function renderDescriptionSamples() {
+  const list = document.getElementById('description-samples-list');
+  if (!list) return;
+  list.innerHTML = DESCRIPTION_SAMPLES.map((sample, index) => `
+    <article class="sample-card">
+      <h3>${esc(sample.title)}</h3>
+      <p>${esc(sample.text)}</p>
+      <div class="sample-actions">
+        <button class="copy-id-btn" type="button" data-description-copy="${index}">Скопировать</button>
+        <button class="copy-id-btn" type="button" data-description-replace="${index}">Заменить</button>
+      </div>
+    </article>
+  `).join('');
+}
+
+function openDescriptionSamples() {
+  renderDescriptionSamples();
+  const drawer = document.getElementById('description-samples-drawer');
+  if (!drawer) return;
+  drawer.classList.add('show');
+  drawer.setAttribute('aria-hidden', 'false');
+}
+
+function closeDescriptionSamples() {
+  const drawer = document.getElementById('description-samples-drawer');
+  if (!drawer) return;
+  drawer.classList.remove('show');
+  drawer.setAttribute('aria-hidden', 'true');
+}
+
+function initDescriptionSamples() {
+  renderDescriptionSamples();
+  document.getElementById('btn-description-samples')?.addEventListener('click', openDescriptionSamples);
+  document.getElementById('btn-close-description-samples')?.addEventListener('click', closeDescriptionSamples);
+  document.getElementById('description-samples-drawer')?.addEventListener('click', event => {
+    if (event.target.id === 'description-samples-drawer') closeDescriptionSamples();
+    const copyBtn = event.target.closest('[data-description-copy]');
+    const replaceBtn = event.target.closest('[data-description-replace]');
+    if (copyBtn) {
+      const sample = DESCRIPTION_SAMPLES[Number(copyBtn.dataset.descriptionCopy)];
+      copyTextToClipboard(sample?.text || '')
+        .then(() => toast('Описание скопировано', 's'))
+        .catch(() => toast('Не удалось скопировать', 'e'));
+    }
+    if (replaceBtn) {
+      const sample = DESCRIPTION_SAMPLES[Number(replaceBtn.dataset.descriptionReplace)];
+      setDescriptionValue(sample?.text || '');
+      closeDescriptionSamples();
+      toast('Описание заменено', 's');
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeDescriptionSamples();
+  });
+}
+
 async function getConfiguredRangeRadius(map, agent, ability, abilityAliases = []) {
   if (!map || !agent || !ability) return 0;
   const names = [...new Set([ability, ...abilityAliases].filter(Boolean).map(String))];
@@ -291,6 +394,28 @@ function toast(msg, type = 'i') {
 }
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function setDescriptionValue(text) {
+  const desc = document.getElementById('inp-desc');
+  if (!desc) return;
+  desc.value = String(text || '').slice(0, 1000);
+  const counter = document.getElementById('desc-count');
+  if (counter) counter.textContent = desc.value.length;
+  _saveDraft();
+}
+function copyTextToClipboard(text) {
+  const value = String(text || '');
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
+  const area = document.createElement('textarea');
+  area.value = value;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.left = '-9999px';
+  document.body.appendChild(area);
+  area.select();
+  const ok = document.execCommand('copy');
+  area.remove();
+  return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
 }
 function fmtTime(s) {
   if (!isFinite(s)) return '0:00';
@@ -1380,6 +1505,7 @@ function renderAuthorWorkspace() {
 
 initWorkspaceTabs();
 initSiteVersionWatcher();
+initDescriptionSamples();
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function authorDisplayName() {

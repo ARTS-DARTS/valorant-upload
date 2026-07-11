@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 14:21 · 11.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 14:29 · 11.07.2026</div>
   <div class="user-info" id="header-user" style="display:none;">
     <img id="user-avatar" src="" alt="" style="display:none;">
     <span id="user-name"></span>
@@ -138,6 +138,9 @@
       <div class="input-wrap">
         <textarea class="finput" id="inp-desc" placeholder="Опиши лайнап: с какой позиции, куда летит, как ставить угол…" maxlength="1000" rows="4"></textarea>
         <span class="char-counter"><span id="desc-count">0</span>/1000</span>
+      </div>
+      <div class="description-tools">
+        <button class="copy-id-btn" type="button" id="btn-description-samples">Образцы</button>
       </div>
     </div>
 
@@ -464,6 +467,19 @@
 <footer style="padding:18px 20px 28px;text-align:center;color:var(--text2);font-size:12px;">
   <a href="/privacy_policy.html" target="_blank" style="color:var(--text2);text-decoration:none;">Политика конфиденциальности</a>
 </footer>
+
+<aside class="samples-drawer" id="description-samples-drawer" aria-hidden="true">
+  <div class="samples-drawer-panel">
+    <div class="samples-drawer-head">
+      <div>
+        <div class="samples-kicker">ОПИСАНИЕ</div>
+        <h2>Образцы для видео</h2>
+      </div>
+      <button class="modal-close" type="button" id="btn-close-description-samples">×</button>
+    </div>
+    <div class="samples-list" id="description-samples-list"></div>
+  </div>
+</aside>
 
 <div id="toasts"></div>
 
