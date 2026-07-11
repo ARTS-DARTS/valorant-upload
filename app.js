@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T05:31:44+03:00';
+const SITE_VERSION = '2026-07-11T05:37:56+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1747,6 +1747,15 @@ function clampTime(value) {
   return Math.max(0, Math.min(duration, n));
 }
 
+function frameStep() {
+  return 1 / 30;
+}
+
+function snapFrameTime(time) {
+  const step = frameStep();
+  return clampTime(Math.round(Number(time || 0) / step) * step);
+}
+
 function normalizedVideoEdit() {
   const duration = videoDuration();
   const trimStart = clampTime(videoEdit.trimStart);
@@ -2199,7 +2208,7 @@ function timeFromTimelineEvent(event) {
   if (!duration || !editorEls.shell) return 0;
   const rect = editorEls.shell.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-  return outputToSourceTime(ratio * editedOutputDuration());
+  return snapFrameTime(outputToSourceTime(ratio * editedOutputDuration()));
 }
 
 function outputTimeFromTimelineEvent(event) {
@@ -2248,9 +2257,13 @@ function snapOutputTime(outputTime) {
   return Math.max(0, Math.min(outputDuration, best));
 }
 
-function timelineTimesFromEvent(event) {
-  const outputTime = snapOutputTime(outputTimeFromTimelineEvent(event));
-  return { outputTime, sourceTime: clampTime(outputToSourceTime(outputTime)) };
+function timelineTimesFromEvent(event, { magnet = true } = {}) {
+  const rawOutputTime = outputTimeFromTimelineEvent(event);
+  const outputTime = magnet ? snapOutputTime(rawOutputTime) : rawOutputTime;
+  return {
+    outputTime: Math.max(0, Math.min(editedOutputDuration(), outputTime)),
+    sourceTime: snapFrameTime(outputToSourceTime(outputTime)),
+  };
 }
 
 function autoScrollTimelineWhileDragging(event) {
@@ -2341,7 +2354,9 @@ editorEls.shell?.addEventListener('click', event => {
     suppressTimelineClick = false;
     return;
   }
-  const { outputTime, sourceTime } = timelineTimesFromEvent(event);
+  const { outputTime, sourceTime } = timelineTimesFromEvent(event, {
+    magnet: false,
+  });
   applyTimelineTool(sourceTime, outputTime);
 });
 editorEls.shell?.addEventListener('pointerdown', event => {
@@ -2449,7 +2464,7 @@ editorEls.shell?.addEventListener('pointermove', event => {
     timelinePreviewOutputTime = outputTime;
     const segment = segmentForOutputTime(outputTime);
     setFreezeOverlay(segment?.type === 'freeze' ? (freezeFrameImages.get(segment.id) || '') : '');
-    vidPlayer.currentTime = time;
+    vidPlayer.currentTime = snapFrameTime(time);
   }
   renderVideoEditor();
 });
@@ -2851,11 +2866,11 @@ vidScrubber.addEventListener('input', () => {
   const ratio = Number(vidScrubber.value || 0) / 100;
   if ((videoEdit.freezeFrames || []).length) {
     const outputTime = ratio * editedOutputDuration();
-    applyTimelineTool(outputToSourceTime(outputTime), outputTime);
+    applyTimelineTool(snapFrameTime(outputToSourceTime(outputTime)), outputTime);
   } else {
     timelinePreviewOutputTime = null;
     setFreezeOverlay('');
-    vidPlayer.currentTime = ratio * vidPlayer.duration;
+    vidPlayer.currentTime = snapFrameTime(ratio * vidPlayer.duration);
   }
 });
 vidPlayBtn.addEventListener('click', toggleEditorPlayback);

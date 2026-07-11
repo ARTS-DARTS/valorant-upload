@@ -206,7 +206,7 @@
     .btn-frame:hover { background: rgba(79,195,247,0.22); }
     .btn-frame:disabled { opacity: .4; cursor: default; }
     .video-editor { margin-top: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 12px; }
-    .editor-workbench { display: grid; grid-template-columns: minmax(260px, 320px) minmax(640px, 1fr); gap: 12px; align-items: start; margin-top: 9px; }
+    .editor-workbench { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 12px; align-items: start; margin-top: 9px; }
     .editor-timeline-pane { min-width: 0; grid-column: 2; grid-row: 1; }
     .editor-inspector { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; grid-column: 1; grid-row: 1; border: 1px solid var(--border); border-radius: var(--r); background: rgba(12,18,32,.92); padding: 10px; scrollbar-width: thin; }
     .inspector-title { color: var(--primary); font-size: 11px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; margin-bottom: 9px; }
