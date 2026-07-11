@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T21:16:33+03:00';
+const SITE_VERSION = '2026-07-11T21:21:20+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -2446,7 +2446,8 @@ function applyVideoEditPreview() {
   const activeFootage = activeFootageClipAtOutput(currentOutputTime());
   if (editorEls.footagePreview) {
     if (activeFootage?.url) {
-      if (editorEls.footagePreview.src !== activeFootage.url) {
+      if (editorEls.footagePreview.dataset.url !== activeFootage.url) {
+        editorEls.footagePreview.dataset.url = activeFootage.url;
         editorEls.footagePreview.src = activeFootage.url;
       }
       editorEls.footagePreview.muted = activeFootage.muted !== false;
@@ -2464,6 +2465,7 @@ function applyVideoEditPreview() {
     } else {
       editorEls.footagePreview.pause();
       editorEls.footagePreview.classList.remove('show');
+      delete editorEls.footagePreview.dataset.url;
       editorEls.footagePreview.removeAttribute('src');
     }
   }
@@ -2706,6 +2708,15 @@ dropZone.addEventListener('drop', e => {
   if (file) handleVideoFile(file);
 });
 vidInput.addEventListener('change', () => { if (vidInput.files[0]) handleVideoFile(vidInput.files[0]); });
+editorEls.footagePreview?.addEventListener('loadeddata', () => {
+  if (editorEls.footageStatus?.textContent === 'Не удалось показать футаж в предпросмотре') {
+    editorEls.footageStatus.textContent = '';
+  }
+});
+editorEls.footagePreview?.addEventListener('error', () => {
+  if (editorEls.footageStatus) editorEls.footageStatus.textContent = 'Не удалось показать футаж в предпросмотре';
+  toast('Браузер не смог показать этот футаж в предпросмотре. Попробуй H.264 MP4/WebM для preview.', 'w');
+});
 document.querySelectorAll('[data-editor-mode]').forEach(btn => {
   btn.addEventListener('click', () => setEditorMode(btn.dataset.editorMode || 'trim'));
 });
