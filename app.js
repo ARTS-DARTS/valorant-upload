@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-12T01:21:00+03:00';
+const SITE_VERSION = '2026-07-12T02:08:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1824,6 +1824,8 @@ let timelineMagnetEnabled = true;
 let activeEffectTrack = 0;
 const TIMELINE_FRAME_SECONDS = 60;
 const EFFECT_TRACK_HEIGHT = 36;
+const MIN_TRIM_DURATION_SECONDS = 0.2;
+const MIN_TIMELINE_CLIP_WIDTH_PX = 24;
 const VIDEO_EDIT_UNDO_KEY = 'vlineups_video_edit_undo_v2';
 const VIDEO_EDIT_UNDO_LIMIT = 12;
 let videoEditUndoStack = [];
@@ -1958,6 +1960,12 @@ function timelineWidthPx() {
   return Math.max(900, Math.round(timelineFrameDuration() * timelinePixelsPerSecond));
 }
 
+function timelineBlockStyle(start, duration, minWidthPx = MIN_TIMELINE_CLIP_WIDTH_PX) {
+  const leftPx = Math.max(0, Number(start || 0) * timelinePixelsPerSecond);
+  const widthPx = Math.max(minWidthPx, Number(duration || 0) * timelinePixelsPerSecond);
+  return `left:${leftPx}px;width:${widthPx}px`;
+}
+
 function effectOutputStart(item) {
   const explicit = Number(item?.outputAt);
   if (Number.isFinite(explicit)) return clampOutputTime(explicit);
@@ -1966,8 +1974,15 @@ function effectOutputStart(item) {
 
 function normalizedVideoEdit() {
   const duration = videoDuration();
-  const trimStart = clampTime(videoEdit.trimStart);
-  const trimEnd = clampTime(videoEdit.trimEnd || duration);
+  const rawStart = clampTime(videoEdit.trimStart);
+  const rawEnd = clampTime(videoEdit.trimEnd || duration);
+  const minTrim = duration ? Math.min(MIN_TRIM_DURATION_SECONDS, duration) : MIN_TRIM_DURATION_SECONDS;
+  const trimStart = duration
+    ? Math.max(0, Math.min(rawStart, Math.max(0, rawEnd - minTrim)))
+    : Math.min(rawStart, rawEnd);
+  const trimEnd = duration
+    ? Math.min(duration, Math.max(rawEnd, trimStart + minTrim))
+    : Math.max(rawStart, rawEnd);
   const storedTrackCount = Math.max(1, Math.min(8, Number(videoEdit.effectTracks || 1)));
   const maxZoomTrack = Math.max(0, ...(videoEdit.zoomKeyframes || []).map(item => Math.max(0, Number(item.track || 0))));
   const maxFootageTrack = Math.max(0, ...(videoEdit.footageOverlays || []).map(item => Math.max(0, Number(item.track || 0))));
@@ -1975,8 +1990,8 @@ function normalizedVideoEdit() {
   return {
     ...videoEdit,
     effectTracks,
-    trimStart: Math.min(trimStart, trimEnd),
-    trimEnd: Math.max(trimStart, trimEnd),
+    trimStart,
+    trimEnd,
     splits: [...new Set((videoEdit.splits || []).map(clampTime).filter(t => t > 0 && (!duration || t < duration)))]
       .sort((a, b) => a - b),
     freezeFrames: (videoEdit.freezeFrames || []).map(item => ({
@@ -2613,7 +2628,7 @@ function renderVideoEditor() {
   }
   if (editorEls.markers) {
     const clipHtml = buildTimelineSegments().map(segment => segment.type === 'video'
-      ? `<span class="timeline-video-clip" style="left:${pct(segment.outputStart)}%;width:${pct(segment.duration)}%" title="Видео ${fmtTime(segment.sourceStart)}-${fmtTime(segment.sourceEnd)}"></span>`
+      ? `<span class="timeline-video-clip" style="${timelineBlockStyle(segment.outputStart, segment.duration, 10)}" title="Видео ${fmtTime(segment.sourceStart)}-${fmtTime(segment.sourceEnd)}"></span>`
       : '').join('');
     const splitHtml = videoEdit.splits.map(t => `<span class="timeline-marker split ${selectedEditorItem?.type === 'split' && Math.abs(selectedEditorItem.at - t) < 0.11 ? 'selected' : ''}" data-split-at="${t}" title="Разрез ${fmtTime(t)}" style="left:${pct(sourceToOutputTime(t))}%"></span>`).join('');
     const freezeHtml = videoEdit.freezeFrames.map(f => {
@@ -2623,7 +2638,7 @@ function renderVideoEditor() {
       <span class="timeline-freeze-block ${selectedEditorItem?.type === 'freeze' && selectedEditorItem.id === f.id ? 'selected' : ''}"
         data-freeze-id="${esc(f.id)}"
         title="Стоп-кадр ${fmtTime(f.duration)} на ${fmtTime(f.at)}"
-        style="left:${pct(outputStart)}%;width:${Math.max(2.5, pct(f.duration))}%">
+        style="${timelineBlockStyle(outputStart, f.duration)}">
         <span class="freeze-resize start" data-freeze-edge="start"></span>
         +${Number(f.duration || 2).toFixed(1)}с
         <span class="freeze-resize end" data-freeze-edge="end"></span>
@@ -2646,7 +2661,7 @@ function renderVideoEditor() {
       <span class="timeline-zoom-block ${selectedEditorItem?.type === 'zoom' && selectedEditorItem.id === z.id ? 'selected' : ''}"
         data-zoom-id="${esc(z.id)}"
         title="Зум ${Number(z.scale || 1).toFixed(1)}x, дорожка ${Number(z.track || 0) + 1}, ${fmtTime(z.duration)}"
-        style="top:${Number(z.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;left:${pct(effectOutputStart(z))}%;width:${Math.max(2.5, pct(z.duration))}%">
+        style="top:${Number(z.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;${timelineBlockStyle(effectOutputStart(z), z.duration)}">
         <span class="zoom-resize start" data-zoom-edge="start"></span>
         ${Number(z.scale || 1).toFixed(1)}x
         <span class="zoom-resize end" data-zoom-edge="end"></span>
@@ -2655,7 +2670,7 @@ function renderVideoEditor() {
       <span class="timeline-footage-block ${selectedEditorItem?.type === 'footage' && selectedEditorItem.id === f.id ? 'selected' : ''} ${f.chromaKey?.enabled ? 'has-chroma' : ''}"
         data-footage-id="${esc(f.id)}"
         title="Футаж ${esc(f.name)} · дорожка ${Number(f.track || 0) + 1}, ${fmtTime(f.duration)}${f.chromaKey?.enabled ? ` · хромакей ${f.chromaKey.color || '#00ff00'}` : ''}"
-        style="top:${Number(f.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;left:${pct(effectOutputStart(f))}%;width:${Math.max(2.5, pct(f.duration))}%">
+        style="top:${Number(f.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;${timelineBlockStyle(effectOutputStart(f), f.duration)}">
         <span class="footage-resize start" data-footage-edge="start"></span>
         ${esc(f.name || 'Футаж')}
         ${f.chromaKey?.enabled ? '<span class="footage-chroma-dot"></span>' : ''}
@@ -3131,9 +3146,13 @@ editorEls.shell?.addEventListener('pointermove', event => {
   const { outputTime, sourceTime } = timelineTimesFromEvent(event);
   const time = sourceTime;
   if (timelineDrag.kind === 'start') {
-    videoEdit.trimStart = Math.min(time, videoEdit.trimEnd || videoDuration());
+    const end = videoEdit.trimEnd || videoDuration();
+    const minTrim = end ? Math.min(MIN_TRIM_DURATION_SECONDS, end) : MIN_TRIM_DURATION_SECONDS;
+    videoEdit.trimStart = Math.min(time, Math.max(0, end - minTrim));
   } else if (timelineDrag.kind === 'end') {
-    videoEdit.trimEnd = Math.max(time, videoEdit.trimStart);
+    const duration = videoDuration();
+    const minTrim = duration ? Math.min(MIN_TRIM_DURATION_SECONDS, duration) : MIN_TRIM_DURATION_SECONDS;
+    videoEdit.trimEnd = Math.max(time, videoEdit.trimStart + minTrim);
   } else if (timelineDrag.kind === 'freeze') {
     const freeze = (videoEdit.freezeFrames || []).find(item => item.id === timelineDrag.id);
     if (freeze) {
@@ -3229,12 +3248,20 @@ editorEls.shell?.addEventListener('pointercancel', () => {
 });
 editorEls.trimStart?.addEventListener('change', event => {
   videoEdit.trimStart = clampTime(event.target.value);
-  if (videoEdit.trimEnd && videoEdit.trimStart > videoEdit.trimEnd) videoEdit.trimEnd = videoEdit.trimStart;
+  const duration = videoDuration();
+  const minTrim = duration ? Math.min(MIN_TRIM_DURATION_SECONDS, duration) : MIN_TRIM_DURATION_SECONDS;
+  if (videoEdit.trimEnd && videoEdit.trimStart > videoEdit.trimEnd - minTrim) {
+    videoEdit.trimStart = Math.max(0, videoEdit.trimEnd - minTrim);
+  }
   saveVideoEdit();
 });
 editorEls.trimEnd?.addEventListener('change', event => {
   videoEdit.trimEnd = clampTime(event.target.value);
-  if (videoEdit.trimEnd < videoEdit.trimStart) videoEdit.trimStart = videoEdit.trimEnd;
+  const duration = videoDuration();
+  const minTrim = duration ? Math.min(MIN_TRIM_DURATION_SECONDS, duration) : MIN_TRIM_DURATION_SECONDS;
+  if (videoEdit.trimEnd < videoEdit.trimStart + minTrim) {
+    videoEdit.trimEnd = Math.min(duration || videoEdit.trimStart + minTrim, videoEdit.trimStart + minTrim);
+  }
   saveVideoEdit();
 });
 editorEls.volume?.addEventListener('input', event => {

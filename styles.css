@@ -256,7 +256,7 @@
     .timeline-lane { position: relative; height: 42px; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; background: var(--surface); cursor: pointer; }
     .lane-label { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); z-index: 3; color: var(--text1); font-size: 11px; font-weight: 900; text-transform: uppercase; text-shadow: 0 1px 4px #000; }
     .timeline-range { position: absolute; top: 8px; bottom: 8px; border-radius: 6px; background: linear-gradient(90deg, rgba(79,195,247,.35), rgba(34,197,94,.25)); border: 1px solid rgba(79,195,247,.55); }
-    .timeline-video-clip { position: absolute; top: 8px; bottom: 8px; border-radius: 6px; background: linear-gradient(90deg, rgba(79,195,247,.30), rgba(34,197,94,.18)); border: 1px solid rgba(79,195,247,.45); pointer-events: none; }
+    .timeline-video-clip { position: absolute; top: 8px; bottom: 8px; min-width: 10px; border-radius: 6px; background: linear-gradient(90deg, rgba(79,195,247,.30), rgba(34,197,94,.18)); border: 1px solid rgba(79,195,247,.45); pointer-events: none; }
     .trim-handle { position: absolute; top: -5px; bottom: -5px; width: 14px; border-radius: 6px; background: #dbeafe; border: 2px solid var(--primary); cursor: ew-resize; }
     .trim-handle.start { left: -7px; }
     .trim-handle.end { right: -7px; }
@@ -268,18 +268,18 @@
     .effect-track-row:first-child { border-top: 0; }
     .effect-track-row.active { background: rgba(34,197,94,.06); }
     .effect-track-row.selected { box-shadow: inset 0 0 0 1px rgba(79,195,247,.45); }
-    .effect-track-label { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); z-index: 3; color: var(--text1); font-size: 11px; font-weight: 900; text-transform: uppercase; text-shadow: 0 1px 4px #000; pointer-events: none; }
+    .effect-track-label { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); z-index: 6; max-width: 104px; padding: 2px 5px; border-radius: 5px; background: rgba(12,18,32,.78); color: var(--text1); font-size: 11px; font-weight: 900; text-transform: uppercase; text-shadow: 0 1px 4px #000; pointer-events: none; }
     .timeline-marker { position: absolute; top: 5px; bottom: 5px; width: 3px; border-radius: 999px; transform: translateX(-50%); }
     .timeline-marker.split { background: #f59e0b; cursor: pointer; pointer-events: auto; z-index: 4; }
     .timeline-marker.split.selected { width: 6px; box-shadow: 0 0 0 5px rgba(245,158,11,.22); }
     .timeline-marker.freeze { background: #e879f9; }
     .timeline-marker.zoom { background: #22c55e; }
-    .timeline-freeze-block, .timeline-zoom-block, .timeline-footage-block { position: absolute; top: 6px; bottom: 6px; min-width: 34px; border-radius: 7px; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; cursor: grab; pointer-events: auto; z-index: 4; }
+    .timeline-freeze-block, .timeline-zoom-block, .timeline-footage-block { position: absolute; top: 6px; bottom: 6px; min-width: 24px; max-width: min(360px, calc(100% - 4px)); border-radius: 7px; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; cursor: grab; pointer-events: auto; z-index: 4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .timeline-freeze-block { border: 2px solid rgba(232,121,249,.92); background: rgba(232,121,249,.20); color: #f5d0fe; }
     .timeline-freeze-block.selected { background: rgba(232,121,249,.36); box-shadow: 0 0 0 3px rgba(232,121,249,.18); }
     .timeline-zoom-block { border: 2px solid rgba(34,197,94,.92); background: rgba(34,197,94,.20); color: #bbf7d0; }
     .timeline-zoom-block.selected { background: rgba(34,197,94,.36); box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
-    .timeline-footage-block { border: 2px solid rgba(79,195,247,.92); background: rgba(79,195,247,.22); color: #dbeafe; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .timeline-footage-block { border: 2px solid rgba(79,195,247,.92); background: rgba(79,195,247,.22); color: #dbeafe; padding: 0 12px; }
     .timeline-footage-block.selected { background: rgba(79,195,247,.38); box-shadow: 0 0 0 3px rgba(79,195,247,.18); }
     .timeline-footage-block.has-chroma { border-color: rgba(34,197,94,.96); box-shadow: inset 0 0 0 1px rgba(34,197,94,.24); }
     .footage-chroma-dot { flex: 0 0 auto; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.16); }
