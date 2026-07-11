@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-12T00:24:00+03:00';
+const SITE_VERSION = '2026-07-12T01:21:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1936,6 +1936,19 @@ function snapFrameTime(time) {
   return clampTime(Math.round(Number(time || 0) / step) * step);
 }
 
+function clampOutputTime(value) {
+  const duration = editedOutputDuration();
+  const n = Number(value || 0);
+  if (!duration) return Math.max(0, n);
+  return Math.max(0, Math.min(duration, n));
+}
+
+function effectOutputStart(item) {
+  const explicit = Number(item?.outputAt);
+  if (Number.isFinite(explicit)) return clampOutputTime(explicit);
+  return sourceToOutputTime(item?.at || 0);
+}
+
 function normalizedVideoEdit() {
   const duration = videoDuration();
   const trimStart = clampTime(videoEdit.trimStart);
@@ -1956,27 +1969,39 @@ function normalizedVideoEdit() {
       at: clampTime(item.at),
       duration: Math.max(0.2, Math.min(10, Number(item.duration || 2))),
     })).sort((a, b) => a.at - b.at),
-    zoomKeyframes: (videoEdit.zoomKeyframes || []).map(item => ({
-      id: item.id || `zoom_${Math.round(Number(item.at || 0) * 1000)}_${Math.random().toString(36).slice(2, 7)}`,
-      at: clampTime(item.at),
-      scale: Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(item.scale || 1.4))),
-      scaleX: Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(item.scaleX ?? item.scale ?? 1.4))),
-      scaleY: Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(item.scaleY ?? item.scale ?? 1.4))),
-      posX: Math.max(-100, Math.min(100, Number(item.posX || 0))),
-      posY: Math.max(-100, Math.min(100, Number(item.posY || 0))),
-      rotation: Math.max(-45, Math.min(45, Number(item.rotation || 0))),
-      anchorX: Math.max(0, Math.min(100, Number(item.anchorX ?? 50))),
-      anchorY: Math.max(0, Math.min(100, Number(item.anchorY ?? 50))),
-      duration: Math.max(0.2, Math.min(10, Number(item.duration || 2))),
-      track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
-    })).sort((a, b) => a.at - b.at),
+    zoomKeyframes: (videoEdit.zoomKeyframes || []).map(item => {
+      const at = clampTime(item.at);
+      const outputAt = Number.isFinite(Number(item.outputAt))
+        ? clampOutputTime(Number(item.outputAt))
+        : sourceToOutputTime(at);
+      return {
+        id: item.id || `zoom_${Math.round(Number(item.at || 0) * 1000)}_${Math.random().toString(36).slice(2, 7)}`,
+        at,
+        outputAt,
+        scale: Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(item.scale || 1.4))),
+        scaleX: Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(item.scaleX ?? item.scale ?? 1.4))),
+        scaleY: Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(item.scaleY ?? item.scale ?? 1.4))),
+        posX: Math.max(-100, Math.min(100, Number(item.posX || 0))),
+        posY: Math.max(-100, Math.min(100, Number(item.posY || 0))),
+        rotation: Math.max(-45, Math.min(45, Number(item.rotation || 0))),
+        anchorX: Math.max(0, Math.min(100, Number(item.anchorX ?? 50))),
+        anchorY: Math.max(0, Math.min(100, Number(item.anchorY ?? 50))),
+        duration: Math.max(0.2, Math.min(10, Number(item.duration || 2))),
+        track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
+      };
+    }).sort((a, b) => effectOutputStart(a) - effectOutputStart(b)),
     footageOverlays: (videoEdit.footageOverlays || []).map(item => {
       const legacyChroma = item.chromaKey || item.chroma || (videoEdit.chromaKey?.enabled ? videoEdit.chromaKey : {});
+      const at = clampTime(item.at);
+      const outputAt = Number.isFinite(Number(item.outputAt))
+        ? clampOutputTime(Number(item.outputAt))
+        : sourceToOutputTime(at);
       return {
         id: item.id || `footage_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         url: String(item.url || ''),
         name: String(item.name || 'Футаж').slice(0, 120),
-        at: clampTime(item.at),
+        at,
+        outputAt,
         duration: Math.max(0.2, Math.min(60, Number(item.duration || 2))),
         track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
         muted: item.muted !== false,
@@ -1985,7 +2010,7 @@ function normalizedVideoEdit() {
         scale: Math.max(0.05, Math.min(2, Number(item.scale ?? 0.35))),
         chromaKey: normalizeChromaKey(legacyChroma),
       };
-    }).filter(item => item.url).sort((a, b) => a.at - b.at),
+    }).filter(item => item.url).sort((a, b) => effectOutputStart(a) - effectOutputStart(b)),
     audio: {
       muted: !!videoEdit.audio?.muted,
       volume: Math.max(0, Math.min(2, Number(videoEdit.audio?.volume ?? 1))),
@@ -2152,7 +2177,7 @@ function activeZoomClipAtOutput(outputTime) {
     .slice()
     .reverse()
     .find(item => {
-      const start = sourceToOutputTime(item.at);
+      const start = effectOutputStart(item);
       return outputTime >= start && outputTime <= start + Number(item.duration || 2);
     }) || null;
 }
@@ -2162,7 +2187,7 @@ function activeFootageClipAtOutput(outputTime) {
     .slice()
     .reverse()
     .find(item => {
-      const start = sourceToOutputTime(item.at);
+      const start = effectOutputStart(item);
       return outputTime >= start && outputTime <= start + Number(item.duration || 2);
     }) || null;
 }
@@ -2607,7 +2632,7 @@ function renderVideoEditor() {
       <span class="timeline-zoom-block ${selectedEditorItem?.type === 'zoom' && selectedEditorItem.id === z.id ? 'selected' : ''}"
         data-zoom-id="${esc(z.id)}"
         title="Зум ${Number(z.scale || 1).toFixed(1)}x, дорожка ${Number(z.track || 0) + 1}, ${fmtTime(z.duration)}"
-        style="top:${Number(z.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;left:${pct(sourceToOutputTime(z.at))}%;width:${Math.max(2.5, pct(z.duration))}%">
+        style="top:${Number(z.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;left:${pct(effectOutputStart(z))}%;width:${Math.max(2.5, pct(z.duration))}%">
         <span class="zoom-resize start" data-zoom-edge="start"></span>
         ${Number(z.scale || 1).toFixed(1)}x
         <span class="zoom-resize end" data-zoom-edge="end"></span>
@@ -2616,7 +2641,7 @@ function renderVideoEditor() {
       <span class="timeline-footage-block ${selectedEditorItem?.type === 'footage' && selectedEditorItem.id === f.id ? 'selected' : ''} ${f.chromaKey?.enabled ? 'has-chroma' : ''}"
         data-footage-id="${esc(f.id)}"
         title="Футаж ${esc(f.name)} · дорожка ${Number(f.track || 0) + 1}, ${fmtTime(f.duration)}${f.chromaKey?.enabled ? ` · хромакей ${f.chromaKey.color || '#00ff00'}` : ''}"
-        style="top:${Number(f.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;left:${pct(sourceToOutputTime(f.at))}%;width:${Math.max(2.5, pct(f.duration))}%">
+        style="top:${Number(f.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;left:${pct(effectOutputStart(f))}%;width:${Math.max(2.5, pct(f.duration))}%">
         <span class="footage-resize start" data-footage-edge="start"></span>
         ${esc(f.name || 'Футаж')}
         ${f.chromaKey?.enabled ? '<span class="footage-chroma-dot"></span>' : ''}
@@ -2764,9 +2789,14 @@ function timelineSnapPoints() {
     points.add(start + Number(freeze.duration || 2));
   });
   (videoEdit.zoomKeyframes || []).forEach(zoom => {
-    const start = sourceToOutputTime(zoom.at);
+    const start = effectOutputStart(zoom);
     points.add(start);
     points.add(start + Number(zoom.duration || 2));
+  });
+  (videoEdit.footageOverlays || []).forEach(footage => {
+    const start = effectOutputStart(footage);
+    points.add(start);
+    points.add(start + Number(footage.duration || 2));
   });
   return [...points].filter(Number.isFinite).sort((a, b) => a - b);
 }
@@ -3021,8 +3051,8 @@ editorEls.shell?.addEventListener('pointerdown', event => {
     activeEffectTrack = Math.max(0, Number(footage?.track || 0));
     setEditorMode('effects');
     timelineDrag = edge
-      ? { kind: 'footage-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(footage?.at || 0), startOutputAt: sourceToOutputTime(Number(footage?.at || 0)), startDuration: Number(footage?.duration || 2) }
-      : { kind: 'footage', id, moved: false, offset: footage ? timeFromTimelineEvent(event) - footage.at : 0 };
+      ? { kind: 'footage-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(footage?.at || 0), startOutputAt: effectOutputStart(footage), startDuration: Number(footage?.duration || 2) }
+      : { kind: 'footage', id, moved: false, offset: footage ? outputTimeFromTimelineEvent(event) - effectOutputStart(footage) : 0 };
     suppressTimelineClick = true;
     editorEls.shell.setPointerCapture?.(event.pointerId);
     editorEls.shell.classList.add('dragging');
@@ -3039,8 +3069,8 @@ editorEls.shell?.addEventListener('pointerdown', event => {
     activeEffectTrack = Math.max(0, Number(zoom?.track || 0));
     setEditorMode('zoom');
     timelineDrag = edge
-      ? { kind: 'zoom-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(zoom?.at || 0), startOutputAt: sourceToOutputTime(Number(zoom?.at || 0)), startDuration: Number(zoom?.duration || 2) }
-      : { kind: 'zoom', id, moved: false, offset: zoom ? timeFromTimelineEvent(event) - zoom.at : 0 };
+      ? { kind: 'zoom-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(zoom?.at || 0), startOutputAt: effectOutputStart(zoom), startDuration: Number(zoom?.duration || 2) }
+      : { kind: 'zoom', id, moved: false, offset: zoom ? outputTimeFromTimelineEvent(event) - effectOutputStart(zoom) : 0 };
     suppressTimelineClick = true;
     editorEls.shell.setPointerCapture?.(event.pointerId);
     editorEls.shell.classList.add('dragging');
@@ -3112,8 +3142,9 @@ editorEls.shell?.addEventListener('pointermove', event => {
   } else if (timelineDrag.kind === 'zoom') {
     const zoom = (videoEdit.zoomKeyframes || []).find(item => item.id === timelineDrag.id);
     if (zoom) {
-      const rawStart = clampTime(rawTime - (timelineDrag.offset || 0));
-      zoom.at = clampTime(outputToSourceTime(snapOutputTime(sourceToOutputTime(rawStart))));
+      const nextOutputStart = snapOutputTime(outputTime - (timelineDrag.offset || 0));
+      zoom.outputAt = clampOutputTime(nextOutputStart);
+      zoom.at = clampTime(outputToSourceTime(zoom.outputAt));
       zoom.track = effectTrackFromPointerEvent(event);
       activeEffectTrack = zoom.track;
     }
@@ -3124,6 +3155,7 @@ editorEls.shell?.addEventListener('pointermove', event => {
       if (timelineDrag.edge === 'start') {
         const endOutput = timelineDrag.startOutputAt + timelineDrag.startDuration;
         const nextOutputStart = Math.max(0, Math.min(endOutput - 0.2, timelineDrag.startOutputAt + delta));
+        zoom.outputAt = clampOutputTime(nextOutputStart);
         zoom.at = clampTime(outputToSourceTime(nextOutputStart));
         zoom.duration = Math.max(0.2, Math.min(10, endOutput - nextOutputStart));
       } else {
@@ -3133,8 +3165,9 @@ editorEls.shell?.addEventListener('pointermove', event => {
   } else if (timelineDrag.kind === 'footage') {
     const footage = (videoEdit.footageOverlays || []).find(item => item.id === timelineDrag.id);
     if (footage) {
-      const rawStart = clampTime(rawTime - (timelineDrag.offset || 0));
-      footage.at = clampTime(outputToSourceTime(snapOutputTime(sourceToOutputTime(rawStart))));
+      const nextOutputStart = snapOutputTime(outputTime - (timelineDrag.offset || 0));
+      footage.outputAt = clampOutputTime(nextOutputStart);
+      footage.at = clampTime(outputToSourceTime(footage.outputAt));
       footage.track = effectTrackFromPointerEvent(event);
       activeEffectTrack = footage.track;
     }
@@ -3145,6 +3178,7 @@ editorEls.shell?.addEventListener('pointermove', event => {
       if (timelineDrag.edge === 'start') {
         const endOutput = timelineDrag.startOutputAt + timelineDrag.startDuration;
         const nextOutputStart = Math.max(0, Math.min(endOutput - 0.2, timelineDrag.startOutputAt + delta));
+        footage.outputAt = clampOutputTime(nextOutputStart);
         footage.at = clampTime(outputToSourceTime(nextOutputStart));
         footage.duration = Math.max(0.2, Math.min(60, endOutput - nextOutputStart));
       } else {
@@ -3636,14 +3670,15 @@ function readVideoUrlMetadata(url) {
 }
 function addFootageOverlay({ url, name, duration }) {
   const outputDuration = editedOutputDuration() || videoDuration();
-  const currentAt = outputToSourceTime(currentOutputTime());
+  const outputAt = clampOutputTime(currentOutputTime());
+  const currentAt = outputToSourceTime(outputAt);
   const at = Math.round(clampTime(currentAt) * 10) / 10;
-  const clipDuration = Math.max(0.2, Math.min(60, Number(duration || 2), Math.max(0.2, outputDuration - sourceToOutputTime(at))));
+  const clipDuration = Math.max(0.2, Math.min(60, Number(duration || 2), Math.max(0.2, outputDuration - outputAt)));
   const track = Math.max(0, Math.min((videoEdit.effectTracks || 1) - 1, activeEffectTrack));
   const id = `footage_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   videoEdit.footageOverlays = [
     ...(videoEdit.footageOverlays || []),
-    { id, url, name, at, duration: clipDuration, track, muted: true, posX: 50, posY: 50, scale: 0.35 },
+    { id, url, name, at, outputAt, duration: clipDuration, track, muted: true, posX: 50, posY: 50, scale: 0.35 },
   ];
   selectedEditorItem = { type: 'footage', id };
   activeEffectTrack = track;
@@ -3754,7 +3789,8 @@ editorEls.footageInput?.addEventListener('change', () => {
   if (file) handleFootageFile(file);
 });
 function addZoomAt(time, { silent = false } = {}) {
-  const at = Math.round(clampTime(time) * 10) / 10;
+  const outputAt = clampOutputTime(currentOutputTime());
+  const at = Math.round(clampTime(outputToSourceTime(outputAt)) * 10) / 10;
   const track = Math.max(0, Math.min((videoEdit.effectTracks || 1) - 1, activeEffectTrack));
   const scale = Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(editorEls.zoomScaleX?.value || editorEls.zoomScaleY?.value || 1.4)));
   const scaleX = scale;
@@ -3766,8 +3802,8 @@ function addZoomAt(time, { silent = false } = {}) {
   const anchorY = Math.max(0, Math.min(100, Number(editorEls.zoomAnchorY?.value || 50)));
   const id = `zoom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   videoEdit.zoomKeyframes = [
-    ...(videoEdit.zoomKeyframes || []).filter(item => Number(item.track || 0) !== track || Math.abs(item.at - at) >= 0.11),
-    { id, at, scale: Math.max(scaleX, scaleY), scaleX, scaleY, posX, posY, rotation, anchorX, anchorY, duration: 2, track },
+    ...(videoEdit.zoomKeyframes || []).filter(item => Number(item.track || 0) !== track || Math.abs(effectOutputStart(item) - outputAt) >= 0.11),
+    { id, at, outputAt, scale: Math.max(scaleX, scaleY), scaleX, scaleY, posX, posY, rotation, anchorX, anchorY, duration: 2, track },
   ];
   selectedEditorItem = { type: 'zoom', id };
   activeEffectTrack = track;
