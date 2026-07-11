@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T20:37:45+03:00';
+const SITE_VERSION = '2026-07-11T20:50:28+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1844,6 +1844,8 @@ const editorEls = {
   muted: document.getElementById('edit-muted'),
   chromaEnabled: document.getElementById('edit-chroma-enabled'),
   chromaStrength: document.getElementById('edit-chroma-strength'),
+  footageInput: document.getElementById('edit-footage-input'),
+  footageStatus: document.getElementById('edit-footage-status'),
   zoomScaleX: document.getElementById('edit-zoom-scale-x'),
   zoomScaleY: document.getElementById('edit-zoom-scale-y'),
   zoomPosX: document.getElementById('edit-zoom-pos-x'),
@@ -1898,7 +1900,8 @@ function normalizedVideoEdit() {
   const trimEnd = clampTime(videoEdit.trimEnd || duration);
   const storedTrackCount = Math.max(1, Math.min(8, Number(videoEdit.effectTracks || 1)));
   const maxZoomTrack = Math.max(0, ...(videoEdit.zoomKeyframes || []).map(item => Math.max(0, Number(item.track || 0))));
-  const effectTracks = Math.max(storedTrackCount, maxZoomTrack + 1);
+  const maxFootageTrack = Math.max(0, ...(videoEdit.footageOverlays || []).map(item => Math.max(0, Number(item.track || 0))));
+  const effectTracks = Math.max(storedTrackCount, maxZoomTrack + 1, maxFootageTrack + 1);
   return {
     ...videoEdit,
     effectTracks,
@@ -1925,6 +1928,15 @@ function normalizedVideoEdit() {
       duration: Math.max(0.2, Math.min(10, Number(item.duration || 2))),
       track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
     })).sort((a, b) => a.at - b.at),
+    footageOverlays: (videoEdit.footageOverlays || []).map(item => ({
+      id: item.id || `footage_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      url: String(item.url || ''),
+      name: String(item.name || 'Футаж').slice(0, 120),
+      at: clampTime(item.at),
+      duration: Math.max(0.2, Math.min(60, Number(item.duration || 2))),
+      track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
+      muted: item.muted !== false,
+    })).filter(item => item.url).sort((a, b) => a.at - b.at),
     audio: {
       muted: !!videoEdit.audio?.muted,
       volume: Math.max(0, Math.min(2, Number(videoEdit.audio?.volume ?? 1))),
@@ -2346,7 +2358,16 @@ function renderVideoEditor() {
         ${Number(z.scale || 1).toFixed(1)}x
         <span class="zoom-resize end" data-zoom-edge="end"></span>
       </span>`).join('');
-    editorEls.effectMarkers.innerHTML = rowsHtml + zoomHtml;
+    const footageHtml = (videoEdit.footageOverlays || []).map(f => `
+      <span class="timeline-footage-block ${selectedEditorItem?.type === 'footage' && selectedEditorItem.id === f.id ? 'selected' : ''}"
+        data-footage-id="${esc(f.id)}"
+        title="Футаж ${esc(f.name)} · дорожка ${Number(f.track || 0) + 1}, ${fmtTime(f.duration)}"
+        style="top:${Number(f.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;left:${pct(sourceToOutputTime(f.at))}%;width:${Math.max(2.5, pct(f.duration))}%">
+        <span class="footage-resize start" data-footage-edge="start"></span>
+        ${esc(f.name || 'Футаж')}
+        <span class="footage-resize end" data-footage-edge="end"></span>
+      </span>`).join('');
+    editorEls.effectMarkers.innerHTML = rowsHtml + zoomHtml + footageHtml;
   }
   if (editorEls.timeLabel) editorEls.timeLabel.textContent = `${fmtTime(vidPlayer.currentTime || 0)} / ${fmtTime(duration)} · итог ${fmtTime(outputDuration)}`;
   renderVideoTransport();
@@ -2358,6 +2379,7 @@ function renderVideoEditor() {
     if (videoEdit.splits.length) parts.push(`разрезов: ${videoEdit.splits.length}`);
     if (videoEdit.freezeFrames.length) parts.push(`стоп-кадров: ${videoEdit.freezeFrames.length} (+${fmtTime(videoEdit.freezeFrames.reduce((s, f) => s + Number(f.duration || 2), 0))})`);
     if (videoEdit.zoomKeyframes.length) parts.push(`зумов: ${videoEdit.zoomKeyframes.length}`);
+    if (videoEdit.footageOverlays.length) parts.push(`футажей: ${videoEdit.footageOverlays.length}`);
     if (videoEdit.audio.muted) parts.push('звук выключен');
     if (videoEdit.chromaKey.enabled) parts.push('хромакей');
     if (parts.length) parts.push(`итог: ${fmtTime(editedOutputDuration())}`);
@@ -2597,6 +2619,24 @@ editorEls.shell?.addEventListener('pointerdown', event => {
     event.preventDefault();
     return;
   }
+  const footageBlock = event.target.closest('[data-footage-id]');
+  if (footageBlock) {
+    const id = footageBlock.dataset.footageId || '';
+    const edge = event.target.closest('[data-footage-edge]')?.dataset.footageEdge || '';
+    const footage = (videoEdit.footageOverlays || []).find(item => item.id === id);
+    selectedEditorItem = { type: 'footage', id };
+    activeEffectTrack = Math.max(0, Number(footage?.track || 0));
+    setEditorMode('effects');
+    timelineDrag = edge
+      ? { kind: 'footage-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(footage?.at || 0), startOutputAt: sourceToOutputTime(Number(footage?.at || 0)), startDuration: Number(footage?.duration || 2) }
+      : { kind: 'footage', id, moved: false, offset: footage ? timeFromTimelineEvent(event) - footage.at : 0 };
+    suppressTimelineClick = true;
+    editorEls.shell.setPointerCapture?.(event.pointerId);
+    editorEls.shell.classList.add('dragging');
+    renderVideoEditor();
+    event.preventDefault();
+    return;
+  }
   const zoomBlock = event.target.closest('[data-zoom-id]');
   if (zoomBlock) {
     const id = zoomBlock.dataset.zoomId || '';
@@ -2695,6 +2735,25 @@ editorEls.shell?.addEventListener('pointermove', event => {
         zoom.duration = Math.max(0.2, Math.min(10, timelineDrag.startDuration + delta));
       }
     }
+  } else if (timelineDrag.kind === 'footage') {
+    const footage = (videoEdit.footageOverlays || []).find(item => item.id === timelineDrag.id);
+    if (footage) {
+      const rawStart = clampTime(rawTime - (timelineDrag.offset || 0));
+      footage.at = clampTime(outputToSourceTime(snapOutputTime(sourceToOutputTime(rawStart))));
+    }
+  } else if (timelineDrag.kind === 'footage-resize') {
+    const footage = (videoEdit.footageOverlays || []).find(item => item.id === timelineDrag.id);
+    if (footage) {
+      const delta = (event.clientX - timelineDrag.startX) / timelinePixelsPerSecond;
+      if (timelineDrag.edge === 'start') {
+        const endOutput = timelineDrag.startOutputAt + timelineDrag.startDuration;
+        const nextOutputStart = Math.max(0, Math.min(endOutput - 0.2, timelineDrag.startOutputAt + delta));
+        footage.at = clampTime(outputToSourceTime(nextOutputStart));
+        footage.duration = Math.max(0.2, Math.min(60, endOutput - nextOutputStart));
+      } else {
+        footage.duration = Math.max(0.2, Math.min(60, timelineDrag.startDuration + delta));
+      }
+    }
   } else {
     stopOutputPlayback({ keepPreview: false });
     clearFreezeHold();
@@ -2711,12 +2770,13 @@ editorEls.shell?.addEventListener('pointerup', event => {
   const wasTrim = timelineDrag.kind === 'start' || timelineDrag.kind === 'end';
   const wasFreeze = timelineDrag.kind === 'freeze' || timelineDrag.kind === 'freeze-resize';
   const wasZoom = timelineDrag.kind === 'zoom' || timelineDrag.kind === 'zoom-resize';
+  const wasFootage = timelineDrag.kind === 'footage' || timelineDrag.kind === 'footage-resize';
   editorEls.shell.releasePointerCapture?.(event.pointerId);
   editorEls.shell.classList.remove('dragging');
   const moved = timelineDrag.moved;
   timelineDrag = null;
-  suppressTimelineClick = moved || wasFreeze || wasZoom;
-  if ((wasTrim || wasFreeze || wasZoom) && moved) saveVideoEdit();
+  suppressTimelineClick = moved || wasFreeze || wasZoom || wasFootage;
+  if ((wasTrim || wasFreeze || wasZoom || wasFootage) && moved) saveVideoEdit();
 });
 editorEls.shell?.addEventListener('pointercancel', () => {
   timelineDrag = null;
@@ -2978,6 +3038,13 @@ function deleteSelectedEditorItem() {
     saveVideoEdit();
     return;
   }
+  if (selectedEditorItem.type === 'footage') {
+    videoEdit.footageOverlays = (videoEdit.footageOverlays || []).filter(item => item.id !== selectedEditorItem.id);
+    selectedEditorItem = null;
+    toast('Футаж удалён', 's');
+    saveVideoEdit();
+    return;
+  }
   if (selectedEditorItem.type === 'split') {
     videoEdit.splits = (videoEdit.splits || []).filter(t => Math.abs(t - selectedEditorItem.at) >= 0.11);
     selectedEditorItem = null;
@@ -3009,6 +3076,12 @@ function removeEffectTrack(track = activeEffectTrack) {
       ...item,
       track: Number(item.track || 0) > removeTrack ? Number(item.track || 0) - 1 : Number(item.track || 0),
     }));
+  videoEdit.footageOverlays = (videoEdit.footageOverlays || [])
+    .filter(item => Number(item.track || 0) !== removeTrack)
+    .map(item => ({
+      ...item,
+      track: Number(item.track || 0) > removeTrack ? Number(item.track || 0) - 1 : Number(item.track || 0),
+    }));
   videoEdit.effectTracks = trackCount - 1;
   activeEffectTrack = Math.max(0, Math.min(videoEdit.effectTracks - 1, removeTrack));
   selectedEditorItem = { type: 'effectTrack', track: activeEffectTrack };
@@ -3017,6 +3090,70 @@ function removeEffectTrack(track = activeEffectTrack) {
 }
 document.getElementById('edit-remove-effect-track')?.addEventListener('click', () => {
   removeEffectTrack(activeEffectTrack);
+});
+function readVideoMetadata(file) {
+  return new Promise(resolve => {
+    const video = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    const done = value => {
+      URL.revokeObjectURL(url);
+      resolve(value);
+    };
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => done({
+      duration: Number.isFinite(video.duration) ? video.duration : 0,
+    });
+    video.onerror = () => done({ duration: 0 });
+    video.src = url;
+  });
+}
+function addFootageOverlay({ url, name, duration }) {
+  const outputDuration = editedOutputDuration() || videoDuration();
+  const currentAt = outputToSourceTime(currentOutputTime());
+  const at = Math.round(clampTime(currentAt) * 10) / 10;
+  const clipDuration = Math.max(0.2, Math.min(60, Number(duration || 2), Math.max(0.2, outputDuration - sourceToOutputTime(at))));
+  const track = Math.max(0, Math.min((videoEdit.effectTracks || 1) - 1, activeEffectTrack));
+  const id = `footage_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  videoEdit.footageOverlays = [
+    ...(videoEdit.footageOverlays || []),
+    { id, url, name, at, duration: clipDuration, track, muted: true },
+  ];
+  selectedEditorItem = { type: 'footage', id };
+  activeEffectTrack = track;
+  setEditorMode('effects');
+  toast('Футаж добавлен на таймлайн', 's');
+  saveVideoEdit();
+}
+async function handleFootageFile(file) {
+  if (!isVideoFile(file)) { toast('Выбери .mp4 или .mov футаж', 'e'); return; }
+  if (file.size > 50 * 1024 * 1024) { toast('Футаж превышает 50 МБ', 'e'); return; }
+  if (editorEls.footageStatus) editorEls.footageStatus.textContent = 'Подготовка футажа...';
+  const meta = await readVideoMetadata(file);
+  const upload = uploadVideoToSelectel(file, pct => {
+    if (editorEls.footageStatus) editorEls.footageStatus.textContent = `Футаж ${Math.round(pct * 100)}%`;
+  });
+  try {
+    const url = await upload;
+    if (editorEls.footageStatus) editorEls.footageStatus.textContent = '';
+    addFootageOverlay({
+      url,
+      name: file.name.replace(/\.[^.]+$/, '') || 'Футаж',
+      duration: meta.duration || 2,
+    });
+  } catch (error) {
+    if (editorEls.footageStatus) editorEls.footageStatus.textContent = '';
+    if (error?.message !== 'canceled') toast('Ошибка загрузки футажа: ' + (error?.message || error), 'e');
+  } finally {
+    if (editorEls.footageInput) editorEls.footageInput.value = '';
+  }
+}
+document.getElementById('edit-add-footage')?.addEventListener('click', () => {
+  if (!videoUrl) { toast('Сначала загрузи основное видео', 'i'); return; }
+  editorEls.footageInput?.click();
+});
+editorEls.footageInput?.addEventListener('change', () => {
+  const file = editorEls.footageInput.files?.[0];
+  if (file) handleFootageFile(file);
 });
 function addZoomAt(time, { silent = false } = {}) {
   const at = Math.round(clampTime(time) * 10) / 10;

@@ -258,15 +258,18 @@
     .timeline-marker.split.selected { width: 6px; box-shadow: 0 0 0 5px rgba(245,158,11,.22); }
     .timeline-marker.freeze { background: #e879f9; }
     .timeline-marker.zoom { background: #22c55e; }
-    .timeline-freeze-block, .timeline-zoom-block { position: absolute; top: 6px; bottom: 6px; min-width: 34px; border-radius: 7px; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; cursor: grab; pointer-events: auto; z-index: 4; }
+    .timeline-freeze-block, .timeline-zoom-block, .timeline-footage-block { position: absolute; top: 6px; bottom: 6px; min-width: 34px; border-radius: 7px; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; cursor: grab; pointer-events: auto; z-index: 4; }
     .timeline-freeze-block { border: 2px solid rgba(232,121,249,.92); background: rgba(232,121,249,.20); color: #f5d0fe; }
     .timeline-freeze-block.selected { background: rgba(232,121,249,.36); box-shadow: 0 0 0 3px rgba(232,121,249,.18); }
     .timeline-zoom-block { border: 2px solid rgba(34,197,94,.92); background: rgba(34,197,94,.20); color: #bbf7d0; }
     .timeline-zoom-block.selected { background: rgba(34,197,94,.36); box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
-    .timeline-freeze-block:active, .timeline-zoom-block:active { cursor: grabbing; }
-    .freeze-resize, .zoom-resize { position: absolute; top: -2px; bottom: -2px; width: 10px; cursor: ew-resize; background: rgba(255,255,255,.18); }
-    .freeze-resize.start, .zoom-resize.start { left: -2px; border-radius: 6px 0 0 6px; }
-    .freeze-resize.end, .zoom-resize.end { right: -2px; border-radius: 0 6px 6px 0; }
+    .timeline-footage-block { border: 2px solid rgba(79,195,247,.92); background: rgba(79,195,247,.22); color: #dbeafe; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .timeline-footage-block.selected { background: rgba(79,195,247,.38); box-shadow: 0 0 0 3px rgba(79,195,247,.18); }
+    .timeline-freeze-block:active, .timeline-zoom-block:active, .timeline-footage-block:active { cursor: grabbing; }
+    .freeze-resize, .zoom-resize, .footage-resize { position: absolute; top: -2px; bottom: -2px; width: 10px; cursor: ew-resize; background: rgba(255,255,255,.18); }
+    .freeze-resize.start, .zoom-resize.start, .footage-resize.start { left: -2px; border-radius: 6px 0 0 6px; }
+    .freeze-resize.end, .zoom-resize.end, .footage-resize.end { right: -2px; border-radius: 0 6px 6px 0; }
+    .footage-status { color: var(--text2); font-size: 12px; align-self: center; min-height: 16px; }
     .audio-wave { position: absolute; inset: 7px 8px; background: repeating-linear-gradient(90deg, rgba(79,195,247,.25) 0 3px, transparent 3px 7px); mask-image: linear-gradient(180deg, transparent 0 18%, #000 18% 82%, transparent 82% 100%); }
     .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 10px; align-items: end; }
     .editor-field { color: var(--text2); font-size: 11px; font-weight: 800; display: grid; gap: 5px; }

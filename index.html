@@ -234,10 +234,13 @@
                 <button class="btn-sm" id="edit-split" type="button">Разрезать тут</button>
                 <button class="btn-sm" id="edit-freeze" type="button">Добавить стоп-кадр 2с</button>
                 <button class="btn-sm" id="edit-zoom" type="button">Добавить зум</button>
+                <input type="file" id="edit-footage-input" accept="video/mp4,video/quicktime,.mp4,.mov" hidden>
+                <button class="btn-sm" id="edit-add-footage" type="button">Добавить футаж</button>
                 <button class="btn-sm" id="edit-add-effect-track" type="button">+ дорожка эффектов</button>
                 <button class="btn-sm danger-soft" id="edit-remove-effect-track" type="button">− дорожка эффектов</button>
                 <button class="btn-sm danger-soft" id="edit-delete-selected" type="button">Удалить выбранное</button>
                 <button class="btn-sm" id="edit-reset" type="button">Сбросить монтаж</button>
+                <span class="footage-status" id="edit-footage-status" aria-live="polite"></span>
               </div>
               <div class="zoom-panel" id="zoom-panel">
                 <div class="transform-head">
