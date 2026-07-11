@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T22:03:00+03:00';
+const SITE_VERSION = '2026-07-11T22:10:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -2231,6 +2231,17 @@ function renderChromaPreviewFrame(footage) {
     const feather = 18 + strength * 54;
     const despill = Math.min(1, 0.25 + strength * 0.75);
     for (let i = 0; i < data.length; i += 4) {
+      const maxChannel = Math.max(data[i], data[i + 1], data[i + 2]);
+      const minChannel = Math.min(data[i], data[i + 1], data[i + 2]);
+      const luma = data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
+      const neutralDark = maxChannel - minChannel <= 18;
+      if (neutralDark && luma <= 18) {
+        data[i + 3] = 0;
+        continue;
+      }
+      if (neutralDark && luma <= 38) {
+        data[i + 3] = Math.round(data[i + 3] * ((luma - 18) / 20));
+      }
       const dr = data[i] - key.r;
       const dg = data[i + 1] - key.g;
       const db = data[i + 2] - key.b;
