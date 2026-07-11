@@ -21,8 +21,9 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T05:19:34+03:00';
+const SITE_VERSION = '2026-07-11T05:26:58+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
+const EDITOR_MAX_ZOOM = 2.2;
 
 const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
 const SEL_SECRET_KEY = 'e2ffe93a51ba4c05abadc810d9c0edfc';
@@ -1764,9 +1765,9 @@ function normalizedVideoEdit() {
     zoomKeyframes: (videoEdit.zoomKeyframes || []).map(item => ({
       id: item.id || `zoom_${Math.round(Number(item.at || 0) * 1000)}_${Math.random().toString(36).slice(2, 7)}`,
       at: clampTime(item.at),
-      scale: Math.max(1, Math.min(3, Number(item.scale || 1.4))),
-      scaleX: Math.max(1, Math.min(4, Number(item.scaleX ?? item.scale ?? 1.4))),
-      scaleY: Math.max(1, Math.min(4, Number(item.scaleY ?? item.scale ?? 1.4))),
+      scale: Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(item.scale || 1.4))),
+      scaleX: Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(item.scaleX ?? item.scale ?? 1.4))),
+      scaleY: Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(item.scaleY ?? item.scale ?? 1.4))),
       posX: Math.max(-100, Math.min(100, Number(item.posX || 0))),
       posY: Math.max(-100, Math.min(100, Number(item.posY || 0))),
       rotation: Math.max(-45, Math.min(45, Number(item.rotation || 0))),
@@ -2634,8 +2635,8 @@ function finishZoomFrameDrag(event) {
 editorEls.zoomFrame?.addEventListener('pointerup', finishZoomFrameDrag);
 editorEls.zoomFrame?.addEventListener('pointercancel', finishZoomFrameDrag);
 
-bindZoomTransformInput(editorEls.zoomScaleX, 'scaleX', value => Math.max(1, Math.min(4, value || 1)));
-bindZoomTransformInput(editorEls.zoomScaleY, 'scaleY', value => Math.max(1, Math.min(4, value || 1)));
+bindZoomTransformInput(editorEls.zoomScaleX, 'scaleX', value => Math.max(1, Math.min(EDITOR_MAX_ZOOM, value || 1)));
+bindZoomTransformInput(editorEls.zoomScaleY, 'scaleY', value => Math.max(1, Math.min(EDITOR_MAX_ZOOM, value || 1)));
 bindZoomTransformInput(editorEls.zoomPosX, 'posX', value => Math.max(-100, Math.min(100, value)));
 bindZoomTransformInput(editorEls.zoomPosY, 'posY', value => Math.max(-100, Math.min(100, value)));
 bindZoomTransformInput(editorEls.zoomRotation, 'rotation', value => Math.max(-45, Math.min(45, value)));
@@ -2733,7 +2734,7 @@ document.getElementById('edit-zoom')?.addEventListener('click', () => {
 });
 function addZoomAt(time, { silent = false } = {}) {
   const at = Math.round(clampTime(time) * 10) / 10;
-  const scale = Math.max(1, Math.min(4, Number(editorEls.zoomScaleX?.value || editorEls.zoomScaleY?.value || 1.4)));
+  const scale = Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(editorEls.zoomScaleX?.value || editorEls.zoomScaleY?.value || 1.4)));
   const scaleX = scale;
   const scaleY = scale;
   const posX = Math.max(-100, Math.min(100, Number(editorEls.zoomPosX?.value || 0)));
