@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T05:44:26+03:00';
+const SITE_VERSION = '2026-07-11T14:21:33+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1686,6 +1686,8 @@ let outputPlaybackRaf = null;
 let outputPlaybackStartedAt = 0;
 let outputPlaybackStartTime = 0;
 let outputPlaybackTime = null;
+let lastVideoReviveAt = 0;
+let videoHiddenAt = 0;
 const freezeFrameImages = new Map();
 const editorEls = {
   scroll: document.getElementById('timeline-scroll'),
@@ -1897,6 +1899,39 @@ function setFreezeOverlay(src) {
     editorEls.freezeOverlay.classList.remove('show');
     editorEls.freezeOverlay.removeAttribute('src');
   }
+}
+
+function reviveEditorVideo(reason = 'resume') {
+  if (!videoUrl || !vidPlayer) return;
+  const now = Date.now();
+  if (now - lastVideoReviveAt < 1500) return;
+  const wrap = document.getElementById('vid-player-wrap');
+  if (wrap && wrap.style.display === 'none') return;
+  const src = vidPlayer.currentSrc || vidPlayer.src || videoUrl;
+  if (!src) return;
+  const wasPaused = vidPlayer.paused;
+  const current = Number.isFinite(vidPlayer.currentTime) ? vidPlayer.currentTime : 0;
+  const hadError = !!vidPlayer.error;
+  const lostSource = !vidPlayer.currentSrc && !vidPlayer.src;
+  const stuckOverlay = !!editorEls.freezeOverlay?.classList.contains('show') && !outputPlaybackActive;
+  const forceReload = reason === 'pageshow' || reason === 'stale-visible';
+  if (!hadError && !lostSource && !stuckOverlay && !forceReload) return;
+  lastVideoReviveAt = now;
+  stopOutputPlayback({ keepPreview: false });
+  clearFreezeHold();
+  setFreezeOverlay('');
+  vidPlayer.crossOrigin = 'anonymous';
+  vidPlayer.src = videoUrl;
+  vidPlayer.load();
+  const restoreTime = () => {
+    if (Number.isFinite(current) && current > 0 && vidPlayer.duration) {
+      vidPlayer.currentTime = Math.min(current, vidPlayer.duration - 0.05);
+    }
+    renderVideoEditor();
+    if (!wasPaused) safePlay(vidPlayer);
+  };
+  vidPlayer.addEventListener('loadedmetadata', restoreTime, { once: true });
+  setTimeout(restoreTime, 250);
 }
 
 function selectedZoomClip() {
@@ -2846,6 +2881,7 @@ vidPlayer.addEventListener('loadedmetadata', () => {
   if (!videoEdit.trimEnd) videoEdit.trimEnd = videoDuration();
   renderVideoEditor();
 });
+vidPlayer.addEventListener('error', () => reviveEditorVideo('error'));
 vidPlayer.addEventListener('play',  () => {
   if ((videoEdit.freezeFrames || []).length && !outputPlaybackActive) {
     vidPlayer.pause();
@@ -2874,6 +2910,17 @@ vidScrubber.addEventListener('input', () => {
   }
 });
 vidPlayBtn.addEventListener('click', toggleEditorPlayback);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    videoHiddenAt = Date.now();
+    return;
+  }
+  const hiddenMs = videoHiddenAt ? Date.now() - videoHiddenAt : 0;
+  reviveEditorVideo(hiddenMs > 5 * 60 * 1000 ? 'stale-visible' : 'visible');
+});
+window.addEventListener('pageshow', event => {
+  if (event.persisted) reviveEditorVideo('pageshow');
+});
 document.getElementById('vid-remove-btn').addEventListener('click', () => {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
@@ -3358,6 +3405,7 @@ function saveCurrentDraftSnapshot() {
   renderDrafts();
   renderAuthorWorkspace();
   toast('Черновик сохранён', 's');
+  resetUploadForm();
 }
 
 function deleteSavedDraft(id) {
@@ -3735,6 +3783,15 @@ function resetUploadForm({ keepDraft = false } = {}) {
   trajectoryPoints = [];
   mapMode = 'position';
   videoUrl = null; videoEdit = createDefaultVideoEdit(); screenshots = [];
+  stopOutputPlayback({ keepPreview: false });
+  clearFreezeHold();
+  setFreezeOverlay('');
+  if (vidPlayer) {
+    vidPlayer.pause();
+    vidPlayer.removeAttribute('src');
+    vidPlayer.load();
+  }
+  if (vidInput) vidInput.value = '';
 
   document.getElementById('sel-map').value = '';
   document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
