@@ -210,9 +210,9 @@
     .footage-chroma-canvas { position: absolute; left: 50%; top: 50%; width: 35%; height: auto; max-width: none; max-height: none; object-fit: contain; display: none; pointer-events: none; z-index: 5; background: transparent; transform: translate(-50%, -50%); transform-origin: 50% 50%; }
     .footage-chroma-canvas.show { display: block; }
     .footage-chroma-canvas.interactive { pointer-events: auto; cursor: move; touch-action: none; }
-    .footage-transform-frame { position: absolute; left: 50%; top: 50%; width: 35%; aspect-ratio: 1 / 1; display: none; z-index: 8; transform: translate(-50%, -50%); transform-origin: 50% 50%; border: 2px solid #eaff00; box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 0 20px rgba(234,255,0,.2); cursor: move; touch-action: none; background-image: linear-gradient(rgba(234,255,0,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(234,255,0,.35) 1px, transparent 1px); background-size: 33.333% 33.333%; }
+    .footage-transform-frame { position: absolute; left: 50%; top: 50%; width: 35%; aspect-ratio: 1 / 1; display: none; z-index: 8; transform: translate(-50%, -50%); transform-origin: 50% 50%; border: 2px solid rgba(255,255,255,.95); box-shadow: 0 0 0 1px rgba(0,0,0,.45); cursor: move; touch-action: none; }
     .footage-transform-frame.show { display: block; }
-    .footage-resize-handle { position: absolute; width: 12px; height: 12px; border-radius: 3px; border: 2px solid #0a0f1a; background: #eaff00; box-shadow: 0 0 0 1px rgba(234,255,0,.75); }
+    .footage-resize-handle { position: absolute; width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.65); background: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.75); }
     .footage-resize-handle.nw { left: -7px; top: -7px; cursor: nwse-resize; }
     .footage-resize-handle.ne { right: -7px; top: -7px; cursor: nesw-resize; }
     .footage-resize-handle.sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
