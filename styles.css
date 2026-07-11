@@ -269,6 +269,8 @@
     .timeline-zoom-block.selected { background: rgba(34,197,94,.36); box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
     .timeline-footage-block { border: 2px solid rgba(79,195,247,.92); background: rgba(79,195,247,.22); color: #dbeafe; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .timeline-footage-block.selected { background: rgba(79,195,247,.38); box-shadow: 0 0 0 3px rgba(79,195,247,.18); }
+    .timeline-footage-block.has-chroma { border-color: rgba(34,197,94,.96); box-shadow: inset 0 0 0 1px rgba(34,197,94,.24); }
+    .footage-chroma-dot { flex: 0 0 auto; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.16); }
     .timeline-freeze-block:active, .timeline-zoom-block:active, .timeline-footage-block:active { cursor: grabbing; }
     .freeze-resize, .zoom-resize, .footage-resize { position: absolute; top: -2px; bottom: -2px; width: 10px; cursor: ew-resize; background: rgba(255,255,255,.18); }
     .freeze-resize.start, .zoom-resize.start, .footage-resize.start { left: -2px; border-radius: 6px 0 0 6px; }
@@ -278,10 +280,14 @@
     .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 10px; align-items: end; }
     .editor-field { color: var(--text2); font-size: 11px; font-weight: 800; display: grid; gap: 5px; }
     .editor-field input[type="range"] { width: 100%; accent-color: var(--primary); }
+    .editor-field input[type="color"] { width: 100%; height: 34px; padding: 3px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface2); cursor: pointer; }
+    .editor-field input:disabled { opacity: .45; cursor: not-allowed; }
     .editor-check { color: var(--text2); font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 7px; min-height: 36px; }
     .editor-check input { accent-color: var(--primary); }
     .effects-panel { display: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
     .effects-panel.open { display: grid; }
+    .chroma-target { grid-column: 1 / -1; min-height: 32px; display: flex; align-items: center; padding: 7px 9px; border: 1px solid rgba(79,195,247,.24); border-radius: var(--r); background: rgba(79,195,247,.08); color: var(--text2); font-size: 12px; font-weight: 800; overflow-wrap: anywhere; }
+    .chroma-target.active { color: var(--text1); border-color: rgba(79,195,247,.52); background: rgba(79,195,247,.13); }
     .footage-library { grid-column: 1 / -1; border: 1px solid var(--border); border-radius: var(--r); background: rgba(15,23,42,.70); padding: 12px; display: grid; gap: 10px; }
     .footage-library[hidden] { display: none; }
     .footage-library-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }

@@ -269,7 +269,11 @@
                 </div>
               </div>
               <div class="effects-panel" id="effects-panel">
-                <label class="editor-check"><input type="checkbox" id="edit-chroma-enabled"> Хромакей зелёного</label>
+                <div class="chroma-target" id="edit-chroma-target">Выбери футаж на таймлайне</div>
+                <label class="editor-check"><input type="checkbox" id="edit-chroma-enabled"> Хромакей футажа</label>
+                <label class="editor-field">Цвет хромакея
+                  <input type="color" id="edit-chroma-color" value="#00ff00">
+                </label>
                 <label class="editor-field">Сила хромакея
                   <input type="range" id="edit-chroma-strength" min="0" max="1" step="0.05" value="0.35">
                 </label>

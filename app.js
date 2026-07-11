@@ -1860,7 +1860,9 @@ const editorEls = {
   volumeLabel: document.getElementById('edit-volume-label'),
   muted: document.getElementById('edit-muted'),
   chromaEnabled: document.getElementById('edit-chroma-enabled'),
+  chromaColor: document.getElementById('edit-chroma-color'),
   chromaStrength: document.getElementById('edit-chroma-strength'),
+  chromaTarget: document.getElementById('edit-chroma-target'),
   footageInput: document.getElementById('edit-footage-input'),
   footageStatus: document.getElementById('edit-footage-status'),
   footageLibrary: document.getElementById('footage-library'),
@@ -1891,6 +1893,15 @@ function createDefaultVideoEdit() {
     audio: { muted: false, volume: 1 },
     chromaKey: { enabled: false, color: '#00ff00', strength: 0.35 },
     footageOverlays: [],
+  };
+}
+
+function normalizeChromaKey(value = {}) {
+  const color = /^#[0-9a-f]{6}$/i.test(String(value.color || '')) ? String(value.color).toLowerCase() : '#00ff00';
+  return {
+    enabled: !!value.enabled,
+    color,
+    strength: Math.max(0, Math.min(1, Number(value.strength ?? 0.35))),
   };
 }
 
@@ -1948,24 +1959,24 @@ function normalizedVideoEdit() {
       duration: Math.max(0.2, Math.min(10, Number(item.duration || 2))),
       track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
     })).sort((a, b) => a.at - b.at),
-    footageOverlays: (videoEdit.footageOverlays || []).map(item => ({
-      id: item.id || `footage_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      url: String(item.url || ''),
-      name: String(item.name || 'Футаж').slice(0, 120),
-      at: clampTime(item.at),
-      duration: Math.max(0.2, Math.min(60, Number(item.duration || 2))),
-      track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
-      muted: item.muted !== false,
-    })).filter(item => item.url).sort((a, b) => a.at - b.at),
+    footageOverlays: (videoEdit.footageOverlays || []).map(item => {
+      const legacyChroma = item.chromaKey || item.chroma || (videoEdit.chromaKey?.enabled ? videoEdit.chromaKey : {});
+      return {
+        id: item.id || `footage_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        url: String(item.url || ''),
+        name: String(item.name || 'Футаж').slice(0, 120),
+        at: clampTime(item.at),
+        duration: Math.max(0.2, Math.min(60, Number(item.duration || 2))),
+        track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
+        muted: item.muted !== false,
+        chromaKey: normalizeChromaKey(legacyChroma),
+      };
+    }).filter(item => item.url).sort((a, b) => a.at - b.at),
     audio: {
       muted: !!videoEdit.audio?.muted,
       volume: Math.max(0, Math.min(2, Number(videoEdit.audio?.volume ?? 1))),
     },
-    chromaKey: {
-      enabled: !!videoEdit.chromaKey?.enabled,
-      color: videoEdit.chromaKey?.color || '#00ff00',
-      strength: Math.max(0, Math.min(1, Number(videoEdit.chromaKey?.strength ?? 0.35))),
-    },
+    chromaKey: normalizeChromaKey(videoEdit.chromaKey),
   };
 }
 
@@ -2110,6 +2121,11 @@ function selectedZoomClip() {
   return (videoEdit.zoomKeyframes || []).find(item => item.id === selectedEditorItem.id) || null;
 }
 
+function selectedFootageClip() {
+  if (selectedEditorItem?.type !== 'footage') return null;
+  return (videoEdit.footageOverlays || []).find(item => item.id === selectedEditorItem.id) || null;
+}
+
 function activeZoomClipAt(time) {
   return (videoEdit.zoomKeyframes || [])
     .slice()
@@ -2135,6 +2151,30 @@ function activeFootageClipAtOutput(outputTime) {
       const start = sourceToOutputTime(item.at);
       return outputTime >= start && outputTime <= start + Number(item.duration || 2);
     }) || null;
+}
+
+function syncFootageChromaPanel() {
+  const footage = selectedFootageClip();
+  const chroma = normalizeChromaKey(footage?.chromaKey || {});
+  const disabled = !footage;
+  if (editorEls.chromaTarget) {
+    editorEls.chromaTarget.textContent = footage
+      ? `Хромакей привязан к футажу: ${footage.name || 'Футаж'}`
+      : 'Выбери футаж на таймлайне, чтобы включить хромакей';
+    editorEls.chromaTarget.classList.toggle('active', !!footage);
+  }
+  if (editorEls.chromaEnabled) {
+    editorEls.chromaEnabled.checked = !!footage && chroma.enabled;
+    editorEls.chromaEnabled.disabled = disabled;
+  }
+  if (editorEls.chromaColor) {
+    editorEls.chromaColor.value = chroma.color;
+    editorEls.chromaColor.disabled = disabled;
+  }
+  if (editorEls.chromaStrength) {
+    editorEls.chromaStrength.value = String(chroma.strength);
+    editorEls.chromaStrength.disabled = disabled;
+  }
 }
 
 function syncZoomTransformPanel() {
@@ -2331,8 +2371,7 @@ function renderVideoEditor() {
   if (editorEls.volume) editorEls.volume.value = String(videoEdit.audio.volume);
   if (editorEls.volumeLabel) editorEls.volumeLabel.textContent = `${Math.round(videoEdit.audio.volume * 100)}%`;
   if (editorEls.muted) editorEls.muted.checked = videoEdit.audio.muted;
-  if (editorEls.chromaEnabled) editorEls.chromaEnabled.checked = videoEdit.chromaKey.enabled;
-  if (editorEls.chromaStrength) editorEls.chromaStrength.value = String(videoEdit.chromaKey.strength);
+  syncFootageChromaPanel();
   vidPlayer.muted = videoEdit.audio.muted;
   vidPlayer.volume = Math.max(0, Math.min(1, videoEdit.audio.volume));
 
@@ -2389,12 +2428,13 @@ function renderVideoEditor() {
         <span class="zoom-resize end" data-zoom-edge="end"></span>
       </span>`).join('');
     const footageHtml = (videoEdit.footageOverlays || []).map(f => `
-      <span class="timeline-footage-block ${selectedEditorItem?.type === 'footage' && selectedEditorItem.id === f.id ? 'selected' : ''}"
+      <span class="timeline-footage-block ${selectedEditorItem?.type === 'footage' && selectedEditorItem.id === f.id ? 'selected' : ''} ${f.chromaKey?.enabled ? 'has-chroma' : ''}"
         data-footage-id="${esc(f.id)}"
-        title="Футаж ${esc(f.name)} · дорожка ${Number(f.track || 0) + 1}, ${fmtTime(f.duration)}"
+        title="Футаж ${esc(f.name)} · дорожка ${Number(f.track || 0) + 1}, ${fmtTime(f.duration)}${f.chromaKey?.enabled ? ` · хромакей ${f.chromaKey.color || '#00ff00'}` : ''}"
         style="top:${Number(f.track || 0) * EFFECT_TRACK_HEIGHT + 6}px;bottom:auto;height:24px;left:${pct(sourceToOutputTime(f.at))}%;width:${Math.max(2.5, pct(f.duration))}%">
         <span class="footage-resize start" data-footage-edge="start"></span>
         ${esc(f.name || 'Футаж')}
+        ${f.chromaKey?.enabled ? '<span class="footage-chroma-dot"></span>' : ''}
         <span class="footage-resize end" data-footage-edge="end"></span>
       </span>`).join('');
     editorEls.effectMarkers.innerHTML = rowsHtml + zoomHtml + footageHtml;
@@ -2411,7 +2451,8 @@ function renderVideoEditor() {
     if (videoEdit.zoomKeyframes.length) parts.push(`зумов: ${videoEdit.zoomKeyframes.length}`);
     if (videoEdit.footageOverlays.length) parts.push(`футажей: ${videoEdit.footageOverlays.length}`);
     if (videoEdit.audio.muted) parts.push('звук выключен');
-    if (videoEdit.chromaKey.enabled) parts.push('хромакей');
+    const chromaCount = videoEdit.footageOverlays.filter(item => item.chromaKey?.enabled).length;
+    if (chromaCount) parts.push(`хромакей: ${chromaCount}`);
     if (parts.length) parts.push(`итог: ${fmtTime(editedOutputDuration())}`);
     editorEls.summary.textContent = parts.length ? parts.join(' · ') : 'Видео без правок';
   }
@@ -2430,7 +2471,7 @@ function setEditorMode(mode) {
     split: 'Перемотай на нужное место и нажми “Разрезать тут”. Обычный клик по таймлайну больше не добавляет разрез.',
     freeze: 'Перемотай на кадр и нажми “Добавить стоп-кадр 2с”. Появится фиолетовый клип, его можно двигать, тянуть за край и удалить.',
     zoom: 'Выбери силу зума и нажми “Добавить зум”. Зелёный клип на дорожке эффектов можно двигать, растягивать и удалить.',
-    effects: 'Футаж сейчас сохраняет настройки звука и хромакея в заявке. Финальный рендер делает модерация/обработка.',
+    effects: 'Выбери футаж на таймлайне, затем включи хромакей и цвет именно для этого блока. Финальный рендер делает модерация/обработка.',
   };
   if (editorEls.hint) editorEls.hint.textContent = hints[activeEditorMode] || hints.trim;
 }
@@ -2480,7 +2521,7 @@ function applyVideoEditPreview() {
       editorEls.footagePreview.removeAttribute('src');
     }
   }
-  vidPlayer.style.filter = videoEdit.chromaKey?.enabled ? `saturate(${1 + videoEdit.chromaKey.strength}) contrast(1.08)` : '';
+  vidPlayer.style.filter = '';
   editorEls.zoomFrame?.classList.toggle('show', !!activeZoom && (scaleX > 1.01 || scaleY > 1.01));
   if (editorEls.zoomFrame) {
     const frameWidth = Math.max(16, Math.min(46, 54 / Math.max(scale, 1)));
@@ -2937,13 +2978,29 @@ editorEls.muted?.addEventListener('change', event => {
   videoEdit.audio.muted = !!event.target.checked;
   saveVideoEdit();
 });
-editorEls.chromaEnabled?.addEventListener('change', event => {
-  videoEdit.chromaKey.enabled = !!event.target.checked;
+
+function updateSelectedFootageChroma(patch) {
+  const footage = selectedFootageClip();
+  if (!footage) {
+    toast('Сначала выбери футаж на таймлайне', 'i');
+    syncFootageChromaPanel();
+    return;
+  }
+  footage.chromaKey = normalizeChromaKey({
+    ...(footage.chromaKey || {}),
+    ...patch,
+  });
   saveVideoEdit();
+}
+
+editorEls.chromaEnabled?.addEventListener('change', event => {
+  updateSelectedFootageChroma({ enabled: !!event.target.checked });
+});
+editorEls.chromaColor?.addEventListener('input', event => {
+  updateSelectedFootageChroma({ color: event.target.value || '#00ff00' });
 });
 editorEls.chromaStrength?.addEventListener('input', event => {
-  videoEdit.chromaKey.strength = Number(event.target.value || 0.35);
-  saveVideoEdit();
+  updateSelectedFootageChroma({ strength: Number(event.target.value || 0.35) });
 });
 function bindZoomTransformInput(el, key, map = value => value) {
   el?.addEventListener('input', event => {
