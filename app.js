@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T21:32:26+03:00';
+const SITE_VERSION = '2026-07-11T21:50:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1835,12 +1835,17 @@ let outputPlaybackStartTime = 0;
 let outputPlaybackTime = null;
 let lastVideoReviveAt = 0;
 let videoHiddenAt = 0;
+let chromaRenderRaf = null;
+let chromaRenderFootageId = null;
+let chromaRenderSignature = '';
+let chromaRenderErrorShown = false;
 const freezeFrameImages = new Map();
 const editorEls = {
   scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
   stage: document.getElementById('vid-stage'),
   footagePreview: document.getElementById('footage-preview-overlay'),
+  footageCanvas: document.getElementById('footage-chroma-canvas'),
   freezeOverlay: document.getElementById('freeze-frame-overlay'),
   zoomFrame: document.getElementById('zoom-preview-frame'),
   playhead: document.getElementById('timeline-playhead'),
@@ -2151,6 +2156,101 @@ function activeFootageClipAtOutput(outputTime) {
       const start = sourceToOutputTime(item.at);
       return outputTime >= start && outputTime <= start + Number(item.duration || 2);
     }) || null;
+}
+
+function hexToRgb(hex) {
+  const value = String(hex || '#00ff00').replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(value)) return { r: 0, g: 255, b: 0 };
+  return {
+    r: parseInt(value.slice(0, 2), 16),
+    g: parseInt(value.slice(2, 4), 16),
+    b: parseInt(value.slice(4, 6), 16),
+  };
+}
+
+function stopChromaPreview() {
+  if (chromaRenderRaf) {
+    cancelAnimationFrame(chromaRenderRaf);
+    chromaRenderRaf = null;
+  }
+  chromaRenderFootageId = null;
+  chromaRenderSignature = '';
+  editorEls.footageCanvas?.classList.remove('show');
+  const ctx = editorEls.footageCanvas?.getContext?.('2d', { willReadFrequently: true });
+  if (ctx && editorEls.footageCanvas) ctx.clearRect(0, 0, editorEls.footageCanvas.width, editorEls.footageCanvas.height);
+}
+
+function startChromaPreview(footage) {
+  if (!footage?.id || !footage?.chromaKey?.enabled) {
+    stopChromaPreview();
+    return;
+  }
+  const chroma = normalizeChromaKey(footage.chromaKey);
+  const signature = `${footage.id}|${chroma.color}|${chroma.strength}`;
+  if (chromaRenderRaf && chromaRenderSignature === signature) return;
+  stopChromaPreview();
+  chromaRenderFootageId = footage.id;
+  chromaRenderSignature = signature;
+  chromaRenderRaf = requestAnimationFrame(() => renderChromaPreviewFrame(footage));
+}
+
+function renderChromaPreviewFrame(footage) {
+  const video = editorEls.footagePreview;
+  const canvas = editorEls.footageCanvas;
+  if (!video || !canvas || !footage?.chromaKey?.enabled) {
+    stopChromaPreview();
+    return;
+  }
+  if (chromaRenderFootageId && chromaRenderFootageId !== footage.id) return;
+  const vw = video.videoWidth || 0;
+  const vh = video.videoHeight || 0;
+  if (!vw || !vh) {
+    chromaRenderRaf = requestAnimationFrame(() => renderChromaPreviewFrame(footage));
+    return;
+  }
+  if (canvas.width !== vw || canvas.height !== vh) {
+    canvas.width = vw;
+    canvas.height = vh;
+  }
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return;
+  try {
+    ctx.clearRect(0, 0, vw, vh);
+    ctx.drawImage(video, 0, 0, vw, vh);
+    const frame = ctx.getImageData(0, 0, vw, vh);
+    const data = frame.data;
+    const key = hexToRgb(footage.chromaKey.color);
+    const strength = Math.max(0, Math.min(1, Number(footage.chromaKey.strength ?? 0.35)));
+    const tolerance = 18 + strength * 160;
+    const feather = 18 + strength * 54;
+    const despill = Math.min(1, 0.25 + strength * 0.75);
+    for (let i = 0; i < data.length; i += 4) {
+      const dr = data[i] - key.r;
+      const dg = data[i + 1] - key.g;
+      const db = data[i + 2] - key.b;
+      const distance = Math.sqrt(dr * dr + dg * dg + db * db);
+      if (distance <= tolerance) {
+        data[i + 3] = 0;
+      } else if (distance <= tolerance + feather) {
+        data[i + 3] = Math.round(data[i + 3] * ((distance - tolerance) / feather));
+      }
+      if (key.g >= key.r && key.g >= key.b && data[i + 1] > data[i] && data[i + 1] > data[i + 2]) {
+        data[i + 1] = Math.round(data[i + 1] - Math.max(0, data[i + 1] - Math.max(data[i], data[i + 2])) * despill);
+      }
+    }
+    ctx.putImageData(frame, 0, 0);
+    canvas.classList.add('show');
+    chromaRenderErrorShown = false;
+  } catch (error) {
+    stopChromaPreview();
+    if (!chromaRenderErrorShown) {
+      chromaRenderErrorShown = true;
+      console.warn('chroma preview failed', error);
+      toast('Не удалось применить хромакей в предпросмотре: браузер запретил читать пиксели футажа', 'w');
+    }
+    return;
+  }
+  chromaRenderRaf = requestAnimationFrame(() => renderChromaPreviewFrame(footage));
 }
 
 function syncFootageChromaPanel() {
@@ -2501,6 +2601,7 @@ function applyVideoEditPreview() {
       if (editorEls.footagePreview.dataset.url !== activeFootage.url) {
         editorEls.footagePreview.dataset.url = activeFootage.url;
         editorEls.footagePreview.src = activeFootage.url;
+        stopChromaPreview();
       }
       editorEls.footagePreview.muted = activeFootage.muted !== false;
       const clipStart = sourceToOutputTime(activeFootage.at);
@@ -2513,10 +2614,16 @@ function applyVideoEditPreview() {
       } else if (!outputPlaybackActive && vidPlayer.paused && !editorEls.footagePreview.paused) {
         editorEls.footagePreview.pause();
       }
-      editorEls.footagePreview.classList.add('show');
+      const hasChroma = !!activeFootage.chromaKey?.enabled;
+      editorEls.footagePreview.classList.toggle('show', !hasChroma);
+      editorEls.footagePreview.classList.toggle('processing-chroma', hasChroma);
+      if (hasChroma) startChromaPreview(activeFootage);
+      else stopChromaPreview();
     } else {
       editorEls.footagePreview.pause();
       editorEls.footagePreview.classList.remove('show');
+      editorEls.footagePreview.classList.remove('processing-chroma');
+      stopChromaPreview();
       delete editorEls.footagePreview.dataset.url;
       editorEls.footagePreview.removeAttribute('src');
     }

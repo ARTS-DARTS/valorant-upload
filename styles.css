@@ -205,6 +205,9 @@
     .vid-player { position: relative; z-index: 1; width: 100%; border-radius: var(--r); background: #000; display: block; max-height: 300px; transform-origin: 50% 50%; transition: transform .32s cubic-bezier(.2,.8,.2,1), filter .18s ease; }
     .footage-preview-overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; pointer-events: none; z-index: 5; background: transparent; }
     .footage-preview-overlay.show { display: block; }
+    .footage-preview-overlay.processing-chroma { display: block; opacity: 0; }
+    .footage-chroma-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; pointer-events: none; z-index: 5; background: transparent; }
+    .footage-chroma-canvas.show { display: block; }
     .freeze-frame-overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; display: none; pointer-events: none; z-index: 6; }
     .freeze-frame-overlay.show { display: block; }
     .zoom-frame { position: absolute; left: 50%; top: 50%; width: 46%; height: 46%; transform: translate(-50%, -50%); border: 2px solid rgba(34,197,94,.85); border-radius: var(--r); color: #bbf7d0; background: rgba(34,197,94,.08); display: none; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; text-transform: uppercase; pointer-events: auto; cursor: grab; touch-action: none; box-shadow: 0 0 20px rgba(34,197,94,.25); z-index: 7; }
