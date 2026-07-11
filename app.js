@@ -1822,6 +1822,7 @@ let lastVideoTime = 0;
 let timelinePixelsPerSecond = 52;
 let timelineMagnetEnabled = true;
 let activeEffectTrack = 0;
+const TIMELINE_FRAME_SECONDS = 60;
 const EFFECT_TRACK_HEIGHT = 36;
 const VIDEO_EDIT_UNDO_KEY = 'vlineups_video_edit_undo_v2';
 const VIDEO_EDIT_UNDO_LIMIT = 12;
@@ -1941,6 +1942,20 @@ function clampOutputTime(value) {
   const n = Number(value || 0);
   if (!duration) return Math.max(0, n);
   return Math.max(0, Math.min(duration, n));
+}
+
+function timelineFrameDuration() {
+  const output = editedOutputDuration();
+  return Math.max(TIMELINE_FRAME_SECONDS, output || 0);
+}
+
+function timelinePct(value) {
+  const duration = timelineFrameDuration();
+  return duration ? Math.max(0, Math.min(100, Number(value || 0) / duration * 100)) : 0;
+}
+
+function timelineWidthPx() {
+  return Math.max(900, Math.round(timelineFrameDuration() * timelinePixelsPerSecond));
 }
 
 function effectOutputStart(item) {
@@ -2542,8 +2557,7 @@ function renderVideoTransport() {
 }
 
 function updateTimelinePlaybackUi({ keepVisible = false } = {}) {
-  const outputDuration = editedOutputDuration();
-  const currentPct = outputDuration ? Math.max(0, Math.min(100, currentOutputTime() / outputDuration * 100)) : 0;
+  const currentPct = timelinePct(currentOutputTime());
   if (editorEls.playhead) editorEls.playhead.style.left = `${currentPct}%`;
   if (keepVisible) keepTimelinePlayheadVisible(currentPct);
   renderVideoTransport();
@@ -2572,9 +2586,10 @@ function renderVideoEditor() {
   videoEdit = normalizedVideoEdit();
   const end = videoEdit.trimEnd || duration;
   const outputDuration = editedOutputDuration();
+  const frameDuration = timelineFrameDuration();
   activeEffectTrack = Math.max(0, Math.min((videoEdit.effectTracks || 1) - 1, activeEffectTrack));
   if (editorEls.shell && duration) {
-    editorEls.shell.style.width = `${Math.max(900, Math.round(outputDuration * timelinePixelsPerSecond))}px`;
+    editorEls.shell.style.width = `${timelineWidthPx()}px`;
   }
   if (editorEls.trimStart) editorEls.trimStart.value = videoEdit.trimStart.toFixed(1);
   if (editorEls.trimEnd) editorEls.trimEnd.value = (end || 0).toFixed(1);
@@ -2585,9 +2600,8 @@ function renderVideoEditor() {
   vidPlayer.muted = videoEdit.audio.muted;
   vidPlayer.volume = Math.max(0, Math.min(1, videoEdit.audio.volume));
 
-  const pct = outputDuration ? (value) => Math.max(0, Math.min(100, value / outputDuration * 100)) : () => 0;
-  const sourcePct = duration ? (value) => Math.max(0, Math.min(100, value / duration * 100)) : () => 0;
-  const currentPct = pct(currentOutputTime());
+  const pct = timelinePct;
+  const currentPct = timelinePct(currentOutputTime());
   if (editorEls.playhead) editorEls.playhead.style.left = `${currentPct}%`;
   if (outputPlaybackActive || (!vidPlayer.paused && !outputPlaybackActive) || timelineDrag?.kind === 'playhead') {
     keepTimelinePlayheadVisible(currentPct);
@@ -2649,7 +2663,7 @@ function renderVideoEditor() {
       </span>`).join('');
     editorEls.effectMarkers.innerHTML = rowsHtml + zoomHtml + footageHtml;
   }
-  if (editorEls.timeLabel) editorEls.timeLabel.textContent = `${fmtTime(vidPlayer.currentTime || 0)} / ${fmtTime(duration)} · итог ${fmtTime(outputDuration)}`;
+  if (editorEls.timeLabel) editorEls.timeLabel.textContent = `${fmtTime(vidPlayer.currentTime || 0)} / ${fmtTime(duration)} · итог ${fmtTime(outputDuration)} · каркас ${fmtTime(frameDuration)}`;
   renderVideoTransport();
   syncZoomTransformPanel();
   applyVideoEditPreview();
@@ -2764,19 +2778,19 @@ function timeFromTimelineEvent(event) {
   if (!duration || !editorEls.shell) return 0;
   const rect = editorEls.shell.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-  return snapFrameTime(outputToSourceTime(ratio * editedOutputDuration()));
+  return snapFrameTime(outputToSourceTime(ratio * timelineFrameDuration()));
 }
 
 function outputTimeFromTimelineEvent(event) {
   if (!editorEls.shell) return 0;
   const rect = editorEls.shell.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-  return ratio * editedOutputDuration();
+  return ratio * timelineFrameDuration();
 }
 
 function timelineSnapPoints() {
   const outputDuration = editedOutputDuration();
-  const points = new Set([0, outputDuration]);
+  const points = new Set([0, outputDuration, timelineFrameDuration()]);
   buildTimelineSegments().forEach(segment => {
     points.add(segment.outputStart);
     points.add(segment.outputStart + segment.duration);
@@ -2802,8 +2816,8 @@ function timelineSnapPoints() {
 }
 
 function snapOutputTime(outputTime) {
-  const outputDuration = editedOutputDuration();
-  const raw = Math.max(0, Math.min(outputDuration, Number(outputTime || 0)));
+  const frameDuration = timelineFrameDuration();
+  const raw = Math.max(0, Math.min(frameDuration, Number(outputTime || 0)));
   if (!timelineMagnetEnabled) return raw;
   const threshold = Math.max(0.07, Math.min(0.28, 12 / Math.max(1, timelinePixelsPerSecond)));
   let best = raw;
@@ -2815,7 +2829,7 @@ function snapOutputTime(outputTime) {
       bestDistance = distance;
     }
   });
-  return Math.max(0, Math.min(outputDuration, best));
+  return Math.max(0, Math.min(frameDuration, best));
 }
 
 function timelineTimesFromEvent(event, { magnet = true } = {}) {
