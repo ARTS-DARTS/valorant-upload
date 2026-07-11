@@ -116,3 +116,27 @@ git pull
 npm ci
 pm2 restart valorant-upload
 ```
+
+## Auto update
+
+The production VPS runs a systemd timer:
+
+```bash
+systemctl status valorant-upload-autodeploy.timer
+```
+
+It executes `/usr/local/bin/deploy-valorant-upload.sh` every minute. The script fetches `origin/main`, fast-forwards the local checkout, runs `npm ci`, and restarts PM2 when a new commit exists.
+
+Manual immediate deploy:
+
+```bash
+/usr/local/bin/deploy-valorant-upload.sh
+tail -n 80 /var/log/valorant-upload-deploy.log
+```
+
+After every push, verify the live site:
+
+```bash
+curl -fsSL "https://vlineups.ru/site-version.json?$(date +%s)"
+curl -fsSL "https://vlineups.ru/app.js?$(date +%s)" | grep "EXPECTED_NEW_STRING"
+```

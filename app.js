@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T20:50:28+03:00';
+const SITE_VERSION = '2026-07-11T20:55:49+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -2499,6 +2499,14 @@ function timelineTimesFromEvent(event, { magnet = true } = {}) {
   };
 }
 
+function effectTrackFromPointerEvent(event) {
+  if (!editorEls.effectLane) return activeEffectTrack;
+  const trackCount = Math.max(1, Number(videoEdit.effectTracks || 1));
+  const rect = editorEls.effectLane.getBoundingClientRect();
+  const y = Math.max(0, Math.min(rect.height - 1, event.clientY - rect.top));
+  return Math.max(0, Math.min(trackCount - 1, Math.floor(y / EFFECT_TRACK_HEIGHT)));
+}
+
 function autoScrollTimelineWhileDragging(event) {
   if (!editorEls.scroll || !timelineDrag) return;
   const maxScroll = editorEls.scroll.scrollWidth - editorEls.scroll.clientWidth;
@@ -2721,6 +2729,8 @@ editorEls.shell?.addEventListener('pointermove', event => {
     if (zoom) {
       const rawStart = clampTime(rawTime - (timelineDrag.offset || 0));
       zoom.at = clampTime(outputToSourceTime(snapOutputTime(sourceToOutputTime(rawStart))));
+      zoom.track = effectTrackFromPointerEvent(event);
+      activeEffectTrack = zoom.track;
     }
   } else if (timelineDrag.kind === 'zoom-resize') {
     const zoom = (videoEdit.zoomKeyframes || []).find(item => item.id === timelineDrag.id);
@@ -2740,6 +2750,8 @@ editorEls.shell?.addEventListener('pointermove', event => {
     if (footage) {
       const rawStart = clampTime(rawTime - (timelineDrag.offset || 0));
       footage.at = clampTime(outputToSourceTime(snapOutputTime(sourceToOutputTime(rawStart))));
+      footage.track = effectTrackFromPointerEvent(event);
+      activeEffectTrack = footage.track;
     }
   } else if (timelineDrag.kind === 'footage-resize') {
     const footage = (videoEdit.footageOverlays || []).find(item => item.id === timelineDrag.id);
