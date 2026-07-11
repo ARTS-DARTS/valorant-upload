@@ -239,6 +239,7 @@
                 <button class="btn-sm" id="edit-add-effect-track" type="button">+ дорожка эффектов</button>
                 <button class="btn-sm danger-soft" id="edit-remove-effect-track" type="button">− дорожка эффектов</button>
                 <button class="btn-sm danger-soft" id="edit-delete-selected" type="button">Удалить выбранное</button>
+                <button class="btn-sm" id="edit-undo" type="button" disabled>Отменить</button>
                 <button class="btn-sm" id="edit-reset" type="button">Сбросить монтаж</button>
                 <span class="footage-status" id="edit-footage-status" aria-live="polite"></span>
               </div>
@@ -271,6 +272,7 @@
                 <label class="editor-field">Сила хромакея
                   <input type="range" id="edit-chroma-strength" min="0" max="1" step="0.05" value="0.35">
                 </label>
+                <div class="footage-library" id="footage-library" hidden></div>
               </div>
             </aside>
           </div>

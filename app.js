@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T20:55:49+03:00';
+const SITE_VERSION = '2026-07-11T21:02:38+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1259,6 +1259,7 @@ async function loadAuthorMaterials({ force = false } = {}) {
   } finally {
     authorMaterialsLoading = false;
     renderMaterials();
+    if (editorEls.footageLibrary && !editorEls.footageLibrary.hidden) renderFootageLibrary();
   }
 }
 
@@ -1810,6 +1811,10 @@ let timelinePixelsPerSecond = 52;
 let timelineMagnetEnabled = true;
 let activeEffectTrack = 0;
 const EFFECT_TRACK_HEIGHT = 36;
+const VIDEO_EDIT_UNDO_KEY = 'vlineups_video_edit_undo';
+const VIDEO_EDIT_UNDO_LIMIT = 12;
+let videoEditUndoStack = [];
+let resetConfirmTimer = null;
 let videoEditorHotkeysActive = false;
 let timelinePreviewOutputTime = null;
 let outputPlaybackActive = false;
@@ -1846,6 +1851,9 @@ const editorEls = {
   chromaStrength: document.getElementById('edit-chroma-strength'),
   footageInput: document.getElementById('edit-footage-input'),
   footageStatus: document.getElementById('edit-footage-status'),
+  footageLibrary: document.getElementById('footage-library'),
+  undo: document.getElementById('edit-undo'),
+  reset: document.getElementById('edit-reset'),
   zoomScaleX: document.getElementById('edit-zoom-scale-x'),
   zoomScaleY: document.getElementById('edit-zoom-scale-y'),
   zoomPosX: document.getElementById('edit-zoom-pos-x'),
@@ -2394,6 +2402,7 @@ function setEditorMode(mode) {
   });
   editorEls.effectsPanel?.classList.toggle('open', activeEditorMode === 'effects');
   editorEls.zoomPanel?.classList.toggle('open', activeEditorMode === 'zoom');
+  if (activeEditorMode !== 'effects' && editorEls.footageLibrary) editorEls.footageLibrary.hidden = true;
   const hints = {
     trim: 'Клик или drag по таймлайну перематывает. Для обрезки тяни белые края зелёного отрезка или меняй поля старт/конец.',
     split: 'Перемотай на нужное место и нажми “Разрезать тут”. Обычный клик по таймлайну больше не добавляет разрез.',
@@ -2565,13 +2574,68 @@ function addUniqueTime(list, time) {
   return [...list, t].sort((a, b) => a - b);
 }
 
-function saveVideoEdit() {
+function cloneVideoEditState(edit = videoEdit) {
+  return JSON.parse(JSON.stringify(edit || createDefaultVideoEdit()));
+}
+
+function writeVideoEditUndoStack() {
+  try { localStorage.setItem(VIDEO_EDIT_UNDO_KEY, JSON.stringify(videoEditUndoStack)); } catch (_) {}
+  if (editorEls.undo) editorEls.undo.disabled = !videoEditUndoStack.length;
+}
+
+function loadVideoEditUndoStack() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(VIDEO_EDIT_UNDO_KEY) || '[]');
+    videoEditUndoStack = Array.isArray(parsed) ? parsed.slice(-VIDEO_EDIT_UNDO_LIMIT) : [];
+  } catch (_) {
+    videoEditUndoStack = [];
+  }
+  writeVideoEditUndoStack();
+}
+
+function pushVideoEditUndo() {
+  videoEditUndoStack.push(cloneVideoEditState(normalizedVideoEdit()));
+  if (videoEditUndoStack.length > VIDEO_EDIT_UNDO_LIMIT) videoEditUndoStack.shift();
+  writeVideoEditUndoStack();
+}
+
+function undoVideoEdit() {
+  const previous = videoEditUndoStack.pop();
+  if (!previous) { toast('Нечего отменять', 'i'); return; }
+  stopOutputPlayback({ keepPreview: false });
+  clearFreezeHold();
+  timelinePreviewOutputTime = null;
+  selectedEditorItem = null;
+  videoEdit = { ...createDefaultVideoEdit(), ...previous };
+  writeVideoEditUndoStack();
+  saveVideoEdit({ skipUndo: true });
+  toast('Монтаж восстановлен', 's');
+}
+
+function saveVideoEdit({ skipUndo = false } = {}) {
+  if (!skipUndo) clearResetConfirmation();
   videoEdit = normalizedVideoEdit();
   renderVideoEditor();
   _saveDraft();
 }
 
+function clearResetConfirmation() {
+  if (resetConfirmTimer) {
+    clearTimeout(resetConfirmTimer);
+    resetConfirmTimer = null;
+  }
+  if (editorEls.reset) editorEls.reset.textContent = 'Сбросить монтаж';
+}
+
 function resetVideoEdit() {
+  if (!resetConfirmTimer) {
+    if (editorEls.reset) editorEls.reset.textContent = 'Точно сбросить?';
+    toast('Нажми «Точно сбросить?» ещё раз, чтобы очистить монтаж', 'w');
+    resetConfirmTimer = setTimeout(clearResetConfirmation, 4500);
+    return;
+  }
+  pushVideoEditUndo();
+  clearResetConfirmation();
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   timelinePreviewOutputTime = null;
@@ -2579,8 +2643,12 @@ function resetVideoEdit() {
   setFreezeOverlay('');
   videoEdit = createDefaultVideoEdit();
   videoEdit.trimEnd = videoDuration();
-  saveVideoEdit();
+  selectedEditorItem = null;
+  saveVideoEdit({ skipUndo: true });
+  toast('Монтаж сброшен. Можно нажать «Отменить»', 's');
 }
+
+loadVideoEditUndoStack();
 
 function clearFreezeHold() {
   if (freezeHoldTimer) {
@@ -3036,6 +3104,7 @@ function deleteSelectedEditorItem() {
     return;
   }
   if (selectedEditorItem.type === 'freeze') {
+    pushVideoEditUndo();
     videoEdit.freezeFrames = (videoEdit.freezeFrames || []).filter(item => item.id !== selectedEditorItem.id);
     freezeFrameImages.delete(selectedEditorItem.id);
     selectedEditorItem = null;
@@ -3044,6 +3113,7 @@ function deleteSelectedEditorItem() {
     return;
   }
   if (selectedEditorItem.type === 'zoom') {
+    pushVideoEditUndo();
     videoEdit.zoomKeyframes = (videoEdit.zoomKeyframes || []).filter(item => item.id !== selectedEditorItem.id);
     selectedEditorItem = null;
     toast('Зум удалён', 's');
@@ -3051,6 +3121,7 @@ function deleteSelectedEditorItem() {
     return;
   }
   if (selectedEditorItem.type === 'footage') {
+    pushVideoEditUndo();
     videoEdit.footageOverlays = (videoEdit.footageOverlays || []).filter(item => item.id !== selectedEditorItem.id);
     selectedEditorItem = null;
     toast('Футаж удалён', 's');
@@ -3058,6 +3129,7 @@ function deleteSelectedEditorItem() {
     return;
   }
   if (selectedEditorItem.type === 'split') {
+    pushVideoEditUndo();
     videoEdit.splits = (videoEdit.splits || []).filter(t => Math.abs(t - selectedEditorItem.at) >= 0.11);
     selectedEditorItem = null;
     toast('Разрез удалён', 's');
@@ -3082,6 +3154,7 @@ function removeEffectTrack(track = activeEffectTrack) {
     toast('Нельзя удалить последнюю дорожку эффектов', 'i');
     return;
   }
+  pushVideoEditUndo();
   videoEdit.zoomKeyframes = (videoEdit.zoomKeyframes || [])
     .filter(item => Number(item.track || 0) !== removeTrack)
     .map(item => ({
@@ -3119,6 +3192,25 @@ function readVideoMetadata(file) {
     video.src = url;
   });
 }
+function readVideoUrlMetadata(url) {
+  return new Promise(resolve => {
+    const video = document.createElement('video');
+    let settled = false;
+    const done = value => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    video.preload = 'metadata';
+    video.crossOrigin = 'anonymous';
+    video.onloadedmetadata = () => done({
+      duration: Number.isFinite(video.duration) ? video.duration : 0,
+    });
+    video.onerror = () => done({ duration: 0 });
+    video.src = url;
+    setTimeout(() => done({ duration: 0 }), 3500);
+  });
+}
 function addFootageOverlay({ url, name, duration }) {
   const outputDuration = editedOutputDuration() || videoDuration();
   const currentAt = outputToSourceTime(currentOutputTime());
@@ -3135,6 +3227,70 @@ function addFootageOverlay({ url, name, duration }) {
   setEditorMode('effects');
   toast('Футаж добавлен на таймлайн', 's');
   saveVideoEdit();
+}
+function renderFootageLibrary() {
+  if (!editorEls.footageLibrary) return;
+  const uploadButton = '<button class="btn-sm" type="button" data-footage-upload-new>Загрузить новый файл</button>';
+  if (authorMaterialsError) {
+    editorEls.footageLibrary.innerHTML = `
+      <div class="footage-library-head">
+        <span class="footage-library-title">Материалы</span>
+        <div class="footage-library-actions">${uploadButton}</div>
+      </div>
+      <div class="empty-state"><strong>Не удалось загрузить материалы</strong>${esc(authorMaterialsError)}</div>`;
+    return;
+  }
+  if (!authorMaterialsLoaded) {
+    if (!authorMaterialsLoading) loadAuthorMaterials();
+    editorEls.footageLibrary.innerHTML = `
+      <div class="footage-library-head">
+        <span class="footage-library-title">Материалы</span>
+        <div class="footage-library-actions">${uploadButton}</div>
+      </div>
+      <div class="empty-state"><strong>Загрузка материалов...</strong>Сейчас подтянем опубликованные футажи.</div>`;
+    return;
+  }
+  const materials = (isCurrentUserAdmin() ? authorMaterials : authorMaterials.filter(item => item.is_published !== false))
+    .filter(item => String(item.video_url || '').trim());
+  const listHtml = materials.length
+    ? `<div class="footage-library-list">${materials.map(item => `
+        <article class="footage-library-item">
+          <strong>${esc(firstText(item.title, item.video_file_name, 'Футаж'))}</strong>
+          <span>${esc(firstText(item.description, item.video_file_name, 'Готовый материал'))}</span>
+          <div class="footage-library-actions">
+            <button class="btn-sm" type="button" data-footage-material="${esc(item.id || '')}">На таймлайн</button>
+          </div>
+        </article>`).join('')}</div>`
+    : '<div class="empty-state"><strong>Футажей в материалах пока нет</strong>Загрузи материал в разделе «Материалы» или выбери новый файл здесь.</div>';
+  editorEls.footageLibrary.innerHTML = `
+    <div class="footage-library-head">
+      <span class="footage-library-title">Материалы</span>
+      <div class="footage-library-actions">
+        <button class="btn-sm" type="button" data-footage-refresh>Обновить</button>
+        ${uploadButton}
+      </div>
+    </div>
+    ${listHtml}`;
+}
+function openFootageLibrary() {
+  if (!videoUrl) { toast('Сначала загрузи основное видео', 'i'); return; }
+  setEditorMode('effects');
+  if (!editorEls.footageLibrary) return;
+  editorEls.footageLibrary.hidden = false;
+  renderFootageLibrary();
+}
+async function addMaterialFootageToTimeline(id) {
+  const material = authorMaterials.find(item => item.id === id);
+  const url = String(material?.video_url || '').trim();
+  if (!url) { toast('У материала нет видео', 'e'); return; }
+  if (editorEls.footageStatus) editorEls.footageStatus.textContent = 'Добавляем материал...';
+  const meta = await readVideoUrlMetadata(url);
+  if (editorEls.footageStatus) editorEls.footageStatus.textContent = '';
+  addFootageOverlay({
+    url,
+    name: firstText(material.title, material.video_file_name, 'Футаж'),
+    duration: meta.duration || 2,
+  });
 }
 async function handleFootageFile(file) {
   if (!isVideoFile(file)) { toast('Выбери .mp4 или .mov футаж', 'e'); return; }
@@ -3159,9 +3315,14 @@ async function handleFootageFile(file) {
     if (editorEls.footageInput) editorEls.footageInput.value = '';
   }
 }
-document.getElementById('edit-add-footage')?.addEventListener('click', () => {
-  if (!videoUrl) { toast('Сначала загрузи основное видео', 'i'); return; }
-  editorEls.footageInput?.click();
+document.getElementById('edit-add-footage')?.addEventListener('click', openFootageLibrary);
+editorEls.footageLibrary?.addEventListener('click', event => {
+  const materialBtn = event.target.closest('[data-footage-material]');
+  const refreshBtn = event.target.closest('[data-footage-refresh]');
+  const uploadBtn = event.target.closest('[data-footage-upload-new]');
+  if (materialBtn) addMaterialFootageToTimeline(materialBtn.dataset.footageMaterial || '');
+  if (refreshBtn) loadAuthorMaterials({ force: true });
+  if (uploadBtn) editorEls.footageInput?.click();
 });
 editorEls.footageInput?.addEventListener('change', () => {
   const file = editorEls.footageInput.files?.[0];
@@ -3190,6 +3351,7 @@ function addZoomAt(time, { silent = false } = {}) {
   if (!silent) toast(`Зум ${scaleX.toFixed(2)}x/${scaleY.toFixed(2)}x на 2 сек добавлен`, 's');
   saveVideoEdit();
 }
+editorEls.undo?.addEventListener('click', undoVideoEdit);
 document.getElementById('edit-reset')?.addEventListener('click', resetVideoEdit);
 
 function isVideoFile(file) {
@@ -3239,6 +3401,8 @@ async function handleVideoFile(file) {
     vidPlayer.src = url;
     document.getElementById('vid-player-wrap').style.display = '';
     videoEdit = createDefaultVideoEdit();
+    videoEditUndoStack = [];
+    writeVideoEditUndoStack();
     toast('Видео загружено ✅', 's');
     validateForm(); _saveDraft();
     renderVideoEditor();
@@ -3408,6 +3572,12 @@ document.addEventListener('keydown', e => {
   if (isTyping) return;
   const wrap = document.getElementById('vid-player-wrap');
   const insideEditor = !!(wrap && wrap.contains(target));
+  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && (insideEditor || videoEditorHotkeysActive)) {
+    e.preventDefault();
+    e.stopPropagation();
+    undoVideoEdit();
+    return;
+  }
   if ((e.code === 'Delete' || e.code === 'Backspace') && selectedEditorItem && (insideEditor || videoEditorHotkeysActive)) {
     e.preventDefault();
     e.stopPropagation();
@@ -4175,6 +4345,8 @@ function resetUploadForm({ keepDraft = false } = {}) {
   trajectoryPoints = [];
   mapMode = 'position';
   videoUrl = null; videoEdit = createDefaultVideoEdit(); screenshots = [];
+  videoEditUndoStack = [];
+  writeVideoEditUndoStack();
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   setFreezeOverlay('');
