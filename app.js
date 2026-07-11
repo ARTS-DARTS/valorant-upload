@@ -1929,16 +1929,6 @@ function updateSelectedZoomTransform(patch) {
   saveVideoEdit();
 }
 
-function zoomPositionForAnchor(anchorX, anchorY, scaleX, scaleY) {
-  const stageRect = editorEls.stage?.getBoundingClientRect();
-  const width = stageRect?.width || vidPlayer?.getBoundingClientRect?.().width || 0;
-  const height = stageRect?.height || vidPlayer?.getBoundingClientRect?.().height || 0;
-  return {
-    posX: ((50 - anchorX) / 100) * width,
-    posY: ((50 - anchorY) / 100) * height,
-  };
-}
-
 function updateZoomAreaFromPoint(clientX, clientY) {
   let zoom = selectedZoomClip() || activeZoomClipAt(vidPlayer.currentTime || 0);
   if (!zoom) {
@@ -1953,14 +1943,11 @@ function updateZoomAreaFromPoint(clientX, clientY) {
   if (!rect.width || !rect.height) return;
   const anchorX = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
   const anchorY = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
-  const scaleX = Math.max(1, Number(zoom.scaleX ?? zoom.scale ?? 1.4));
-  const scaleY = Math.max(1, Number(zoom.scaleY ?? zoom.scale ?? scaleX));
-  const position = zoomPositionForAnchor(anchorX, anchorY, scaleX, scaleY);
   updateSelectedZoomTransform({
     anchorX,
     anchorY,
-    posX: position.posX,
-    posY: position.posY,
+    posX: Number(zoom.posX || 0),
+    posY: Number(zoom.posY || 0),
   });
   syncZoomTransformPanel();
   applyVideoEditPreview();
@@ -2489,6 +2476,15 @@ editorEls.chromaStrength?.addEventListener('input', event => {
 });
 function bindZoomTransformInput(el, key, map = value => value) {
   el?.addEventListener('input', event => {
+    if (key === 'scaleX' || key === 'scaleY') {
+      const scale = map(Number(event.target.value || 1));
+      if (editorEls.zoomScaleX) editorEls.zoomScaleX.value = scale.toFixed(2);
+      if (editorEls.zoomScaleY) editorEls.zoomScaleY.value = scale.toFixed(2);
+      updateSelectedZoomTransform({ scaleX: scale, scaleY: scale, scale });
+      syncZoomTransformPanel();
+      applyVideoEditPreview();
+      return;
+    }
     if (key === 'rotation' && editorEls.zoomRotationRange && event.target === editorEls.zoomRotation) {
       editorEls.zoomRotationRange.value = event.target.value;
     }
@@ -2717,8 +2713,9 @@ document.getElementById('edit-zoom')?.addEventListener('click', () => {
 });
 function addZoomAt(time, { silent = false } = {}) {
   const at = Math.round(clampTime(time) * 10) / 10;
-  const scaleX = Math.max(1, Math.min(4, Number(editorEls.zoomScaleX?.value || 1.4)));
-  const scaleY = Math.max(1, Math.min(4, Number(editorEls.zoomScaleY?.value || scaleX)));
+  const scale = Math.max(1, Math.min(4, Number(editorEls.zoomScaleX?.value || editorEls.zoomScaleY?.value || 1.4)));
+  const scaleX = scale;
+  const scaleY = scale;
   const posX = Math.max(-100, Math.min(100, Number(editorEls.zoomPosX?.value || 0)));
   const posY = Math.max(-100, Math.min(100, Number(editorEls.zoomPosY?.value || 0)));
   const rotation = Math.max(-45, Math.min(45, Number(editorEls.zoomRotation?.value || 0)));
