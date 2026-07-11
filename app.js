@@ -27,48 +27,48 @@ const EDITOR_MAX_ZOOM = 2.2;
 
 const DESCRIPTION_SAMPLES = [
   {
-    title: 'Three screenshots',
-    text: '1 фото: куда встать.\n2 фото: куда прицелиться.\n3 фото: куда попадает лайнап.',
+    title: 'Corner + wall',
+    text: 'Подходим в угол ящика и стены (1 фото), целимся прицелом (2 фото), нажимаем ЛКМ и получаем результат (3 фото).',
   },
   {
-    title: 'Four screenshots',
-    text: '1 фото: куда встать.\n2 фото: куда прицелиться.\n3 фото: чем прицелиться, желательно с приближением.\n4 фото: куда попадает лайнап.',
+    title: 'Corner + crosshair',
+    text: 'Подходим в угол (1 фото), наводим прицел на ориентир (2 фото), целимся способностью (3 фото), нажимаем ЛКМ и получаем результат (4 фото).',
   },
   {
-    title: 'Position to target',
-    text: 'Название пишем на английском: позиция откуда + куда прилетает.\nПример: A Screens from A Lobby.\nОписание: 1 фото - позиция, 2 фото - прицел, 3 фото - прицеливание способностью, 4 фото - результат.',
+    title: 'Wall + sign',
+    text: 'Подходим в упор к стене (1 фото), затем целимся на верхнюю часть таблички (2 фото), прыжок + ЛКМ (3 фото), результат прилетает на Site (4 фото).',
   },
   {
-    title: 'Only target',
-    text: 'Название пишем на английском и указываем только куда прилетает.\nПример: B Site + B Market.\nОписание: 1 фото - место, где стоять; 2 фото - ориентир прицела; 3 фото - способность с приближением; 4 фото - точка попадания.',
+    title: 'Flower bounce',
+    text: 'Подходим в упор к углу (1 фото), затем целимся на цветы (2 фото), ставим отскок как на скриншоте (3 фото), получаем результат (4 фото).',
   },
   {
     title: 'Sova lineup',
-    text: '1 фото: позиция игрока.\n2 фото: ориентир обычного прицела.\n3 фото: прицеливание дротиком/шоком с приближением и нужной силой.\n4 фото: место попадания способности.',
+    text: 'Встаём в угол (1 фото), целимся по ориентиру (2 фото), натягиваем тетиву с нужной силой (3 фото), стрела прилетает в отмеченную зону (4 фото).',
   },
   {
     title: 'Viper lineup',
-    text: '1 фото: точная позиция, куда встать.\n2 фото: ориентир прицела.\n3 фото: прицеливание молли/смоком с приближением.\n4 фото: зона, куда прилетает состав.',
+    text: 'Становимся в упор к стене (1 фото), совмещаем прицел с ориентиром (2 фото), бросаем молли ЛКМ (3 фото), состав падает на Spike (4 фото).',
   },
   {
     title: 'Killjoy lineup',
-    text: '1 фото: позиция перед броском.\n2 фото: ориентир для прицела.\n3 фото: прицеливание гранатой с приближением.\n4 фото: место раскрытия/попадания способности.',
+    text: 'Подходим к отмеченной позиции (1 фото), целимся в угол текстуры (2 фото), бросаем гранату (3 фото), наносварм раскрывается на пленте (4 фото).',
   },
   {
     title: 'Post plant',
-    text: '1 фото: безопасная позиция после установки Spike.\n2 фото: куда поставить прицел.\n3 фото: чем и как прицелиться с приближением.\n4 фото: попадание по Spike или зоне дефьюза.',
+    text: 'После установки Spike отходим в безопасную позицию (1 фото), целимся по ориентиру (2 фото), бросаем способность (3 фото), лайнап закрывает дефьюз (4 фото).',
   },
   {
     title: 'Retake utility',
-    text: '1 фото: позиция для ретейка.\n2 фото: ориентир прицела.\n3 фото: прицеливание способностью с приближением.\n4 фото: зона, которую закрывает или очищает лайнап.',
+    text: 'Занимаем позицию для ретейка (1 фото), целимся в указанный ориентир (2 фото), используем способность (3 фото), она очищает отмеченную зону (4 фото).',
   },
   {
-    title: 'English title examples',
-    text: 'Примеры названий:\nA Screens from A Lobby\nA Site from Lobby\nSpike from Vine\nA Site Gen\nB Site + B Market\nB Default from B Main',
+    title: 'Default impact',
+    text: 'Подходим в упор к дефолту (1 фото), целимся способностью по ориентиру (2 фото), нажимаем ЛКМ (3 фото), получаем стабильный результат (4 фото).',
   },
   {
-    title: 'Title rule',
-    text: 'Название только на английском языке. Пиши либо откуда и куда летит лайнап, либо только куда он прилетает. Без лишних слов, без русского текста, только позиции.',
+    title: 'Tube window',
+    text: 'Подходим к трубе (1 фото), ставим прицел на окно (2 фото), используем способность с приближением (3 фото), получаем попадание в нужную точку (4 фото).',
   },
 ];
 
@@ -1837,6 +1837,7 @@ const editorEls = {
   trimStart: document.getElementById('edit-trim-start'),
   trimEnd: document.getElementById('edit-trim-end'),
   volume: document.getElementById('edit-volume'),
+  volumeLabel: document.getElementById('edit-volume-label'),
   muted: document.getElementById('edit-muted'),
   chromaEnabled: document.getElementById('edit-chroma-enabled'),
   chromaStrength: document.getElementById('edit-chroma-strength'),
@@ -1917,7 +1918,7 @@ function normalizedVideoEdit() {
     })).sort((a, b) => a.at - b.at),
     audio: {
       muted: !!videoEdit.audio?.muted,
-      volume: Math.max(0, Math.min(1, Number(videoEdit.audio?.volume ?? 1))),
+      volume: Math.max(0, Math.min(2, Number(videoEdit.audio?.volume ?? 1))),
     },
     chromaKey: {
       enabled: !!videoEdit.chromaKey?.enabled,
@@ -2075,8 +2076,18 @@ function activeZoomClipAt(time) {
     .find(item => time >= item.at && time <= item.at + Number(item.duration || 2)) || null;
 }
 
+function activeZoomClipAtOutput(outputTime) {
+  return (videoEdit.zoomKeyframes || [])
+    .slice()
+    .reverse()
+    .find(item => {
+      const start = sourceToOutputTime(item.at);
+      return outputTime >= start && outputTime <= start + Number(item.duration || 2);
+    }) || null;
+}
+
 function syncZoomTransformPanel() {
-  const zoom = selectedZoomClip() || activeZoomClipAt(vidPlayer.currentTime || 0);
+  const zoom = selectedZoomClip() || activeZoomClipAtOutput(currentOutputTime());
   const scaleX = Number(zoom?.scaleX ?? zoom?.scale ?? editorEls.zoomScaleX?.value ?? 1.4);
   const scaleY = Number(zoom?.scaleY ?? zoom?.scale ?? editorEls.zoomScaleY?.value ?? 1.4);
   const posX = Number(zoom?.posX ?? editorEls.zoomPosX?.value ?? 0);
@@ -2228,6 +2239,19 @@ function toggleEditorPlayback() {
   vidPlayer.paused ? safePlay(vidPlayer) : vidPlayer.pause();
 }
 
+function stepEditorFrame(direction) {
+  if (!hasVideoForHotkeys()) return false;
+  stopOutputPlayback({ keepPreview: true });
+  const total = editedOutputDuration() || videoDuration();
+  if (!total) return false;
+  const next = Math.max(0, Math.min(total, currentOutputTime() + direction * frameStep()));
+  showOutputFrame(next);
+  timelinePreviewOutputTime = next;
+  keepTimelinePlayheadVisible(total ? next / total * 100 : 0);
+  renderVideoEditor();
+  return true;
+}
+
 function renderVideoTransport() {
   const sourceDuration = videoDuration();
   const outputDuration = editedOutputDuration() || sourceDuration;
@@ -2253,11 +2277,12 @@ function renderVideoEditor() {
   if (editorEls.trimStart) editorEls.trimStart.value = videoEdit.trimStart.toFixed(1);
   if (editorEls.trimEnd) editorEls.trimEnd.value = (end || 0).toFixed(1);
   if (editorEls.volume) editorEls.volume.value = String(videoEdit.audio.volume);
+  if (editorEls.volumeLabel) editorEls.volumeLabel.textContent = `${Math.round(videoEdit.audio.volume * 100)}%`;
   if (editorEls.muted) editorEls.muted.checked = videoEdit.audio.muted;
   if (editorEls.chromaEnabled) editorEls.chromaEnabled.checked = videoEdit.chromaKey.enabled;
   if (editorEls.chromaStrength) editorEls.chromaStrength.value = String(videoEdit.chromaKey.strength);
   vidPlayer.muted = videoEdit.audio.muted;
-  vidPlayer.volume = videoEdit.audio.volume;
+  vidPlayer.volume = Math.max(0, Math.min(1, videoEdit.audio.volume));
 
   const pct = outputDuration ? (value) => Math.max(0, Math.min(100, value / outputDuration * 100)) : () => 0;
   const sourcePct = duration ? (value) => Math.max(0, Math.min(100, value / duration * 100)) : () => 0;
@@ -2328,7 +2353,7 @@ function setEditorMode(mode) {
   editorEls.effectsPanel?.classList.toggle('open', activeEditorMode === 'effects');
   editorEls.zoomPanel?.classList.toggle('open', activeEditorMode === 'zoom');
   const hints = {
-    trim: 'Клик или drag по таймлайну только перематывает. Для обрезки тяни белые края зелёного отрезка или жми “Поставить старт/конец”.',
+    trim: 'Клик или drag по таймлайну перематывает. Для обрезки тяни белые края зелёного отрезка или меняй поля старт/конец.',
     split: 'Перемотай на нужное место и нажми “Разрезать тут”. Обычный клик по таймлайну больше не добавляет разрез.',
     freeze: 'Перемотай на кадр и нажми “Добавить стоп-кадр 2с”. Появится фиолетовый клип, его можно двигать, тянуть за край и удалить.',
     zoom: 'Выбери силу зума и нажми “Добавить зум”. Зелёный клип на дорожке эффектов можно двигать, растягивать и удалить.',
@@ -2338,8 +2363,7 @@ function setEditorMode(mode) {
 }
 
 function applyVideoEditPreview() {
-  const time = vidPlayer.currentTime || 0;
-  const activeZoom = activeZoomClipAt(time);
+  const activeZoom = activeZoomClipAtOutput(currentOutputTime());
   const scaleX = activeZoom ? Number(activeZoom.scaleX ?? activeZoom.scale ?? 1) : 1;
   const scaleY = activeZoom ? Number(activeZoom.scaleY ?? activeZoom.scale ?? 1) : 1;
   const scale = Math.max(scaleX, scaleY, 1);
@@ -2358,7 +2382,7 @@ function applyVideoEditPreview() {
     editorEls.freezeOverlay.style.transform = transform;
   }
   vidPlayer.style.filter = videoEdit.chromaKey?.enabled ? `saturate(${1 + videoEdit.chromaKey.strength}) contrast(1.08)` : '';
-  editorEls.zoomFrame?.classList.toggle('show', scaleX > 1.01 || scaleY > 1.01 || activeEditorMode === 'zoom');
+  editorEls.zoomFrame?.classList.toggle('show', !!activeZoom && (scaleX > 1.01 || scaleY > 1.01));
   if (editorEls.zoomFrame) {
     const frameWidth = Math.max(16, Math.min(46, 54 / Math.max(scale, 1)));
     const frameHeight = Math.max(16, Math.min(46, 54 / Math.max(scale, 1)));
@@ -2561,7 +2585,7 @@ editorEls.shell?.addEventListener('pointerdown', event => {
     selectedEditorItem = { type: 'zoom', id };
     setEditorMode('zoom');
     timelineDrag = edge
-      ? { kind: 'zoom-resize', edge, id, moved: false, startAt: Number(zoom?.at || 0), startDuration: Number(zoom?.duration || 2) }
+      ? { kind: 'zoom-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(zoom?.at || 0), startOutputAt: sourceToOutputTime(Number(zoom?.at || 0)), startDuration: Number(zoom?.duration || 2) }
       : { kind: 'zoom', id, moved: false, offset: zoom ? timeFromTimelineEvent(event) - zoom.at : 0 };
     suppressTimelineClick = true;
     editorEls.shell.setPointerCapture?.(event.pointerId);
@@ -2631,13 +2655,14 @@ editorEls.shell?.addEventListener('pointermove', event => {
   } else if (timelineDrag.kind === 'zoom-resize') {
     const zoom = (videoEdit.zoomKeyframes || []).find(item => item.id === timelineDrag.id);
     if (zoom) {
+      const delta = (event.clientX - timelineDrag.startX) / timelinePixelsPerSecond;
       if (timelineDrag.edge === 'start') {
-        const maxStart = Math.max(0, timelineDrag.startAt + timelineDrag.startDuration - 0.2);
-        const nextStart = Math.min(maxStart, clampTime(time));
-        zoom.at = nextStart;
-        zoom.duration = Math.max(0.2, Math.min(10, timelineDrag.startAt + timelineDrag.startDuration - nextStart));
+        const endOutput = timelineDrag.startOutputAt + timelineDrag.startDuration;
+        const nextOutputStart = Math.max(0, Math.min(endOutput - 0.2, timelineDrag.startOutputAt + delta));
+        zoom.at = clampTime(outputToSourceTime(nextOutputStart));
+        zoom.duration = Math.max(0.2, Math.min(10, endOutput - nextOutputStart));
       } else {
-        zoom.duration = Math.max(0.2, Math.min(10, clampTime(time) - zoom.at));
+        zoom.duration = Math.max(0.2, Math.min(10, timelineDrag.startDuration + delta));
       }
     }
   } else {
@@ -2678,7 +2703,7 @@ editorEls.trimEnd?.addEventListener('change', event => {
   saveVideoEdit();
 });
 editorEls.volume?.addEventListener('input', event => {
-  videoEdit.audio.volume = Number(event.target.value || 1);
+  videoEdit.audio.volume = Math.max(0, Math.min(2, Number(event.target.value || 1)));
   saveVideoEdit();
 });
 editorEls.muted?.addEventListener('change', event => {
@@ -3185,15 +3210,19 @@ document.addEventListener('keydown', e => {
     }
   }
   if (e.code === 'ArrowRight') {
-    if (player && (player.currentSrc || player.src) && !player.error) {
+    if ((insideEditor || videoEditorHotkeysActive) && player && (player.currentSrc || player.src) && !player.error) {
       e.preventDefault();
-      player.currentTime = Math.min(player.duration, player.currentTime + 5);
+      e.stopPropagation();
+      e.stopImmediatePropagation?.();
+      stepEditorFrame(1);
     }
   }
   if (e.code === 'ArrowLeft') {
-    if (player && (player.currentSrc || player.src) && !player.error) {
+    if ((insideEditor || videoEditorHotkeysActive) && player && (player.currentSrc || player.src) && !player.error) {
       e.preventDefault();
-      player.currentTime = Math.max(0, player.currentTime - 5);
+      e.stopPropagation();
+      e.stopImmediatePropagation?.();
+      stepEditorFrame(-1);
     }
   }
 }, true);

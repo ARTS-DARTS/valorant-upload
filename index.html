@@ -136,7 +136,7 @@
     <div class="section-title">📄 ОПИСАНИЕ</div>
     <div class="card">
       <div class="input-wrap">
-        <textarea class="finput" id="inp-desc" placeholder="Фото: 1) куда встать; 2) куда прицелиться; 3) чем прицелиться с приближением; 4) куда попадает лайнап." maxlength="1000" rows="4"></textarea>
+        <textarea class="finput" id="inp-desc" placeholder="Подходим в угол ящика и стены, целимся прицелом, нажимаем ЛКМ и получаем результат." maxlength="1000" rows="4"></textarea>
         <span class="char-counter"><span id="desc-count">0</span>/1000</span>
       </div>
       <div class="description-tools">
@@ -149,7 +149,7 @@
       <div class="drop-zone" id="drop-zone">
         <div class="drop-icon">🎥</div>
         <div>Перетащи видео сюда или <strong style="color:var(--primary);">нажми для выбора</strong></div>
-        <div style="font-size:11px;margin-top:6px;color:var(--text2);">Видео · Максимум 50 МБ · До 1080p · 20–30 сек</div>
+        <div style="font-size:11px;margin-top:6px;color:var(--text2);">Видео · 16:9 обязательно · Максимум 50 МБ · До 1080p · 20–30 сек</div>
       </div>
       <input type="file" id="vid-file-input" accept="video/*,.mp4,.mov" style="display:none;">
       <div id="vid-upload-progress" style="display:none;">
@@ -223,16 +223,14 @@
                 <label class="editor-field">Конец
                   <input class="finput" type="number" id="edit-trim-end" min="0" step="0.1" value="0">
                 </label>
-                <label class="editor-field">Громкость
-                  <input type="range" id="edit-volume" min="0" max="1" step="0.05" value="1">
+                <label class="editor-field">Громкость <span id="edit-volume-label">100%</span>
+                  <input type="range" id="edit-volume" min="0" max="2" step="0.05" value="1">
                 </label>
                 <label class="editor-check">
                   <input type="checkbox" id="edit-muted"> Без звука
                 </label>
               </div>
               <div class="editor-actions">
-                <button class="btn-sm" id="edit-set-in" type="button">Поставить старт</button>
-                <button class="btn-sm" id="edit-set-out" type="button">Поставить конец</button>
                 <button class="btn-sm" id="edit-split" type="button">Разрезать тут</button>
                 <button class="btn-sm" id="edit-freeze" type="button">Добавить стоп-кадр 2с</button>
                 <button class="btn-sm" id="edit-zoom" type="button">Добавить зум</button>
@@ -275,7 +273,7 @@
       </div>
     </div>
 
-    <div class="section-title">🖼 СКРИНШОТЫ <span style="color:var(--text2);font-weight:400;">(до 5 шт.)</span></div>
+    <div class="section-title">🖼 СКРИНШОТЫ</div>
     <div class="card">
       <div class="shots-row" id="shots-row">
         <button class="btn-add-shot" id="btn-add-shot">+</button>
