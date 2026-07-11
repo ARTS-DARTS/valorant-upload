@@ -1929,6 +1929,43 @@ function updateSelectedZoomTransform(patch) {
   saveVideoEdit();
 }
 
+function zoomPositionForAnchor(anchorX, anchorY, scaleX, scaleY) {
+  const stageRect = editorEls.stage?.getBoundingClientRect();
+  const width = stageRect?.width || vidPlayer?.getBoundingClientRect?.().width || 0;
+  const height = stageRect?.height || vidPlayer?.getBoundingClientRect?.().height || 0;
+  return {
+    posX: ((50 - anchorX) / 100) * width,
+    posY: ((50 - anchorY) / 100) * height,
+  };
+}
+
+function updateZoomAreaFromPoint(clientX, clientY) {
+  let zoom = selectedZoomClip() || activeZoomClipAt(vidPlayer.currentTime || 0);
+  if (!zoom) {
+    addZoomAt(vidPlayer.currentTime || 0, { silent: true });
+    zoom = selectedZoomClip();
+  } else {
+    selectedEditorItem = { type: 'zoom', id: zoom.id };
+    setEditorMode('zoom');
+  }
+  if (!zoom || !editorEls.stage) return;
+  const rect = editorEls.stage.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const anchorX = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+  const anchorY = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
+  const scaleX = Math.max(1, Number(zoom.scaleX ?? zoom.scale ?? 1.4));
+  const scaleY = Math.max(1, Number(zoom.scaleY ?? zoom.scale ?? scaleX));
+  const position = zoomPositionForAnchor(anchorX, anchorY, scaleX, scaleY);
+  updateSelectedZoomTransform({
+    anchorX,
+    anchorY,
+    posX: position.posX,
+    posY: position.posY,
+  });
+  syncZoomTransformPanel();
+  applyVideoEditPreview();
+}
+
 function stopOutputPlayback({ keepPreview = true } = {}) {
   if (outputPlaybackRaf) {
     cancelAnimationFrame(outputPlaybackRaf);
@@ -2138,7 +2175,15 @@ function applyVideoEditPreview() {
   }
   vidPlayer.style.filter = videoEdit.chromaKey?.enabled ? `saturate(${1 + videoEdit.chromaKey.strength}) contrast(1.08)` : '';
   editorEls.zoomFrame?.classList.toggle('show', scaleX > 1.01 || scaleY > 1.01 || activeEditorMode === 'zoom');
-  if (editorEls.zoomFrame) editorEls.zoomFrame.textContent = activeZoom ? `${scaleX.toFixed(2)}x/${scaleY.toFixed(2)}x` : 'Зум';
+  if (editorEls.zoomFrame) {
+    const frameWidth = Math.max(22, Math.min(72, 100 / Math.max(scaleX, 1)));
+    const frameHeight = Math.max(22, Math.min(72, 100 / Math.max(scaleY, 1)));
+    editorEls.zoomFrame.style.left = `${anchorX}%`;
+    editorEls.zoomFrame.style.top = `${anchorY}%`;
+    editorEls.zoomFrame.style.width = `${frameWidth}%`;
+    editorEls.zoomFrame.style.height = `${frameHeight}%`;
+    editorEls.zoomFrame.textContent = activeZoom ? `${scaleX.toFixed(2)}x/${scaleY.toFixed(2)}x` : 'Зум';
+  }
 }
 
 function timeFromTimelineEvent(event) {
@@ -2545,6 +2590,34 @@ function bindTransformDragNumber(el) {
   el.addEventListener('pointercancel', finishDrag);
 }
 
+let zoomFrameDrag = null;
+editorEls.zoomFrame?.addEventListener('pointerdown', event => {
+  if (event.button !== 0) return;
+  setEditorMode('zoom');
+  zoomFrameDrag = { pointerId: event.pointerId, moved: false };
+  editorEls.zoomFrame.classList.add('dragging');
+  editorEls.zoomFrame.setPointerCapture?.(event.pointerId);
+  updateZoomAreaFromPoint(event.clientX, event.clientY);
+  event.preventDefault();
+  event.stopPropagation();
+});
+editorEls.zoomFrame?.addEventListener('pointermove', event => {
+  if (!zoomFrameDrag || zoomFrameDrag.pointerId !== event.pointerId) return;
+  zoomFrameDrag.moved = true;
+  updateZoomAreaFromPoint(event.clientX, event.clientY);
+  event.preventDefault();
+});
+function finishZoomFrameDrag(event) {
+  if (!zoomFrameDrag || zoomFrameDrag.pointerId !== event.pointerId) return;
+  editorEls.zoomFrame.releasePointerCapture?.(event.pointerId);
+  editorEls.zoomFrame.classList.remove('dragging');
+  zoomFrameDrag = null;
+  saveVideoEdit();
+  event.preventDefault();
+}
+editorEls.zoomFrame?.addEventListener('pointerup', finishZoomFrameDrag);
+editorEls.zoomFrame?.addEventListener('pointercancel', finishZoomFrameDrag);
+
 bindZoomTransformInput(editorEls.zoomScaleX, 'scaleX', value => Math.max(1, Math.min(4, value || 1)));
 bindZoomTransformInput(editorEls.zoomScaleY, 'scaleY', value => Math.max(1, Math.min(4, value || 1)));
 bindZoomTransformInput(editorEls.zoomPosX, 'posX', value => Math.max(-100, Math.min(100, value)));
@@ -2642,7 +2715,7 @@ document.getElementById('edit-delete-selected')?.addEventListener('click', delet
 document.getElementById('edit-zoom')?.addEventListener('click', () => {
   addZoomAt(vidPlayer.currentTime);
 });
-function addZoomAt(time) {
+function addZoomAt(time, { silent = false } = {}) {
   const at = Math.round(clampTime(time) * 10) / 10;
   const scaleX = Math.max(1, Math.min(4, Number(editorEls.zoomScaleX?.value || 1.4)));
   const scaleY = Math.max(1, Math.min(4, Number(editorEls.zoomScaleY?.value || scaleX)));
@@ -2659,7 +2732,7 @@ function addZoomAt(time) {
   selectedEditorItem = { type: 'zoom', id };
   setEditorMode('zoom');
   vidPlayer.currentTime = at;
-  toast(`Зум ${scaleX.toFixed(2)}x/${scaleY.toFixed(2)}x на 2 сек добавлен`, 's');
+  if (!silent) toast(`Зум ${scaleX.toFixed(2)}x/${scaleY.toFixed(2)}x на 2 сек добавлен`, 's');
   saveVideoEdit();
 }
 document.getElementById('edit-reset')?.addEventListener('click', resetVideoEdit);
