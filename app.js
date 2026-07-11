@@ -2183,8 +2183,8 @@ function applyVideoEditPreview() {
   vidPlayer.style.filter = videoEdit.chromaKey?.enabled ? `saturate(${1 + videoEdit.chromaKey.strength}) contrast(1.08)` : '';
   editorEls.zoomFrame?.classList.toggle('show', scaleX > 1.01 || scaleY > 1.01 || activeEditorMode === 'zoom');
   if (editorEls.zoomFrame) {
-    const frameWidth = Math.max(22, Math.min(72, 100 / Math.max(scale, 1)));
-    const frameHeight = Math.max(22, Math.min(72, 100 / Math.max(scale, 1)));
+    const frameWidth = Math.max(16, Math.min(46, 54 / Math.max(scale, 1)));
+    const frameHeight = Math.max(16, Math.min(46, 54 / Math.max(scale, 1)));
     editorEls.zoomFrame.style.left = `${anchorX}%`;
     editorEls.zoomFrame.style.top = `${anchorY}%`;
     editorEls.zoomFrame.style.width = `${frameWidth}%`;
