@@ -112,6 +112,7 @@
     .material-badge.hidden { border-color: rgba(245,158,11,.30); background: rgba(245,158,11,.12); color: var(--orange); }
     .material-desc { color: var(--text2); font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
     .material-video { display: block; width: min(100%, 520px); max-height: 320px; margin-top: 12px; border-radius: var(--r); background: #000; border: 1px solid var(--border); }
+    .material-preview-warning { margin-top: 8px; border: 1px solid rgba(245,158,11,.32); border-radius: var(--r); background: rgba(245,158,11,.10); color: #fed7aa; padding: 9px 10px; font-size: 12px; line-height: 1.45; }
     .material-link { display: inline-flex; margin-top: 9px; color: var(--primary); font-size: 13px; font-weight: 800; text-decoration: none; overflow-wrap: anywhere; }
     .material-link:hover { text-decoration: underline; }
     .material-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }

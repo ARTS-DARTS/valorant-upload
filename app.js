@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T21:26:56+03:00';
+const SITE_VERSION = '2026-07-11T21:32:26+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -430,6 +430,11 @@ function videoContentType(file) {
   if (/\.mov$/i.test(file.name)) return 'video/quicktime';
   if (/\.webm$/i.test(file.name)) return 'video/webm';
   return 'video/mp4';
+}
+function transparentPreviewWarning(fileNameOrUrl = '') {
+  const value = String(fileNameOrUrl || '').toLowerCase();
+  if (!value.endsWith('.mov')) return '';
+  return 'MOV/QuickTime с альфой хранится как мастер-файл, но браузерный предпросмотр часто показывает его чёрным. Для прозрачного оверлея на сайте загрузи WebM VP9/VP8 с alpha.';
 }
 
 // ── Cloudinary ────────────────────────────────────────────────────────────────
@@ -1268,6 +1273,7 @@ function materialCardHtml(material) {
   const published = material.is_published !== false;
   const videoUrl = String(material.video_url || '').trim();
   const legacyUrl = String(material.url || '').trim();
+  const previewWarning = transparentPreviewWarning(material.video_file_name || videoUrl);
   return `
     <article class="material-item" data-material-id="${esc(material.id || '')}">
       <div>
@@ -1279,6 +1285,7 @@ function materialCardHtml(material) {
         ${material.description ? `<div class="material-desc">${esc(material.description)}</div>` : ''}
         ${videoUrl ? `
           <video class="material-video" src="${esc(videoUrl)}" controls preload="metadata"></video>
+          ${previewWarning ? `<div class="material-preview-warning">${esc(previewWarning)}</div>` : ''}
           <a class="material-link" href="${esc(videoUrl)}" download rel="noopener noreferrer">Скачать видео</a>
         ` : legacyUrl ? `<a class="material-link" href="${esc(legacyUrl)}" target="_blank" rel="noopener noreferrer">Открыть материал</a>` : ''}
       </div>
@@ -1319,6 +1326,7 @@ function renderMaterialForm() {
     ? { type: 'video', title: '', description: '', video_url: '', video_file_name: '', video_size: 0, is_published: true }
     : authorMaterials.find(item => item.id === materialEditorId) || {};
   const videoUrl = String(material.video_url || '').trim();
+  const previewWarning = transparentPreviewWarning(material.video_file_name || videoUrl);
   shell.style.display = '';
   shell.innerHTML = `
     <div class="material-form-grid">
@@ -1336,6 +1344,7 @@ function renderMaterialForm() {
     </div>
     <div class="material-video-preview" id="material-video-preview">
       ${videoUrl ? `<video class="material-video" src="${esc(videoUrl)}" controls preload="metadata"></video>` : ''}
+      ${previewWarning ? `<div class="material-preview-warning">${esc(previewWarning)}</div>` : ''}
     </div>
     <label class="lineup-meta" style="margin-bottom:12px;">
       <input type="checkbox" id="material-published" ${material.is_published === false ? '' : 'checked'}>
@@ -1376,6 +1385,7 @@ async function uploadMaterialVideoFile(file) {
   if (!isCurrentUserAdmin()) return;
   if (!isVideoFile(file)) { toast('Выбери видеофайл', 'e'); return; }
   if (file.size > 100 * 1024 * 1024) { toast('Видео превышает 100 МБ', 'e'); return; }
+  const previewWarning = transparentPreviewWarning(file.name);
 
   const seq = ++materialVideoUploadSeq;
   materialVideoUploading = true;
@@ -1383,7 +1393,7 @@ async function uploadMaterialVideoFile(file) {
   const preview = document.getElementById('material-video-preview');
   const saveBtn = document.querySelector('[data-material-save]');
   if (saveBtn) saveBtn.disabled = true;
-  if (state) state.textContent = 'Загрузка видео: 0%';
+  if (state) state.textContent = previewWarning || 'Загрузка видео: 0%';
   if (preview) preview.innerHTML = '';
   try {
     const url = await uploadVideoToSelectel(file, pct => {
@@ -1394,8 +1404,8 @@ async function uploadMaterialVideoFile(file) {
     document.getElementById('material-video-url').value = url;
     document.getElementById('material-video-name').value = file.name;
     document.getElementById('material-video-size').value = String(file.size);
-    if (state) state.textContent = 'Видео загружено. Можно сохранять материал.';
-    if (preview) preview.innerHTML = `<video class="material-video" src="${esc(url)}" controls preload="metadata"></video>`;
+    if (state) state.textContent = previewWarning || 'Видео загружено. Можно сохранять материал.';
+    if (preview) preview.innerHTML = `<video class="material-video" src="${esc(url)}" controls preload="metadata"></video>${previewWarning ? `<div class="material-preview-warning">${esc(previewWarning)}</div>` : ''}`;
     toast('Видео загружено', 's');
   } catch (e) {
     if (seq !== materialVideoUploadSeq) return;
@@ -3342,7 +3352,9 @@ async function addMaterialFootageToTimeline(id) {
 async function handleFootageFile(file) {
   if (!isVideoFile(file)) { toast('Выбери .mp4, .mov или .webm футаж', 'e'); return; }
   if (file.size > 50 * 1024 * 1024) { toast('Футаж превышает 50 МБ', 'e'); return; }
-  if (editorEls.footageStatus) editorEls.footageStatus.textContent = 'Подготовка футажа...';
+  const previewWarning = transparentPreviewWarning(file.name);
+  if (previewWarning) toast(previewWarning, 'w');
+  if (editorEls.footageStatus) editorEls.footageStatus.textContent = previewWarning || 'Подготовка футажа...';
   const meta = await readVideoMetadata(file);
   const upload = uploadVideoToSelectel(file, pct => {
     if (editorEls.footageStatus) editorEls.footageStatus.textContent = `Футаж ${Math.round(pct * 100)}%`;
