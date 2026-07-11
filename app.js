@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T21:50:00+03:00';
+const SITE_VERSION = '2026-07-11T22:03:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1839,6 +1839,8 @@ let chromaRenderRaf = null;
 let chromaRenderFootageId = null;
 let chromaRenderSignature = '';
 let chromaRenderErrorShown = false;
+let footageStageDrag = null;
+let timelineSmoothRaf = null;
 const freezeFrameImages = new Map();
 const editorEls = {
   scroll: document.getElementById('timeline-scroll'),
@@ -1868,6 +1870,7 @@ const editorEls = {
   chromaColor: document.getElementById('edit-chroma-color'),
   chromaStrength: document.getElementById('edit-chroma-strength'),
   chromaTarget: document.getElementById('edit-chroma-target'),
+  footageScale: document.getElementById('edit-footage-scale'),
   footageInput: document.getElementById('edit-footage-input'),
   footageStatus: document.getElementById('edit-footage-status'),
   footageLibrary: document.getElementById('footage-library'),
@@ -1974,6 +1977,9 @@ function normalizedVideoEdit() {
         duration: Math.max(0.2, Math.min(60, Number(item.duration || 2))),
         track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
         muted: item.muted !== false,
+        posX: Math.max(0, Math.min(100, Number(item.posX ?? 50))),
+        posY: Math.max(0, Math.min(100, Number(item.posY ?? 50))),
+        scale: Math.max(0.05, Math.min(2, Number(item.scale ?? 0.35))),
         chromaKey: normalizeChromaKey(legacyChroma),
       };
     }).filter(item => item.url).sort((a, b) => a.at - b.at),
@@ -2275,6 +2281,40 @@ function syncFootageChromaPanel() {
     editorEls.chromaStrength.value = String(chroma.strength);
     editorEls.chromaStrength.disabled = disabled;
   }
+  if (editorEls.footageScale) {
+    editorEls.footageScale.value = String(Math.max(0.05, Math.min(2, Number(footage?.scale ?? 0.35))));
+    editorEls.footageScale.disabled = disabled;
+  }
+}
+
+function applyFootageOverlayTransform(footage) {
+  const scale = Math.max(0.05, Math.min(2, Number(footage?.scale ?? 0.35)));
+  const left = Math.max(0, Math.min(100, Number(footage?.posX ?? 50)));
+  const top = Math.max(0, Math.min(100, Number(footage?.posY ?? 50)));
+  const width = `${Math.round(scale * 10000) / 100}%`;
+  [editorEls.footagePreview, editorEls.footageCanvas].forEach(el => {
+    if (!el) return;
+    el.style.left = `${left}%`;
+    el.style.top = `${top}%`;
+    el.style.width = width;
+    el.style.transform = 'translate(-50%, -50%)';
+  });
+}
+
+function updateSelectedFootageTransform(patch, { persist = true } = {}) {
+  const footage = selectedFootageClip();
+  if (!footage) {
+    toast('Сначала выбери футаж на таймлайне', 'i');
+    syncFootageChromaPanel();
+    return null;
+  }
+  if (patch.posX !== undefined) footage.posX = Math.max(0, Math.min(100, Number(patch.posX ?? footage.posX ?? 50)));
+  if (patch.posY !== undefined) footage.posY = Math.max(0, Math.min(100, Number(patch.posY ?? footage.posY ?? 50)));
+  if (patch.scale !== undefined) footage.scale = Math.max(0.05, Math.min(2, Number(patch.scale ?? footage.scale ?? 0.35)));
+  applyFootageOverlayTransform(footage);
+  syncFootageChromaPanel();
+  if (persist) saveVideoEdit();
+  return footage;
 }
 
 function syncZoomTransformPanel() {
@@ -2361,7 +2401,7 @@ function stopOutputPlayback({ keepPreview = true } = {}) {
   setFreezeOverlay('');
   if (!vidPlayer.paused) vidPlayer.pause();
   if (vidPlayBtn) vidPlayBtn.textContent = '▶';
-  renderVideoEditor();
+  updateTimelinePlaybackUi({ keepVisible: true });
 }
 
 function showOutputFrame(outputTime) {
@@ -2385,7 +2425,7 @@ function showOutputFrame(outputTime) {
     }
     if (vidPlayer.paused && outputPlaybackActive) safePlay(vidPlayer);
   }
-  renderVideoEditor();
+  updateTimelinePlaybackUi({ keepVisible: true });
 }
 
 function tickOutputPlayback() {
@@ -2413,6 +2453,7 @@ function startOutputPlayback(startOutput = null) {
   outputPlaybackActive = true;
   if (vidPlayBtn) vidPlayBtn.textContent = '⏸';
   showOutputFrame(outputPlaybackStartTime);
+  startSmoothTimelineUi();
   outputPlaybackRaf = requestAnimationFrame(tickOutputPlayback);
 }
 
@@ -2455,6 +2496,32 @@ function renderVideoTransport() {
   }
   if (vidScrubber && sourceDuration) vidScrubber.value = String((vidPlayer.currentTime / sourceDuration) * 100);
   if (vidTimeEl) vidTimeEl.textContent = fmtTime(vidPlayer.currentTime) + ' / ' + fmtTime(sourceDuration);
+}
+
+function updateTimelinePlaybackUi({ keepVisible = false } = {}) {
+  const outputDuration = editedOutputDuration();
+  const currentPct = outputDuration ? Math.max(0, Math.min(100, currentOutputTime() / outputDuration * 100)) : 0;
+  if (editorEls.playhead) editorEls.playhead.style.left = `${currentPct}%`;
+  if (keepVisible) keepTimelinePlayheadVisible(currentPct);
+  renderVideoTransport();
+  applyVideoEditPreview();
+}
+
+function startSmoothTimelineUi() {
+  if (timelineSmoothRaf) return;
+  const tick = () => {
+    timelineSmoothRaf = null;
+    if (!outputPlaybackActive && vidPlayer.paused && !timelineDrag) return;
+    updateTimelinePlaybackUi({ keepVisible: outputPlaybackActive || !vidPlayer.paused });
+    timelineSmoothRaf = requestAnimationFrame(tick);
+  };
+  timelineSmoothRaf = requestAnimationFrame(tick);
+}
+
+function stopSmoothTimelineUi() {
+  if (!timelineSmoothRaf) return;
+  cancelAnimationFrame(timelineSmoothRaf);
+  timelineSmoothRaf = null;
 }
 
 function renderVideoEditor() {
@@ -2598,6 +2665,7 @@ function applyVideoEditPreview() {
   const activeFootage = activeFootageClipAtOutput(currentOutputTime());
   if (editorEls.footagePreview) {
     if (activeFootage?.url) {
+      applyFootageOverlayTransform(activeFootage);
       if (editorEls.footagePreview.dataset.url !== activeFootage.url) {
         editorEls.footagePreview.dataset.url = activeFootage.url;
         editorEls.footagePreview.src = activeFootage.url;
@@ -2615,14 +2683,19 @@ function applyVideoEditPreview() {
         editorEls.footagePreview.pause();
       }
       const hasChroma = !!activeFootage.chromaKey?.enabled;
+      const isSelectedFootage = selectedEditorItem?.type === 'footage' && selectedEditorItem.id === activeFootage.id;
       editorEls.footagePreview.classList.toggle('show', !hasChroma);
       editorEls.footagePreview.classList.toggle('processing-chroma', hasChroma);
+      editorEls.footagePreview.classList.toggle('interactive', isSelectedFootage);
+      editorEls.footageCanvas?.classList.toggle('interactive', isSelectedFootage);
       if (hasChroma) startChromaPreview(activeFootage);
       else stopChromaPreview();
     } else {
       editorEls.footagePreview.pause();
       editorEls.footagePreview.classList.remove('show');
       editorEls.footagePreview.classList.remove('processing-chroma');
+      editorEls.footagePreview.classList.remove('interactive');
+      editorEls.footageCanvas?.classList.remove('interactive');
       stopChromaPreview();
       delete editorEls.footagePreview.dataset.url;
       editorEls.footagePreview.removeAttribute('src');
@@ -3109,6 +3182,77 @@ editorEls.chromaColor?.addEventListener('input', event => {
 editorEls.chromaStrength?.addEventListener('input', event => {
   updateSelectedFootageChroma({ strength: Number(event.target.value || 0.35) });
 });
+editorEls.footageScale?.addEventListener('input', event => {
+  updateSelectedFootageTransform({ scale: Number(event.target.value || 0.35) });
+});
+
+function stagePointToPercent(clientX, clientY) {
+  const rect = editorEls.stage?.getBoundingClientRect();
+  if (!rect?.width || !rect?.height) return { x: 50, y: 50 };
+  return {
+    x: Math.max(0, Math.min(100, (clientX - rect.left) / rect.width * 100)),
+    y: Math.max(0, Math.min(100, (clientY - rect.top) / rect.height * 100)),
+  };
+}
+
+function beginFootageStageDrag(event) {
+  if (event.button !== 0) return;
+  const activeFootage = activeFootageClipAtOutput(currentOutputTime());
+  if (!activeFootage) return;
+  selectedEditorItem = { type: 'footage', id: activeFootage.id };
+  activeEffectTrack = Math.max(0, Number(activeFootage.track || 0));
+  setEditorMode('effects');
+  const point = stagePointToPercent(event.clientX, event.clientY);
+  footageStageDrag = {
+    pointerId: event.pointerId,
+    startX: point.x,
+    startY: point.y,
+    posX: Number(activeFootage.posX ?? 50),
+    posY: Number(activeFootage.posY ?? 50),
+    moved: false,
+  };
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+  event.stopPropagation();
+  renderVideoEditor();
+}
+
+function moveFootageStageDrag(event) {
+  if (!footageStageDrag || footageStageDrag.pointerId !== event.pointerId) return;
+  const point = stagePointToPercent(event.clientX, event.clientY);
+  const nextX = footageStageDrag.posX + point.x - footageStageDrag.startX;
+  const nextY = footageStageDrag.posY + point.y - footageStageDrag.startY;
+  footageStageDrag.moved = true;
+  updateSelectedFootageTransform({ posX: nextX, posY: nextY }, { persist: false });
+  updateTimelinePlaybackUi();
+  event.preventDefault();
+}
+
+function finishFootageStageDrag(event) {
+  if (!footageStageDrag || footageStageDrag.pointerId !== event.pointerId) return;
+  event.currentTarget.releasePointerCapture?.(event.pointerId);
+  const moved = footageStageDrag.moved;
+  footageStageDrag = null;
+  if (moved) saveVideoEdit();
+  event.preventDefault();
+}
+
+[editorEls.footagePreview, editorEls.footageCanvas].forEach(el => {
+  el?.addEventListener('pointerdown', beginFootageStageDrag);
+  el?.addEventListener('pointermove', moveFootageStageDrag);
+  el?.addEventListener('pointerup', finishFootageStageDrag);
+  el?.addEventListener('pointercancel', finishFootageStageDrag);
+  el?.addEventListener('wheel', event => {
+    const footage = selectedFootageClip() || activeFootageClipAtOutput(currentOutputTime());
+    if (!footage) return;
+    selectedEditorItem = { type: 'footage', id: footage.id };
+    activeEffectTrack = Math.max(0, Number(footage.track || 0));
+    const direction = event.deltaY > 0 ? -1 : 1;
+    const step = event.shiftKey ? 0.02 : 0.06;
+    updateSelectedFootageTransform({ scale: Number(footage.scale ?? 0.35) + direction * step });
+    event.preventDefault();
+  }, { passive: false });
+});
 function bindZoomTransformInput(el, key, map = value => value) {
   el?.addEventListener('input', event => {
     if (key === 'scaleX' || key === 'scaleY') {
@@ -3441,7 +3585,7 @@ function addFootageOverlay({ url, name, duration }) {
   const id = `footage_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   videoEdit.footageOverlays = [
     ...(videoEdit.footageOverlays || []),
-    { id, url, name, at, duration: clipDuration, track, muted: true },
+    { id, url, name, at, duration: clipDuration, track, muted: true, posX: 50, posY: 50, scale: 0.35 },
   ];
   selectedEditorItem = { type: 'footage', id };
   activeEffectTrack = track;
@@ -3648,7 +3792,7 @@ vidPlayer.addEventListener('timeupdate', () => {
     vidPlayer.currentTime = videoEdit.trimStart;
     playedFreezeHolds.clear();
   }
-  renderVideoEditor();
+  updateTimelinePlaybackUi();
   lastVideoTime = vidPlayer.currentTime;
 });
 vidPlayer.addEventListener('loadedmetadata', () => {
@@ -3666,9 +3810,19 @@ vidPlayer.addEventListener('play',  () => {
   if (!outputPlaybackActive) outputPlaybackTime = null;
   vidPlayBtn.textContent = '⏸';
   lastVideoTime = vidPlayer.currentTime;
+  startSmoothTimelineUi();
 });
-vidPlayer.addEventListener('pause', () => { if (!outputPlaybackActive) vidPlayBtn.textContent = '▶'; });
-vidPlayer.addEventListener('seeking', () => { clearFreezeHold(); if (!outputPlaybackActive) outputPlaybackTime = null; lastVideoTime = vidPlayer.currentTime; });
+vidPlayer.addEventListener('pause', () => {
+  if (!outputPlaybackActive) vidPlayBtn.textContent = '▶';
+  stopSmoothTimelineUi();
+  updateTimelinePlaybackUi();
+});
+vidPlayer.addEventListener('seeking', () => {
+  clearFreezeHold();
+  if (!outputPlaybackActive) outputPlaybackTime = null;
+  lastVideoTime = vidPlayer.currentTime;
+  updateTimelinePlaybackUi({ keepVisible: true });
+});
 vidScrubber.addEventListener('input', () => {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
