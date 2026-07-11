@@ -247,7 +247,11 @@
     .trim-handle.end { right: -7px; }
     .timeline-shell.dragging .timeline-playhead::before, .trim-handle:hover { box-shadow: 0 0 0 5px rgba(79,195,247,.22); }
     .timeline-effect-markers { position: absolute; inset: 0; }
-    .effect-lane { height: 36px; }
+    .effect-lane { height: 36px; min-height: 36px; }
+    .effect-track-row { position: absolute; left: 0; right: 0; height: 36px; border-top: 1px solid rgba(148,163,184,.10); }
+    .effect-track-row:first-child { border-top: 0; }
+    .effect-track-row.active { background: rgba(34,197,94,.06); }
+    .effect-track-label { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); z-index: 3; color: var(--text1); font-size: 11px; font-weight: 900; text-transform: uppercase; text-shadow: 0 1px 4px #000; pointer-events: none; }
     .timeline-marker { position: absolute; top: 5px; bottom: 5px; width: 3px; border-radius: 999px; transform: translateX(-50%); }
     .timeline-marker.split { background: #f59e0b; cursor: pointer; pointer-events: auto; z-index: 4; }
     .timeline-marker.split.selected { width: 6px; box-shadow: 0 0 0 5px rgba(245,158,11,.22); }

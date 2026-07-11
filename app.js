@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T15:10:38+03:00';
+const SITE_VERSION = '2026-07-11T18:30:28+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1808,6 +1808,7 @@ let playedFreezeHolds = new Set();
 let lastVideoTime = 0;
 let timelinePixelsPerSecond = 52;
 let timelineMagnetEnabled = true;
+let activeEffectTrack = 0;
 let videoEditorHotkeysActive = false;
 let timelinePreviewOutputTime = null;
 let outputPlaybackActive = false;
@@ -1827,6 +1828,7 @@ const editorEls = {
   playhead: document.getElementById('timeline-playhead'),
   trimRange: document.getElementById('video-trim-range'),
   markers: document.getElementById('video-markers'),
+  effectLane: document.getElementById('effect-lane'),
   effectMarkers: document.getElementById('effect-markers'),
   wave: document.getElementById('audio-wave'),
   timeLabel: document.getElementById('editor-time-label'),
@@ -1862,6 +1864,7 @@ function createDefaultVideoEdit() {
     splits: [],
     freezeFrames: [],
     zoomKeyframes: [],
+    effectTracks: 1,
     audio: { muted: false, volume: 1 },
     chromaKey: { enabled: false, color: '#00ff00', strength: 0.35 },
     footageOverlays: [],
@@ -1892,8 +1895,12 @@ function normalizedVideoEdit() {
   const duration = videoDuration();
   const trimStart = clampTime(videoEdit.trimStart);
   const trimEnd = clampTime(videoEdit.trimEnd || duration);
+  const storedTrackCount = Math.max(1, Math.min(8, Number(videoEdit.effectTracks || 1)));
+  const maxZoomTrack = Math.max(0, ...(videoEdit.zoomKeyframes || []).map(item => Math.max(0, Number(item.track || 0))));
+  const effectTracks = Math.max(storedTrackCount, maxZoomTrack + 1);
   return {
     ...videoEdit,
+    effectTracks,
     trimStart: Math.min(trimStart, trimEnd),
     trimEnd: Math.max(trimStart, trimEnd),
     splits: [...new Set((videoEdit.splits || []).map(clampTime).filter(t => t > 0 && (!duration || t < duration)))]
@@ -1915,6 +1922,7 @@ function normalizedVideoEdit() {
       anchorX: Math.max(0, Math.min(100, Number(item.anchorX ?? 50))),
       anchorY: Math.max(0, Math.min(100, Number(item.anchorY ?? 50))),
       duration: Math.max(0.2, Math.min(10, Number(item.duration || 2))),
+      track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
     })).sort((a, b) => a.at - b.at),
     audio: {
       muted: !!videoEdit.audio?.muted,
@@ -2271,6 +2279,7 @@ function renderVideoEditor() {
   videoEdit = normalizedVideoEdit();
   const end = videoEdit.trimEnd || duration;
   const outputDuration = editedOutputDuration();
+  activeEffectTrack = Math.max(0, Math.min((videoEdit.effectTracks || 1) - 1, activeEffectTrack));
   if (editorEls.shell && duration) {
     editorEls.shell.style.width = `${Math.max(900, Math.round(outputDuration * timelinePixelsPerSecond))}px`;
   }
@@ -2317,16 +2326,22 @@ function renderVideoEditor() {
     editorEls.markers.innerHTML = clipHtml + splitHtml + freezeHtml;
   }
   if (editorEls.effectMarkers) {
+    const trackCount = Math.max(1, Number(videoEdit.effectTracks || 1));
+    if (editorEls.effectLane) editorEls.effectLane.style.height = `${trackCount * 36}px`;
+    const rowsHtml = Array.from({ length: trackCount }, (_, track) => `
+      <div class="effect-track-row ${track === activeEffectTrack ? 'active' : ''}" data-effect-track="${track}" style="top:${track * 36}px;">
+        <span class="effect-track-label">Эффекты ${track + 1}</span>
+      </div>`).join('');
     const zoomHtml = videoEdit.zoomKeyframes.map(z => `
       <span class="timeline-zoom-block ${selectedEditorItem?.type === 'zoom' && selectedEditorItem.id === z.id ? 'selected' : ''}"
         data-zoom-id="${esc(z.id)}"
-        title="Зум ${Number(z.scale || 1).toFixed(1)}x, ${fmtTime(z.duration)}"
-        style="left:${pct(sourceToOutputTime(z.at))}%;width:${Math.max(2.5, pct(z.duration))}%">
+        title="Зум ${Number(z.scale || 1).toFixed(1)}x, дорожка ${Number(z.track || 0) + 1}, ${fmtTime(z.duration)}"
+        style="top:${Number(z.track || 0) * 36 + 6}px;bottom:auto;height:24px;left:${pct(sourceToOutputTime(z.at))}%;width:${Math.max(2.5, pct(z.duration))}%">
         <span class="zoom-resize start" data-zoom-edge="start"></span>
         ${Number(z.scale || 1).toFixed(1)}x
         <span class="zoom-resize end" data-zoom-edge="end"></span>
       </span>`).join('');
-    editorEls.effectMarkers.innerHTML = zoomHtml;
+    editorEls.effectMarkers.innerHTML = rowsHtml + zoomHtml;
   }
   if (editorEls.timeLabel) editorEls.timeLabel.textContent = `${fmtTime(vidPlayer.currentTime || 0)} / ${fmtTime(duration)} · итог ${fmtTime(outputDuration)}`;
   renderVideoTransport();
@@ -2583,6 +2598,7 @@ editorEls.shell?.addEventListener('pointerdown', event => {
     const edge = event.target.closest('[data-zoom-edge]')?.dataset.zoomEdge || '';
     const zoom = (videoEdit.zoomKeyframes || []).find(item => item.id === id);
     selectedEditorItem = { type: 'zoom', id };
+    activeEffectTrack = Math.max(0, Number(zoom?.track || 0));
     setEditorMode('zoom');
     timelineDrag = edge
       ? { kind: 'zoom-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(zoom?.at || 0), startOutputAt: sourceToOutputTime(Number(zoom?.at || 0)), startDuration: Number(zoom?.duration || 2) }
@@ -2590,6 +2606,15 @@ editorEls.shell?.addEventListener('pointerdown', event => {
     suppressTimelineClick = true;
     editorEls.shell.setPointerCapture?.(event.pointerId);
     editorEls.shell.classList.add('dragging');
+    renderVideoEditor();
+    event.preventDefault();
+    return;
+  }
+  const effectTrackRow = event.target.closest('[data-effect-track]');
+  if (effectTrackRow) {
+    activeEffectTrack = Math.max(0, Math.min((videoEdit.effectTracks || 1) - 1, Number(effectTrackRow.dataset.effectTrack || 0)));
+    selectedEditorItem = null;
+    suppressTimelineClick = true;
     renderVideoEditor();
     event.preventDefault();
     return;
@@ -2955,8 +2980,16 @@ document.getElementById('edit-delete-selected')?.addEventListener('click', delet
 document.getElementById('edit-zoom')?.addEventListener('click', () => {
   addZoomAt(vidPlayer.currentTime);
 });
+document.getElementById('edit-add-effect-track')?.addEventListener('click', () => {
+  videoEdit.effectTracks = Math.max(1, Math.min(8, Number(videoEdit.effectTracks || 1) + 1));
+  activeEffectTrack = videoEdit.effectTracks - 1;
+  selectedEditorItem = null;
+  toast(`Добавлена дорожка эффектов ${videoEdit.effectTracks}`, 's');
+  saveVideoEdit();
+});
 function addZoomAt(time, { silent = false } = {}) {
   const at = Math.round(clampTime(time) * 10) / 10;
+  const track = Math.max(0, Math.min((videoEdit.effectTracks || 1) - 1, activeEffectTrack));
   const scale = Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(editorEls.zoomScaleX?.value || editorEls.zoomScaleY?.value || 1.4)));
   const scaleX = scale;
   const scaleY = scale;
@@ -2967,10 +3000,11 @@ function addZoomAt(time, { silent = false } = {}) {
   const anchorY = Math.max(0, Math.min(100, Number(editorEls.zoomAnchorY?.value || 50)));
   const id = `zoom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   videoEdit.zoomKeyframes = [
-    ...(videoEdit.zoomKeyframes || []).filter(item => Math.abs(item.at - at) >= 0.11),
-    { id, at, scale: Math.max(scaleX, scaleY), scaleX, scaleY, posX, posY, rotation, anchorX, anchorY, duration: 2 },
+    ...(videoEdit.zoomKeyframes || []).filter(item => Number(item.track || 0) !== track || Math.abs(item.at - at) >= 0.11),
+    { id, at, scale: Math.max(scaleX, scaleY), scaleX, scaleY, posX, posY, rotation, anchorX, anchorY, duration: 2, track },
   ];
   selectedEditorItem = { type: 'zoom', id };
+  activeEffectTrack = track;
   setEditorMode('zoom');
   vidPlayer.currentTime = at;
   if (!silent) toast(`Зум ${scaleX.toFixed(2)}x/${scaleY.toFixed(2)}x на 2 сек добавлен`, 's');
