@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-11T22:10:00+03:00';
+const SITE_VERSION = '2026-07-11T23:13:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1848,6 +1848,7 @@ const editorEls = {
   stage: document.getElementById('vid-stage'),
   footagePreview: document.getElementById('footage-preview-overlay'),
   footageCanvas: document.getElementById('footage-chroma-canvas'),
+  footageFrame: document.getElementById('footage-transform-frame'),
   freezeOverlay: document.getElementById('freeze-frame-overlay'),
   zoomFrame: document.getElementById('zoom-preview-frame'),
   playhead: document.getElementById('timeline-playhead'),
@@ -2303,11 +2304,15 @@ function applyFootageOverlayTransform(footage) {
   const left = Math.max(0, Math.min(100, Number(footage?.posX ?? 50)));
   const top = Math.max(0, Math.min(100, Number(footage?.posY ?? 50)));
   const width = `${Math.round(scale * 10000) / 100}%`;
-  [editorEls.footagePreview, editorEls.footageCanvas].forEach(el => {
+  const videoAspect = editorEls.footagePreview?.videoWidth && editorEls.footagePreview?.videoHeight
+    ? `${editorEls.footagePreview.videoWidth} / ${editorEls.footagePreview.videoHeight}`
+    : '1 / 1';
+  [editorEls.footagePreview, editorEls.footageCanvas, editorEls.footageFrame].forEach(el => {
     if (!el) return;
     el.style.left = `${left}%`;
     el.style.top = `${top}%`;
     el.style.width = width;
+    if (el === editorEls.footageFrame) el.style.aspectRatio = videoAspect;
     el.style.transform = 'translate(-50%, -50%)';
   });
 }
@@ -2699,6 +2704,7 @@ function applyVideoEditPreview() {
       editorEls.footagePreview.classList.toggle('processing-chroma', hasChroma);
       editorEls.footagePreview.classList.toggle('interactive', isSelectedFootage);
       editorEls.footageCanvas?.classList.toggle('interactive', isSelectedFootage);
+      editorEls.footageFrame?.classList.toggle('show', isSelectedFootage);
       if (hasChroma) startChromaPreview(activeFootage);
       else stopChromaPreview();
     } else {
@@ -2707,6 +2713,7 @@ function applyVideoEditPreview() {
       editorEls.footagePreview.classList.remove('processing-chroma');
       editorEls.footagePreview.classList.remove('interactive');
       editorEls.footageCanvas?.classList.remove('interactive');
+      editorEls.footageFrame?.classList.remove('show');
       stopChromaPreview();
       delete editorEls.footagePreview.dataset.url;
       editorEls.footagePreview.removeAttribute('src');
@@ -3214,12 +3221,22 @@ function beginFootageStageDrag(event) {
   activeEffectTrack = Math.max(0, Number(activeFootage.track || 0));
   setEditorMode('effects');
   const point = stagePointToPercent(event.clientX, event.clientY);
+  const handle = event.target.closest?.('[data-footage-stage-handle]')?.dataset.footageStageHandle || '';
+  const stageRect = editorEls.stage?.getBoundingClientRect();
+  const centerX = stageRect ? stageRect.left + stageRect.width * Number(activeFootage.posX ?? 50) / 100 : event.clientX;
+  const centerY = stageRect ? stageRect.top + stageRect.height * Number(activeFootage.posY ?? 50) / 100 : event.clientY;
+  const startDistance = Math.max(12, Math.hypot(event.clientX - centerX, event.clientY - centerY));
   footageStageDrag = {
+    kind: handle ? 'resize' : 'move',
     pointerId: event.pointerId,
     startX: point.x,
     startY: point.y,
     posX: Number(activeFootage.posX ?? 50),
     posY: Number(activeFootage.posY ?? 50),
+    scale: Number(activeFootage.scale ?? 0.35),
+    centerX,
+    centerY,
+    startDistance,
     moved: false,
   };
   event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -3230,6 +3247,15 @@ function beginFootageStageDrag(event) {
 
 function moveFootageStageDrag(event) {
   if (!footageStageDrag || footageStageDrag.pointerId !== event.pointerId) return;
+  if (footageStageDrag.kind === 'resize') {
+    const nextDistance = Math.max(12, Math.hypot(event.clientX - footageStageDrag.centerX, event.clientY - footageStageDrag.centerY));
+    const nextScale = footageStageDrag.scale * (nextDistance / Math.max(1, footageStageDrag.startDistance));
+    footageStageDrag.moved = true;
+    updateSelectedFootageTransform({ scale: nextScale }, { persist: false });
+    updateTimelinePlaybackUi();
+    event.preventDefault();
+    return;
+  }
   const point = stagePointToPercent(event.clientX, event.clientY);
   const nextX = footageStageDrag.posX + point.x - footageStageDrag.startX;
   const nextY = footageStageDrag.posY + point.y - footageStageDrag.startY;
@@ -3248,7 +3274,7 @@ function finishFootageStageDrag(event) {
   event.preventDefault();
 }
 
-[editorEls.footagePreview, editorEls.footageCanvas].forEach(el => {
+[editorEls.footagePreview, editorEls.footageCanvas, editorEls.footageFrame].forEach(el => {
   el?.addEventListener('pointerdown', beginFootageStageDrag);
   el?.addEventListener('pointermove', moveFootageStageDrag);
   el?.addEventListener('pointerup', finishFootageStageDrag);

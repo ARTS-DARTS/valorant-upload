@@ -210,6 +210,13 @@
     .footage-chroma-canvas { position: absolute; left: 50%; top: 50%; width: 35%; height: auto; max-width: none; max-height: none; object-fit: contain; display: none; pointer-events: none; z-index: 5; background: transparent; transform: translate(-50%, -50%); transform-origin: 50% 50%; }
     .footage-chroma-canvas.show { display: block; }
     .footage-chroma-canvas.interactive { pointer-events: auto; cursor: move; touch-action: none; }
+    .footage-transform-frame { position: absolute; left: 50%; top: 50%; width: 35%; aspect-ratio: 1 / 1; display: none; z-index: 8; transform: translate(-50%, -50%); transform-origin: 50% 50%; border: 2px solid #eaff00; box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 0 20px rgba(234,255,0,.2); cursor: move; touch-action: none; background-image: linear-gradient(rgba(234,255,0,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(234,255,0,.35) 1px, transparent 1px); background-size: 33.333% 33.333%; }
+    .footage-transform-frame.show { display: block; }
+    .footage-resize-handle { position: absolute; width: 12px; height: 12px; border-radius: 3px; border: 2px solid #0a0f1a; background: #eaff00; box-shadow: 0 0 0 1px rgba(234,255,0,.75); }
+    .footage-resize-handle.nw { left: -7px; top: -7px; cursor: nwse-resize; }
+    .footage-resize-handle.ne { right: -7px; top: -7px; cursor: nesw-resize; }
+    .footage-resize-handle.sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
+    .footage-resize-handle.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
     .freeze-frame-overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; display: none; pointer-events: none; z-index: 6; }
     .freeze-frame-overlay.show { display: block; }
     .zoom-frame { position: absolute; left: 50%; top: 50%; width: 46%; height: 46%; transform: translate(-50%, -50%); border: 2px solid rgba(34,197,94,.85); border-radius: var(--r); color: #bbf7d0; background: rgba(34,197,94,.08); display: none; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; text-transform: uppercase; pointer-events: auto; cursor: grab; touch-action: none; box-shadow: 0 0 20px rgba(34,197,94,.25); z-index: 7; }
