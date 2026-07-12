@@ -233,9 +233,6 @@
     .defense-mesh-node { fill: #8de5ff; stroke: #dff8ff; stroke-width: 1.2; filter: drop-shadow(0 0 3px rgba(79,195,247,.9)); }
     .defense-area-shape { vector-effect: non-scaling-stroke; }
     .defense-area-shape.net { fill: rgba(50,130,255,.32); stroke: #7ddcff; stroke-width: 1.5; stroke-dasharray: 3 2; filter: drop-shadow(0 0 5px rgba(55,151,255,.65)); }
-    .defense-direction-zone { fill: rgba(65,128,255,.28); stroke: rgba(105,215,255,.75); stroke-width: .35; vector-effect: non-scaling-stroke; }
-    .defense-direction-anchor { fill: #fff; stroke: #dff8ff; stroke-width: .35; vector-effect: non-scaling-stroke; }
-    .defense-direction-end { fill: #8d5d74; stroke: #d98aa9; stroke-width: .3; vector-effect: non-scaling-stroke; }
     .defense-ability-btn.limit-reached { opacity: .42; cursor: not-allowed; }
     .defense-placed-list { display: flex; flex-wrap: wrap; gap: 7px; }
     .defense-placed-chip { display: inline-grid; grid-template-columns: auto auto auto; align-items: center; gap: 5px; min-height: 31px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); color: var(--text1); font-size: 12px; cursor: pointer; }
