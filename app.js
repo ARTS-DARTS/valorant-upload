@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-12T06:35:00+03:00';
+const SITE_VERSION = '2026-07-12T07:06:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -275,7 +275,7 @@ function renderDefenseAbilityPanel() {
     const selected = selectedDefenseAbility?.ability === ab.ability;
     return `
       <button class="defense-ability-btn ${selected ? 'selected' : ''} ${reached ? 'limit-reached' : ''}" type="button"
-        draggable="${reached ? 'false' : 'true'}" data-defense-ability="${esc(ab.ability)}" title="${esc(ab.ability)}: ${count}/${ab.limit}">
+        draggable="false" data-defense-ability="${esc(ab.ability)}" title="${esc(ab.ability)}: ${count}/${ab.limit}">
         <img src="${esc(ab.icon)}" alt="">
         <span>${esc(ab.ability.split(' ')[0])}</span>
         <small>${count}/${ab.limit}</small>
@@ -294,6 +294,11 @@ function renderDefenseAbilityPanel() {
       setMapMode('defenseAbility');
       renderDefenseAbilityPanel();
     });
+    btn.addEventListener('pointerdown', event => {
+      const ab = abilities.find(item => item.ability === btn.dataset.defenseAbility);
+      if (!ab || placedDefenseCount(ab.ability) >= ab.limit) return;
+      beginDefenseAbilityDrag(event, ab);
+    });
     btn.addEventListener('dragstart', event => {
       const ab = abilities.find(item => item.ability === btn.dataset.defenseAbility);
       if (!ab || placedDefenseCount(ab.ability) >= ab.limit) {
@@ -310,15 +315,28 @@ function renderDefenseAbilityPanel() {
   });
   list.innerHTML = defenseAbilities.length
     ? defenseAbilities.map((item, idx) => `
-        <span class="defense-placed-chip">
-          ${idx + 1}. ${esc(item.ability)}
+        <span class="defense-placed-chip ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-select-defense-ability="${idx}" title="${idx + 1}. ${esc(item.ability)}">
+          <span class="defense-placed-num">${idx + 1}</span>
+          ${item.icon ? `<img src="${esc(item.icon)}" alt="">` : `<span>${esc(item.ability.slice(0, 1))}</span>`}
           <button type="button" data-remove-defense-ability="${idx}">×</button>
         </span>
       `).join('')
     : '<span style="color:var(--text2);font-size:12px;">Точек сетапа пока нет</span>';
+  list.querySelectorAll('[data-select-defense-ability]').forEach(chip => {
+    chip.addEventListener('click', event => {
+      if (event.target.closest('[data-remove-defense-ability]')) return;
+      selectedDefenseMarkerIndex = Number(chip.dataset.selectDefenseAbility);
+      renderDefenseAbilityPanel();
+      renderDefenseAbilityMarkers();
+    });
+  });
   list.querySelectorAll('[data-remove-defense-ability]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      defenseAbilities.splice(Number(btn.dataset.removeDefenseAbility), 1);
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      const removed = Number(btn.dataset.removeDefenseAbility);
+      defenseAbilities.splice(removed, 1);
+      if (selectedDefenseMarkerIndex === removed) selectedDefenseMarkerIndex = null;
+      else if (selectedDefenseMarkerIndex > removed) selectedDefenseMarkerIndex -= 1;
       renderDefenseAbilityPanel();
       renderDefenseAbilityMarkers();
       validateForm(); _saveDraft();
@@ -334,7 +352,7 @@ function renderDefenseAbilityMarkers() {
     const left = (content.left + item.x * content.width) / content.wrapWidth * 100;
     const top = (content.top + item.y * content.height) / content.wrapHeight * 100;
     return `
-      <div class="defense-ability-marker" data-defense-marker-index="${idx}" style="left:${left}%;top:${top}%;" title="${esc(item.ability)} #${idx + 1}">
+      <div class="defense-ability-marker ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-marker-index="${idx}" style="left:${left}%;top:${top}%;" title="${esc(item.ability)} #${idx + 1}">
         ${item.icon ? `<img src="${esc(item.icon)}" alt="">` : `<span>${idx + 1}</span>`}
       </div>
     `;
@@ -348,6 +366,36 @@ function moveDefenseAbilityTo(index, x, y) {
   item.y = y;
   renderDefenseAbilityMarkers();
   validateForm(); _saveDraft();
+}
+
+function setAbilityDragGhostPosition(event) {
+  if (!defenseAbilityDrag?.ghost) return;
+  defenseAbilityDrag.ghost.style.left = `${event.clientX}px`;
+  defenseAbilityDrag.ghost.style.top = `${event.clientY}px`;
+}
+
+function removeAbilityDragGhost() {
+  defenseAbilityDrag?.ghost?.remove();
+}
+
+function beginDefenseAbilityDrag(event, ability) {
+  if (event.button !== undefined && event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  selectedDefenseAbility = ability;
+  setMapMode('defenseAbility');
+  const ghost = document.createElement('div');
+  ghost.className = 'ability-drag-ghost';
+  ghost.innerHTML = ability.icon ? `<img src="${esc(ability.icon)}" alt="">` : '';
+  document.body.appendChild(ghost);
+  defenseAbilityDrag = {
+    ability,
+    pointerId: event.pointerId,
+    ghost,
+    moved: false,
+  };
+  setAbilityDragGhostPosition(event);
+  event.currentTarget.setPointerCapture?.(event.pointerId);
 }
 
 function placeDefenseAbilityAt(x, y) {
@@ -367,6 +415,7 @@ function placeDefenseAbilityAt(x, y) {
     y,
     order: defenseAbilities.length + 1,
   });
+  selectedDefenseMarkerIndex = defenseAbilities.length - 1;
   if (placedDefenseCount(selectedDefenseAbility.ability) >= selectedDefenseAbility.limit) {
     selectedDefenseAbility = null;
     setMapMode('position');
@@ -414,7 +463,7 @@ function renderCategoryMapExtras() {
   if (dzStatus) {
     dzStatus.textContent = hasValidDefenseZoom()
       ? `Zoom: x ${defenseZoomArea.x.toFixed(3)}, y ${defenseZoomArea.y.toFixed(3)}, w ${defenseZoomArea.width.toFixed(3)}, h ${defenseZoomArea.height.toFixed(3)}`
-      : 'Два клика по карте: левый верхний и правый нижний угол zoom-области.';
+      : 'Нажми Zoom и выдели прямоугольник на карте.';
   }
 }
 
@@ -426,6 +475,7 @@ function updateCategoryUi() {
       selectedAgent = null;
       selectedAbility = null;
       selectedDefenseAbility = null;
+      selectedDefenseMarkerIndex = null;
       defenseAbilities = [];
       document.getElementById('abilities-row').innerHTML = '<span style="color:var(--text2);font-size:13px;">Сначала выбери агента</span>';
     }
@@ -958,8 +1008,12 @@ let trajectoryPoints = [];
 let wallbangTargetX = null, wallbangTargetY = null;
 let defenseZoomStart = null;
 let defenseZoomArea = null;
+let defenseZoomDrag = null;
+let defenseZoomJustSelected = false;
 let selectedDefenseAbility = null;
 let defenseAbilities = [];
+let defenseAbilityDrag = null;
+let selectedDefenseMarkerIndex = null;
 let mapMode = 'position';
 let videoUrl = null;
 let videoXhr = null;
@@ -2178,6 +2232,7 @@ function renderAgentsGrid() {
         if (!ok) return;
         defenseAbilities = [];
         selectedDefenseAbility = null;
+        selectedDefenseMarkerIndex = null;
         renderDefenseAbilityMarkers();
       }
       grid.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
@@ -2191,6 +2246,7 @@ function selectAgent(agent) {
   selectedAgent   = agent.displayName;
   selectedAbility = null;
   selectedDefenseAbility = null;
+  selectedDefenseMarkerIndex = null;
   if (normalizeContentCategory(selectedCategory) === 'defense') {
     defenseAbilities = [];
     renderDefenseAbilityPanel();
@@ -4723,7 +4779,10 @@ document.getElementById('defense-ability-markers')?.addEventListener('pointerdow
     moved: false,
   };
   selectedDefenseAbility = null;
+  selectedDefenseMarkerIndex = Number(marker.dataset.defenseMarkerIndex);
   setMapMode('position');
+  renderDefenseAbilityPanel();
+  renderDefenseAbilityMarkers();
   marker.classList.add('dragging');
   marker.setPointerCapture?.(e.pointerId);
 });
@@ -4734,6 +4793,11 @@ document.getElementById('defense-ability-markers')?.addEventListener('click', e 
   }
 }, true);
 window.addEventListener('pointermove', e => {
+  if (defenseAbilityDrag && defenseAbilityDrag.pointerId === e.pointerId) {
+    defenseAbilityDrag.moved = true;
+    setAbilityDragGhostPosition(e);
+    return;
+  }
   if (!defenseMarkerDrag || defenseMarkerDrag.pointerId !== e.pointerId) return;
   defenseMarkerDrag.moved = true;
   const { x, y } = eventToMapPoint(e);
@@ -4751,6 +4815,85 @@ function finishDefenseMarkerDrag(e) {
 }
 window.addEventListener('pointerup', finishDefenseMarkerDrag);
 window.addEventListener('pointercancel', e => { if (defenseMarkerDrag?.pointerId === e.pointerId) defenseMarkerDrag = null; });
+
+function finishDefenseAbilityDrag(e) {
+  if (!defenseAbilityDrag || defenseAbilityDrag.pointerId !== e.pointerId) return;
+  const drag = defenseAbilityDrag;
+  removeAbilityDragGhost();
+  defenseAbilityDrag = null;
+  const wrap = document.getElementById('map-wrap');
+  const rect = wrap?.getBoundingClientRect();
+  const overMap = rect && e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+  if (overMap) {
+    selectedDefenseAbility = drag.ability;
+    const { x, y } = eventToMapPoint(e);
+    placeDefenseAbilityAt(x, y);
+    return;
+  }
+  renderDefenseAbilityPanel();
+}
+window.addEventListener('pointerup', finishDefenseAbilityDrag);
+window.addEventListener('pointercancel', e => {
+  if (defenseAbilityDrag?.pointerId !== e.pointerId) return;
+  removeAbilityDragGhost();
+  defenseAbilityDrag = null;
+  renderDefenseAbilityPanel();
+});
+
+function areaFromMapPoints(a, b) {
+  const x1 = Math.min(a.x, b.x);
+  const y1 = Math.min(a.y, b.y);
+  const x2 = Math.max(a.x, b.x);
+  const y2 = Math.max(a.y, b.y);
+  return {
+    x: x1,
+    y: y1,
+    width: Math.max(0.01, x2 - x1),
+    height: Math.max(0.01, y2 - y1),
+  };
+}
+
+document.getElementById('map-wrap')?.addEventListener('pointerdown', e => {
+  if (normalizeContentCategory(selectedCategory) !== 'defense' || mapMode !== 'zoom') return;
+  const img = document.getElementById('map-img');
+  if (img?.style.display === 'none') return;
+  e.preventDefault();
+  e.stopPropagation();
+  const start = eventToMapPoint(e);
+  defenseZoomDrag = { start, pointerId: e.pointerId, moved: false };
+  defenseZoomStart = start;
+  defenseZoomArea = { x: start.x, y: start.y, width: 0.01, height: 0.01 };
+  renderCategoryMapExtras();
+  e.currentTarget.setPointerCapture?.(e.pointerId);
+});
+
+window.addEventListener('pointermove', e => {
+  if (!defenseZoomDrag || defenseZoomDrag.pointerId !== e.pointerId) return;
+  e.preventDefault();
+  defenseZoomDrag.moved = true;
+  defenseZoomArea = areaFromMapPoints(defenseZoomDrag.start, eventToMapPoint(e));
+  renderCategoryMapExtras();
+});
+
+function finishDefenseZoomDrag(e) {
+  if (!defenseZoomDrag || defenseZoomDrag.pointerId !== e.pointerId) return;
+  const area = areaFromMapPoints(defenseZoomDrag.start, eventToMapPoint(e));
+  defenseZoomArea = area.width >= 0.01 && area.height >= 0.01 ? area : null;
+  defenseZoomStart = null;
+  defenseZoomDrag = null;
+  defenseZoomJustSelected = true;
+  renderCategoryMapExtras();
+  setMapMode('position');
+  validateForm(); _saveDraft();
+  setTimeout(() => { defenseZoomJustSelected = false; }, 0);
+}
+window.addEventListener('pointerup', finishDefenseZoomDrag);
+window.addEventListener('pointercancel', e => {
+  if (defenseZoomDrag?.pointerId !== e.pointerId) return;
+  defenseZoomStart = null;
+  defenseZoomDrag = null;
+  renderCategoryMapExtras();
+});
 
 function loadMapMinimap() {
   const mapName = document.getElementById('sel-map').value;
@@ -4838,7 +4981,7 @@ function setMapMode(mode) {
   const hint = document.getElementById('map-hint');
   if (hint) {
     if (mode === 'target') hint.textContent = 'Кликни на карте точку, куда прилетает прострел.';
-    else if (mode === 'zoom') hint.textContent = defenseZoomStart ? 'Теперь кликни второй угол zoom-области.' : 'Кликни первый угол zoom-области.';
+    else if (mode === 'zoom') hint.textContent = 'Зажми мышь на карте и выдели прямоугольник zoom-области.';
     else if (mode === 'defenseAbility') hint.textContent = selectedDefenseAbility ? 'Кликни по карте или перетащи абилку, чтобы поставить точку сетапа.' : 'Обычный режим: перетаскивай уже поставленные абилки по карте.';
     else hint.textContent = 'Выбери режим и кликни на карту';
   }
@@ -4901,6 +5044,7 @@ function trajectoryFromMarker(points = trajectoryPoints) {
 
 document.getElementById('map-wrap').addEventListener('click', e => {
   e.preventDefault();
+  if (defenseZoomJustSelected) return;
   const img = document.getElementById('map-img');
   if (img.style.display === 'none') return;
   const { x, y } = eventToMapPoint(e);
@@ -4923,24 +5067,7 @@ document.getElementById('map-wrap').addEventListener('click', e => {
   } else if (mapMode === 'defenseAbility') {
     placeDefenseAbilityAt(x, y);
   } else if (mapMode === 'zoom') {
-    if (!defenseZoomStart) {
-      defenseZoomStart = { x, y };
-      setMapMode('zoom');
-    } else {
-      const x1 = Math.min(defenseZoomStart.x, x);
-      const y1 = Math.min(defenseZoomStart.y, y);
-      const x2 = Math.max(defenseZoomStart.x, x);
-      const y2 = Math.max(defenseZoomStart.y, y);
-      defenseZoomArea = {
-        x: x1,
-        y: y1,
-        width: Math.max(0.01, x2 - x1),
-        height: Math.max(0.01, y2 - y1),
-      };
-      defenseZoomStart = null;
-      renderCategoryMapExtras();
-      setMapMode('position');
-    }
+    return;
   } else {
     if (markerX !== null && trajectoryPoints.length === 0) {
       trajectoryPoints.push({ x: markerX, y: markerY });
@@ -5142,6 +5269,7 @@ function resetCategorySpecificData() {
   defenseZoomStart = null;
   defenseZoomArea = null;
   selectedDefenseAbility = null;
+  selectedDefenseMarkerIndex = null;
   defenseAbilities = [];
   mapMode = 'position';
   document.getElementById('abilities-row')?.querySelectorAll('.ability-btn').forEach(btn => btn.classList.remove('selected'));
@@ -5275,6 +5403,7 @@ function _restoreDraft(sourceDraft = null) {
               order: Number(item.order || idx + 1),
             }))
             .filter(item => item.ability && Number.isFinite(item.x) && Number.isFinite(item.y));
+          selectedDefenseMarkerIndex = defenseAbilities.length ? defenseAbilities.length - 1 : null;
         }
         if (d.markerX != null) {
           markerX = d.markerX; markerY = d.markerY;
