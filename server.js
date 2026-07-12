@@ -9,6 +9,7 @@ import valorantProxyHandler from './api/valorant-proxy.js';
 import yandexCallbackHandler from './api/yandex-callback.js';
 import yandexStartHandler from './api/yandex-start.js';
 import moderatorApplicationHandler from './api/moderator-application.js';
+import { finalizeExpiredDuels } from './api/duel-finalizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,4 +63,10 @@ app.use((err, req, res, next) => {
 
 app.listen(port, '127.0.0.1', () => {
   console.log(`Valorant upload site listening on http://127.0.0.1:${port}`);
+  const runDuelFinalizer = () => finalizeExpiredDuels().then(results => {
+    const finalized = results.filter(item => item && !item.tie && !item.alreadyFinalized).length;
+    if (finalized) console.log(`Finalized duels: ${finalized}`);
+  }).catch(error => console.error('duel finalizer:', error));
+  setTimeout(runDuelFinalizer, 15000);
+  setInterval(runDuelFinalizer, 60000);
 });
