@@ -264,10 +264,10 @@ function defensePlacementShape(agentName, abilityName, slot = '') {
     return { kind: 'line_segment', points: 2 };
   }
   if (/viper/.test(key) && /poison cloud|ядовит.*облак|облак/.test(key)) {
-    return { kind: 'circle_area', points: 1, radius: 0.0235, theme: 'viper' };
+    return { kind: 'circle_area', points: 1, radius: 0.015275, theme: 'viper' };
   }
   if (/viper/.test(key) && /snake bite|змеин|укус/.test(key)) {
-    return { kind: 'circle_area', points: 1, radius: 0.0275, theme: 'viper' };
+    return { kind: 'circle_area', points: 1, radius: 0.0165, theme: 'viper' };
   }
   if (/viper/.test(key) && /viper.*pit|гнезд.*гадюк|ultimate/.test(key)) {
     return { kind: 'circle_area', points: 1, radius: 0.0475, theme: 'viper-ult' };
