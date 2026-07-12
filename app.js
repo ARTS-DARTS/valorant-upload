@@ -252,7 +252,7 @@ function defensePlacementShape(agentName, abilityName, slot = '') {
     return { kind: 'net_area', points: 1, radius: 0.06 };
   }
   if (/deadlock/.test(key) && /sonic|звуков|датчик|сенсор|sensor/.test(key)) {
-    return { kind: 'point', points: 1 };
+    return { kind: 'directional_rect', points: 2, width: 0.045 };
   }
   if (/cypher/.test(key) && /trapwire|растяж/.test(key)) {
     return { kind: 'line_segment', points: 2 };
@@ -609,6 +609,21 @@ function renderDefenseAbilityMarkers() {
       const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || 0.06) * 100);
       return `<circle class="defense-area-shape net" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
     }
+    if (kind === 'directional_rect' && points.length >= 2) {
+      const a = mapPointToPercent(points[0]);
+      const b = mapPointToPercent(points[1]);
+      const dx = b.left - a.left;
+      const dy = b.top - a.top;
+      const length = Math.max(0.001, Math.hypot(dx, dy));
+      const halfWidth = Math.max(1.8, Number(item.shape_width || item.shape?.width || 0.045) * 50);
+      const px = -dy / length * halfWidth;
+      const py = dx / length * halfWidth;
+      const polygon = `${a.left + px},${a.top + py} ${b.left + px},${b.top + py} ${b.left - px},${b.top - py} ${a.left - px},${a.top - py}`;
+      const diamond = `${b.left},${b.top - 1.25} ${b.left + 1.25},${b.top} ${b.left},${b.top + 1.25} ${b.left - 1.25},${b.top}`;
+      return `<polygon class="defense-direction-zone" points="${polygon}"></polygon>
+        <circle class="defense-direction-anchor" cx="${a.left}%" cy="${a.top}%" r="0.85%"></circle>
+        <polygon class="defense-direction-end" points="${diamond}"></polygon>`;
+    }
     if (kind !== 'line_segment' || points.length < 2) return '';
     const a = mapPointToPercent(points[0]);
     const b = mapPointToPercent(points[1]);
@@ -618,14 +633,14 @@ function renderDefenseAbilityMarkers() {
       <line class="defense-shape-line ${draft ? 'draft' : ''}" x1="${a.left}%" y1="${a.top}%" x2="${b.left}%" y2="${b.top}%"></line>
     `;
   }).join('');
-  const draftAnchors = defenseLineDraft && defenseShapeKind(defenseLineDraft) === 'line_segment'
+  const draftAnchors = defenseLineDraft && defenseShapeUsesPoints(defenseLineDraft)
     ? normalizedDefensePoints(defenseLineDraft).map((point, pointIdx) => {
         const pos = mapPointToPercent(point);
         return `<div class="defense-line-anchor draft" style="left:${pos.left}%;top:${pos.top}%;"></div>`;
       }).join('')
     : '';
   const markers = defenseAbilities.map((item, idx) => {
-    const isLine = defenseShapeKind(item) === 'line_segment';
+    const isLine = defenseShapeUsesPoints(item);
     const points = normalizedDefensePoints(item);
     const center = defenseAbilityCenter(item);
     const centerPos = mapPointToPercent(center);
@@ -640,14 +655,14 @@ function renderDefenseAbilityMarkers() {
       </div>
     `;
   }).join('');
-  host.innerHTML = `<svg class="defense-shape-lines" aria-hidden="true">${lines}</svg>${draftAnchors}${markers}`;
+  host.innerHTML = `<svg class="defense-shape-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines}</svg>${draftAnchors}${markers}`;
 }
 
 function moveDefenseAbilityTo(index, x, y) {
   const item = defenseAbilities[index];
   if (!item) return;
   const oldCenter = defenseAbilityCenter(item);
-  if (defenseShapeKind(item) === 'line_segment') {
+  if (defenseShapeUsesPoints(item)) {
     const dx = x - oldCenter.x;
     const dy = y - oldCenter.y;
     item.points = normalizedDefensePoints(item).map(point => ({
@@ -707,6 +722,11 @@ function defenseShapeKind(item) {
   return item?.shape_kind || item?.shape?.kind || 'point';
 }
 
+function defenseShapeUsesPoints(itemOrKind) {
+  const kind = typeof itemOrKind === 'string' ? itemOrKind : defenseShapeKind(itemOrKind);
+  return kind === 'line_segment' || kind === 'directional_rect';
+}
+
 function normalizedDefensePoints(item) {
   const points = Array.isArray(item?.points) ? item.points : [];
   const clean = points
@@ -721,7 +741,7 @@ function normalizedDefensePoints(item) {
 
 function defenseAbilityCenter(item) {
   const points = normalizedDefensePoints(item);
-  if (defenseShapeKind(item) === 'line_segment' && points.length >= 2) {
+  if (defenseShapeUsesPoints(item) && points.length >= 2) {
     return {
       x: clamp01((points[0].x + points[1].x) / 2),
       y: clamp01((points[0].y + points[1].y) / 2),
@@ -743,10 +763,10 @@ function placeDefenseAbilityAt(x, y, options = {}) {
     return false;
   }
   const shapeKind = options.shapeKind || selectedDefenseAbility.shape?.kind || 'point';
-  const points = shapeKind === 'line_segment'
+  const points = defenseShapeUsesPoints(shapeKind)
     ? normalizedDefensePoints({ x, y, points: options.points })
     : [];
-  const center = shapeKind === 'line_segment'
+  const center = defenseShapeUsesPoints(shapeKind)
     ? defenseAbilityCenter({ shape_kind: shapeKind, points })
     : { x, y };
   defenseAbilities.push({
@@ -757,6 +777,7 @@ function placeDefenseAbilityAt(x, y, options = {}) {
     y: clamp01(center.y),
     shape_kind: shapeKind,
     shape_radius: Number(options.shapeRadius || selectedDefenseAbility.shape?.radius || 0),
+    shape_width: Number(options.shapeWidth || selectedDefenseAbility.shape?.width || 0),
     points,
     order: defenseAbilities.length + 1,
   });
@@ -5221,7 +5242,7 @@ window.addEventListener('pointermove', e => {
   const { x, y } = eventToMapPoint(e);
   const item = defenseAbilities[defenseMarkerDrag.index];
   if (!item) return;
-  if (defenseShapeKind(item) === 'line_segment') {
+  if (defenseShapeUsesPoints(item)) {
     const oldCenter = defenseAbilityCenter(item);
     const dx = x - oldCenter.x;
     const dy = y - oldCenter.y;
@@ -5302,7 +5323,7 @@ document.getElementById('map-wrap')?.addEventListener('pointerdown', e => {
   if (
     normalizeContentCategory(selectedCategory) === 'defense' &&
     mapMode === 'defenseAbility' &&
-    selectedDefenseAbility?.shape?.kind === 'line_segment'
+    defenseShapeUsesPoints(selectedDefenseAbility?.shape?.kind)
   ) {
     const img = document.getElementById('map-img');
     if (img?.style.display === 'none') return;
@@ -5313,7 +5334,8 @@ document.getElementById('map-wrap')?.addEventListener('pointerdown', e => {
       ability: selectedDefenseAbility.ability,
       slot: selectedDefenseAbility.slot,
       icon: selectedDefenseAbility.icon,
-      shape_kind: 'line_segment',
+      shape_kind: selectedDefenseAbility.shape.kind,
+      shape_width: Number(selectedDefenseAbility.shape.width || 0),
       x: start.x,
       y: start.y,
       points: [start, start],
@@ -5384,8 +5406,8 @@ function finishDefenseLineDraft(e) {
     toast('Протяни линию между двумя стенками', 'w');
     return;
   }
-  const center = defenseAbilityCenter({ shape_kind: 'line_segment', points });
-  placeDefenseAbilityAt(center.x, center.y, { shapeKind: 'line_segment', points });
+  const center = defenseAbilityCenter({ shape_kind: draft.shape_kind, points });
+  placeDefenseAbilityAt(center.x, center.y, { shapeKind: draft.shape_kind, shapeWidth: draft.shape_width, points });
   defenseLineJustCreated = true;
   setTimeout(() => { defenseLineJustCreated = false; }, 0);
 }
@@ -5489,7 +5511,7 @@ function setMapMode(mode) {
   if (hint) {
     if (mode === 'target') hint.textContent = 'Кликни на карте точку, куда прилетает прострел.';
     else if (mode === 'zoom') hint.textContent = 'Зажми мышь на карте и выдели прямоугольник zoom-области.';
-    else if (mode === 'defenseAbility') hint.textContent = selectedDefenseAbility?.shape?.kind === 'line_segment'
+    else if (mode === 'defenseAbility') hint.textContent = defenseShapeUsesPoints(selectedDefenseAbility?.shape?.kind)
       ? 'Зажми на карте и протяни линию между двумя стенками.'
       : (selectedDefenseAbility ? 'Кликни по карте или перетащи абилку, чтобы поставить точку сетапа.' : 'Обычный режим: перетаскивай уже поставленные абилки по карте.');
     else if (mode === 'trajectory' && activeExtraAbility()) hint.textContent = `Рисуешь доп. траекторию: ${activeExtraAbility().ability}`;
@@ -5981,9 +6003,13 @@ function _restoreDraft(sourceDraft = null) {
           defenseAbilities = d.defenseAbilities
             .map((item, idx) => {
               const storedShapeKind = item.shape_kind || item.shape?.kind || 'point';
-              const shapeKind = storedShapeKind === 'sensor_area' ? 'point' : storedShapeKind;
-              const points = shapeKind === 'line_segment' ? normalizedDefensePoints(item) : [];
-              const center = shapeKind === 'line_segment'
+              const catalogShape = defensePlacementShape(d.agent || selectedAgent, item.ability, item.slot);
+              const shapeKind = (storedShapeKind === 'sensor_area' ||
+                (storedShapeKind === 'point' && catalogShape.kind === 'directional_rect'))
+                ? catalogShape.kind
+                : storedShapeKind;
+              const points = defenseShapeUsesPoints(shapeKind) ? normalizedDefensePoints(item) : [];
+              const center = defenseShapeUsesPoints(shapeKind)
                 ? defenseAbilityCenter({ ...item, shape_kind: shapeKind, points })
                 : { x: Number(item.x), y: Number(item.y) };
               return {
@@ -5994,6 +6020,7 @@ function _restoreDraft(sourceDraft = null) {
                 y: Number(center.y),
                 shape_kind: shapeKind,
                 shape_radius: Number(item.shape_radius || item.shape?.radius || 0),
+                shape_width: Number(item.shape_width || item.shape?.width || 0),
                 points,
                 order: Number(item.order || idx + 1),
               };
@@ -6339,7 +6366,8 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
           y: item.y,
           shape_kind: defenseShapeKind(item),
           shape_radius: Number(item.shape_radius || 0),
-          points: defenseShapeKind(item) === 'line_segment'
+          shape_width: Number(item.shape_width || 0),
+          points: defenseShapeUsesPoints(item)
             ? normalizedDefensePoints(item).map(point => ({ x: point.x, y: point.y }))
             : [],
           order: idx + 1,
