@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-12T05:19:00+03:00';
+const SITE_VERSION = '2026-07-12T06:10:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -121,10 +121,182 @@ function normalizeContentCategory(value) {
   return raw;
 }
 
-const ENABLED_UPLOAD_CONTENT_TYPES = new Set(['lineup']);
+const UPLOAD_IMPLEMENTED_CONTENT_TYPES = new Set(['lineup', 'wallbang', 'defense']);
+const DEFAULT_WALLBANG_WEAPONS = ['Vandal', 'Phantom', 'Guardian', 'Ares', 'Odin'];
+let uploadCategoryAccess = {
+  lineup_enabled: true,
+  combo_enabled: false,
+  wallbang_enabled: false,
+  defense_enabled: false,
+};
+let uploadWeaponWhitelist = [...DEFAULT_WALLBANG_WEAPONS];
+
+function uploadCategoryFlag(category) {
+  const normalized = normalizeContentCategory(category);
+  if (normalized === 'lineup') return uploadCategoryAccess.lineup_enabled !== false;
+  if (normalized === 'combo') return uploadCategoryAccess.combo_enabled === true;
+  if (normalized === 'wallbang') return uploadCategoryAccess.wallbang_enabled === true;
+  if (normalized === 'defense') return uploadCategoryAccess.defense_enabled === true;
+  return false;
+}
 
 function canSubmitContentCategory(value) {
-  return ENABLED_UPLOAD_CONTENT_TYPES.has(normalizeContentCategory(value));
+  const normalized = normalizeContentCategory(value);
+  return UPLOAD_IMPLEMENTED_CONTENT_TYPES.has(normalized) && uploadCategoryFlag(normalized);
+}
+
+function categoryNeedsAgent(category = selectedCategory) {
+  return normalizeContentCategory(category) !== 'wallbang';
+}
+
+function categoryNeedsAbility(category = selectedCategory) {
+  return normalizeContentCategory(category) !== 'wallbang';
+}
+
+function selectedWallbangWeapons() {
+  return [...document.querySelectorAll('#wallbang-weapons input[type="checkbox"]:checked')]
+    .map(input => input.value)
+    .filter(Boolean);
+}
+
+function defenseSiteValue() {
+  return (document.getElementById('defense-site')?.value || '').trim();
+}
+
+function defenseNumberValue() {
+  const raw = Number(document.getElementById('defense-number')?.value || 0);
+  return Number.isFinite(raw) ? Math.max(1, Math.min(99, Math.round(raw))) : 1;
+}
+
+function hasValidDefenseZoom() {
+  return !!(
+    defenseZoomArea &&
+    Number.isFinite(defenseZoomArea.x) &&
+    Number.isFinite(defenseZoomArea.y) &&
+    defenseZoomArea.width > 0 &&
+    defenseZoomArea.height > 0
+  );
+}
+
+function categoryExtrasValid(category = selectedCategory) {
+  const normalized = normalizeContentCategory(category);
+  if (normalized === 'wallbang') {
+    return selectedWallbangWeapons().length > 0 && wallbangTargetX !== null && wallbangTargetY !== null;
+  }
+  if (normalized === 'defense') {
+    return !!defenseSiteValue() && hasValidDefenseZoom();
+  }
+  return true;
+}
+
+function renderWallbangWeapons() {
+  const grid = document.getElementById('wallbang-weapons');
+  if (!grid) return;
+  const selected = new Set(selectedWallbangWeapons());
+  const weapons = uploadWeaponWhitelist.length ? uploadWeaponWhitelist : DEFAULT_WALLBANG_WEAPONS;
+  grid.innerHTML = weapons.map(weapon => `
+    <label class="weapon-check">
+      <input type="checkbox" value="${esc(weapon)}" ${selected.has(weapon) ? 'checked' : ''}>
+      <span>${esc(weapon)}</span>
+    </label>
+  `).join('');
+  grid.querySelectorAll('input').forEach(input => {
+    input.addEventListener('change', () => { validateForm(); _saveDraft(); });
+  });
+}
+
+function setElementMapBox(el, area) {
+  if (!el || !area) return;
+  const content = mapContentRect();
+  el.style.display = '';
+  el.style.left = ((content.left + area.x * content.width) / content.wrapWidth * 100) + '%';
+  el.style.top = ((content.top + area.y * content.height) / content.wrapHeight * 100) + '%';
+  el.style.width = (area.width * content.width / content.wrapWidth * 100) + '%';
+  el.style.height = (area.height * content.height / content.wrapHeight * 100) + '%';
+}
+
+function renderCategoryMapExtras() {
+  const target = document.getElementById('wallbang-target-marker');
+  const zoom = document.getElementById('defense-zoom-box');
+  if (target) {
+    if (wallbangTargetX !== null && wallbangTargetY !== null) {
+      const content = mapContentRect();
+      target.style.display = '';
+      target.style.left = ((content.left + wallbangTargetX * content.width) / content.wrapWidth * 100) + '%';
+      target.style.top = ((content.top + wallbangTargetY * content.height) / content.wrapHeight * 100) + '%';
+    } else {
+      target.style.display = 'none';
+    }
+  }
+  if (zoom) {
+    if (hasValidDefenseZoom()) setElementMapBox(zoom, defenseZoomArea);
+    else zoom.style.display = 'none';
+  }
+  const wbStatus = document.getElementById('wallbang-target-status');
+  if (wbStatus) {
+    wbStatus.textContent = wallbangTargetX !== null
+      ? `Точка попадания: ${wallbangTargetX.toFixed(3)}, ${wallbangTargetY.toFixed(3)}`
+      : 'Поставь точку, куда должен прилететь прострел.';
+  }
+  const dzStatus = document.getElementById('defense-zoom-status');
+  if (dzStatus) {
+    dzStatus.textContent = hasValidDefenseZoom()
+      ? `Zoom: x ${defenseZoomArea.x.toFixed(3)}, y ${defenseZoomArea.y.toFixed(3)}, w ${defenseZoomArea.width.toFixed(3)}, h ${defenseZoomArea.height.toFixed(3)}`
+      : 'Два клика по карте: левый верхний и правый нижний угол zoom-области.';
+  }
+}
+
+function updateCategoryUi() {
+  const normalized = normalizeContentCategory(selectedCategory || '');
+  document.getElementById('wallbang-extra')?.toggleAttribute('hidden', normalized !== 'wallbang');
+  document.getElementById('defense-extra')?.toggleAttribute('hidden', normalized !== 'defense');
+  if (normalized !== 'wallbang' && mapMode === 'target') setMapMode('position');
+  if (normalized !== 'defense' && mapMode === 'zoom') setMapMode('position');
+  renderCategoryMapExtras();
+  validateForm();
+}
+
+function updateUploadCategoryButtons() {
+  document.querySelectorAll('#cat-row .pill-btn').forEach(btn => {
+    const category = normalizeContentCategory(btn.dataset.val);
+    const implemented = UPLOAD_IMPLEMENTED_CONTENT_TYPES.has(category);
+    const enabled = implemented && uploadCategoryFlag(category);
+    btn.disabled = !enabled;
+    btn.classList.toggle('locked', !enabled);
+    btn.title = enabled
+      ? ''
+      : (implemented ? 'Категория закрыта в настройках сайта' : 'Комбо пока закрыто: нужна отдельная модель');
+    if (!enabled && selectedCategory === category) {
+      btn.classList.remove('selected');
+      selectedCategory = null;
+    }
+  });
+  updateCategoryUi();
+}
+
+async function loadUploadCategoryConfig() {
+  try {
+    const [accessSnap, weaponsSnap] = await Promise.all([
+      getDoc(doc(db, 'settings', 'category_access')),
+      getDoc(doc(db, 'settings', 'weapon_whitelist')),
+    ]);
+    if (accessSnap.exists()) {
+      const data = accessSnap.data();
+      uploadCategoryAccess = {
+        lineup_enabled: data.lineup_enabled !== false,
+        combo_enabled: data.combo_enabled === true,
+        wallbang_enabled: data.wallbang_enabled === true,
+        defense_enabled: data.defense_enabled === true,
+      };
+    }
+    if (weaponsSnap.exists() && Array.isArray(weaponsSnap.data().weapons)) {
+      uploadWeaponWhitelist = weaponsSnap.data().weapons.filter(Boolean);
+    }
+  } catch (e) {
+    console.warn('loadUploadCategoryConfig', e.message);
+  }
+  renderWallbangWeapons();
+  updateUploadCategoryButtons();
 }
 
 function toSafeErrorMessage(error) {
@@ -195,9 +367,9 @@ function submitFormDiagnostics({ title = '', desc = '', map = '', ability = '', 
   const reasons = [];
   if (!currentUser) reasons.push('no_current_user');
   if (!map) reasons.push('missing_map');
-  if (!selectedAgent) reasons.push('missing_agent');
-  if (!ability) reasons.push('missing_normalized_ability');
-  if (!selectedAbility) reasons.push('missing_selected_ability');
+  if (categoryNeedsAgent(contentType || selectedCategory) && !selectedAgent) reasons.push('missing_agent');
+  if (categoryNeedsAbility(contentType || selectedCategory) && !ability) reasons.push('missing_normalized_ability');
+  if (categoryNeedsAbility(contentType || selectedCategory) && !selectedAbility) reasons.push('missing_selected_ability');
   if (!selectedCategory) reasons.push('missing_category');
   if (!canSubmitContentCategory(contentType || selectedCategory)) reasons.push('content_type_closed');
   if (!selectedDifficulty) reasons.push('missing_difficulty');
@@ -205,6 +377,7 @@ function submitFormDiagnostics({ title = '', desc = '', map = '', ability = '', 
   if (title.length > 100) reasons.push('title_too_long');
   if (desc.length > 1000) reasons.push('description_too_long');
   if (markerX === null || markerY === null) reasons.push('missing_marker');
+  if (!categoryExtrasValid(contentType || selectedCategory)) reasons.push('missing_category_extras');
   if (screenshots.some(s => s.uploading)) reasons.push('screenshots_uploading');
   return {
     client_ok: reasons.length === 0,
@@ -217,6 +390,11 @@ function submitFormDiagnostics({ title = '', desc = '', map = '', ability = '', 
     marker_x: markerX,
     marker_y: markerY,
     trajectory_points: trajectoryPoints.length,
+    wallbang_weapons: selectedWallbangWeapons(),
+    wallbang_target_x: wallbangTargetX,
+    wallbang_target_y: wallbangTargetY,
+    defense_site: defenseSiteValue(),
+    defense_zoom_area: defenseZoomArea,
   };
 }
 
@@ -564,6 +742,9 @@ let selectedCategory = null;
 let selectedDifficulty = null;
 let markerX = null, markerY = null;
 let trajectoryPoints = [];
+let wallbangTargetX = null, wallbangTargetY = null;
+let defenseZoomStart = null;
+let defenseZoomArea = null;
 let mapMode = 'position';
 let videoUrl = null;
 let videoXhr = null;
@@ -1022,6 +1203,7 @@ function openLineupDetail(lineupId) {
       <div class="detail-tile"><span>Абилка</span><b>${esc(firstText(item.ability, '—'))}</b></div>
       <div class="detail-tile"><span>Сложность</span><b>${esc(difficultyLabel(item.difficulty))}</b></div>
       <div class="detail-tile"><span>Категория</span><b>${esc(categoryLabel(item.content_type || item.category))}</b></div>
+      ${categoryExtraDetailHtml(item)}
       ${item.resubmitted_from ? `<div class="detail-tile"><span>Доработка</span><b>${esc(source ? firstText(source.title, source.id) : item.resubmitted_from)}</b></div>` : ''}
     </div>
     ${rejection ? `<div class="detail-section"><div class="detail-section-title">Причина отклонения</div><div class="detail-warning">${esc(rejection)}</div></div>` : ''}
@@ -1098,10 +1280,40 @@ function rejectedLineupDraft(item) {
     markerY: item.position_y ?? item.marker_y ?? null,
     mapMode: 'position',
     trajectory: Array.isArray(item.trajectory) ? item.trajectory : [],
+    wallbangTargetX: item.target_x ?? null,
+    wallbangTargetY: item.target_y ?? null,
+    wallbangWeapons: Array.isArray(item.weapons) ? item.weapons : [],
+    defenseSite: item.site || '',
+    defenseNumber: item.number || 1,
+    defenseZoomArea: item.zoom_area || null,
     videoUrl: item.video_url || '',
     screenshots: shots,
     resubmissionSourceId: item.id,
   };
+}
+
+function categoryExtraDetailHtml(item) {
+  const type = normalizeContentCategory(item.content_type || item.category || 'lineup');
+  if (type === 'wallbang') {
+    const weapons = Array.isArray(item.weapons) ? item.weapons.filter(Boolean).join(', ') : '';
+    const target = item.target_x !== undefined && item.target_y !== undefined
+      ? `${Number(item.target_x).toFixed(3)}, ${Number(item.target_y).toFixed(3)}`
+      : '';
+    return `
+      ${weapons ? `<div class="detail-tile"><span>Оружие</span><b>${esc(weapons)}</b></div>` : ''}
+      ${target ? `<div class="detail-tile"><span>Точка</span><b>${esc(target)}</b></div>` : ''}
+    `;
+  }
+  if (type === 'defense') {
+    const zoom = item.zoom_area;
+    const zoomText = zoom ? `${Number(zoom.x).toFixed(3)}, ${Number(zoom.y).toFixed(3)} / ${Number(zoom.width).toFixed(3)}×${Number(zoom.height).toFixed(3)}` : '';
+    return `
+      ${item.site ? `<div class="detail-tile"><span>Зона</span><b>${esc(item.site)}</b></div>` : ''}
+      ${item.number ? `<div class="detail-tile"><span>Сетап</span><b>${esc(item.number)}</b></div>` : ''}
+      ${zoomText ? `<div class="detail-tile"><span>Zoom</span><b>${esc(zoomText)}</b></div>` : ''}
+    `;
+  }
+  return '';
 }
 
 function lineupCopyDraft(item) {
@@ -1557,6 +1769,7 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'flex';
     await loadCurrentUserProfile(user);
+    await loadUploadCategoryConfig();
     updateAdminOnlyWorkspace();
     document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
     updateUploadGate();
@@ -1788,10 +2001,10 @@ document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => {
       selectedCategory = null;
       b.classList.remove('selected');
       toast('Эта категория пока закрыта для отправки.', 'i');
-      validateForm(); _saveDraft();
+      updateCategoryUi(); _saveDraft();
       return;
     }
-    validateForm(); _saveDraft();
+    updateCategoryUi(); _saveDraft();
   });
 });
 document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => {
@@ -1799,6 +2012,30 @@ document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => {
     document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
     b.classList.add('selected');
     selectedDifficulty = b.dataset.val;
+    validateForm(); _saveDraft();
+  });
+});
+
+document.getElementById('mode-wallbang-target')?.addEventListener('click', () => setMapMode('target'));
+document.getElementById('wallbang-target-clear')?.addEventListener('click', () => {
+  wallbangTargetX = wallbangTargetY = null;
+  if (mapMode === 'target') setMapMode('position');
+  renderCategoryMapExtras();
+  validateForm(); _saveDraft();
+});
+document.getElementById('mode-defense-zoom')?.addEventListener('click', () => {
+  defenseZoomStart = null;
+  setMapMode('zoom');
+});
+document.getElementById('defense-zoom-clear')?.addEventListener('click', () => {
+  defenseZoomStart = null;
+  defenseZoomArea = null;
+  if (mapMode === 'zoom') setMapMode('position');
+  renderCategoryMapExtras();
+  validateForm(); _saveDraft();
+});
+['defense-site', 'defense-number'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', () => {
     validateForm(); _saveDraft();
   });
 });
@@ -4227,7 +4464,11 @@ function loadMapMinimap() {
     img.style.display = 'none'; ph.style.display = '';
     marker.style.display = 'none';
     markerX = markerY = null; trajectoryPoints = [];
+    wallbangTargetX = wallbangTargetY = null;
+    defenseZoomStart = null;
+    defenseZoomArea = null;
     renderTrajectory();
+    renderCategoryMapExtras();
     return;
   }
   const apiUrl = mapsData.find(m => m.displayName === mapName)?.displayIcon;
@@ -4256,6 +4497,7 @@ function loadMapMinimap() {
       ph.style.display = 'none';
       if (markerX != null && markerY != null) setMarkerPosition(markerX, markerY);
       renderTrajectory();
+      renderCategoryMapExtras();
     };
     img.style.display = 'none';
     ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Загружаем карту…</div>`;
@@ -4263,7 +4505,11 @@ function loadMapMinimap() {
     img.src = candidates[0];
     marker.style.display = 'none';
     markerX = markerY = null; trajectoryPoints = [];
+    wallbangTargetX = wallbangTargetY = null;
+    defenseZoomStart = null;
+    defenseZoomArea = null;
     renderTrajectory();
+    renderCategoryMapExtras();
   } else {
     img.style.display = 'none';
     ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Миникарта не найдена</div>`;
@@ -4277,8 +4523,16 @@ function setMapMode(mode) {
   mapMode = mode;
   document.getElementById('mode-position').classList.toggle('selected-mode',   mode === 'position');
   document.getElementById('mode-trajectory').classList.toggle('selected-mode', mode === 'trajectory');
+  document.getElementById('mode-wallbang-target')?.classList.toggle('selected-mode', mode === 'target');
+  document.getElementById('mode-defense-zoom')?.classList.toggle('selected-mode', mode === 'zoom');
   document.getElementById('traj-undo').style.display  = mode === 'trajectory' ? '' : 'none';
   document.getElementById('traj-clear').style.display = mode === 'trajectory' ? '' : 'none';
+  const hint = document.getElementById('map-hint');
+  if (hint) {
+    if (mode === 'target') hint.textContent = 'Кликни на карте точку, куда прилетает прострел.';
+    else if (mode === 'zoom') hint.textContent = defenseZoomStart ? 'Теперь кликни второй угол zoom-области.' : 'Кликни первый угол zoom-области.';
+    else hint.textContent = 'Выбери режим и кликни на карту';
+  }
 }
 window.setMapMode = setMapMode;
 window.undoTraj  = function() { trajectoryPoints.pop(); renderTrajectory(); _saveDraft(); };
@@ -4347,6 +4601,30 @@ document.getElementById('map-wrap').addEventListener('click', e => {
     setMarkerPosition(x, y);
     updateMarkerIcon();
     renderTrajectory();
+  } else if (mapMode === 'target') {
+    wallbangTargetX = x; wallbangTargetY = y;
+    if (markerX !== null) trajectoryPoints = [{ x: markerX, y: markerY }, { x, y }];
+    renderTrajectory();
+    renderCategoryMapExtras();
+  } else if (mapMode === 'zoom') {
+    if (!defenseZoomStart) {
+      defenseZoomStart = { x, y };
+      setMapMode('zoom');
+    } else {
+      const x1 = Math.min(defenseZoomStart.x, x);
+      const y1 = Math.min(defenseZoomStart.y, y);
+      const x2 = Math.max(defenseZoomStart.x, x);
+      const y2 = Math.max(defenseZoomStart.y, y);
+      defenseZoomArea = {
+        x: x1,
+        y: y1,
+        width: Math.max(0.01, x2 - x1),
+        height: Math.max(0.01, y2 - y1),
+      };
+      defenseZoomStart = null;
+      renderCategoryMapExtras();
+      setMapMode('position');
+    }
   } else {
     if (markerX !== null && trajectoryPoints.length === 0) {
       trajectoryPoints.push({ x: markerX, y: markerY });
@@ -4431,6 +4709,12 @@ function collectDraftData() {
     desc:       document.getElementById('inp-desc')?.value || '',
     markerX, markerY, mapMode,
     trajectory: trajectoryPoints,
+    wallbangTargetX,
+    wallbangTargetY,
+    wallbangWeapons: selectedWallbangWeapons(),
+    defenseSite: defenseSiteValue(),
+    defenseNumber: defenseNumberValue(),
+    defenseZoomArea,
     videoUrl,
     videoEdit: videoUrl ? normalizedVideoEdit() : createDefaultVideoEdit(),
     screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
@@ -4443,6 +4727,8 @@ function hasDraftContent(draft) {
     draft &&
     (draft.title || draft.desc || draft.map || draft.agent || draft.ability ||
       draft.videoUrl || draft.markerX != null || draft.trajectory?.length ||
+      draft.wallbangTargetX != null || draft.wallbangWeapons?.length ||
+      draft.defenseSite || draft.defenseZoomArea ||
       draft.screenshots?.length || draft.videoEdit?.splits?.length ||
       draft.videoEdit?.freezeFrames?.length || draft.videoEdit?.zoomKeyframes?.length ||
       draft.resubmissionSourceId)
@@ -4579,6 +4865,7 @@ function _restoreDraft(sourceDraft = null) {
       document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       selectedCategory = restoredCategory;
+      updateCategoryUi();
     }
   }
   if (d.difficulty) {
@@ -4600,11 +4887,19 @@ function _restoreDraft(sourceDraft = null) {
       const afterLoad = () => {
         if (d.mapMode) setMapMode(d.mapMode);
         if (d.trajectory?.length) { trajectoryPoints = d.trajectory; renderTrajectory(); }
+        if (d.wallbangTargetX != null) {
+          wallbangTargetX = Number(d.wallbangTargetX);
+          wallbangTargetY = Number(d.wallbangTargetY);
+        }
+        if (d.defenseZoomArea) {
+          defenseZoomArea = d.defenseZoomArea;
+        }
         if (d.markerX != null) {
           markerX = d.markerX; markerY = d.markerY;
           setMarkerPosition(d.markerX, d.markerY);
           updateMarkerIcon();
         }
+        renderCategoryMapExtras();
         validateForm();
       };
       if (img.complete && img.naturalWidth) afterLoad();
@@ -4632,6 +4927,22 @@ function _restoreDraft(sourceDraft = null) {
         if (abilBtn) { document.querySelectorAll('.ability-btn').forEach(b => b.classList.remove('selected')); abilBtn.classList.add('selected'); updateMarkerIcon(); }
       }
     }
+  }
+
+  if (Array.isArray(d.wallbangWeapons)) {
+    renderWallbangWeapons();
+    const weapons = new Set(d.wallbangWeapons);
+    document.querySelectorAll('#wallbang-weapons input[type="checkbox"]').forEach(input => {
+      input.checked = weapons.has(input.value);
+    });
+  }
+  if (d.defenseSite) {
+    const el = document.getElementById('defense-site');
+    if (el) el.value = d.defenseSite;
+  }
+  if (d.defenseNumber) {
+    const el = document.getElementById('defense-number');
+    if (el) el.value = d.defenseNumber;
   }
 
   // Video
@@ -4662,12 +4973,14 @@ function _restoreDraft(sourceDraft = null) {
 
 // ── Validation ────────────────────────────────────────────────────────────────
 function validateForm() {
+  const category = normalizeContentCategory(selectedCategory || '');
   const ok =
     document.getElementById('sel-map').value &&
-    selectedAgent &&
-    selectedAbility &&
+    (!categoryNeedsAgent(category) || selectedAgent) &&
+    (!categoryNeedsAbility(category) || selectedAbility) &&
     selectedCategory &&
     canSubmitContentCategory(selectedCategory) &&
+    categoryExtrasValid(category) &&
     selectedDifficulty &&
     document.getElementById('inp-title').value.trim().length > 0 &&
     markerX !== null;
@@ -4704,12 +5017,18 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   const title = document.getElementById('inp-title').value.trim();
   const desc  = document.getElementById('inp-desc').value.trim();
   const map   = document.getElementById('sel-map').value;
+  const requestedContentType = normalizeContentCategory(selectedCategory);
 
-  if (!map || !selectedAgent || !selectedAbility || !selectedCategory || !selectedDifficulty) {
+  if (!map || !selectedCategory || !selectedDifficulty ||
+      (categoryNeedsAgent(requestedContentType) && !selectedAgent) ||
+      (categoryNeedsAbility(requestedContentType) && !selectedAbility)) {
     toast('Заполни все обязательные поля', 'e'); return;
   }
   if (!canSubmitContentCategory(selectedCategory)) {
     toast('Эта категория пока закрыта для отправки.', 'e'); return;
+  }
+  if (!categoryExtrasValid(requestedContentType)) {
+    toast('Заполни данные выбранной категории', 'e'); return;
   }
   if (!title) { toast('Введи название', 'e'); return; }
   if (hasCyrillic(title)) { toast('Название должно быть на английском: только позиции, например A Screens from A Lobby', 'e'); return; }
@@ -4765,14 +5084,18 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   let submittedPayloadDiagnostics = {};
   try {
     submitStage = 'normalize_ability';
-    normalizedAbility = normalizeAbilityName(selectedAgent, selectedAbility);
-    if (!normalizedAbility) {
+    normalizedAbility = categoryNeedsAbility(contentType || requestedContentType)
+      ? normalizeAbilityName(selectedAgent, selectedAbility)
+      : '';
+    if (categoryNeedsAbility(requestedContentType) && !normalizedAbility) {
       toast('Выбери способность агента', 'e');
       btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
       return;
     }
     submitStage = 'load_range_radius';
-    rangeRadius = await getConfiguredRangeRadius(map, selectedAgent, normalizedAbility, selectedAbilityAliases());
+    rangeRadius = requestedContentType === 'wallbang'
+      ? 0
+      : await getConfiguredRangeRadius(map, selectedAgent, normalizedAbility, selectedAbilityAliases());
     const submittedBy = authorDisplayName();
     contentType = normalizeContentCategory(selectedCategory);
     if (!canSubmitContentCategory(contentType)) {
@@ -4785,14 +5108,15 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     submittedPayloadDiagnostics = {
       lineup_id: lineupId,
       map,
-      agent: selectedAgent,
+      agent: contentType === 'wallbang' ? '' : selectedAgent,
       selected_ability: selectedAbility,
       normalized_ability: normalizedAbility,
-      ability_aliases: selectedAbilityAliases(),
+      ability_aliases: contentType === 'wallbang' ? [] : selectedAbilityAliases(),
       category: selectedCategory,
       content_type: contentType,
       difficulty: selectedDifficulty,
       range_radius: rangeRadius,
+      category_extras_valid: categoryExtrasValid(contentType),
       user_id: uid,
       submitted_by: submittedBy,
       submitted_at: 'serverTimestamp()',
@@ -4807,7 +5131,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     const batch = writeBatch(db);
     batch.set(lineupRef, {
       map,
-      agent:         selectedAgent,
+      agent:         contentType === 'wallbang' ? '' : selectedAgent,
       ability:       normalizedAbility,
       title,
       description:   desc,
@@ -4820,6 +5144,16 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       range_radius:  rangeRadius,
       category:      contentType,
       content_type:  contentType,
+      ...(contentType === 'wallbang' ? {
+        weapons: selectedWallbangWeapons(),
+        target_x: wallbangTargetX,
+        target_y: wallbangTargetY,
+      } : {}),
+      ...(contentType === 'defense' ? {
+        site: defenseSiteValue(),
+        number: defenseNumberValue(),
+        zoom_area: defenseZoomArea,
+      } : {}),
       schema_version: 1,
       difficulty:    selectedDifficulty,
       status:        'pending',
@@ -4878,6 +5212,9 @@ function resetUploadForm({ keepDraft = false } = {}) {
   selectedCategory = null; selectedDifficulty = null;
   markerX = null; markerY = null;
   trajectoryPoints = [];
+  wallbangTargetX = null; wallbangTargetY = null;
+  defenseZoomStart = null;
+  defenseZoomArea = null;
   mapMode = 'position';
   videoUrl = null; videoEdit = createDefaultVideoEdit(); screenshots = [];
   rememberCommittedVideoEdit();
@@ -4900,6 +5237,9 @@ function resetUploadForm({ keepDraft = false } = {}) {
   document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('inp-title').value = '';
   document.getElementById('inp-desc').value = '';
+  document.getElementById('defense-site').value = '';
+  document.getElementById('defense-number').value = '1';
+  document.querySelectorAll('#wallbang-weapons input[type="checkbox"]').forEach(input => { input.checked = false; });
   document.getElementById('title-count').textContent = '0';
   document.getElementById('desc-count').textContent = '0';
   document.getElementById('drop-zone').style.display = '';
@@ -4911,6 +5251,7 @@ function resetUploadForm({ keepDraft = false } = {}) {
   document.getElementById('traj-container').innerHTML = '';
   document.getElementById('map-hint').textContent = 'Выбери режим и кликни на карту';
   setMapMode('position');
+  updateCategoryUi();
   renderScreenshots();
   document.getElementById('success-screen').style.display = 'none';
   document.getElementById('btn-submit').disabled = true;

@@ -177,6 +177,16 @@
     .pill-btn.locked, .pill-btn:disabled { opacity: .48; cursor: not-allowed; }
     .pill-btn.locked:hover, .pill-btn:disabled:hover { border-color: var(--border); color: var(--text2); }
     .selected-mode { border-color: var(--primary) !important; color: var(--primary) !important; }
+    .category-extra-panel[hidden] { display: none !important; }
+    .category-extra-card { display: grid; gap: 12px; }
+    .extra-kicker { color: var(--text2); font-size: 11px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; }
+    .weapon-check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 8px; }
+    .weapon-check { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface2); color: var(--text1); font-size: 12px; font-weight: 700; cursor: pointer; }
+    .weapon-check input { accent-color: var(--primary); }
+    .extra-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+    .extra-grid label { display: grid; gap: 6px; color: var(--text2); font-size: 11px; font-weight: 900; letter-spacing: .6px; text-transform: uppercase; }
+    .extra-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .extra-status { color: var(--text2); font-size: 12px; line-height: 1.45; }
 
     .input-wrap { position: relative; }
     .char-counter { position: absolute; bottom: 8px; right: 10px; font-size: 11px; color: var(--text2); pointer-events: none; }
@@ -334,6 +344,8 @@
 
     /* Map */
     .map-wrap { position: relative; cursor: crosshair; border-radius: var(--r); overflow: hidden; background: #0a0e1a; border: 1px solid var(--border); user-select: none; aspect-ratio: 1 / 1; }
+    .wallbang-target-marker { position: absolute; z-index: 4; width: 22px; height: 22px; transform: translate(-50%, -50%); border: 2px solid #f97316; border-radius: 50%; background: rgba(249,115,22,.16); color: #fff7ed; font-size: 18px; line-height: 16px; font-weight: 900; text-align: center; pointer-events: none; box-shadow: 0 0 12px rgba(249,115,22,.65); }
+    .defense-zoom-box { position: absolute; z-index: 2; border: 2px solid rgba(34,197,94,.95); background: rgba(34,197,94,.12); box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 0 16px rgba(34,197,94,.32); pointer-events: none; }
     .map-wrap > img.map-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
     .map-hint { color: var(--text2); font-size: 12px; margin-top: 6px; }
 

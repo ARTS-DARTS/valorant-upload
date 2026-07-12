@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-12T01-21">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-12T06-10">
 </head>
 <body>
 
@@ -113,6 +113,38 @@
         <button class="pill-btn locked" data-val="combo" disabled title="Скоро: сначала заполняют админы">⚡ Комбо</button>
         <button class="pill-btn locked" data-val="wallbang" disabled title="Скоро: сначала заполняют админы">💥 Прострелы</button>
         <button class="pill-btn locked" data-val="defense" disabled title="Скоро: сначала заполняют админы">🛡 Защита</button>
+      </div>
+    </div>
+
+    <div class="category-extra-panel" id="wallbang-extra" hidden>
+      <div class="section-title">💥 ДАННЫЕ ПРОСТРЕЛА</div>
+      <div class="card category-extra-card">
+        <div class="extra-kicker">Оружие</div>
+        <div class="weapon-check-grid" id="wallbang-weapons"></div>
+        <div class="extra-actions">
+          <button class="pill-btn" id="mode-wallbang-target" type="button">🎯 Точка попадания</button>
+          <button class="pill-btn" id="wallbang-target-clear" type="button">✕ Сбросить</button>
+        </div>
+        <div class="extra-status" id="wallbang-target-status">Поставь точку, куда должен прилететь прострел.</div>
+      </div>
+    </div>
+
+    <div class="category-extra-panel" id="defense-extra" hidden>
+      <div class="section-title">🛡 ДАННЫЕ ЗАЩИТЫ</div>
+      <div class="card category-extra-card">
+        <div class="extra-grid">
+          <label>Зона / плент
+            <input class="finput" id="defense-site" maxlength="20" placeholder="A, B, C, Mid">
+          </label>
+          <label>Номер сетапа
+            <input class="finput" id="defense-number" type="number" min="1" max="99" step="1" value="1">
+          </label>
+        </div>
+        <div class="extra-actions">
+          <button class="pill-btn" id="mode-defense-zoom" type="button">🔍 Область zoom</button>
+          <button class="pill-btn" id="defense-zoom-clear" type="button">✕ Сбросить zoom</button>
+        </div>
+        <div class="extra-status" id="defense-zoom-status">Два клика по карте: левый верхний и правый нижний угол zoom-области.</div>
       </div>
     </div>
 
@@ -315,6 +347,8 @@
         <div class="map-wrap" id="map-wrap">
           <img id="map-img" class="map-img" crossorigin="anonymous" src="" alt="" style="display:none;">
           <div id="map-placeholder" style="padding:32px;text-align:center;color:var(--text2);font-size:13px;">Сначала выбери карту</div>
+          <div id="defense-zoom-box" class="defense-zoom-box" style="display:none;"></div>
+          <div id="wallbang-target-marker" class="wallbang-target-marker" style="display:none;">×</div>
           <!-- Position marker -->
           <div id="map-marker" style="display:none;position:absolute;transform:translate(-50%,-50%);z-index:3;pointer-events:none;">
             <div id="marker-dot" style="width:18px;height:18px;border-radius:50%;border:2px solid var(--primary);background:var(--surface);display:flex;align-items:center;justify-content:center;box-shadow:0 0 6px rgba(79,195,247,0.6);">
@@ -503,6 +537,6 @@
 
 <div id="toasts"></div>
 
-<script type="module" src="/app.js?v=2026-07-12T01-21"></script>
+<script type="module" src="/app.js?v=2026-07-12T06-10"></script>
 </body>
 </html>
