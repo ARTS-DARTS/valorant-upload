@@ -349,13 +349,12 @@ function renderExtraAbilityPanel() {
     return;
   }
   const abilities = selectedAgentAbilities().filter(ab => ab.ability !== selectedAbility);
-  const used = new Set(extraAbilityTrajectories.map(item => item.ability));
+  const atLimit = extraAbilityTrajectories.length >= 2;
   picker.innerHTML = abilities.length
     ? abilities.map(ab => {
-        const added = used.has(ab.ability);
         return `
-          <button class="ability-btn extra-ability-pick ${added ? 'added' : ''}" type="button"
-            data-extra-add="${esc(ab.ability)}" title="${esc(ab.ability)}" ${added ? 'disabled' : ''}>
+          <button class="ability-btn extra-ability-pick" type="button"
+            data-extra-add="${esc(ab.ability)}" title="Добавить: ${esc(ab.ability)}" ${atLimit ? 'disabled' : ''}>
             <img src="${esc(ab.icon)}" alt="">
             <span>${esc(ab.ability.split(' ')[0])}</span>
           </button>
@@ -365,7 +364,21 @@ function renderExtraAbilityPanel() {
   picker.querySelectorAll('[data-extra-add]').forEach(btn => {
     btn.addEventListener('click', () => addExtraAbilityByName(btn.dataset.extraAdd || ''));
   });
-  list.innerHTML = extraAbilityTrajectories.length
+  const mainCatalog = selectedAgentAbilities().find(ab => ab.ability === selectedAbility);
+  const mainPoints = normalizeTrajectoryPoints(trajectoryPoints).length;
+  const mainRow = `
+    <div class="extra-ability-item ${selectedExtraAbilityIndex === null ? 'selected' : ''}">
+      <span class="extra-ability-num">★</span>
+      <button class="extra-ability-main" type="button" data-extra-main title="Рисовать основную траекторию">
+        ${mainCatalog?.icon ? `<img src="${esc(mainCatalog.icon)}" alt="">` : ''}
+        <span>
+          <span class="extra-ability-name">Основная · ${esc(selectedAbility)}</span>
+          <span class="extra-ability-meta">${mainPoints >= 2 ? `${mainPoints} точек` : 'траектория не задана'}</span>
+        </span>
+      </button>
+      <span></span>
+    </div>`;
+  list.innerHTML = mainRow + (extraAbilityTrajectories.length
     ? extraAbilityTrajectories.map((item, idx) => {
         const points = normalizeTrajectoryPoints(item.trajectory).length;
         const selected = selectedExtraAbilityIndex === idx;
@@ -387,7 +400,14 @@ function renderExtraAbilityPanel() {
           </div>
         `;
       }).join('')
-    : '<span style="color:var(--text2);font-size:12px;">Дополнительных траекторий пока нет</span>';
+    : '<span style="color:var(--text2);font-size:12px;">Нажми абилку выше, чтобы добавить доп. траекторию</span>');
+  list.querySelector('[data-extra-main]')?.addEventListener('click', () => {
+    selectedExtraAbilityIndex = null;
+    setMapMode('trajectory');
+    renderExtraAbilityPanel();
+    renderTrajectory();
+    _saveDraft();
+  });
   list.querySelectorAll('[data-extra-select]').forEach(btn => {
     btn.addEventListener('click', () => {
       selectedExtraAbilityIndex = Number(btn.dataset.extraSelect);
@@ -441,10 +461,6 @@ function addExtraAbilityByName(abilityName) {
   }
   if (abilityName === selectedAbility) {
     toast('Основная абилка уже выбрана выше', 'w');
-    return;
-  }
-  if (extraAbilityTrajectories.some(item => item.ability === abilityName)) {
-    toast('Эта доп. абилка уже добавлена', 'w');
     return;
   }
   const effect = abilityEffectShape(selectedAgent, ab.ability, ab.slot);
