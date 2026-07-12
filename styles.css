@@ -168,6 +168,18 @@
     .ability-btn.selected { border-color: var(--primary); background: rgba(79,195,247,0.12); }
     .ability-btn img { width: 32px; height: 32px; object-fit: contain; }
     .ability-btn span { font-size: 11px; color: var(--text2); margin-top: 3px; display: block; text-align: center; max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .extra-ability-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+    .extra-ability-list { display: grid; gap: 8px; }
+    .extra-ability-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface2); padding: 8px; }
+    .extra-ability-item.selected { border-color: var(--primary); background: rgba(79,195,247,.12); box-shadow: 0 0 0 1px rgba(79,195,247,.18) inset; }
+    .extra-ability-num { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(79,195,247,.16); color: var(--primary); font-weight: 800; font-size: 12px; }
+    .extra-ability-main { min-width: 0; display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; text-align: left; }
+    .extra-ability-main img { width: 28px; height: 28px; object-fit: contain; flex: 0 0 auto; }
+    .extra-ability-name { min-width: 0; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .extra-ability-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+    .extra-ability-actions { display: flex; gap: 6px; align-items: center; }
+    .extra-ability-action { min-width: 30px; height: 30px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); color: var(--text); cursor: pointer; font-weight: 800; }
+    .extra-ability-action:hover { border-color: var(--primary); color: var(--primary); }
 
     /* Pills */
     .pill-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -477,6 +489,7 @@
       #map-container.defense-workbench .map-hint { grid-column: 1; grid-row: auto; }
       #map-container.defense-workbench .defense-toolbox { position: static; max-height: none; }
       .defense-toolbox .defense-ability-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .extra-ability-controls { grid-template-columns: 1fr; }
     }
     @media (max-width: 500px) {
       .auth-card { padding: 28px 18px; }

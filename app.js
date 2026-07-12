@@ -198,6 +198,11 @@ function categoryExtrasValid(category = selectedCategory) {
   if (normalized === 'defense') {
     return !!defenseSiteValue() && hasValidDefenseZoom() && defenseAbilities.length > 0;
   }
+  if (normalized === 'lineup') {
+    return extraAbilityTrajectories.every(item =>
+      item?.ability && normalizeTrajectoryPoints(item.trajectory).length >= 2
+    );
+  }
   return true;
 }
 
@@ -266,6 +271,189 @@ function selectedAgentAbilities() {
       shape: defensePlacementShape(agent.displayName, normalizeAbilityName(agent.displayName, ab.displayName, ab.slot), ab.slot || ''),
     }));
 }
+
+function abilityEffectShape(agentName, abilityName, slot = '') {
+  const key = `${agentName || ''} ${abilityName || ''} ${slot || ''}`.toLowerCase();
+  if (/viper/.test(key) && /toxic screen|токсичн.*завес|завес/.test(key)) {
+    return { effect_shape: 'line', effect_width: 0.018 };
+  }
+  if (/sova/.test(key) && /hunter|гнев охот/.test(key)) {
+    return { effect_shape: 'none', effect_width: 0 };
+  }
+  return { effect_shape: 'circle', effect_width: 0 };
+}
+
+function extraTrajectoriesEnabled(category = selectedCategory) {
+  return normalizeContentCategory(category) === 'lineup';
+}
+
+function normalizeTrajectoryPoints(points) {
+  return (Array.isArray(points) ? points : [])
+    .map(p => ({ x: Number(p?.x), y: Number(p?.y) }))
+    .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
+    .map(p => ({ x: clamp01(p.x), y: clamp01(p.y) }));
+}
+
+function normalizeExtraAbilityItem(item, index = 0) {
+  const ability = String(item?.ability || '').trim();
+  if (!ability) return null;
+  const catalog = selectedAgentAbilities().find(ab => ab.ability === ability);
+  const effect = abilityEffectShape(selectedAgent, ability, item?.slot || catalog?.slot || '');
+  return {
+    order: Number(item?.order || index + 1),
+    ability,
+    slot: item?.slot || catalog?.slot || '',
+    icon: item?.icon || catalog?.icon || '',
+    trajectory: normalizeTrajectoryPoints(item?.trajectory),
+    range_radius: Number(item?.range_radius || 0),
+    effect_shape: effect.effect_shape || item?.effect_shape || 'circle',
+    effect_width: Number(effect.effect_width ?? item?.effect_width ?? 0),
+    note: item?.note || '',
+  };
+}
+
+function activeExtraAbility() {
+  return Number.isInteger(selectedExtraAbilityIndex)
+    ? extraAbilityTrajectories[selectedExtraAbilityIndex] || null
+    : null;
+}
+
+function activeTrajectoryPoints() {
+  return activeExtraAbility()?.trajectory || trajectoryPoints;
+}
+
+function setActiveTrajectoryPoints(points) {
+  const extra = activeExtraAbility();
+  if (extra) extra.trajectory = points;
+  else trajectoryPoints = points;
+}
+
+function trajectoryFromMarkerFor(points = trajectoryPoints) {
+  const clean = normalizeTrajectoryPoints(points);
+  if (markerX === null || markerY === null || !clean.length) return clean;
+  const path = clean.map(p => ({ ...p }));
+  path[0] = { x: markerX, y: markerY };
+  return path;
+}
+
+function renderExtraAbilityPanel() {
+  const panel = document.getElementById('extra-abilities-panel');
+  const select = document.getElementById('extra-ability-select');
+  const list = document.getElementById('extra-ability-list');
+  if (!panel || !select || !list) return;
+  const enabled = extraTrajectoriesEnabled() && !!selectedAgent && !!selectedAbility;
+  panel.toggleAttribute('hidden', !enabled);
+  if (!enabled) {
+    select.innerHTML = '<option value="">Выбери доп. абилку</option>';
+    list.innerHTML = '';
+    return;
+  }
+  const abilities = selectedAgentAbilities().filter(ab => ab.ability !== selectedAbility);
+  select.innerHTML = [
+    '<option value="">Выбери доп. абилку</option>',
+    ...abilities.map(ab => `<option value="${esc(ab.ability)}">${esc(ab.ability)}</option>`),
+  ].join('');
+  list.innerHTML = extraAbilityTrajectories.length
+    ? extraAbilityTrajectories.map((item, idx) => {
+        const points = normalizeTrajectoryPoints(item.trajectory).length;
+        const selected = selectedExtraAbilityIndex === idx;
+        return `
+          <div class="extra-ability-item ${selected ? 'selected' : ''}" data-extra-index="${idx}">
+            <span class="extra-ability-num">${idx + 1}</span>
+            <button class="extra-ability-main" type="button" data-extra-select="${idx}" title="Рисовать траекторию: ${esc(item.ability)}">
+              ${item.icon ? `<img src="${esc(item.icon)}" alt="">` : ''}
+              <span>
+                <span class="extra-ability-name">${esc(item.ability)}</span>
+                <span class="extra-ability-meta">${points >= 2 ? `${points} точек` : 'траектория не задана'}</span>
+              </span>
+            </button>
+            <span class="extra-ability-actions">
+              <button class="extra-ability-action" type="button" data-extra-up="${idx}" title="Выше">↑</button>
+              <button class="extra-ability-action" type="button" data-extra-down="${idx}" title="Ниже">↓</button>
+              <button class="extra-ability-action" type="button" data-extra-remove="${idx}" title="Удалить">×</button>
+            </span>
+          </div>
+        `;
+      }).join('')
+    : '<span style="color:var(--text2);font-size:12px;">Дополнительных траекторий пока нет</span>';
+  list.querySelectorAll('[data-extra-select]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedExtraAbilityIndex = Number(btn.dataset.extraSelect);
+      setMapMode('trajectory');
+      renderExtraAbilityPanel();
+      renderTrajectory();
+      _saveDraft();
+    });
+  });
+  list.querySelectorAll('[data-extra-remove]').forEach(btn => {
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      const idx = Number(btn.dataset.extraRemove);
+      extraAbilityTrajectories.splice(idx, 1);
+      extraAbilityTrajectories.forEach((item, orderIdx) => { item.order = orderIdx + 1; });
+      if (selectedExtraAbilityIndex === idx) selectedExtraAbilityIndex = null;
+      else if (selectedExtraAbilityIndex > idx) selectedExtraAbilityIndex -= 1;
+      renderExtraAbilityPanel();
+      renderTrajectory();
+      validateForm(); _saveDraft();
+    });
+  });
+  list.querySelectorAll('[data-extra-up],[data-extra-down]').forEach(btn => {
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      const isUp = btn.hasAttribute('data-extra-up');
+      const idx = Number(isUp ? btn.dataset.extraUp : btn.dataset.extraDown);
+      const next = isUp ? idx - 1 : idx + 1;
+      if (next < 0 || next >= extraAbilityTrajectories.length) return;
+      [extraAbilityTrajectories[idx], extraAbilityTrajectories[next]] = [extraAbilityTrajectories[next], extraAbilityTrajectories[idx]];
+      extraAbilityTrajectories.forEach((item, orderIdx) => { item.order = orderIdx + 1; });
+      if (selectedExtraAbilityIndex === idx) selectedExtraAbilityIndex = next;
+      else if (selectedExtraAbilityIndex === next) selectedExtraAbilityIndex = idx;
+      renderExtraAbilityPanel();
+      renderTrajectory();
+      _saveDraft();
+    });
+  });
+}
+
+function addExtraAbilityFromSelect() {
+  if (!extraTrajectoriesEnabled()) return;
+  if (extraAbilityTrajectories.length >= 2) {
+    toast('Пока максимум 2 дополнительные траектории', 'w');
+    return;
+  }
+  const select = document.getElementById('extra-ability-select');
+  const abilityName = select?.value || '';
+  const ab = selectedAgentAbilities().find(item => item.ability === abilityName);
+  if (!ab) {
+    toast('Выбери дополнительную абилку', 'w');
+    return;
+  }
+  if (abilityName === selectedAbility) {
+    toast('Основная абилка уже выбрана выше', 'w');
+    return;
+  }
+  const effect = abilityEffectShape(selectedAgent, ab.ability, ab.slot);
+  extraAbilityTrajectories.push({
+    order: extraAbilityTrajectories.length + 1,
+    ability: ab.ability,
+    slot: ab.slot || '',
+    icon: ab.icon || '',
+    trajectory: [],
+    range_radius: 0,
+    effect_shape: effect.effect_shape,
+    effect_width: effect.effect_width,
+    note: '',
+  });
+  selectedExtraAbilityIndex = extraAbilityTrajectories.length - 1;
+  if (select) select.value = '';
+  setMapMode('trajectory');
+  renderExtraAbilityPanel();
+  renderTrajectory();
+  validateForm(); _saveDraft();
+}
+
+document.getElementById('extra-ability-add')?.addEventListener('click', addExtraAbilityFromSelect);
 
 function placedDefenseCount(abilityName) {
   return defenseAbilities.filter(item => item.ability === abilityName).length;
@@ -590,6 +778,7 @@ function updateCategoryUi() {
   if (agentTitle?.classList?.contains('section-title')) agentTitle.style.display = showAgent ? '' : 'none';
   if (abilityCard) abilityCard.style.display = showAbility ? '' : 'none';
   if (abilityTitle?.classList?.contains('section-title')) abilityTitle.style.display = showAbility ? '' : 'none';
+  document.getElementById('extra-abilities-panel')?.toggleAttribute('hidden', !showAbility || !selectedAgent || !selectedAbility);
   document.getElementById('wallbang-extra')?.toggleAttribute('hidden', normalized !== 'wallbang');
   document.getElementById('defense-extra')?.toggleAttribute('hidden', normalized !== 'defense');
   document.getElementById('defense-ability-panel')?.toggleAttribute('hidden', normalized !== 'defense');
@@ -612,6 +801,7 @@ function updateCategoryUi() {
     renderDefenseAbilityPanel();
   }
   renderAgentsGrid();
+  renderExtraAbilityPanel();
   setMapMode(mapMode);
   renderCategoryMapExtras();
   renderDefenseAbilityMarkers();
@@ -1105,6 +1295,8 @@ let selectedCategory = null;
 let selectedDifficulty = null;
 let markerX = null, markerY = null;
 let trajectoryPoints = [];
+let extraAbilityTrajectories = [];
+let selectedExtraAbilityIndex = null;
 let wallbangTargetX = null, wallbangTargetY = null;
 let defenseZoomStart = null;
 let defenseZoomArea = null;
@@ -1651,6 +1843,7 @@ function rejectedLineupDraft(item) {
     markerY: item.position_y ?? item.marker_y ?? null,
     mapMode: 'position',
     trajectory: Array.isArray(item.trajectory) ? item.trajectory : [],
+    extraAbilities: Array.isArray(item.extra_abilities) ? item.extra_abilities : [],
     wallbangTargetX: item.target_x ?? null,
     wallbangTargetY: item.target_y ?? null,
     wallbangWeapons: Array.isArray(item.weapons) ? item.weapons : [],
@@ -1659,6 +1852,7 @@ function rejectedLineupDraft(item) {
     defenseZoomArea: item.zoom_area || null,
     defenseAbilities: Array.isArray(item.abilities) ? item.abilities : [],
     videoUrl: item.video_url || '',
+    videoEdit: item.video_edit || null,
     screenshots: shots,
     resubmissionSourceId: item.id,
   };
@@ -2329,12 +2523,20 @@ function renderAgentsGrid() {
     card.addEventListener('click', () => {
       const agent = agentsList.find(a => a.uuid === card.dataset.uuid);
       if (!agent || agent.displayName === selectedAgent) return;
-      if (normalizeContentCategory(selectedCategory) === 'defense' && defenseAbilities.length) {
-        const ok = window.confirm('Вы уверены, что хотите переключить агента? Это сотрёт все расставленные способности сетапа.');
+      if (selectedAgent && categoryHasPlacedData(selectedCategory)) {
+        const ok = window.confirm('Вы уверены, что хотите переключить агента? Это сотрёт расставленные точки и траектории для текущего агента.');
         if (!ok) return;
+        markerX = markerY = null;
+        trajectoryPoints = [];
+        extraAbilityTrajectories = [];
+        selectedExtraAbilityIndex = null;
         defenseAbilities = [];
         selectedDefenseAbility = null;
         selectedDefenseMarkerIndex = null;
+        defenseLineDraft = null;
+        defenseLineJustCreated = false;
+        document.getElementById('map-marker').style.display = 'none';
+        renderTrajectory();
         renderDefenseAbilityMarkers();
       }
       grid.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
@@ -2347,6 +2549,8 @@ function renderAgentsGrid() {
 function selectAgent(agent) {
   selectedAgent   = agent.displayName;
   selectedAbility = null;
+  extraAbilityTrajectories = [];
+  selectedExtraAbilityIndex = null;
   selectedDefenseAbility = null;
   selectedDefenseMarkerIndex = null;
   if (normalizeContentCategory(selectedCategory) === 'defense') {
@@ -2373,10 +2577,15 @@ function selectAgent(agent) {
       row.querySelectorAll('.ability-btn').forEach(x => x.classList.remove('selected'));
       b.classList.add('selected');
       selectedAbility = b.dataset.key;
+      extraAbilityTrajectories = extraAbilityTrajectories.filter(item => item.ability !== selectedAbility);
+      selectedExtraAbilityIndex = null;
       updateMarkerIcon();
+      renderExtraAbilityPanel();
+      renderTrajectory();
       validateForm(); _saveDraft();
     });
   });
+  renderExtraAbilityPanel();
   validateForm();
 }
 
@@ -5124,6 +5333,8 @@ function loadMapMinimap() {
     img.style.display = 'none'; ph.style.display = '';
     marker.style.display = 'none';
     markerX = markerY = null; trajectoryPoints = [];
+    extraAbilityTrajectories = [];
+    selectedExtraAbilityIndex = null;
     wallbangTargetX = wallbangTargetY = null;
     defenseZoomStart = null;
     defenseZoomArea = null;
@@ -5165,6 +5376,8 @@ function loadMapMinimap() {
     img.src = candidates[0];
     marker.style.display = 'none';
     markerX = markerY = null; trajectoryPoints = [];
+    extraAbilityTrajectories = [];
+    selectedExtraAbilityIndex = null;
     wallbangTargetX = wallbangTargetY = null;
     defenseZoomStart = null;
     defenseZoomArea = null;
@@ -5203,12 +5416,26 @@ function setMapMode(mode) {
     else if (mode === 'defenseAbility') hint.textContent = selectedDefenseAbility?.shape?.kind === 'line_segment'
       ? 'Зажми на карте и протяни линию между двумя стенками.'
       : (selectedDefenseAbility ? 'Кликни по карте или перетащи абилку, чтобы поставить точку сетапа.' : 'Обычный режим: перетаскивай уже поставленные абилки по карте.');
+    else if (mode === 'trajectory' && activeExtraAbility()) hint.textContent = `Рисуешь доп. траекторию: ${activeExtraAbility().ability}`;
+    else if (mode === 'trajectory') hint.textContent = 'Рисуешь основную траекторию';
     else hint.textContent = 'Выбери режим и кликни на карту';
   }
 }
 window.setMapMode = setMapMode;
-window.undoTraj  = function() { trajectoryPoints.pop(); renderTrajectory(); _saveDraft(); };
-window.clearTraj = function() { trajectoryPoints = []; renderTrajectory(); _saveDraft(); };
+window.undoTraj  = function() {
+  const points = activeTrajectoryPoints();
+  points.pop();
+  setActiveTrajectoryPoints(points);
+  renderExtraAbilityPanel();
+  renderTrajectory();
+  _saveDraft();
+};
+window.clearTraj = function() {
+  setActiveTrajectoryPoints([]);
+  renderExtraAbilityPanel();
+  renderTrajectory();
+  validateForm(); _saveDraft();
+};
 
 function mapContentRect() {
   const wrap = document.getElementById('map-wrap');
@@ -5253,13 +5480,7 @@ function setMarkerPosition(x, y) {
 }
 
 function trajectoryFromMarker(points = trajectoryPoints) {
-  const clean = (Array.isArray(points) ? points : [])
-    .map(p => ({ x: Number(p?.x), y: Number(p?.y) }))
-    .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
-  if (markerX === null || markerY === null || !clean.length) return clean;
-  const path = clean.map(p => ({ ...p }));
-  path[0] = { x: markerX, y: markerY };
-  return path;
+  return trajectoryFromMarkerFor(points);
 }
 
 document.getElementById('map-wrap').addEventListener('click', e => {
@@ -5274,6 +5495,9 @@ document.getElementById('map-wrap').addEventListener('click', e => {
     if (normalizeContentCategory(selectedCategory) === 'defense') return;
     markerX = x; markerY = y;
     if (trajectoryPoints.length) trajectoryPoints[0] = { x, y };
+    extraAbilityTrajectories.forEach(item => {
+      if (Array.isArray(item.trajectory) && item.trajectory.length) item.trajectory[0] = { x, y };
+    });
     if (normalizeContentCategory(selectedCategory) === 'wallbang' && wallbangTargetX !== null) {
       trajectoryPoints = [{ x, y }, { x: wallbangTargetX, y: wallbangTargetY }];
     }
@@ -5290,10 +5514,13 @@ document.getElementById('map-wrap').addEventListener('click', e => {
   } else if (mapMode === 'zoom') {
     return;
   } else {
-    if (markerX !== null && trajectoryPoints.length === 0) {
-      trajectoryPoints.push({ x: markerX, y: markerY });
+    const points = activeTrajectoryPoints();
+    if (markerX !== null && points.length === 0) {
+      points.push({ x: markerX, y: markerY });
     }
-    trajectoryPoints.push({ x, y });
+    points.push({ x, y });
+    setActiveTrajectoryPoints(points);
+    renderExtraAbilityPanel();
     renderTrajectory();
   }
   validateForm(); _saveDraft();
@@ -5302,40 +5529,93 @@ document.getElementById('map-wrap').addEventListener('click', e => {
 function renderTrajectory() {
   const container = document.getElementById('traj-container');
   container.innerHTML = '';
-  if (trajectoryPoints.length < 2) return;
   const ns  = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
   const content = mapContentRect();
-  const path = trajectoryFromMarker();
-  const mid = 'ul-arr';
   const defs = document.createElementNS(ns, 'defs');
-  const mkr  = document.createElementNS(ns, 'marker');
-  mkr.setAttribute('id', mid);
-  mkr.setAttribute('markerWidth', '10'); mkr.setAttribute('markerHeight', '8');
-  mkr.setAttribute('refX', '10');       mkr.setAttribute('refY', '4');
-  mkr.setAttribute('orient', 'auto');   mkr.setAttribute('markerUnits', 'userSpaceOnUse');
-  const tri = document.createElementNS(ns, 'polygon');
-  tri.setAttribute('points', '0 0, 10 4, 0 8'); tri.setAttribute('fill', '#FF4655');
-  mkr.appendChild(tri); defs.appendChild(mkr); svg.appendChild(defs);
-  const coords = path.map(p => `${(content.left + p.x*content.width).toFixed(1)},${(content.top + p.y*content.height).toFixed(1)}`).join(' ');
-  const poly = document.createElementNS(ns, 'polyline');
-  poly.setAttribute('points', coords);
-  poly.setAttribute('fill', 'none');   poly.setAttribute('stroke', '#FF4655');
-  poly.setAttribute('stroke-opacity', '0.85'); poly.setAttribute('stroke-width', '2');
-  poly.setAttribute('stroke-linejoin', 'round'); poly.setAttribute('stroke-linecap', 'round');
-  poly.setAttribute('marker-end', `url(#${mid})`);
-  svg.appendChild(poly);
-  for (let i = 0; i < path.length; i++) {
-    const dot = document.createElementNS(ns, 'circle');
-    dot.setAttribute('cx', (content.left + path[i].x*content.width).toFixed(1));
-    dot.setAttribute('cy', (content.top + path[i].y*content.height).toFixed(1));
-    dot.setAttribute('r', i === 0 ? '5' : '3.5');
-    dot.setAttribute('fill', '#FF4655');
-    dot.setAttribute('stroke', 'rgba(255,255,255,0.45)'); dot.setAttribute('stroke-width', '0.5');
-    svg.appendChild(dot);
+  svg.appendChild(defs);
+  let drew = false;
+
+  function addMarker(id, color) {
+    if (defs.querySelector(`#${id}`)) return;
+    const mkr = document.createElementNS(ns, 'marker');
+    mkr.setAttribute('id', id);
+    mkr.setAttribute('markerWidth', '10');
+    mkr.setAttribute('markerHeight', '8');
+    mkr.setAttribute('refX', '10');
+    mkr.setAttribute('refY', '4');
+    mkr.setAttribute('orient', 'auto');
+    mkr.setAttribute('markerUnits', 'userSpaceOnUse');
+    const tri = document.createElementNS(ns, 'polygon');
+    tri.setAttribute('points', '0 0, 10 4, 0 8');
+    tri.setAttribute('fill', color);
+    mkr.appendChild(tri);
+    defs.appendChild(mkr);
   }
-  container.appendChild(svg);
+
+  function drawPath(rawPoints, { color, markerId, opacity = 0.85, width = 2, orderLabel = '' }) {
+    const path = trajectoryFromMarkerFor(rawPoints);
+    if (path.length < 2) return;
+    drew = true;
+    addMarker(markerId, color);
+    const coords = path.map(p => `${(content.left + p.x * content.width).toFixed(1)},${(content.top + p.y * content.height).toFixed(1)}`).join(' ');
+    const poly = document.createElementNS(ns, 'polyline');
+    poly.setAttribute('points', coords);
+    poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', color);
+    poly.setAttribute('stroke-opacity', String(opacity));
+    poly.setAttribute('stroke-width', String(width));
+    poly.setAttribute('stroke-linejoin', 'round');
+    poly.setAttribute('stroke-linecap', 'round');
+    poly.setAttribute('marker-end', `url(#${markerId})`);
+    svg.appendChild(poly);
+    path.forEach((point, i) => {
+      const cx = (content.left + point.x * content.width).toFixed(1);
+      const cy = (content.top + point.y * content.height).toFixed(1);
+      const dot = document.createElementNS(ns, 'circle');
+      dot.setAttribute('cx', cx);
+      dot.setAttribute('cy', cy);
+      dot.setAttribute('r', i === 0 ? '5' : '3.5');
+      dot.setAttribute('fill', color);
+      dot.setAttribute('fill-opacity', String(opacity));
+      dot.setAttribute('stroke', 'rgba(255,255,255,0.45)');
+      dot.setAttribute('stroke-width', '0.5');
+      svg.appendChild(dot);
+      if (orderLabel && i === path.length - 1) {
+        const label = document.createElementNS(ns, 'text');
+        label.setAttribute('x', String(Number(cx) + 7));
+        label.setAttribute('y', String(Number(cy) - 7));
+        label.setAttribute('fill', color);
+        label.setAttribute('font-size', '11');
+        label.setAttribute('font-weight', '800');
+        label.setAttribute('paint-order', 'stroke');
+        label.setAttribute('stroke', 'rgba(2,6,23,.85)');
+        label.setAttribute('stroke-width', '3');
+        label.textContent = orderLabel;
+        svg.appendChild(label);
+      }
+    });
+  }
+
+  drawPath(trajectoryPoints, {
+    color: '#FF4655',
+    markerId: 'ul-arr-primary',
+    opacity: activeExtraAbility() ? 0.42 : 0.88,
+    width: activeExtraAbility() ? 1.8 : 2.4,
+  });
+  extraAbilityTrajectories.forEach((item, idx) => {
+    const active = selectedExtraAbilityIndex === idx;
+    drawPath(item.trajectory, {
+      color: active ? '#50d6ff' : '#9b7bff',
+      markerId: `ul-arr-extra-${idx}`,
+      opacity: active ? 0.95 : 0.48,
+      width: active ? 2.6 : 1.9,
+      orderLabel: `+${idx + 1}`,
+    });
+  });
+
+  if (drew) container.appendChild(svg);
 }
 
 function updateMarkerIcon() {
@@ -5373,6 +5653,8 @@ function collectDraftData() {
     desc:       document.getElementById('inp-desc')?.value || '',
     markerX, markerY, mapMode,
     trajectory: trajectoryPoints,
+    extraAbilities: extraAbilityTrajectories,
+    selectedExtraAbilityIndex,
     wallbangTargetX,
     wallbangTargetY,
     wallbangWeapons: selectedWallbangWeapons(),
@@ -5392,6 +5674,7 @@ function hasDraftContent(draft) {
     draft &&
     (draft.title || draft.desc || draft.map || draft.agent || draft.ability ||
       draft.videoUrl || draft.markerX != null || draft.trajectory?.length ||
+      draft.extraAbilities?.length || draft.extra_abilities?.length ||
       draft.wallbangTargetX != null || draft.wallbangWeapons?.length ||
       draft.defenseSite || draft.defenseZoomArea || draft.defenseAbilities?.length ||
       draft.screenshots?.length || draft.videoEdit?.splits?.length ||
@@ -5469,7 +5752,7 @@ function saveCurrentDraftCopy(message = 'Черновик сохранён') {
 function categoryHasPlacedData(category = selectedCategory) {
   const normalized = normalizeContentCategory(category);
   if (normalized === 'lineup') {
-    return !!(selectedAbility || markerX !== null || trajectoryPoints.length);
+    return !!(selectedAbility || markerX !== null || trajectoryPoints.length || extraAbilityTrajectories.length);
   }
   if (normalized === 'wallbang') {
     return !!(selectedWallbangWeapons().length || markerX !== null || wallbangTargetX !== null || trajectoryPoints.length);
@@ -5485,6 +5768,8 @@ function resetCategorySpecificData() {
   markerX = null;
   markerY = null;
   trajectoryPoints = [];
+  extraAbilityTrajectories = [];
+  selectedExtraAbilityIndex = null;
   wallbangTargetX = null;
   wallbangTargetY = null;
   defenseZoomStart = null;
@@ -5504,6 +5789,7 @@ function resetCategorySpecificData() {
   if (site) site.value = '';
   if (number) number.value = '1';
   renderTrajectory();
+  renderExtraAbilityPanel();
   renderCategoryMapExtras();
   renderDefenseAbilityPanel();
   renderDefenseAbilityMarkers();
@@ -5670,6 +5956,20 @@ function _restoreDraft(sourceDraft = null) {
         );
         if (abilBtn) { document.querySelectorAll('.ability-btn').forEach(b => b.classList.remove('selected')); abilBtn.classList.add('selected'); updateMarkerIcon(); }
       }
+      const restoredExtras = Array.isArray(d.extraAbilities) ? d.extraAbilities : (Array.isArray(d.extra_abilities) ? d.extra_abilities : []);
+      extraAbilityTrajectories = restoredExtras
+        .map((item, idx) => normalizeExtraAbilityItem(item, idx))
+        .filter(Boolean)
+        .slice(0, 2)
+        .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+        .map((item, idx) => ({ ...item, order: idx + 1 }));
+      selectedExtraAbilityIndex = Number.isInteger(d.selectedExtraAbilityIndex) &&
+        d.selectedExtraAbilityIndex >= 0 &&
+        d.selectedExtraAbilityIndex < extraAbilityTrajectories.length
+        ? d.selectedExtraAbilityIndex
+        : null;
+      renderExtraAbilityPanel();
+      renderTrajectory();
     }
   }
 
@@ -5748,6 +6048,52 @@ function selectedAbilityAliases() {
   ];
 }
 
+function abilityAliasesFor(abilityName) {
+  const agent = agentsList.find(a => a.displayName === selectedAgent);
+  if (!agent) return [abilityName];
+  const ability = (agent.abilities || []).find(ab =>
+    ab.displayName === abilityName ||
+    ab.slot === abilityName ||
+    normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === abilityName
+  );
+  return [
+    ability?.displayName,
+    ability?.slot,
+    abilityName,
+    ability ? normalizeAbilityName(agent.displayName, ability.displayName, ability.slot) : null,
+  ];
+}
+
+async function buildExtraAbilitiesPayload(map, agentName) {
+  if (!extraTrajectoriesEnabled()) return [];
+  const cleanItems = extraAbilityTrajectories
+    .map((item, idx) => normalizeExtraAbilityItem(item, idx))
+    .filter(item => item && normalizeTrajectoryPoints(item.trajectory).length >= 2)
+    .slice(0, 2);
+  const payload = [];
+  for (let idx = 0; idx < cleanItems.length; idx += 1) {
+    const item = cleanItems[idx];
+    const normalizedAbility = normalizeAbilityName(agentName, item.ability);
+    const aliases = abilityAliasesFor(item.ability);
+    const effect = abilityEffectShape(agentName, normalizedAbility, item.slot || '');
+    const range = effect.effect_shape === 'none'
+      ? 0
+      : await getConfiguredRangeRadius(map, agentName, normalizedAbility, aliases);
+    payload.push({
+      order: idx + 1,
+      ability: normalizedAbility,
+      slot: item.slot || '',
+      icon: item.icon || '',
+      trajectory: trajectoryFromMarkerFor(item.trajectory),
+      range_radius: range || 0,
+      effect_shape: effect.effect_shape || item.effect_shape || 'circle',
+      effect_width: Number(effect.effect_width ?? item.effect_width ?? 0),
+      note: item.note || '',
+    });
+  }
+  return payload;
+}
+
 // ── Submit ────────────────────────────────────────────────────────────────────
 document.getElementById('btn-submit').addEventListener('click', async () => {
   if (!currentUser) { toast('Войди в аккаунт', 'e'); return; }
@@ -5824,6 +6170,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   let normalizedAbility = '';
   let contentType = '';
   let rangeRadius = null;
+  let extraAbilitiesPayload = [];
   let lineupId = '';
   let submitStage = 'prepare';
   let submittedPayloadDiagnostics = {};
@@ -5843,6 +6190,10 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     rangeRadius = requestedContentType === 'wallbang' || requestedContentType === 'defense'
       ? 0
       : await getConfiguredRangeRadius(map, selectedAgent, normalizedAbility, selectedAbilityAliases());
+    submitStage = 'load_extra_abilities';
+    extraAbilitiesPayload = requestedContentType === 'lineup'
+      ? await buildExtraAbilitiesPayload(map, selectedAgent)
+      : [];
     const submittedBy = authorDisplayName();
     contentType = normalizeContentCategory(selectedCategory);
     if (!canSubmitContentCategory(contentType)) {
@@ -5859,6 +6210,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       selected_ability: selectedAbility,
       normalized_ability: normalizedAbility,
       ability_aliases: contentType === 'lineup' ? selectedAbilityAliases() : [],
+      extra_abilities_count: extraAbilitiesPayload.length,
       category: selectedCategory,
       content_type: contentType,
       difficulty: selectedDifficulty,
@@ -5870,7 +6222,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       rate_limit_last_lineup_at: 'serverTimestamp()',
       resubmitted_from: resubmissionSourceId || '',
       source: 'web',
-      schema_version: 1,
+      schema_version: 2,
       has_video_edit: !!videoUrl,
       ...submitFormDiagnostics({ title, desc, map, ability: normalizedAbility, contentType }),
     };
@@ -5888,6 +6240,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       position_x: contentType === 'defense' ? 0 : markerX,
       position_y: contentType === 'defense' ? 0 : markerY,
       trajectory: contentType === 'defense' ? [] : trajectoryFromMarker(),
+      extra_abilities: contentType === 'lineup' ? extraAbilitiesPayload : [],
       range_radius:  rangeRadius,
       category:      contentType,
       content_type:  contentType,
@@ -5913,7 +6266,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
           order: idx + 1,
         })),
       } : {}),
-      schema_version: 1,
+      schema_version: 2,
       difficulty:    selectedDifficulty,
       status:        'pending',
       submitted_at:  serverTimestamp(),
@@ -5971,6 +6324,8 @@ function resetUploadForm({ keepDraft = false } = {}) {
   selectedCategory = null; selectedDifficulty = null;
   markerX = null; markerY = null;
   trajectoryPoints = [];
+  extraAbilityTrajectories = [];
+  selectedExtraAbilityIndex = null;
   wallbangTargetX = null; wallbangTargetY = null;
   defenseZoomStart = null;
   defenseZoomArea = null;
@@ -6016,6 +6371,7 @@ function resetUploadForm({ keepDraft = false } = {}) {
   document.getElementById('map-hint').textContent = 'Выбери режим и кликни на карту';
   setMapMode('position');
   updateCategoryUi();
+  renderExtraAbilityPanel();
   renderScreenshots();
   document.getElementById('success-screen').style.display = 'none';
   document.getElementById('btn-submit').disabled = true;
