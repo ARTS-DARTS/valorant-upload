@@ -229,7 +229,7 @@ function abilityPlacementLimit(agentName, abilityName, slot = '') {
   if (/killjoy/.test(key) && /alarmbot|бот/.test(key)) return 1;
   if (/killjoy/.test(key) && /turret|турел/.test(key)) return 1;
   if (/killjoy/.test(key) && /nanoswarm|нанос/.test(key)) return 2;
-  if (/deadlock/.test(key) && /sonic|датчик/.test(key)) return 2;
+  if (/deadlock/.test(key) && /sonic|звуков|датчик|сенсор|sensor/.test(key)) return 2;
   if (/sage/.test(key) && /barrier|стен/.test(key)) return 1;
   if (/sage/.test(key) && /slow|замед/.test(key)) return 2;
   if (/vyse/.test(key) && /razorvine|лоз/.test(key)) return 2;
