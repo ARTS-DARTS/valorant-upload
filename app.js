@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-12T02:24:00+03:00';
+const SITE_VERSION = '2026-07-12T05:19:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1686,6 +1686,19 @@ const ABILITY_NAME_FALLBACKS = {
     'ZERO/point': 'ЭПИ/центр',
     'FLASH/drive': 'СВЕТО/вая граната',
     'FRAG/ment': 'ФРАГ/мент',
+  },
+  Viper: {
+    'Snakebite': 'Змеиный укус',
+    'Snake Bite': 'Змеиный укус',
+    'Poison Cloud': 'Ядовитое облако',
+  },
+  Sage: {
+    'Slow Orb': 'Сфера замедления',
+  },
+  Vyse: {
+    'Razorvine': 'Острая лоза',
+    'Steel Garden': 'Стальной сад',
+    'Arc Rose': 'Дуговая роза',
   },
 };
 
