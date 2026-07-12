@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-12T02:08:00+03:00';
+const SITE_VERSION = '2026-07-12T02:22:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1486,6 +1486,7 @@ function renderCabinetStats() {
   const bonusLineups = Number(currentUserProfile?.bonus_lineups || 0);
   const rejected = currentUserLineups.filter(x => x.status === 'rejected').length;
   const pending = currentUserLineups.filter(x => x.status !== 'approved' && x.status !== 'rejected').length;
+  const submittedCount = approved + pending;
   const viewed = Number(currentUserProfile?.lineups_viewed || 0);
   const lv = calculateLevel(effectiveApproved);
   target.innerHTML = `
@@ -1495,7 +1496,7 @@ function renderCabinetStats() {
     <div class="cabinet-stat"><span>Просмотрено</span><b>${viewed}</b></div>
     <div class="cabinet-stat"><span>Отклонено</span><b style="color:var(--red)">${rejected}</b></div>
     <div class="cabinet-stat"><span>Одобрено факт</span><b>${approved}${bonusLineups ? ` +${bonusLineups}` : ''}</b></div>
-    <div class="cabinet-stat"><span>Всего отправлено</span><b>${currentUserLineups.length}</b></div>
+    <div class="cabinet-stat"><span>Отправлено в зачёт</span><b>${submittedCount}</b></div>
     <div class="cabinet-stat"><span>КД отправки</span><b>${cooldownMinutesFor(effectiveApproved)}м</b></div>
     <div class="cabinet-stat"><span>Доступ</span><b>${canCurrentUserUpload() ? 'Можно' : `${Math.min(viewed, UPLOAD_REQUIRED_VIEWS)}/${UPLOAD_REQUIRED_VIEWS}`}</b></div>`;
 }
@@ -1964,6 +1965,10 @@ function timelineBlockStyle(start, duration, minWidthPx = MIN_TIMELINE_CLIP_WIDT
   const leftPx = Math.max(0, Number(start || 0) * timelinePixelsPerSecond);
   const widthPx = Math.max(minWidthPx, Number(duration || 0) * timelinePixelsPerSecond);
   return `left:${leftPx}px;width:${widthPx}px`;
+}
+
+function timelineX(outputTime) {
+  return Math.max(0, Number(outputTime || 0) * timelinePixelsPerSecond);
 }
 
 function effectOutputStart(item) {
@@ -2552,7 +2557,7 @@ function stepEditorFrame(direction) {
   const next = Math.max(0, Math.min(total, currentOutputTime() + direction * frameStep()));
   showOutputFrame(next);
   timelinePreviewOutputTime = next;
-  keepTimelinePlayheadVisible(total ? next / total * 100 : 0);
+  keepTimelinePlayheadVisible(timelineX(next));
   renderVideoEditor();
   return true;
 }
@@ -2572,9 +2577,9 @@ function renderVideoTransport() {
 }
 
 function updateTimelinePlaybackUi({ keepVisible = false } = {}) {
-  const currentPct = timelinePct(currentOutputTime());
-  if (editorEls.playhead) editorEls.playhead.style.left = `${currentPct}%`;
-  if (keepVisible) keepTimelinePlayheadVisible(currentPct);
+  const currentX = timelineX(currentOutputTime());
+  if (editorEls.playhead) editorEls.playhead.style.left = `${currentX}px`;
+  if (keepVisible) keepTimelinePlayheadVisible(currentX);
   renderVideoTransport();
   applyVideoEditPreview();
 }
@@ -2616,10 +2621,10 @@ function renderVideoEditor() {
   vidPlayer.volume = Math.max(0, Math.min(1, videoEdit.audio.volume));
 
   const pct = timelinePct;
-  const currentPct = timelinePct(currentOutputTime());
-  if (editorEls.playhead) editorEls.playhead.style.left = `${currentPct}%`;
+  const currentX = timelineX(currentOutputTime());
+  if (editorEls.playhead) editorEls.playhead.style.left = `${currentX}px`;
   if (outputPlaybackActive || (!vidPlayer.paused && !outputPlaybackActive) || timelineDrag?.kind === 'playhead') {
-    keepTimelinePlayheadVisible(currentPct);
+    keepTimelinePlayheadVisible(currentX);
   }
   if (editorEls.trimRange) {
     editorEls.trimRange.style.left = '0%';
@@ -2880,11 +2885,10 @@ function autoScrollTimelineWhileDragging(event) {
   editorEls.scroll.scrollLeft = Math.max(0, Math.min(maxScroll, editorEls.scroll.scrollLeft + delta));
 }
 
-function keepTimelinePlayheadVisible(currentPct) {
+function keepTimelinePlayheadVisible(playheadX) {
   if (!editorEls.scroll || !editorEls.shell) return;
   const maxScroll = editorEls.scroll.scrollWidth - editorEls.scroll.clientWidth;
   if (maxScroll <= 0) return;
-  const playheadX = currentPct / 100 * editorEls.shell.scrollWidth;
   const leftGuard = editorEls.scroll.scrollLeft + 96;
   const rightGuard = editorEls.scroll.scrollLeft + editorEls.scroll.clientWidth - 96;
   let nextScroll = editorEls.scroll.scrollLeft;
