@@ -172,13 +172,14 @@
     .extra-ability-pick { position: relative; min-width: 66px; min-height: 66px; }
     .extra-ability-pick:disabled { opacity: .45; cursor: not-allowed; }
     .extra-ability-list { display: grid; gap: 8px; }
-    .extra-ability-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface2); padding: 8px; }
+    .extra-ability-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface2); padding: 8px; }
     .extra-ability-item.selected { border-color: var(--primary); background: rgba(79,195,247,.12); box-shadow: 0 0 0 1px rgba(79,195,247,.18) inset; }
     .extra-ability-num { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(79,195,247,.16); color: var(--primary); font-weight: 800; font-size: 12px; }
-    .extra-ability-main { min-width: 0; display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; text-align: left; }
+    .extra-ability-main { width: 100%; min-width: 0; overflow: hidden; display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; text-align: left; }
+    .extra-ability-main > span { display: block; min-width: 0; overflow: hidden; }
     .extra-ability-main img { width: 28px; height: 28px; object-fit: contain; flex: 0 0 auto; }
-    .extra-ability-name { min-width: 0; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .extra-ability-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+    .extra-ability-name { display: block; min-width: 0; max-width: 100%; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .extra-ability-meta { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--text2); margin-top: 2px; }
     .extra-ability-actions { display: flex; gap: 6px; align-items: center; }
     .extra-ability-action { min-width: 30px; height: 30px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); color: var(--text); cursor: pointer; font-weight: 800; }
     .extra-ability-action:hover { border-color: var(--primary); color: var(--primary); }
