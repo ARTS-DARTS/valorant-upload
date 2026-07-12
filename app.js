@@ -246,13 +246,13 @@ function abilityPlacementLimit(agentName, abilityName, slot = '') {
 function defensePlacementShape(agentName, abilityName, slot = '') {
   const key = `${agentName || ''} ${abilityName || ''} ${slot || ''}`.toLowerCase();
   if (/deadlock/.test(key) && /barrier mesh|барьер|сетка/.test(key)) {
-    return { kind: 'mesh_burst', points: 1, radius: 0.075 };
+    return { kind: 'mesh_burst', points: 1, radius: 0.097, source: 'valoplant' };
   }
   if (/deadlock/.test(key) && /gravnet|гравинет|грав.*сет/.test(key)) {
-    return { kind: 'net_area', points: 1, radius: 0.06 };
+    return { kind: 'net_area', points: 1, radius: 0.04335, source: 'valoplant' };
   }
   if (/deadlock/.test(key) && /sonic|звуков|датчик|сенсор|sensor/.test(key)) {
-    return { kind: 'point', points: 1 };
+    return { kind: 'point', points: 1, radius: 0.073, source: 'valoplant' };
   }
   if (/cypher/.test(key) && /trapwire|растяж/.test(key)) {
     return { kind: 'line_segment', points: 2 };
@@ -596,7 +596,7 @@ function renderDefenseAbilityMarkers() {
     const kind = defenseShapeKind(item);
     if (kind === 'mesh_burst') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
-      const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || 0.075) * 100);
+      const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || 0.097) * 100);
       const nodes = [[-radius, 0], [radius, 0], [0, -radius], [0, radius]];
       return nodes.map(([dx, dy]) => `
         <line class="defense-shape-line-bg" x1="${center.left}%" y1="${center.top}%" x2="${center.left + dx}%" y2="${center.top + dy}%"></line>
@@ -606,7 +606,7 @@ function renderDefenseAbilityMarkers() {
     }
     if (kind === 'net_area') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
-      const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || 0.06) * 100);
+      const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || 0.04335) * 100);
       return `<circle class="defense-area-shape net" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
     }
     if (kind !== 'line_segment' || points.length < 2) return '';
