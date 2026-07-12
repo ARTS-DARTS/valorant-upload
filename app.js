@@ -245,6 +245,15 @@ function abilityPlacementLimit(agentName, abilityName, slot = '') {
 
 function defensePlacementShape(agentName, abilityName, slot = '') {
   const key = `${agentName || ''} ${abilityName || ''} ${slot || ''}`.toLowerCase();
+  if (/deadlock/.test(key) && /barrier mesh|барьер|сетка/.test(key)) {
+    return { kind: 'mesh_burst', points: 1, radius: 0.075 };
+  }
+  if (/deadlock/.test(key) && /gravnet|гравинет|грав.*сет/.test(key)) {
+    return { kind: 'net_area', points: 1, radius: 0.06 };
+  }
+  if (/deadlock/.test(key) && /sonic|звуков|датчик|сенсор|sensor/.test(key)) {
+    return { kind: 'sensor_area', points: 1, radius: 0.045 };
+  }
   if (/cypher/.test(key) && /trapwire|растяж/.test(key)) {
     return { kind: 'line_segment', points: 2 };
   }
@@ -584,7 +593,23 @@ function renderDefenseAbilityMarkers() {
   const shapeItems = [...defenseAbilities, ...(defenseLineDraft ? [defenseLineDraft] : [])];
   const lines = shapeItems.map((item, idx) => {
     const points = normalizedDefensePoints(item);
-    if (defenseShapeKind(item) !== 'line_segment' || points.length < 2) return '';
+    const kind = defenseShapeKind(item);
+    if (kind === 'mesh_burst') {
+      const center = mapPointToPercent(defenseAbilityCenter(item));
+      const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || 0.075) * 100);
+      const nodes = [[-radius, 0], [radius, 0], [0, -radius], [0, radius]];
+      return nodes.map(([dx, dy]) => `
+        <line class="defense-shape-line-bg" x1="${center.left}%" y1="${center.top}%" x2="${center.left + dx}%" y2="${center.top + dy}%"></line>
+        <line class="defense-shape-line mesh" x1="${center.left}%" y1="${center.top}%" x2="${center.left + dx}%" y2="${center.top + dy}%"></line>
+        <circle class="defense-mesh-node" cx="${center.left + dx}%" cy="${center.top + dy}%" r="0.75%"></circle>
+      `).join('');
+    }
+    if (kind === 'sensor_area' || kind === 'net_area') {
+      const center = mapPointToPercent(defenseAbilityCenter(item));
+      const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || (kind === 'net_area' ? 0.06 : 0.045)) * 100);
+      return `<circle class="defense-area-shape ${kind === 'net_area' ? 'net' : 'sensor'}" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
+    }
+    if (kind !== 'line_segment' || points.length < 2) return '';
     const a = mapPointToPercent(points[0]);
     const b = mapPointToPercent(points[1]);
     const draft = idx >= defenseAbilities.length;
@@ -731,6 +756,7 @@ function placeDefenseAbilityAt(x, y, options = {}) {
     x: clamp01(center.x),
     y: clamp01(center.y),
     shape_kind: shapeKind,
+    shape_radius: Number(options.shapeRadius || selectedDefenseAbility.shape?.radius || 0),
     points,
     order: defenseAbilities.length + 1,
   });
@@ -5966,6 +5992,7 @@ function _restoreDraft(sourceDraft = null) {
                 x: Number(center.x),
                 y: Number(center.y),
                 shape_kind: shapeKind,
+                shape_radius: Number(item.shape_radius || item.shape?.radius || 0),
                 points,
                 order: Number(item.order || idx + 1),
               };
@@ -6310,6 +6337,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
           x: item.x,
           y: item.y,
           shape_kind: defenseShapeKind(item),
+          shape_radius: Number(item.shape_radius || 0),
           points: defenseShapeKind(item) === 'line_segment'
             ? normalizedDefensePoints(item).map(point => ({ x: point.x, y: point.y }))
             : [],
