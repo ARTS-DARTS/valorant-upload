@@ -243,6 +243,8 @@
     .defense-placed-chip img { width: 20px; height: 20px; object-fit: contain; }
     .defense-placed-chip button { width: 18px; height: 18px; border: 0; border-radius: 50%; background: rgba(148,163,184,.10); color: var(--text2); cursor: pointer; font-weight: 900; line-height: 1; }
     .defense-placed-chip button:hover { color: var(--red); background: rgba(239,68,68,.12); }
+    .defense-placed-chip button[data-resize-defense-ability] { background: rgba(79,195,247,.16); color: #bcefff; }
+    .defense-placed-chip button[data-resize-defense-ability]:hover { background: rgba(79,195,247,.32); color: #fff; }
 
     .input-wrap { position: relative; }
     .char-counter { position: absolute; bottom: 8px; right: 10px; font-size: 11px; color: var(--text2); pointer-events: none; }

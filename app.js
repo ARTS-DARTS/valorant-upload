@@ -561,6 +561,10 @@ function renderDefenseAbilityPanel() {
         <span class="defense-placed-chip ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-select-defense-ability="${idx}" title="${idx + 1}. ${esc(item.ability)}">
           <span class="defense-placed-num">${idx + 1}</span>
           ${item.icon ? `<img src="${esc(item.icon)}" alt="">` : `<span>${esc(item.ability.slice(0, 1))}</span>`}
+          ${defenseShapeKind(item) === 'mesh_burst' ? `
+            <button type="button" data-resize-defense-ability="${idx}" data-resize-direction="-1" title="Уменьшить пропорционально">−</button>
+            <button type="button" data-resize-defense-ability="${idx}" data-resize-direction="1" title="Увеличить пропорционально">+</button>
+          ` : ''}
           <button type="button" data-remove-defense-ability="${idx}">×</button>
         </span>
       `).join('')
@@ -585,6 +589,21 @@ function renderDefenseAbilityPanel() {
       validateForm(); _saveDraft();
     });
   });
+  list.querySelectorAll('[data-resize-defense-ability]').forEach(btn => {
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      const idx = Number(btn.dataset.resizeDefenseAbility);
+      const item = defenseAbilities[idx];
+      if (!item || defenseShapeKind(item) !== 'mesh_burst') return;
+      const direction = Number(btn.dataset.resizeDirection) || 0;
+      const current = Number(item.shape_radius || 0.097);
+      item.shape_radius = Math.max(0.045, Math.min(0.16, current + direction * 0.008));
+      selectedDefenseMarkerIndex = idx;
+      renderDefenseAbilityPanel();
+      renderDefenseAbilityMarkers();
+      validateForm(); _saveDraft();
+    });
+  });
 }
 
 function renderDefenseAbilityMarkers() {
@@ -597,7 +616,7 @@ function renderDefenseAbilityMarkers() {
     if (kind === 'mesh_burst') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
       const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
-      const radius = Math.max(2, Number(canonical.radius || 0.097) * 100);
+      const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.097) * 100);
       const diagonal = radius / Math.sqrt(2);
       const nodes = [[-diagonal, -diagonal], [diagonal, -diagonal], [-diagonal, diagonal], [diagonal, diagonal]];
       return nodes.map(([dx, dy]) => `
