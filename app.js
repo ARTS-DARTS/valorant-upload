@@ -4985,6 +4985,18 @@ document.addEventListener('keydown', e => {
   if (handleVideoEditorSpace(e, true)) return;
   const wrap = document.getElementById('vid-player-wrap');
   const insideEditor = !!(wrap && wrap.contains(target));
+  const mapWrap = document.getElementById('map-wrap');
+  const mapVisible = !!(mapWrap && mapWrap.offsetParent !== null);
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.code === 'KeyZ' &&
+      !isTextTypingTarget(target) && !insideEditor && mapVisible && mapMode === 'trajectory') {
+    const points = activeTrajectoryPoints();
+    if (points.length) {
+      e.preventDefault();
+      e.stopPropagation();
+      window.undoTraj();
+    }
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && (insideEditor || videoEditorHotkeysActive)) {
     e.preventDefault();
     e.stopPropagation();
