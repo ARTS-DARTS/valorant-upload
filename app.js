@@ -263,6 +263,15 @@ function defensePlacementShape(agentName, abilityName, slot = '') {
   if (/viper/.test(key) && /toxic screen|завес/.test(key)) {
     return { kind: 'line_segment', points: 2 };
   }
+  if (/viper/.test(key) && /poison cloud|ядовит.*облак|облак/.test(key)) {
+    return { kind: 'circle_area', points: 1, radius: 0.0235, theme: 'viper' };
+  }
+  if (/viper/.test(key) && /snake bite|змеин|укус/.test(key)) {
+    return { kind: 'circle_area', points: 1, radius: 0.0275, theme: 'viper' };
+  }
+  if (/viper/.test(key) && /viper.*pit|гнезд.*гадюк|ultimate/.test(key)) {
+    return { kind: 'circle_area', points: 1, radius: 0.0475, theme: 'viper-ult' };
+  }
   if (/sage/.test(key) && /barrier|стен/.test(key)) {
     return { kind: 'line_segment', points: 2 };
   }
@@ -639,7 +648,8 @@ function renderDefenseAbilityMarkers() {
       const center = mapPointToPercent(defenseAbilityCenter(item));
       const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
       const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.026) * 100);
-      return `<circle class="defense-area-shape cyber-cage" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
+      const theme = canonical.theme || 'cyber-cage';
+      return `<circle class="defense-area-shape ${theme}" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
     }
     if (kind !== 'line_segment' || points.length < 2) return '';
     const a = mapPointToPercent(points[0]);
@@ -658,7 +668,8 @@ function renderDefenseAbilityMarkers() {
     : '';
   const markers = defenseAbilities.map((item, idx) => {
     const isLine = defenseShapeKind(item) === 'line_segment';
-    const isBareArea = defenseShapeKind(item) === 'circle_area';
+    const markerShape = defensePlacementShape(selectedAgent, item.ability, item.slot);
+    const isBareArea = defenseShapeKind(item) === 'circle_area' && !markerShape.theme;
     const points = normalizedDefensePoints(item);
     const center = defenseAbilityCenter(item);
     const centerPos = mapPointToPercent(center);
