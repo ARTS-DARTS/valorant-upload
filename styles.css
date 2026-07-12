@@ -187,6 +187,14 @@
     .extra-grid label { display: grid; gap: 6px; color: var(--text2); font-size: 11px; font-weight: 900; letter-spacing: .6px; text-transform: uppercase; }
     .extra-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .extra-status { color: var(--text2); font-size: 12px; line-height: 1.45; }
+    .defense-ability-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .defense-ability-btn { min-width: 74px; max-width: 92px; min-height: 74px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 7px; border: 1.5px solid var(--border); border-radius: var(--r); background: var(--surface2); color: var(--text2); cursor: pointer; font-size: 10px; font-weight: 700; text-align: center; }
+    .defense-ability-btn img { width: 32px; height: 32px; object-fit: contain; pointer-events: none; }
+    .defense-ability-btn.selected { border-color: var(--primary); color: var(--primary); background: rgba(79,195,247,.12); }
+    .defense-ability-btn.limit-reached { opacity: .42; cursor: not-allowed; }
+    .defense-placed-list { display: flex; flex-wrap: wrap; gap: 7px; }
+    .defense-placed-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); color: var(--text1); font-size: 12px; }
+    .defense-placed-chip button { border: 0; background: transparent; color: var(--text2); cursor: pointer; font-weight: 900; }
 
     .input-wrap { position: relative; }
     .char-counter { position: absolute; bottom: 8px; right: 10px; font-size: 11px; color: var(--text2); pointer-events: none; }
@@ -343,9 +351,12 @@
     .btn-add-shot:hover { border-color: var(--primary); }
 
     /* Map */
-    .map-wrap { position: relative; cursor: crosshair; border-radius: var(--r); overflow: hidden; background: #0a0e1a; border: 1px solid var(--border); user-select: none; aspect-ratio: 1 / 1; }
+    .map-wrap { position: relative; cursor: crosshair; border-radius: var(--r); overflow: hidden; background: #0a0e1a; border: 1px solid var(--border); user-select: none; -webkit-user-drag: none; touch-action: manipulation; aspect-ratio: 1 / 1; }
     .wallbang-target-marker { position: absolute; z-index: 4; width: 22px; height: 22px; transform: translate(-50%, -50%); border: 2px solid #f97316; border-radius: 50%; background: rgba(249,115,22,.16); color: #fff7ed; font-size: 18px; line-height: 16px; font-weight: 900; text-align: center; pointer-events: none; box-shadow: 0 0 12px rgba(249,115,22,.65); }
     .defense-zoom-box { position: absolute; z-index: 2; border: 2px solid rgba(34,197,94,.95); background: rgba(34,197,94,.12); box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 0 16px rgba(34,197,94,.32); pointer-events: none; }
+    .defense-ability-markers { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+    .defense-ability-marker { position: absolute; width: 28px; height: 28px; transform: translate(-50%, -50%); border: 2px solid var(--primary); border-radius: 50%; background: rgba(15,23,42,.82); box-shadow: 0 0 12px rgba(79,195,247,.55); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .defense-ability-marker img { width: 20px; height: 20px; object-fit: contain; }
     .map-wrap > img.map-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
     .map-hint { color: var(--text2); font-size: 12px; margin-top: 6px; }
 

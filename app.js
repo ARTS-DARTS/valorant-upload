@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-12T06:10:00+03:00';
+const SITE_VERSION = '2026-07-12T06:35:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -150,7 +150,7 @@ function categoryNeedsAgent(category = selectedCategory) {
 }
 
 function categoryNeedsAbility(category = selectedCategory) {
-  return normalizeContentCategory(category) !== 'wallbang';
+  return normalizeContentCategory(category) === 'lineup';
 }
 
 function selectedWallbangWeapons() {
@@ -184,7 +184,7 @@ function categoryExtrasValid(category = selectedCategory) {
     return selectedWallbangWeapons().length > 0 && wallbangTargetX !== null && wallbangTargetY !== null;
   }
   if (normalized === 'defense') {
-    return !!defenseSiteValue() && hasValidDefenseZoom();
+    return !!defenseSiteValue() && hasValidDefenseZoom() && defenseAbilities.length > 0;
   }
   return true;
 }
@@ -203,6 +203,157 @@ function renderWallbangWeapons() {
   grid.querySelectorAll('input').forEach(input => {
     input.addEventListener('change', () => { validateForm(); _saveDraft(); });
   });
+}
+
+function abilityPlacementLimit(agentName, abilityName, slot = '') {
+  const key = `${agentName || ''} ${abilityName || ''} ${slot || ''}`.toLowerCase();
+  if (/clove/.test(key) && /ruse|улов|дым|smoke/.test(key)) return 2;
+  if (/brimstone/.test(key) && /sky smoke|дым/.test(key)) return 3;
+  if (/omen/.test(key) && /dark cover|тёмн|темн/.test(key)) return 2;
+  if (/viper/.test(key) && /toxic screen|завес/.test(key)) return 1;
+  if (/viper/.test(key) && /poison cloud|облак/.test(key)) return 1;
+  if (/cypher/.test(key) && /trapwire|растяж/.test(key)) return 2;
+  if (/cypher/.test(key) && /cyber cage|клет/.test(key)) return 2;
+  if (/killjoy/.test(key) && /alarmbot|бот/.test(key)) return 1;
+  if (/killjoy/.test(key) && /turret|турел/.test(key)) return 1;
+  if (/killjoy/.test(key) && /nanoswarm|нанос/.test(key)) return 2;
+  if (/deadlock/.test(key) && /sonic|датчик/.test(key)) return 2;
+  if (/sage/.test(key) && /barrier|стен/.test(key)) return 1;
+  if (/sage/.test(key) && /slow|замед/.test(key)) return 2;
+  if (/vyse/.test(key) && /razorvine|лоз/.test(key)) return 2;
+  if (/vyse/.test(key) && /shear|стен/.test(key)) return 1;
+  if (/ultimate/.test(String(slot).toLowerCase())) return 1;
+  return 1;
+}
+
+function selectedAgentAbilities() {
+  const agent = agentsList.find(a => a.displayName === selectedAgent);
+  if (!agent) return [];
+  return (agent.abilities || [])
+    .filter(ab => ab.displayIcon && ab.slot !== 'Passive')
+    .map(ab => ({
+      agent: agent.displayName,
+      ability: normalizeAbilityName(agent.displayName, ab.displayName, ab.slot),
+      slot: ab.slot || '',
+      icon: proxiedValorantUrl(ab.displayIcon || ''),
+      limit: abilityPlacementLimit(agent.displayName, normalizeAbilityName(agent.displayName, ab.displayName, ab.slot), ab.slot || ''),
+    }));
+}
+
+function placedDefenseCount(abilityName) {
+  return defenseAbilities.filter(item => item.ability === abilityName).length;
+}
+
+function renderDefenseAbilityPanel() {
+  const row = document.getElementById('defense-ability-row');
+  const list = document.getElementById('defense-placed-list');
+  if (!row || !list) return;
+  const abilities = selectedAgentAbilities();
+  if (!abilities.length) {
+    row.innerHTML = '<span style="color:var(--text2);font-size:13px;">Сначала выбери агента защиты</span>';
+    list.innerHTML = '';
+    return;
+  }
+  if (selectedDefenseAbility && !abilities.some(ab => ab.ability === selectedDefenseAbility.ability)) {
+    selectedDefenseAbility = null;
+  }
+  row.innerHTML = abilities.map(ab => {
+    const count = placedDefenseCount(ab.ability);
+    const reached = count >= ab.limit;
+    const selected = selectedDefenseAbility?.ability === ab.ability;
+    return `
+      <button class="defense-ability-btn ${selected ? 'selected' : ''} ${reached ? 'limit-reached' : ''}" type="button"
+        draggable="${reached ? 'false' : 'true'}" data-defense-ability="${esc(ab.ability)}" title="${esc(ab.ability)}: ${count}/${ab.limit}">
+        <img src="${esc(ab.icon)}" alt="">
+        <span>${esc(ab.ability.split(' ')[0])}</span>
+        <small>${count}/${ab.limit}</small>
+      </button>
+    `;
+  }).join('');
+  row.querySelectorAll('[data-defense-ability]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ab = abilities.find(item => item.ability === btn.dataset.defenseAbility);
+      if (!ab) return;
+      if (placedDefenseCount(ab.ability) >= ab.limit) {
+        toast('Лимит этой способности уже достигнут', 'w');
+        return;
+      }
+      selectedDefenseAbility = ab;
+      setMapMode('defenseAbility');
+      renderDefenseAbilityPanel();
+    });
+    btn.addEventListener('dragstart', event => {
+      const ab = abilities.find(item => item.ability === btn.dataset.defenseAbility);
+      if (!ab || placedDefenseCount(ab.ability) >= ab.limit) {
+        event.preventDefault();
+        return;
+      }
+      selectedDefenseAbility = ab;
+      event.dataTransfer?.setData('text/plain', ab.ability);
+      event.dataTransfer?.setData('application/x-defense-ability', ab.ability);
+      event.dataTransfer.effectAllowed = 'copy';
+      setMapMode('defenseAbility');
+      renderDefenseAbilityPanel();
+    });
+  });
+  list.innerHTML = defenseAbilities.length
+    ? defenseAbilities.map((item, idx) => `
+        <span class="defense-placed-chip">
+          ${idx + 1}. ${esc(item.ability)}
+          <button type="button" data-remove-defense-ability="${idx}">×</button>
+        </span>
+      `).join('')
+    : '<span style="color:var(--text2);font-size:12px;">Точек сетапа пока нет</span>';
+  list.querySelectorAll('[data-remove-defense-ability]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      defenseAbilities.splice(Number(btn.dataset.removeDefenseAbility), 1);
+      renderDefenseAbilityPanel();
+      renderDefenseAbilityMarkers();
+      validateForm(); _saveDraft();
+    });
+  });
+}
+
+function renderDefenseAbilityMarkers() {
+  const host = document.getElementById('defense-ability-markers');
+  if (!host) return;
+  const content = mapContentRect();
+  host.innerHTML = defenseAbilities.map((item, idx) => {
+    const left = (content.left + item.x * content.width) / content.wrapWidth * 100;
+    const top = (content.top + item.y * content.height) / content.wrapHeight * 100;
+    return `
+      <div class="defense-ability-marker" style="left:${left}%;top:${top}%;" title="${esc(item.ability)} #${idx + 1}">
+        ${item.icon ? `<img src="${esc(item.icon)}" alt="">` : `<span>${idx + 1}</span>`}
+      </div>
+    `;
+  }).join('');
+}
+
+function placeDefenseAbilityAt(x, y) {
+  if (!selectedDefenseAbility) {
+    toast('Выбери способность сетапа', 'w');
+    return false;
+  }
+  if (placedDefenseCount(selectedDefenseAbility.ability) >= selectedDefenseAbility.limit) {
+    toast('Лимит этой способности уже достигнут', 'w');
+    return false;
+  }
+  defenseAbilities.push({
+    ability: selectedDefenseAbility.ability,
+    slot: selectedDefenseAbility.slot,
+    icon: selectedDefenseAbility.icon,
+    x,
+    y,
+    order: defenseAbilities.length + 1,
+  });
+  if (placedDefenseCount(selectedDefenseAbility.ability) >= selectedDefenseAbility.limit) {
+    selectedDefenseAbility = null;
+    setMapMode('position');
+  }
+  renderDefenseAbilityPanel();
+  renderDefenseAbilityMarkers();
+  validateForm(); _saveDraft();
+  return true;
 }
 
 function setElementMapBox(el, area) {
@@ -248,11 +399,38 @@ function renderCategoryMapExtras() {
 
 function updateCategoryUi() {
   const normalized = normalizeContentCategory(selectedCategory || '');
+  const showAgent = !!normalized && normalized !== 'wallbang';
+  const showAbility = normalized === 'lineup';
+  const agentCard = document.getElementById('agents-grid')?.closest('.card');
+  const agentTitle = agentCard?.previousElementSibling;
+  const abilityCard = document.getElementById('abilities-row')?.closest('.card');
+  const abilityTitle = abilityCard?.previousElementSibling;
+  if (agentCard) agentCard.style.display = showAgent ? '' : 'none';
+  if (agentTitle?.classList?.contains('section-title')) agentTitle.style.display = showAgent ? '' : 'none';
+  if (abilityCard) abilityCard.style.display = showAbility ? '' : 'none';
+  if (abilityTitle?.classList?.contains('section-title')) abilityTitle.style.display = showAbility ? '' : 'none';
   document.getElementById('wallbang-extra')?.toggleAttribute('hidden', normalized !== 'wallbang');
   document.getElementById('defense-extra')?.toggleAttribute('hidden', normalized !== 'defense');
+  document.getElementById('defense-ability-panel')?.toggleAttribute('hidden', normalized !== 'defense');
+  const mapTitle = document.getElementById('map-section-title');
+  if (mapTitle) {
+    if (normalized === 'defense') mapTitle.textContent = '🛡 КАРТА СЕТАПА';
+    else if (normalized === 'wallbang') mapTitle.textContent = '💥 ТОЧКИ ПРОСТРЕЛА';
+    else mapTitle.textContent = '📍 МЕТКА НА КАРТЕ';
+  }
   if (normalized !== 'wallbang' && mapMode === 'target') setMapMode('position');
-  if (normalized !== 'defense' && mapMode === 'zoom') setMapMode('position');
+  if (normalized === 'wallbang' && mapMode === 'trajectory') setMapMode('position');
+  if (normalized !== 'defense' && (mapMode === 'zoom' || mapMode === 'defenseAbility')) setMapMode('position');
+  if (normalized === 'defense') {
+    trajectoryPoints = [];
+    markerX = markerY = null;
+    document.getElementById('map-marker').style.display = 'none';
+    renderTrajectory();
+    renderDefenseAbilityPanel();
+  }
+  setMapMode(mapMode);
   renderCategoryMapExtras();
+  renderDefenseAbilityMarkers();
   validateForm();
 }
 
@@ -376,7 +554,7 @@ function submitFormDiagnostics({ title = '', desc = '', map = '', ability = '', 
   if (!title.trim()) reasons.push('missing_title');
   if (title.length > 100) reasons.push('title_too_long');
   if (desc.length > 1000) reasons.push('description_too_long');
-  if (markerX === null || markerY === null) reasons.push('missing_marker');
+  if (normalizeContentCategory(contentType || selectedCategory) !== 'defense' && (markerX === null || markerY === null)) reasons.push('missing_marker');
   if (!categoryExtrasValid(contentType || selectedCategory)) reasons.push('missing_category_extras');
   if (screenshots.some(s => s.uploading)) reasons.push('screenshots_uploading');
   return {
@@ -395,6 +573,7 @@ function submitFormDiagnostics({ title = '', desc = '', map = '', ability = '', 
     wallbang_target_y: wallbangTargetY,
     defense_site: defenseSiteValue(),
     defense_zoom_area: defenseZoomArea,
+    defense_abilities: defenseAbilities.length,
   };
 }
 
@@ -745,6 +924,8 @@ let trajectoryPoints = [];
 let wallbangTargetX = null, wallbangTargetY = null;
 let defenseZoomStart = null;
 let defenseZoomArea = null;
+let selectedDefenseAbility = null;
+let defenseAbilities = [];
 let mapMode = 'position';
 let videoUrl = null;
 let videoXhr = null;
@@ -1286,6 +1467,7 @@ function rejectedLineupDraft(item) {
     defenseSite: item.site || '',
     defenseNumber: item.number || 1,
     defenseZoomArea: item.zoom_area || null,
+    defenseAbilities: Array.isArray(item.abilities) ? item.abilities : [],
     videoUrl: item.video_url || '',
     screenshots: shots,
     resubmissionSourceId: item.id,
@@ -1307,10 +1489,12 @@ function categoryExtraDetailHtml(item) {
   if (type === 'defense') {
     const zoom = item.zoom_area;
     const zoomText = zoom ? `${Number(zoom.x).toFixed(3)}, ${Number(zoom.y).toFixed(3)} / ${Number(zoom.width).toFixed(3)}×${Number(zoom.height).toFixed(3)}` : '';
+    const abilities = Array.isArray(item.abilities) ? item.abilities.map(ab => ab.ability).filter(Boolean).join(', ') : '';
     return `
       ${item.site ? `<div class="detail-tile"><span>Зона</span><b>${esc(item.site)}</b></div>` : ''}
       ${item.number ? `<div class="detail-tile"><span>Сетап</span><b>${esc(item.number)}</b></div>` : ''}
       ${zoomText ? `<div class="detail-tile"><span>Zoom</span><b>${esc(zoomText)}</b></div>` : ''}
+      ${abilities ? `<div class="detail-tile"><span>Абилки сетапа</span><b>${esc(abilities)}</b></div>` : ''}
     `;
   }
   return '';
@@ -1963,6 +2147,14 @@ function renderAgentsGrid() {
 function selectAgent(agent) {
   selectedAgent   = agent.displayName;
   selectedAbility = null;
+  selectedDefenseAbility = null;
+  if (normalizeContentCategory(selectedCategory) === 'defense') {
+    defenseAbilities = [];
+    renderDefenseAbilityPanel();
+    renderDefenseAbilityMarkers();
+    updateMarkerIcon();
+    validateForm(); _saveDraft();
+  }
   const row = document.getElementById('abilities-row');
   const abilities = (agent.abilities || []).filter(ab => ab.displayIcon && ab.slot !== 'Passive');
   if (!abilities.length) {
@@ -4453,6 +4645,23 @@ const MAP_FALLBACK_URLS = {
   'Summit':   'https://media.valorant-api.com/maps/756da597-416b-c0f2-f47b-afbdf28670bc/displayicon.png',
 };
 
+document.getElementById('map-wrap')?.addEventListener('dragstart', e => e.preventDefault());
+document.getElementById('map-img')?.addEventListener('dragstart', e => e.preventDefault());
+document.getElementById('map-wrap')?.addEventListener('dragover', e => {
+  if (normalizeContentCategory(selectedCategory) !== 'defense') return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+});
+document.getElementById('map-wrap')?.addEventListener('drop', e => {
+  if (normalizeContentCategory(selectedCategory) !== 'defense') return;
+  e.preventDefault();
+  const abilityName = e.dataTransfer?.getData('application/x-defense-ability') || e.dataTransfer?.getData('text/plain') || '';
+  const ab = selectedAgentAbilities().find(item => item.ability === abilityName);
+  if (ab) selectedDefenseAbility = ab;
+  const { x, y } = eventToMapPoint(e);
+  placeDefenseAbilityAt(x, y);
+});
+
 function loadMapMinimap() {
   const mapName = document.getElementById('sel-map').value;
   const img     = document.getElementById('map-img');
@@ -4525,12 +4734,17 @@ function setMapMode(mode) {
   document.getElementById('mode-trajectory').classList.toggle('selected-mode', mode === 'trajectory');
   document.getElementById('mode-wallbang-target')?.classList.toggle('selected-mode', mode === 'target');
   document.getElementById('mode-defense-zoom')?.classList.toggle('selected-mode', mode === 'zoom');
+  const defense = normalizeContentCategory(selectedCategory) === 'defense';
+  const wallbang = normalizeContentCategory(selectedCategory) === 'wallbang';
+  document.getElementById('mode-position').style.display = defense ? 'none' : '';
+  document.getElementById('mode-trajectory').style.display = (defense || wallbang) ? 'none' : '';
   document.getElementById('traj-undo').style.display  = mode === 'trajectory' ? '' : 'none';
   document.getElementById('traj-clear').style.display = mode === 'trajectory' ? '' : 'none';
   const hint = document.getElementById('map-hint');
   if (hint) {
     if (mode === 'target') hint.textContent = 'Кликни на карте точку, куда прилетает прострел.';
     else if (mode === 'zoom') hint.textContent = defenseZoomStart ? 'Теперь кликни второй угол zoom-области.' : 'Кликни первый угол zoom-области.';
+    else if (mode === 'defenseAbility') hint.textContent = 'Кликни на карте место выбранной способности сетапа.';
     else hint.textContent = 'Выбери режим и кликни на карту';
   }
 }
@@ -4591,13 +4805,20 @@ function trajectoryFromMarker(points = trajectoryPoints) {
 }
 
 document.getElementById('map-wrap').addEventListener('click', e => {
+  e.preventDefault();
   const img = document.getElementById('map-img');
   if (img.style.display === 'none') return;
   const { x, y } = eventToMapPoint(e);
 
+  if (normalizeContentCategory(selectedCategory) === 'defense' && mapMode === 'position') {
+    setMapMode(selectedDefenseAbility ? 'defenseAbility' : 'zoom');
+  }
   if (mapMode === 'position') {
     markerX = x; markerY = y;
     if (trajectoryPoints.length) trajectoryPoints[0] = { x, y };
+    if (normalizeContentCategory(selectedCategory) === 'wallbang' && wallbangTargetX !== null) {
+      trajectoryPoints = [{ x, y }, { x: wallbangTargetX, y: wallbangTargetY }];
+    }
     setMarkerPosition(x, y);
     updateMarkerIcon();
     renderTrajectory();
@@ -4606,6 +4827,8 @@ document.getElementById('map-wrap').addEventListener('click', e => {
     if (markerX !== null) trajectoryPoints = [{ x: markerX, y: markerY }, { x, y }];
     renderTrajectory();
     renderCategoryMapExtras();
+  } else if (mapMode === 'defenseAbility') {
+    placeDefenseAbilityAt(x, y);
   } else if (mapMode === 'zoom') {
     if (!defenseZoomStart) {
       defenseZoomStart = { x, y };
@@ -4715,6 +4938,7 @@ function collectDraftData() {
     defenseSite: defenseSiteValue(),
     defenseNumber: defenseNumberValue(),
     defenseZoomArea,
+    defenseAbilities,
     videoUrl,
     videoEdit: videoUrl ? normalizedVideoEdit() : createDefaultVideoEdit(),
     screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
@@ -4728,7 +4952,7 @@ function hasDraftContent(draft) {
     (draft.title || draft.desc || draft.map || draft.agent || draft.ability ||
       draft.videoUrl || draft.markerX != null || draft.trajectory?.length ||
       draft.wallbangTargetX != null || draft.wallbangWeapons?.length ||
-      draft.defenseSite || draft.defenseZoomArea ||
+      draft.defenseSite || draft.defenseZoomArea || draft.defenseAbilities?.length ||
       draft.screenshots?.length || draft.videoEdit?.splits?.length ||
       draft.videoEdit?.freezeFrames?.length || draft.videoEdit?.zoomKeyframes?.length ||
       draft.resubmissionSourceId)
@@ -4894,12 +5118,25 @@ function _restoreDraft(sourceDraft = null) {
         if (d.defenseZoomArea) {
           defenseZoomArea = d.defenseZoomArea;
         }
+        if (Array.isArray(d.defenseAbilities)) {
+          defenseAbilities = d.defenseAbilities
+            .map((item, idx) => ({
+              ability: item.ability || '',
+              slot: item.slot || '',
+              icon: item.icon || '',
+              x: Number(item.x),
+              y: Number(item.y),
+              order: Number(item.order || idx + 1),
+            }))
+            .filter(item => item.ability && Number.isFinite(item.x) && Number.isFinite(item.y));
+        }
         if (d.markerX != null) {
           markerX = d.markerX; markerY = d.markerY;
           setMarkerPosition(d.markerX, d.markerY);
           updateMarkerIcon();
         }
         renderCategoryMapExtras();
+        renderDefenseAbilityMarkers();
         validateForm();
       };
       if (img.complete && img.naturalWidth) afterLoad();
@@ -4944,6 +5181,7 @@ function _restoreDraft(sourceDraft = null) {
     const el = document.getElementById('defense-number');
     if (el) el.value = d.defenseNumber;
   }
+  renderDefenseAbilityPanel();
 
   // Video
   if (d.videoUrl) {
@@ -4983,7 +5221,7 @@ function validateForm() {
     categoryExtrasValid(category) &&
     selectedDifficulty &&
     document.getElementById('inp-title').value.trim().length > 0 &&
-    markerX !== null;
+    (category === 'defense' || markerX !== null);
   document.getElementById('btn-submit').disabled = !ok;
 }
 
@@ -5034,7 +5272,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   if (hasCyrillic(title)) { toast('Название должно быть на английском: только позиции, например A Screens from A Lobby', 'e'); return; }
   if (title.length > 100) { toast('Название слишком длинное', 'e'); return; }
   if (desc.length > 1000) { toast('Описание слишком длинное', 'e'); return; }
-  if (markerX === null) { toast('Поставь метку на карте', 'e'); return; }
+  if (requestedContentType !== 'defense' && markerX === null) { toast('Поставь метку на карте', 'e'); return; }
 
   const uid = currentUser.uid;
   let rateLimitDiagnostics = { read: false };
@@ -5084,7 +5322,9 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   let submittedPayloadDiagnostics = {};
   try {
     submitStage = 'normalize_ability';
-    normalizedAbility = categoryNeedsAbility(contentType || requestedContentType)
+    normalizedAbility = requestedContentType === 'defense'
+      ? 'Defense setup'
+      : categoryNeedsAbility(contentType || requestedContentType)
       ? normalizeAbilityName(selectedAgent, selectedAbility)
       : '';
     if (categoryNeedsAbility(requestedContentType) && !normalizedAbility) {
@@ -5093,7 +5333,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       return;
     }
     submitStage = 'load_range_radius';
-    rangeRadius = requestedContentType === 'wallbang'
+    rangeRadius = requestedContentType === 'wallbang' || requestedContentType === 'defense'
       ? 0
       : await getConfiguredRangeRadius(map, selectedAgent, normalizedAbility, selectedAbilityAliases());
     const submittedBy = authorDisplayName();
@@ -5111,7 +5351,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       agent: contentType === 'wallbang' ? '' : selectedAgent,
       selected_ability: selectedAbility,
       normalized_ability: normalizedAbility,
-      ability_aliases: contentType === 'wallbang' ? [] : selectedAbilityAliases(),
+      ability_aliases: contentType === 'lineup' ? selectedAbilityAliases() : [],
       category: selectedCategory,
       content_type: contentType,
       difficulty: selectedDifficulty,
@@ -5138,9 +5378,9 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       video_url:     videoUrl || null,
       video_edit:    videoUrl ? normalizedVideoEdit() : null,
       screenshots:   screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
-      position_x: markerX,
-      position_y: markerY,
-      trajectory: trajectoryFromMarker(),
+      position_x: contentType === 'defense' ? 0 : markerX,
+      position_y: contentType === 'defense' ? 0 : markerY,
+      trajectory: contentType === 'defense' ? [] : trajectoryFromMarker(),
       range_radius:  rangeRadius,
       category:      contentType,
       content_type:  contentType,
@@ -5153,6 +5393,14 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         site: defenseSiteValue(),
         number: defenseNumberValue(),
         zoom_area: defenseZoomArea,
+        abilities: defenseAbilities.map((item, idx) => ({
+          ability: item.ability,
+          slot: item.slot || '',
+          icon: item.icon || '',
+          x: item.x,
+          y: item.y,
+          order: idx + 1,
+        })),
       } : {}),
       schema_version: 1,
       difficulty:    selectedDifficulty,
@@ -5215,6 +5463,8 @@ function resetUploadForm({ keepDraft = false } = {}) {
   wallbangTargetX = null; wallbangTargetY = null;
   defenseZoomStart = null;
   defenseZoomArea = null;
+  selectedDefenseAbility = null;
+  defenseAbilities = [];
   mapMode = 'position';
   videoUrl = null; videoEdit = createDefaultVideoEdit(); screenshots = [];
   rememberCommittedVideoEdit();
@@ -5249,6 +5499,7 @@ function resetUploadForm({ keepDraft = false } = {}) {
   document.getElementById('map-placeholder').style.display = '';
   document.getElementById('map-marker').style.display = 'none';
   document.getElementById('traj-container').innerHTML = '';
+  document.getElementById('defense-ability-markers').innerHTML = '';
   document.getElementById('map-hint').textContent = 'Выбери режим и кликни на карту';
   setMapMode('position');
   updateCategoryUi();
