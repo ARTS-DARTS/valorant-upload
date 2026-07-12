@@ -596,8 +596,10 @@ function renderDefenseAbilityMarkers() {
     const kind = defenseShapeKind(item);
     if (kind === 'mesh_burst') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
-      const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || 0.097) * 100);
-      const nodes = [[-radius, 0], [radius, 0], [0, -radius], [0, radius]];
+      const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
+      const radius = Math.max(2, Number(canonical.radius || 0.097) * 100);
+      const diagonal = radius / Math.sqrt(2);
+      const nodes = [[-diagonal, -diagonal], [diagonal, -diagonal], [-diagonal, diagonal], [diagonal, diagonal]];
       return nodes.map(([dx, dy]) => `
         <line class="defense-shape-line-bg" x1="${center.left}%" y1="${center.top}%" x2="${center.left + dx}%" y2="${center.top + dy}%"></line>
         <line class="defense-shape-line mesh" x1="${center.left}%" y1="${center.top}%" x2="${center.left + dx}%" y2="${center.top + dy}%"></line>
@@ -606,8 +608,10 @@ function renderDefenseAbilityMarkers() {
     }
     if (kind === 'net_area') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
-      const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || 0.04335) * 100);
-      return `<circle class="defense-area-shape net" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
+      const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
+      const radius = Math.max(2, Number(canonical.radius || 0.04335) * 100);
+      return `<circle class="defense-area-shape net" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>
+        <circle class="defense-area-net-grid" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
     }
     if (kind !== 'line_segment' || points.length < 2) return '';
     const a = mapPointToPercent(points[0]);
@@ -640,7 +644,10 @@ function renderDefenseAbilityMarkers() {
       </div>
     `;
   }).join('');
-  host.innerHTML = `<svg class="defense-shape-lines" aria-hidden="true">${lines}</svg>${draftAnchors}${markers}`;
+  host.innerHTML = `<svg class="defense-shape-lines" aria-hidden="true">
+    <defs><pattern id="deadlock-net-grid" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <path d="M 0 0 L 0 7 M 3.5 0 L 3.5 7" class="defense-net-pattern-line"></path>
+    </pattern></defs>${lines}</svg>${draftAnchors}${markers}`;
 }
 
 function moveDefenseAbilityTo(index, x, y) {
@@ -5993,7 +6000,7 @@ function _restoreDraft(sourceDraft = null) {
                 x: Number(center.x),
                 y: Number(center.y),
                 shape_kind: shapeKind,
-                shape_radius: Number(item.shape_radius || item.shape?.radius || 0),
+                shape_radius: Number(catalogShape.radius || item.shape_radius || item.shape?.radius || 0),
                 points,
                 order: Number(item.order || idx + 1),
               };
