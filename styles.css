@@ -187,8 +187,23 @@
     .extra-grid label { display: grid; gap: 6px; color: var(--text2); font-size: 11px; font-weight: 900; letter-spacing: .6px; text-transform: uppercase; }
     .extra-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .extra-status { color: var(--text2); font-size: 12px; line-height: 1.45; }
+    .defense-toolbox { display: none; }
+    #map-container.defense-workbench { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 12px; align-items: start; }
+    #map-container.defense-workbench .defense-toolbox { display: grid; grid-column: 1; grid-row: 1 / span 3; gap: 10px; position: sticky; top: 68px; max-height: calc(100vh - 90px); overflow: auto; padding-right: 2px; scrollbar-width: thin; }
+    #map-container.defense-workbench .map-tools,
+    #map-container.defense-workbench .map-wrap,
+    #map-container.defense-workbench .map-hint { grid-column: 2; }
+    .defense-toolbox[hidden] { display: none !important; }
+    .defense-toolbox .section-title { margin-top: 0; }
+    .defense-toolbox .card { margin-bottom: 0; padding: 12px; }
+    .defense-toolbox .extra-grid { grid-template-columns: 1fr; gap: 8px; }
+    .defense-toolbox .extra-actions { gap: 6px; }
+    .defense-toolbox .pill-btn { padding: 6px 10px; }
     .defense-ability-row { display: flex; flex-wrap: wrap; gap: 8px; }
-    .defense-ability-btn { min-width: 74px; max-width: 92px; min-height: 74px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 7px; border: 1.5px solid var(--border); border-radius: var(--r); background: var(--surface2); color: var(--text2); cursor: pointer; font-size: 10px; font-weight: 700; text-align: center; }
+    .defense-toolbox .defense-ability-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .defense-ability-btn { min-width: 74px; max-width: 92px; min-height: 74px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 7px; border: 1.5px solid var(--border); border-radius: var(--r); background: var(--surface2); color: var(--text2); cursor: grab; font-size: 10px; font-weight: 700; text-align: center; }
+    .defense-toolbox .defense-ability-btn { width: 100%; max-width: none; min-width: 0; }
+    .defense-ability-btn:active { cursor: grabbing; }
     .defense-ability-btn img { width: 32px; height: 32px; object-fit: contain; pointer-events: none; }
     .defense-ability-btn.selected { border-color: var(--primary); color: var(--primary); background: rgba(79,195,247,.12); }
     .defense-ability-btn.limit-reached { opacity: .42; cursor: not-allowed; }
@@ -351,11 +366,14 @@
     .btn-add-shot:hover { border-color: var(--primary); }
 
     /* Map */
-    .map-wrap { position: relative; cursor: crosshair; border-radius: var(--r); overflow: hidden; background: #0a0e1a; border: 1px solid var(--border); user-select: none; -webkit-user-drag: none; touch-action: manipulation; aspect-ratio: 1 / 1; }
+    .map-wrap { position: relative; cursor: crosshair; border-radius: var(--r); overflow: hidden; background: #0a0e1a; border: 1px solid var(--border); user-select: none; -webkit-user-select: none; -webkit-user-drag: none; touch-action: manipulation; aspect-ratio: 1 / 1; }
+    #map-container.defense-workbench .map-wrap { cursor: default; }
+    #map-container.defense-workbench .map-wrap.zoom-picking { cursor: crosshair; }
     .wallbang-target-marker { position: absolute; z-index: 4; width: 22px; height: 22px; transform: translate(-50%, -50%); border: 2px solid #f97316; border-radius: 50%; background: rgba(249,115,22,.16); color: #fff7ed; font-size: 18px; line-height: 16px; font-weight: 900; text-align: center; pointer-events: none; box-shadow: 0 0 12px rgba(249,115,22,.65); }
     .defense-zoom-box { position: absolute; z-index: 2; border: 2px solid rgba(34,197,94,.95); background: rgba(34,197,94,.12); box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 0 16px rgba(34,197,94,.32); pointer-events: none; }
     .defense-ability-markers { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
-    .defense-ability-marker { position: absolute; width: 28px; height: 28px; transform: translate(-50%, -50%); border: 2px solid var(--primary); border-radius: 50%; background: rgba(15,23,42,.82); box-shadow: 0 0 12px rgba(79,195,247,.55); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .defense-ability-marker { position: absolute; width: 28px; height: 28px; transform: translate(-50%, -50%); border: 2px solid var(--primary); border-radius: 50%; background: rgba(15,23,42,.82); box-shadow: 0 0 12px rgba(79,195,247,.55); display: flex; align-items: center; justify-content: center; overflow: hidden; pointer-events: auto; cursor: grab; touch-action: none; }
+    .defense-ability-marker.dragging { cursor: grabbing; border-color: #fff; box-shadow: 0 0 0 4px rgba(79,195,247,.24), 0 0 18px rgba(79,195,247,.7); }
     .defense-ability-marker img { width: 20px; height: 20px; object-fit: contain; }
     .map-wrap > img.map-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
     .map-hint { color: var(--text2); font-size: 12px; margin-top: 6px; }
@@ -437,6 +455,13 @@
       .editor-grid, .effects-panel, .footage-library-list { grid-template-columns: 1fr 1fr; }
       .transform-grid { grid-template-columns: 1fr 1fr; }
       .transform-label { grid-column: 1 / -1; text-align: left; }
+      #map-container.defense-workbench { grid-template-columns: 1fr; }
+      #map-container.defense-workbench .defense-toolbox,
+      #map-container.defense-workbench .map-tools,
+      #map-container.defense-workbench .map-wrap,
+      #map-container.defense-workbench .map-hint { grid-column: 1; grid-row: auto; }
+      #map-container.defense-workbench .defense-toolbox { position: static; max-height: none; }
+      .defense-toolbox .defense-ability-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     }
     @media (max-width: 500px) {
       .auth-card { padding: 28px 18px; }
@@ -444,4 +469,5 @@
       .site-update-banner { top: 62px; align-items: stretch; flex-direction: column; }
       .site-update-banner button { width: 100%; }
       .footage-library-list { grid-template-columns: 1fr; }
+      .defense-toolbox .defense-ability-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }

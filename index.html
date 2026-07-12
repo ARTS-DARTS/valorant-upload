@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-12T06-35">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-12T07-05">
 </head>
 <body>
 
@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 05:19 · 12.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 07:05 · 12.07.2026</div>
   <div class="user-info" id="header-user" style="display:none;">
     <img id="user-avatar" src="" alt="" style="display:none;">
     <span id="user-name"></span>
@@ -308,48 +308,47 @@
       <div class="card category-extra-card">
         <div class="extra-kicker">Оружие</div>
         <div class="weapon-check-grid" id="wallbang-weapons"></div>
-        <div class="extra-actions">
-          <button class="pill-btn" id="mode-wallbang-target" type="button">🎯 Точка попадания</button>
-          <button class="pill-btn" id="wallbang-target-clear" type="button">✕ Сбросить</button>
-        </div>
         <div class="extra-status" id="wallbang-target-status">Поставь точку, куда должен прилететь прострел.</div>
-      </div>
-    </div>
-
-    <div class="category-extra-panel" id="defense-extra" hidden>
-      <div class="section-title">🛡 ДАННЫЕ ЗАЩИТЫ</div>
-      <div class="card category-extra-card">
-        <div class="extra-grid">
-          <label>Зона / плент
-            <input class="finput" id="defense-site" maxlength="20" placeholder="A, B, C, Mid">
-          </label>
-          <label>Номер сетапа
-            <input class="finput" id="defense-number" type="number" min="1" max="99" step="1" value="1">
-          </label>
-        </div>
-        <div class="extra-actions">
-          <button class="pill-btn" id="mode-defense-zoom" type="button">🔍 Область zoom</button>
-          <button class="pill-btn" id="defense-zoom-clear" type="button">✕ Сбросить zoom</button>
-        </div>
-        <div class="extra-status" id="defense-zoom-status">Нажми "Область zoom", затем кликни два угла области на карте.</div>
-      </div>
-    </div>
-
-    <div class="category-extra-panel" id="defense-ability-panel" hidden>
-      <div class="section-title">⚡ СПОСОБНОСТИ СЕТАПА</div>
-      <div class="card category-extra-card">
-        <div class="extra-status">Выбери способность и кликай по карте, чтобы поставить точки сетапа. Лимит зависит от способности.</div>
-        <div class="defense-ability-row" id="defense-ability-row"></div>
-        <div class="defense-placed-list" id="defense-placed-list"></div>
       </div>
     </div>
 
     <div class="section-title" id="map-section-title">📍 МЕТКА НА КАРТЕ</div>
     <div class="card">
       <div id="map-container">
-        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <aside class="defense-toolbox" id="defense-toolbox" hidden>
+          <div class="category-extra-panel" id="defense-extra" hidden>
+            <div class="section-title">🛡 ДАННЫЕ СЕТАПА</div>
+            <div class="card category-extra-card">
+              <div class="extra-grid">
+                <label>Зона / плент
+                  <input class="finput" id="defense-site" maxlength="20" placeholder="A, B, C, Mid">
+                </label>
+                <label>Номер
+                  <input class="finput" id="defense-number" type="number" min="1" max="99" step="1" value="1">
+                </label>
+              </div>
+              <div class="extra-actions">
+                <button class="pill-btn" id="mode-defense-zoom" type="button">🔍 Zoom</button>
+                <button class="pill-btn" id="defense-zoom-clear" type="button">✕</button>
+              </div>
+              <div class="extra-status" id="defense-zoom-status">Нажми Zoom и кликни два угла области на карте.</div>
+            </div>
+          </div>
+
+          <div class="category-extra-panel" id="defense-ability-panel" hidden>
+            <div class="section-title">⚡ ИНСТРУМЕНТЫ</div>
+            <div class="card category-extra-card">
+              <div class="extra-status">Перетащи абилку на карту. Лимит зависит от способности.</div>
+              <div class="defense-ability-row" id="defense-ability-row"></div>
+              <div class="defense-placed-list" id="defense-placed-list"></div>
+            </div>
+          </div>
+        </aside>
+        <div class="map-tools" style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
           <button id="mode-position"   class="pill-btn selected-mode" onclick="setMapMode('position')">📍 Позиция броска</button>
           <button id="mode-trajectory" class="pill-btn"               onclick="setMapMode('trajectory')">➡ Траектория</button>
+          <button id="mode-wallbang-target" class="pill-btn" type="button" style="display:none;">🎯 Точка попадания</button>
+          <button id="wallbang-target-clear" class="pill-btn" type="button" style="display:none;">✕ Сбросить</button>
           <button id="traj-undo"  class="pill-btn" style="display:none;" onclick="undoTraj()">↩ Отмена точки</button>
           <button id="traj-clear" class="pill-btn" style="display:none;" onclick="clearTraj()">✕ Очистить</button>
         </div>
@@ -547,6 +546,6 @@
 
 <div id="toasts"></div>
 
-<script type="module" src="/app.js?v=2026-07-12T06-35"></script>
+<script type="module" src="/app.js?v=2026-07-12T07-05"></script>
 </body>
 </html>

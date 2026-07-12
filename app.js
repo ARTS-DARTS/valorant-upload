@@ -123,6 +123,7 @@ function normalizeContentCategory(value) {
 
 const UPLOAD_IMPLEMENTED_CONTENT_TYPES = new Set(['lineup', 'wallbang', 'defense']);
 const DEFAULT_WALLBANG_WEAPONS = ['Vandal', 'Phantom', 'Guardian', 'Ares', 'Odin'];
+const DEFENSE_EXCLUDED_AGENTS = new Set(['Iso', 'Jett', 'Neon', 'Phoenix', 'Raze', 'Reyna', 'Waylay', 'Yoru']);
 let uploadCategoryAccess = {
   lineup_enabled: true,
   combo_enabled: false,
@@ -151,6 +152,17 @@ function categoryNeedsAgent(category = selectedCategory) {
 
 function categoryNeedsAbility(category = selectedCategory) {
   return normalizeContentCategory(category) === 'lineup';
+}
+
+function agentAllowedForCategory(agent, category = selectedCategory) {
+  if (normalizeContentCategory(category) !== 'defense') return true;
+  const roleName = String(agent?.role?.displayName || agent?.role?.displayNameLocalized || '').toLowerCase();
+  if (roleName.includes('duelist') || roleName.includes('дуэлян')) return false;
+  return !DEFENSE_EXCLUDED_AGENTS.has(agent?.displayName || '');
+}
+
+function agentsForCurrentCategory() {
+  return agentsList.filter(agent => agentAllowedForCategory(agent, selectedCategory));
 }
 
 function selectedWallbangWeapons() {
@@ -322,11 +334,20 @@ function renderDefenseAbilityMarkers() {
     const left = (content.left + item.x * content.width) / content.wrapWidth * 100;
     const top = (content.top + item.y * content.height) / content.wrapHeight * 100;
     return `
-      <div class="defense-ability-marker" style="left:${left}%;top:${top}%;" title="${esc(item.ability)} #${idx + 1}">
+      <div class="defense-ability-marker" data-defense-marker-index="${idx}" style="left:${left}%;top:${top}%;" title="${esc(item.ability)} #${idx + 1}">
         ${item.icon ? `<img src="${esc(item.icon)}" alt="">` : `<span>${idx + 1}</span>`}
       </div>
     `;
   }).join('');
+}
+
+function moveDefenseAbilityTo(index, x, y) {
+  const item = defenseAbilities[index];
+  if (!item) return;
+  item.x = x;
+  item.y = y;
+  renderDefenseAbilityMarkers();
+  validateForm(); _saveDraft();
 }
 
 function placeDefenseAbilityAt(x, y) {
@@ -399,6 +420,16 @@ function renderCategoryMapExtras() {
 
 function updateCategoryUi() {
   const normalized = normalizeContentCategory(selectedCategory || '');
+  if (normalized === 'defense') {
+    const selected = agentsList.find(agent => agent.displayName === selectedAgent);
+    if (selected && !agentAllowedForCategory(selected, normalized)) {
+      selectedAgent = null;
+      selectedAbility = null;
+      selectedDefenseAbility = null;
+      defenseAbilities = [];
+      document.getElementById('abilities-row').innerHTML = '<span style="color:var(--text2);font-size:13px;">Сначала выбери агента</span>';
+    }
+  }
   const showAgent = !!normalized && normalized !== 'wallbang';
   const showAbility = normalized === 'lineup';
   const agentCard = document.getElementById('agents-grid')?.closest('.card');
@@ -412,6 +443,8 @@ function updateCategoryUi() {
   document.getElementById('wallbang-extra')?.toggleAttribute('hidden', normalized !== 'wallbang');
   document.getElementById('defense-extra')?.toggleAttribute('hidden', normalized !== 'defense');
   document.getElementById('defense-ability-panel')?.toggleAttribute('hidden', normalized !== 'defense');
+  document.getElementById('defense-toolbox')?.toggleAttribute('hidden', normalized !== 'defense');
+  document.getElementById('map-container')?.classList.toggle('defense-workbench', normalized === 'defense');
   const mapTitle = document.getElementById('map-section-title');
   if (mapTitle) {
     if (normalized === 'defense') mapTitle.textContent = '🛡 КАРТА СЕТАПА';
@@ -428,6 +461,7 @@ function updateCategoryUi() {
     renderTrajectory();
     renderDefenseAbilityPanel();
   }
+  renderAgentsGrid();
   setMapMode(mapMode);
   renderCategoryMapExtras();
   renderDefenseAbilityMarkers();
@@ -2127,19 +2161,28 @@ async function loadMaps() {
 
 function renderAgentsGrid() {
   const grid = document.getElementById('agents-grid');
-  grid.innerHTML = agentsList.map(a => `
-    <div class="agent-card" data-uuid="${esc(a.uuid)}">
+  const visibleAgents = agentsForCurrentCategory();
+  grid.innerHTML = visibleAgents.length ? visibleAgents.map(a => `
+    <div class="agent-card ${a.displayName === selectedAgent ? 'selected' : ''}" data-uuid="${esc(a.uuid)}">
       <img src="${esc(proxiedValorantUrl(a.displayIconSmall || a.displayIcon || ''))}" alt="${esc(a.displayName)}"
            crossorigin="anonymous"
            onerror="this.style.display='none'">
       <span>${esc(a.displayName)}</span>
-    </div>`).join('');
+    </div>`).join('') : '<span style="color:var(--text2);font-size:13px;grid-column:1/-1;">Для этой категории нет доступных агентов</span>';
   grid.querySelectorAll('.agent-card').forEach(card => {
     card.addEventListener('click', () => {
+      const agent = agentsList.find(a => a.uuid === card.dataset.uuid);
+      if (!agent || agent.displayName === selectedAgent) return;
+      if (normalizeContentCategory(selectedCategory) === 'defense' && defenseAbilities.length) {
+        const ok = window.confirm('Вы уверены, что хотите переключить агента? Это сотрёт все расставленные способности сетапа.');
+        if (!ok) return;
+        defenseAbilities = [];
+        selectedDefenseAbility = null;
+        renderDefenseAbilityMarkers();
+      }
       grid.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
-      const agent = agentsList.find(a => a.uuid === card.dataset.uuid);
-      if (agent) selectAgent(agent);
+      selectAgent(agent);
     });
   });
 }
@@ -2186,9 +2229,15 @@ document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => {
       toast('Эта категория скоро появится. Пока её заполняют админы.', 'i');
       return;
     }
+    const nextCategory = normalizeContentCategory(b.dataset.val);
+    if (selectedCategory && nextCategory && nextCategory !== selectedCategory && categoryHasPlacedData(selectedCategory)) {
+      const saveFirst = window.confirm('Вы собираетесь переключить категорию. Нажмите OK, чтобы сохранить текущий вариант как черновик и переключиться. Нажмите Отмена, чтобы переключиться со сбросом данных текущей категории.');
+      if (saveFirst) saveCurrentDraftCopy('Текущий вариант сохранён в черновики');
+      resetCategorySpecificData();
+    }
     document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
     b.classList.add('selected');
-    selectedCategory = normalizeContentCategory(b.dataset.val);
+    selectedCategory = nextCategory;
     if (!canSubmitContentCategory(selectedCategory)) {
       selectedCategory = null;
       b.classList.remove('selected');
@@ -4662,6 +4711,47 @@ document.getElementById('map-wrap')?.addEventListener('drop', e => {
   placeDefenseAbilityAt(x, y);
 });
 
+let defenseMarkerDrag = null;
+document.getElementById('defense-ability-markers')?.addEventListener('pointerdown', e => {
+  const marker = e.target.closest('[data-defense-marker-index]');
+  if (!marker || normalizeContentCategory(selectedCategory) !== 'defense') return;
+  e.preventDefault();
+  e.stopPropagation();
+  defenseMarkerDrag = {
+    index: Number(marker.dataset.defenseMarkerIndex),
+    pointerId: e.pointerId,
+    moved: false,
+  };
+  selectedDefenseAbility = null;
+  setMapMode('position');
+  marker.classList.add('dragging');
+  marker.setPointerCapture?.(e.pointerId);
+});
+document.getElementById('defense-ability-markers')?.addEventListener('click', e => {
+  if (e.target.closest('[data-defense-marker-index]')) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
+window.addEventListener('pointermove', e => {
+  if (!defenseMarkerDrag || defenseMarkerDrag.pointerId !== e.pointerId) return;
+  defenseMarkerDrag.moved = true;
+  const { x, y } = eventToMapPoint(e);
+  const item = defenseAbilities[defenseMarkerDrag.index];
+  if (!item) return;
+  item.x = x;
+  item.y = y;
+  renderDefenseAbilityMarkers();
+});
+function finishDefenseMarkerDrag(e) {
+  if (!defenseMarkerDrag || defenseMarkerDrag.pointerId !== e.pointerId) return;
+  const { x, y } = eventToMapPoint(e);
+  moveDefenseAbilityTo(defenseMarkerDrag.index, x, y);
+  defenseMarkerDrag = null;
+}
+window.addEventListener('pointerup', finishDefenseMarkerDrag);
+window.addEventListener('pointercancel', e => { if (defenseMarkerDrag?.pointerId === e.pointerId) defenseMarkerDrag = null; });
+
 function loadMapMinimap() {
   const mapName = document.getElementById('sel-map').value;
   const img     = document.getElementById('map-img');
@@ -4738,13 +4828,18 @@ function setMapMode(mode) {
   const wallbang = normalizeContentCategory(selectedCategory) === 'wallbang';
   document.getElementById('mode-position').style.display = defense ? 'none' : '';
   document.getElementById('mode-trajectory').style.display = (defense || wallbang) ? 'none' : '';
+  const targetBtn = document.getElementById('mode-wallbang-target');
+  const targetClear = document.getElementById('wallbang-target-clear');
+  if (targetBtn) targetBtn.style.display = wallbang ? '' : 'none';
+  if (targetClear) targetClear.style.display = wallbang ? '' : 'none';
   document.getElementById('traj-undo').style.display  = mode === 'trajectory' ? '' : 'none';
   document.getElementById('traj-clear').style.display = mode === 'trajectory' ? '' : 'none';
+  document.getElementById('map-wrap')?.classList.toggle('zoom-picking', mode === 'zoom');
   const hint = document.getElementById('map-hint');
   if (hint) {
     if (mode === 'target') hint.textContent = 'Кликни на карте точку, куда прилетает прострел.';
     else if (mode === 'zoom') hint.textContent = defenseZoomStart ? 'Теперь кликни второй угол zoom-области.' : 'Кликни первый угол zoom-области.';
-    else if (mode === 'defenseAbility') hint.textContent = 'Кликни на карте место выбранной способности сетапа.';
+    else if (mode === 'defenseAbility') hint.textContent = selectedDefenseAbility ? 'Кликни по карте или перетащи абилку, чтобы поставить точку сетапа.' : 'Обычный режим: перетаскивай уже поставленные абилки по карте.';
     else hint.textContent = 'Выбери режим и кликни на карту';
   }
 }
@@ -4810,10 +4905,8 @@ document.getElementById('map-wrap').addEventListener('click', e => {
   if (img.style.display === 'none') return;
   const { x, y } = eventToMapPoint(e);
 
-  if (normalizeContentCategory(selectedCategory) === 'defense' && mapMode === 'position') {
-    setMapMode(selectedDefenseAbility ? 'defenseAbility' : 'zoom');
-  }
   if (mapMode === 'position') {
+    if (normalizeContentCategory(selectedCategory) === 'defense') return;
     markerX = x; markerY = y;
     if (trajectoryPoints.length) trajectoryPoints[0] = { x, y };
     if (normalizeContentCategory(selectedCategory) === 'wallbang' && wallbangTargetX !== null) {
@@ -5010,6 +5103,59 @@ function saveCurrentDraftSnapshot() {
   renderAuthorWorkspace();
   toast('Черновик сохранён', 's');
   resetUploadForm();
+}
+
+function saveCurrentDraftCopy(message = 'Черновик сохранён') {
+  const draft = collectDraftData();
+  if (!hasDraftContent(draft)) return false;
+  const now = Date.now();
+  const id = `draft_${now}_${Math.random().toString(36).slice(2, 8)}`;
+  const saved = { ...draft, id, createdAt: now, updatedAt: now };
+  writeSavedDrafts([saved, ...getSavedDrafts()]);
+  renderDrafts();
+  renderAuthorWorkspace();
+  toast(message, 's');
+  return true;
+}
+
+function categoryHasPlacedData(category = selectedCategory) {
+  const normalized = normalizeContentCategory(category);
+  if (normalized === 'lineup') {
+    return !!(selectedAbility || markerX !== null || trajectoryPoints.length);
+  }
+  if (normalized === 'wallbang') {
+    return !!(selectedWallbangWeapons().length || markerX !== null || wallbangTargetX !== null || trajectoryPoints.length);
+  }
+  if (normalized === 'defense') {
+    return !!(defenseSiteValue() || defenseZoomArea || defenseAbilities.length);
+  }
+  return false;
+}
+
+function resetCategorySpecificData() {
+  selectedAbility = null;
+  markerX = null;
+  markerY = null;
+  trajectoryPoints = [];
+  wallbangTargetX = null;
+  wallbangTargetY = null;
+  defenseZoomStart = null;
+  defenseZoomArea = null;
+  selectedDefenseAbility = null;
+  defenseAbilities = [];
+  mapMode = 'position';
+  document.getElementById('abilities-row')?.querySelectorAll('.ability-btn').forEach(btn => btn.classList.remove('selected'));
+  document.querySelectorAll('#wallbang-weapons input[type="checkbox"]').forEach(input => { input.checked = false; });
+  const marker = document.getElementById('map-marker');
+  if (marker) marker.style.display = 'none';
+  const site = document.getElementById('defense-site');
+  const number = document.getElementById('defense-number');
+  if (site) site.value = '';
+  if (number) number.value = '1';
+  renderTrajectory();
+  renderCategoryMapExtras();
+  renderDefenseAbilityPanel();
+  renderDefenseAbilityMarkers();
 }
 
 function deleteSavedDraft(id) {
