@@ -233,6 +233,7 @@
     .defense-mesh-node { fill: #8de5ff; stroke: #dff8ff; stroke-width: 1.2; filter: drop-shadow(0 0 3px rgba(79,195,247,.9)); }
     .defense-area-shape { vector-effect: non-scaling-stroke; }
     .defense-area-shape.net { fill: rgba(50,130,255,.32); stroke: #7ddcff; stroke-width: 1.5; stroke-dasharray: 3 2; filter: drop-shadow(0 0 5px rgba(55,151,255,.65)); }
+    .defense-area-shape.cyber-cage { fill: rgba(148,163,184,.2); stroke: rgba(226,232,240,.95); stroke-width: 1.4; filter: drop-shadow(0 0 4px rgba(148,163,184,.5)); }
     .defense-area-net-grid { fill: url(#deadlock-net-grid); stroke: rgba(180,235,255,.9); stroke-width: .7; pointer-events: none; }
     .defense-net-pattern-line { fill: none; stroke: rgba(205,242,255,.72); stroke-width: 1; }
     .defense-ability-btn.limit-reached { opacity: .42; cursor: not-allowed; }

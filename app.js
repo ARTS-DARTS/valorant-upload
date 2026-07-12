@@ -257,6 +257,9 @@ function defensePlacementShape(agentName, abilityName, slot = '') {
   if (/cypher/.test(key) && /trapwire|растяж/.test(key)) {
     return { kind: 'line_segment', points: 2 };
   }
+  if (/cypher/.test(key) && /cyber cage|киберклет|клетк|cage/.test(key)) {
+    return { kind: 'circle_area', points: 1, radius: 0.0375, source: 'valoplant' };
+  }
   if (/viper/.test(key) && /toxic screen|завес/.test(key)) {
     return { kind: 'line_segment', points: 2 };
   }
@@ -631,6 +634,12 @@ function renderDefenseAbilityMarkers() {
       const radius = Math.max(2, Number(canonical.radius || 0.04335) * 100);
       return `<circle class="defense-area-shape net" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>
         <circle class="defense-area-net-grid" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
+    }
+    if (kind === 'circle_area') {
+      const center = mapPointToPercent(defenseAbilityCenter(item));
+      const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
+      const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.0375) * 100);
+      return `<circle class="defense-area-shape cyber-cage" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
     }
     if (kind !== 'line_segment' || points.length < 2) return '';
     const a = mapPointToPercent(points[0]);
@@ -6065,7 +6074,10 @@ function _restoreDraft(sourceDraft = null) {
           defenseAbilities = d.defenseAbilities
             .map((item, idx) => {
               const storedShapeKind = item.shape_kind || item.shape?.kind || 'point';
-              const shapeKind = storedShapeKind === 'sensor_area' ? 'point' : storedShapeKind;
+              const catalogShape = defensePlacementShape(d.agent || selectedAgent, item.ability, item.slot);
+              const shapeKind = storedShapeKind === 'point' && catalogShape.kind !== 'point'
+                ? catalogShape.kind
+                : (storedShapeKind === 'sensor_area' ? 'point' : storedShapeKind);
               const points = shapeKind === 'line_segment' ? normalizedDefensePoints(item) : [];
               const center = shapeKind === 'line_segment'
                 ? defenseAbilityCenter({ ...item, shape_kind: shapeKind, points })
