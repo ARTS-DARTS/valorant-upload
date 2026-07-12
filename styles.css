@@ -232,7 +232,6 @@
     .defense-shape-line.mesh { stroke: #62d8ff; stroke-width: 2.2; stroke-dasharray: 0; }
     .defense-mesh-node { fill: #8de5ff; stroke: #dff8ff; stroke-width: 1.2; filter: drop-shadow(0 0 3px rgba(79,195,247,.9)); }
     .defense-area-shape { vector-effect: non-scaling-stroke; }
-    .defense-area-shape.sensor { fill: rgba(79,195,247,.08); stroke: rgba(180,238,255,.95); stroke-width: 1.6; }
     .defense-area-shape.net { fill: rgba(50,130,255,.32); stroke: #7ddcff; stroke-width: 1.5; stroke-dasharray: 3 2; filter: drop-shadow(0 0 5px rgba(55,151,255,.65)); }
     .defense-ability-btn.limit-reached { opacity: .42; cursor: not-allowed; }
     .defense-placed-list { display: flex; flex-wrap: wrap; gap: 7px; }

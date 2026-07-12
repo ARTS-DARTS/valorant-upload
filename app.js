@@ -252,7 +252,7 @@ function defensePlacementShape(agentName, abilityName, slot = '') {
     return { kind: 'net_area', points: 1, radius: 0.06 };
   }
   if (/deadlock/.test(key) && /sonic|звуков|датчик|сенсор|sensor/.test(key)) {
-    return { kind: 'sensor_area', points: 1, radius: 0.045 };
+    return { kind: 'point', points: 1 };
   }
   if (/cypher/.test(key) && /trapwire|растяж/.test(key)) {
     return { kind: 'line_segment', points: 2 };
@@ -604,10 +604,10 @@ function renderDefenseAbilityMarkers() {
         <circle class="defense-mesh-node" cx="${center.left + dx}%" cy="${center.top + dy}%" r="0.75%"></circle>
       `).join('');
     }
-    if (kind === 'sensor_area' || kind === 'net_area') {
+    if (kind === 'net_area') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
-      const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || (kind === 'net_area' ? 0.06 : 0.045)) * 100);
-      return `<circle class="defense-area-shape ${kind === 'net_area' ? 'net' : 'sensor'}" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
+      const radius = Math.max(2, Number(item.shape_radius || item.shape?.radius || 0.06) * 100);
+      return `<circle class="defense-area-shape net" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
     }
     if (kind !== 'line_segment' || points.length < 2) return '';
     const a = mapPointToPercent(points[0]);
@@ -5980,7 +5980,8 @@ function _restoreDraft(sourceDraft = null) {
         if (Array.isArray(d.defenseAbilities)) {
           defenseAbilities = d.defenseAbilities
             .map((item, idx) => {
-              const shapeKind = item.shape_kind || item.shape?.kind || 'point';
+              const storedShapeKind = item.shape_kind || item.shape?.kind || 'point';
+              const shapeKind = storedShapeKind === 'sensor_area' ? 'point' : storedShapeKind;
               const points = shapeKind === 'line_segment' ? normalizedDefensePoints(item) : [];
               const center = shapeKind === 'line_segment'
                 ? defenseAbilityCenter({ ...item, shape_kind: shapeKind, points })
