@@ -10,6 +10,7 @@ loadEnv({ path: '.env', override: false });
 const serviceAccountJson = String(process.env.FIREBASE_SERVICE_ACCOUNT || '')
   .replace(/^\uFEFF/, '')
   .trim();
+const serverMode = process.env.DUEL_E2E_MODE === 'server';
 
 if (!serviceAccountJson) {
   console.error('DUEL E2E SKIPPED: FIREBASE_SERVICE_ACCOUNT is not configured locally.');
@@ -28,7 +29,9 @@ async function run() {
   delete process.env.ONESIGNAL_APP_ID;
   delete process.env.ONESIGNAL_REST_KEY;
 
-  const { finalizeDuelById } = await import('../api/duel-finalizer.js');
+  const { finalizeDuelById } = serverMode
+    ? { finalizeDuelById: null }
+    : await import('../api/duel-finalizer.js');
   const db = getFirestore();
   const suffix = `${Date.now()}_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   const prefix = `__codex_duel_e2e_${suffix}`;
@@ -76,7 +79,27 @@ async function run() {
     });
     await seed.commit();
 
-    const outcome = await finalizeDuelById(duelId);
+    let outcome;
+    if (serverMode) {
+      const deadline = Date.now() + 90_000;
+      while (Date.now() < deadline) {
+        const current = await duelRef.get();
+        if (current.get('finalized') === true) {
+          outcome = {
+            duelId,
+            winnerId: current.get('winnerLineupId'),
+            loserId: current.get('loserLineupId'),
+            uid: current.get('winnerAuthorUid'),
+            likesAwarded: current.get('likesAwarded'),
+          };
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 5_000));
+      }
+      assert.ok(outcome, 'Selectel timer did not finalize the expired duel within 90 seconds');
+    } else {
+      outcome = await finalizeDuelById(duelId);
+    }
     assert.equal(outcome.duelId, duelId);
     assert.equal(outcome.winnerId, winnerId);
     assert.equal(outcome.loserId, loserId);
@@ -119,8 +142,10 @@ async function run() {
     assert.equal(inboxSnap.size, 1, 'profile inbox must receive the reward notification');
     assert.equal(inboxSnap.docs[0].get('is_read'), false);
 
-    const secondOutcome = await finalizeDuelById(duelId);
-    assert.equal(secondOutcome.alreadyFinalized, true);
+    if (!serverMode) {
+      const secondOutcome = await finalizeDuelById(duelId);
+      assert.equal(secondOutcome.alreadyFinalized, true);
+    }
 
     const [winnerAfterSecond, userAfterSecond, notificationsAfterSecond, inboxAfterSecond] = await Promise.all([
       winnerRef.get(),
@@ -134,7 +159,7 @@ async function run() {
     assert.equal(notificationsAfterSecond.size, 1, 'idempotent retry must not add notifications');
     assert.equal(inboxAfterSecond.size, 1, 'idempotent retry must not duplicate profile inbox items');
 
-    console.log(`DUEL E2E PASSED: ${duelId}`);
+    console.log(`DUEL E2E PASSED (${serverMode ? 'SELECTEL TIMER' : 'DIRECT'}): ${duelId}`);
   } finally {
     const notifications = await userRef.collection('notifications').get();
     const inboxItems = await inboxRef.collection('items').get();
