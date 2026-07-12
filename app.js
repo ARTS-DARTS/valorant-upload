@@ -258,7 +258,7 @@ function defensePlacementShape(agentName, abilityName, slot = '') {
     return { kind: 'line_segment', points: 2 };
   }
   if (/cypher/.test(key) && /cyber cage|киберклет|клетк|cage/.test(key)) {
-    return { kind: 'circle_area', points: 1, radius: 0.0375, source: 'valoplant' };
+    return { kind: 'circle_area', points: 1, radius: 0.026, source: 'valoplant-adjusted' };
   }
   if (/viper/.test(key) && /toxic screen|завес/.test(key)) {
     return { kind: 'line_segment', points: 2 };
@@ -638,7 +638,7 @@ function renderDefenseAbilityMarkers() {
     if (kind === 'circle_area') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
       const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
-      const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.0375) * 100);
+      const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.026) * 100);
       return `<circle class="defense-area-shape cyber-cage" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
     }
     if (kind !== 'line_segment' || points.length < 2) return '';
@@ -658,6 +658,7 @@ function renderDefenseAbilityMarkers() {
     : '';
   const markers = defenseAbilities.map((item, idx) => {
     const isLine = defenseShapeKind(item) === 'line_segment';
+    const isBareArea = defenseShapeKind(item) === 'circle_area';
     const points = normalizedDefensePoints(item);
     const center = defenseAbilityCenter(item);
     const centerPos = mapPointToPercent(center);
@@ -667,8 +668,8 @@ function renderDefenseAbilityMarkers() {
     }).join('') : '';
     return `
       ${anchors}
-      <div class="defense-ability-marker ${isLine ? 'line-center' : ''} ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-marker-index="${idx}" style="left:${centerPos.left}%;top:${centerPos.top}%;" title="${esc(item.ability)} #${idx + 1}">
-        ${item.icon ? `<img src="${esc(item.icon)}" alt="">` : `<span>${idx + 1}</span>`}
+      <div class="defense-ability-marker ${isLine ? 'line-center' : ''} ${isBareArea ? 'bare-area-handle' : ''} ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-marker-index="${idx}" style="left:${centerPos.left}%;top:${centerPos.top}%;" title="${esc(item.ability)} #${idx + 1}">
+        ${isBareArea ? '' : (item.icon ? `<img src="${esc(item.icon)}" alt="">` : `<span>${idx + 1}</span>`)}
       </div>
     `;
   }).join('');

@@ -417,6 +417,8 @@
     .defense-ability-marker { position: absolute; width: 28px; height: 28px; transform: translate(-50%, -50%); border: 2px solid var(--primary); border-radius: 50%; background: rgba(15,23,42,.82); box-shadow: 0 0 12px rgba(79,195,247,.55); display: flex; align-items: center; justify-content: center; overflow: hidden; pointer-events: auto; cursor: grab; touch-action: none; }
     .defense-ability-marker.line-center { width: 12px; height: 12px; z-index: 7; border-width: 1px; box-shadow: 0 0 4.8px rgba(79,195,247,.55); }
     .defense-ability-marker.line-center img { width: 8px; height: 8px; }
+    .defense-ability-marker.bare-area-handle { width: 18px; height: 18px; border: 0; background: transparent; box-shadow: none; overflow: visible; }
+    .defense-ability-marker.bare-area-handle.selected { border: 0; background: transparent; box-shadow: none; }
     .defense-ability-marker.selected { border-color: #fff; box-shadow: 0 0 0 5px rgba(79,195,247,.24), 0 0 20px rgba(79,195,247,.75); }
     .defense-ability-marker.dragging { cursor: grabbing; border-color: #fff; box-shadow: 0 0 0 4px rgba(79,195,247,.24), 0 0 18px rgba(79,195,247,.7); }
     .defense-ability-marker img { width: 20px; height: 20px; object-fit: contain; }
