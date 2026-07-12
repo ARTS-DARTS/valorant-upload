@@ -14,6 +14,29 @@ function authorUid(lineup = {}) {
   return String(lineup.user_id || lineup.uid || lineup.author_uid || lineup.submitted_by_uid || '').trim();
 }
 
+async function sendWinnerPush(outcome) {
+  if (!outcome?.uid || outcome.alreadyFinalized || outcome.tie) return;
+  const appId = String(process.env.ONESIGNAL_APP_ID || '').trim();
+  const restKey = String(process.env.ONESIGNAL_REST_KEY || '').trim();
+  if (!appId || !restKey) return;
+  const title = '⚔️ Победа в дуэли!';
+  const body = `Твой лайнап победил. Начислено +5 очков и +${outcome.likesAwarded} лайков.`;
+  const response = await fetch('https://api.onesignal.com/notifications', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Key ${restKey}` },
+    body: JSON.stringify({
+      app_id: appId,
+      headings: { ru: title, en: title },
+      contents: { ru: body, en: body },
+      include_aliases: { external_id: [outcome.uid] },
+      target_channel: 'push',
+      data: { type: 'duel_win', duel_id: outcome.duelId, lineup_id: outcome.winnerId },
+      priority: 10,
+    }),
+  });
+  if (!response.ok) throw new Error(`onesignal_${response.status}`);
+}
+
 export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
   const db = adminDb();
   const duelRef = db.collection('duels').doc(duelId);
@@ -51,6 +74,9 @@ export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
     }
     outcome = { duelId, winnerId, loserId, uid, likesAwarded };
   });
+  try { await sendWinnerPush(outcome); } catch (error) {
+    console.error('Duel winner push failed:', error);
+  }
   return outcome;
 }
 
