@@ -22,8 +22,8 @@
     .user-info img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
     .btn-out { background: transparent; border: 1px solid var(--border); color: var(--text2); padding: 5px 12px; border-radius: var(--r); cursor: pointer; font-size: 12px; transition: .15s; }
     .btn-out:hover { border-color: var(--primary); color: var(--primary); }
-    .site-update-banner { position: fixed; left: 50%; top: 66px; z-index: 1000; transform: translate(-50%, -12px); display: flex; align-items: center; gap: 12px; width: min(520px, calc(100vw - 24px)); padding: 12px 14px; border-radius: var(--r); border: 1px solid rgba(79,195,247,.42); background: rgba(17,24,39,.96); box-shadow: 0 18px 48px rgba(0,0,0,.42); color: var(--text1); font-size: 13px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; }
-    .site-update-banner.show { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+    .site-update-banner { position: fixed; right: 18px; bottom: 18px; z-index: 1000; transform: translateY(12px); display: flex; align-items: center; gap: 12px; width: min(430px, calc(100vw - 24px)); padding: 12px 14px; border-radius: var(--r); border: 1px solid rgba(79,195,247,.42); background: rgba(17,24,39,.96); box-shadow: 0 18px 48px rgba(0,0,0,.42); color: var(--text1); font-size: 13px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; }
+    .site-update-banner.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
     .site-update-banner span { flex: 1; line-height: 1.35; }
     .site-update-banner button { flex-shrink: 0; border: 0; background: var(--primary); color: #fff; border-radius: var(--r); padding: 8px 12px; font-size: 12px; font-weight: 900; cursor: pointer; }
 
@@ -168,7 +168,10 @@
     .ability-btn.selected { border-color: var(--primary); background: rgba(79,195,247,0.12); }
     .ability-btn img { width: 32px; height: 32px; object-fit: contain; }
     .ability-btn span { font-size: 11px; color: var(--text2); margin-top: 3px; display: block; text-align: center; max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .extra-ability-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+    .extra-ability-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+    .extra-ability-pick { position: relative; min-width: 66px; min-height: 66px; }
+    .extra-ability-pick.added { opacity: .45; cursor: not-allowed; }
+    .extra-ability-pick.added::after { content: '✓'; position: absolute; top: 4px; right: 5px; width: 17px; height: 17px; display: grid; place-items: center; border-radius: 50%; background: var(--green); color: #06101d; font-size: 11px; font-weight: 900; }
     .extra-ability-list { display: grid; gap: 8px; }
     .extra-ability-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface2); padding: 8px; }
     .extra-ability-item.selected { border-color: var(--primary); background: rgba(79,195,247,.12); box-shadow: 0 0 0 1px rgba(79,195,247,.18) inset; }
@@ -199,14 +202,22 @@
     .extra-grid label { display: grid; gap: 6px; color: var(--text2); font-size: 11px; font-weight: 900; letter-spacing: .6px; text-transform: uppercase; }
     .extra-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .extra-status { color: var(--text2); font-size: 12px; line-height: 1.45; }
-    .defense-toolbox { display: none; }
+    .lineup-toolbox, .defense-toolbox { display: none; }
+    #map-container.lineup-workbench,
     #map-container.defense-workbench { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 12px; align-items: start; }
+    #map-container.lineup-workbench .lineup-toolbox,
     #map-container.defense-workbench .defense-toolbox { display: grid; grid-column: 1; grid-row: 1 / span 3; gap: 10px; position: sticky; top: 68px; max-height: calc(100vh - 90px); overflow: auto; padding-right: 2px; scrollbar-width: thin; }
+    #map-container.lineup-workbench .map-tools,
+    #map-container.lineup-workbench .map-wrap,
+    #map-container.lineup-workbench .map-hint,
     #map-container.defense-workbench .map-tools,
     #map-container.defense-workbench .map-wrap,
     #map-container.defense-workbench .map-hint { grid-column: 2; }
+    .lineup-toolbox[hidden],
     .defense-toolbox[hidden] { display: none !important; }
+    .lineup-toolbox .section-title,
     .defense-toolbox .section-title { margin-top: 0; }
+    .lineup-toolbox .card,
     .defense-toolbox .card { margin-bottom: 0; padding: 12px; }
     .defense-toolbox .extra-grid { grid-template-columns: 1fr; gap: 8px; }
     .defense-toolbox .extra-actions { gap: 6px; }
@@ -482,19 +493,24 @@
       .editor-grid, .effects-panel, .footage-library-list { grid-template-columns: 1fr 1fr; }
       .transform-grid { grid-template-columns: 1fr 1fr; }
       .transform-label { grid-column: 1 / -1; text-align: left; }
+      #map-container.lineup-workbench,
       #map-container.defense-workbench { grid-template-columns: 1fr; }
+      #map-container.lineup-workbench .lineup-toolbox,
+      #map-container.lineup-workbench .map-tools,
+      #map-container.lineup-workbench .map-wrap,
+      #map-container.lineup-workbench .map-hint,
       #map-container.defense-workbench .defense-toolbox,
       #map-container.defense-workbench .map-tools,
       #map-container.defense-workbench .map-wrap,
       #map-container.defense-workbench .map-hint { grid-column: 1; grid-row: auto; }
+      #map-container.lineup-workbench .lineup-toolbox,
       #map-container.defense-workbench .defense-toolbox { position: static; max-height: none; }
       .defense-toolbox .defense-ability-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-      .extra-ability-controls { grid-template-columns: 1fr; }
     }
     @media (max-width: 500px) {
       .auth-card { padding: 28px 18px; }
       .site-update { display: none; }
-      .site-update-banner { top: 62px; align-items: stretch; flex-direction: column; }
+      .site-update-banner { right: 12px; bottom: 12px; align-items: stretch; flex-direction: column; }
       .site-update-banner button { width: 100%; }
       .footage-library-list { grid-template-columns: 1fr; }
       .defense-toolbox .defense-ability-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }

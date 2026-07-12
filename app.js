@@ -338,21 +338,33 @@ function trajectoryFromMarkerFor(points = trajectoryPoints) {
 
 function renderExtraAbilityPanel() {
   const panel = document.getElementById('extra-abilities-panel');
-  const select = document.getElementById('extra-ability-select');
+  const picker = document.getElementById('extra-ability-picker');
   const list = document.getElementById('extra-ability-list');
-  if (!panel || !select || !list) return;
+  if (!panel || !picker || !list) return;
   const enabled = extraTrajectoriesEnabled() && !!selectedAgent && !!selectedAbility;
   panel.toggleAttribute('hidden', !enabled);
   if (!enabled) {
-    select.innerHTML = '<option value="">Выбери доп. абилку</option>';
+    picker.innerHTML = '';
     list.innerHTML = '';
     return;
   }
   const abilities = selectedAgentAbilities().filter(ab => ab.ability !== selectedAbility);
-  select.innerHTML = [
-    '<option value="">Выбери доп. абилку</option>',
-    ...abilities.map(ab => `<option value="${esc(ab.ability)}">${esc(ab.ability)}</option>`),
-  ].join('');
+  const used = new Set(extraAbilityTrajectories.map(item => item.ability));
+  picker.innerHTML = abilities.length
+    ? abilities.map(ab => {
+        const added = used.has(ab.ability);
+        return `
+          <button class="ability-btn extra-ability-pick ${added ? 'added' : ''}" type="button"
+            data-extra-add="${esc(ab.ability)}" title="${esc(ab.ability)}" ${added ? 'disabled' : ''}>
+            <img src="${esc(ab.icon)}" alt="">
+            <span>${esc(ab.ability.split(' ')[0])}</span>
+          </button>
+        `;
+      }).join('')
+    : '<span style="color:var(--text2);font-size:12px;">Нет доступных доп. абилок</span>';
+  picker.querySelectorAll('[data-extra-add]').forEach(btn => {
+    btn.addEventListener('click', () => addExtraAbilityByName(btn.dataset.extraAdd || ''));
+  });
   list.innerHTML = extraAbilityTrajectories.length
     ? extraAbilityTrajectories.map((item, idx) => {
         const points = normalizeTrajectoryPoints(item.trajectory).length;
@@ -416,14 +428,12 @@ function renderExtraAbilityPanel() {
   });
 }
 
-function addExtraAbilityFromSelect() {
+function addExtraAbilityByName(abilityName) {
   if (!extraTrajectoriesEnabled()) return;
   if (extraAbilityTrajectories.length >= 2) {
     toast('Пока максимум 2 дополнительные траектории', 'w');
     return;
   }
-  const select = document.getElementById('extra-ability-select');
-  const abilityName = select?.value || '';
   const ab = selectedAgentAbilities().find(item => item.ability === abilityName);
   if (!ab) {
     toast('Выбери дополнительную абилку', 'w');
@@ -431,6 +441,10 @@ function addExtraAbilityFromSelect() {
   }
   if (abilityName === selectedAbility) {
     toast('Основная абилка уже выбрана выше', 'w');
+    return;
+  }
+  if (extraAbilityTrajectories.some(item => item.ability === abilityName)) {
+    toast('Эта доп. абилка уже добавлена', 'w');
     return;
   }
   const effect = abilityEffectShape(selectedAgent, ab.ability, ab.slot);
@@ -446,14 +460,11 @@ function addExtraAbilityFromSelect() {
     note: '',
   });
   selectedExtraAbilityIndex = extraAbilityTrajectories.length - 1;
-  if (select) select.value = '';
   setMapMode('trajectory');
   renderExtraAbilityPanel();
   renderTrajectory();
   validateForm(); _saveDraft();
 }
-
-document.getElementById('extra-ability-add')?.addEventListener('click', addExtraAbilityFromSelect);
 
 function placedDefenseCount(abilityName) {
   return defenseAbilities.filter(item => item.ability === abilityName).length;
@@ -779,10 +790,12 @@ function updateCategoryUi() {
   if (abilityCard) abilityCard.style.display = showAbility ? '' : 'none';
   if (abilityTitle?.classList?.contains('section-title')) abilityTitle.style.display = showAbility ? '' : 'none';
   document.getElementById('extra-abilities-panel')?.toggleAttribute('hidden', !showAbility || !selectedAgent || !selectedAbility);
+  document.getElementById('lineup-toolbox')?.toggleAttribute('hidden', !showAbility || !selectedAgent || !selectedAbility);
   document.getElementById('wallbang-extra')?.toggleAttribute('hidden', normalized !== 'wallbang');
   document.getElementById('defense-extra')?.toggleAttribute('hidden', normalized !== 'defense');
   document.getElementById('defense-ability-panel')?.toggleAttribute('hidden', normalized !== 'defense');
   document.getElementById('defense-toolbox')?.toggleAttribute('hidden', normalized !== 'defense');
+  document.getElementById('map-container')?.classList.toggle('lineup-workbench', showAbility && !!selectedAgent && !!selectedAbility);
   document.getElementById('map-container')?.classList.toggle('defense-workbench', normalized === 'defense');
   const mapTitle = document.getElementById('map-section-title');
   if (mapTitle) {
@@ -1029,13 +1042,18 @@ async function checkSiteVersion() {
     if (!res.ok) return;
     const data = await res.json();
     const liveVersion = String(data.version || '').trim();
-    if (liveVersion && liveVersion !== SITE_VERSION) showSiteUpdateBanner();
+    window.__vlLiveVersion = liveVersion;
+    let dismissed = '';
+    try { dismissed = localStorage.getItem('vl_dismissed_site_update') || ''; } catch (_) {}
+    if (liveVersion && liveVersion !== SITE_VERSION && dismissed !== liveVersion) showSiteUpdateBanner();
     else hideSiteUpdateBanner();
   } catch (_) {}
 }
 
 function initSiteVersionWatcher() {
   document.getElementById('btn-reload-site')?.addEventListener('click', () => {
+    hideSiteUpdateBanner();
+    try { localStorage.setItem('vl_dismissed_site_update', String(window.__vlLiveVersion || '')); } catch (_) {}
     const url = new URL(window.location.href);
     url.searchParams.set('site_refresh', `${SITE_VERSION}_${Date.now()}`);
     window.location.assign(url.toString());
