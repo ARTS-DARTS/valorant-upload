@@ -5559,12 +5559,70 @@ function mapContentRect() {
   };
 }
 
+let mapViewScale = 1;
+let mapViewPanX = 0;
+let mapViewPanY = 0;
+let mapViewPanDrag = null;
+
+function clampMapViewPan() {
+  const wrap = document.getElementById('map-wrap');
+  if (!wrap) return;
+  mapViewPanX = Math.max(wrap.clientWidth * (1 - mapViewScale), Math.min(0, mapViewPanX));
+  mapViewPanY = Math.max(wrap.clientHeight * (1 - mapViewScale), Math.min(0, mapViewPanY));
+}
+
+function applyMapViewTransform() {
+  clampMapViewPan();
+  const stage = document.getElementById('map-stage');
+  if (stage) stage.style.transform = `translate(${mapViewPanX}px, ${mapViewPanY}px) scale(${mapViewScale})`;
+}
+
+document.getElementById('map-wrap')?.addEventListener('wheel', event => {
+  if (document.getElementById('map-img')?.style.display === 'none') return;
+  event.preventDefault();
+  const rect = event.currentTarget.getBoundingClientRect();
+  const cursorX = event.clientX - rect.left;
+  const cursorY = event.clientY - rect.top;
+  const worldX = (cursorX - mapViewPanX) / mapViewScale;
+  const worldY = (cursorY - mapViewPanY) / mapViewScale;
+  const factor = event.deltaY < 0 ? 1.14 : 1 / 1.14;
+  const nextScale = Math.max(1, Math.min(5, mapViewScale * factor));
+  mapViewPanX = cursorX - worldX * nextScale;
+  mapViewPanY = cursorY - worldY * nextScale;
+  mapViewScale = nextScale;
+  applyMapViewTransform();
+}, { passive: false });
+
+document.getElementById('map-wrap')?.addEventListener('pointerdown', event => {
+  if (event.button !== 1) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  mapViewPanDrag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, panX: mapViewPanX, panY: mapViewPanY };
+  event.currentTarget.classList.add('map-panning');
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+});
+window.addEventListener('pointermove', event => {
+  if (!mapViewPanDrag || mapViewPanDrag.pointerId !== event.pointerId) return;
+  mapViewPanX = mapViewPanDrag.panX + event.clientX - mapViewPanDrag.x;
+  mapViewPanY = mapViewPanDrag.panY + event.clientY - mapViewPanDrag.y;
+  applyMapViewTransform();
+});
+function finishMapViewPan(event) {
+  if (!mapViewPanDrag || mapViewPanDrag.pointerId !== event.pointerId) return;
+  mapViewPanDrag = null;
+  document.getElementById('map-wrap')?.classList.remove('map-panning');
+}
+window.addEventListener('pointerup', finishMapViewPan);
+window.addEventListener('pointercancel', finishMapViewPan);
+
 function eventToMapPoint(e) {
   const wrap = document.getElementById('map-wrap');
   const rect = wrap.getBoundingClientRect();
   const content = mapContentRect();
-  const px = e.clientX - rect.left - content.left;
-  const py = e.clientY - rect.top - content.top;
+  const localX = (e.clientX - rect.left - mapViewPanX) / mapViewScale;
+  const localY = (e.clientY - rect.top - mapViewPanY) / mapViewScale;
+  const px = localX - content.left;
+  const py = localY - content.top;
   return {
     x: Math.max(0, Math.min(1, px / content.width)),
     y: Math.max(0, Math.min(1, py / content.height)),

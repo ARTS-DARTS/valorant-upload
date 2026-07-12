@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-13T00-08">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-13T00-25">
 </head>
 <body>
 
@@ -363,19 +363,19 @@
           <button id="traj-clear" class="pill-btn" style="display:none;" onclick="clearTraj()">✕ Очистить</button>
         </div>
         <div class="map-wrap" id="map-wrap">
-          <img id="map-img" class="map-img" crossorigin="anonymous" src="" alt="" style="display:none;">
           <div id="map-placeholder" style="padding:32px;text-align:center;color:var(--text2);font-size:13px;">Сначала выбери карту</div>
-          <div id="defense-zoom-box" class="defense-zoom-box" style="display:none;"></div>
-          <div id="wallbang-target-marker" class="wallbang-target-marker" style="display:none;">×</div>
-          <div id="defense-ability-markers" class="defense-ability-markers"></div>
-          <!-- Position marker -->
-          <div id="map-marker" style="display:none;position:absolute;transform:translate(-50%,-50%);z-index:3;pointer-events:none;">
-            <div id="marker-dot" style="width:18px;height:18px;border-radius:50%;border:2px solid var(--primary);background:var(--surface);display:flex;align-items:center;justify-content:center;box-shadow:0 0 6px rgba(79,195,247,0.6);">
-              <img id="marker-icon" style="width:12px;height:12px;border-radius:50%;object-fit:cover;display:none;" alt="">
+          <div id="map-stage" class="map-stage">
+            <img id="map-img" class="map-img" crossorigin="anonymous" src="" alt="" style="display:none;">
+            <div id="defense-zoom-box" class="defense-zoom-box" style="display:none;"></div>
+            <div id="wallbang-target-marker" class="wallbang-target-marker" style="display:none;">×</div>
+            <div id="defense-ability-markers" class="defense-ability-markers"></div>
+            <div id="map-marker" style="display:none;position:absolute;transform:translate(-50%,-50%);z-index:3;pointer-events:none;">
+              <div id="marker-dot" style="width:18px;height:18px;border-radius:50%;border:2px solid var(--primary);background:var(--surface);display:flex;align-items:center;justify-content:center;box-shadow:0 0 6px rgba(79,195,247,0.6);">
+                <img id="marker-icon" style="width:12px;height:12px;border-radius:50%;object-fit:cover;display:none;" alt="">
+              </div>
             </div>
+            <div id="traj-container" style="position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden;"></div>
           </div>
-          <!-- Trajectory SVG container -->
-          <div id="traj-container" style="position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden;"></div>
         </div>
         <div class="map-hint" id="map-hint">Выбери режим и кликни на карту</div>
       </div>
@@ -556,6 +556,6 @@
 
 <div id="toasts"></div>
 
-<script type="module" src="/app.js?v=2026-07-13T00-08"></script>
+<script type="module" src="/app.js?v=2026-07-13T00-25"></script>
 </body>
 </html>
