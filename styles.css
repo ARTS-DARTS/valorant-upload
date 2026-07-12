@@ -376,10 +376,18 @@
     .wallbang-target-marker { position: absolute; z-index: 4; width: 22px; height: 22px; transform: translate(-50%, -50%); border: 2px solid #f97316; border-radius: 50%; background: rgba(249,115,22,.16); color: #fff7ed; font-size: 18px; line-height: 16px; font-weight: 900; text-align: center; pointer-events: none; box-shadow: 0 0 12px rgba(249,115,22,.65); }
     .defense-zoom-box { position: absolute; z-index: 2; border: 2px solid rgba(34,197,94,.95); background: rgba(34,197,94,.12); box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 0 16px rgba(34,197,94,.32); pointer-events: none; }
     .defense-ability-markers { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+    .defense-shape-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    .defense-shape-line-bg { stroke: rgba(10,14,26,.72); stroke-width: 9; stroke-linecap: round; }
+    .defense-shape-line { stroke: rgba(79,195,247,.78); stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 6px rgba(79,195,247,.45)); }
+    .defense-shape-line.draft { stroke-dasharray: 8 6; }
     .defense-ability-marker { position: absolute; width: 28px; height: 28px; transform: translate(-50%, -50%); border: 2px solid var(--primary); border-radius: 50%; background: rgba(15,23,42,.82); box-shadow: 0 0 12px rgba(79,195,247,.55); display: flex; align-items: center; justify-content: center; overflow: hidden; pointer-events: auto; cursor: grab; touch-action: none; }
+    .defense-ability-marker.line-center { width: 30px; height: 30px; z-index: 7; }
     .defense-ability-marker.selected { border-color: #fff; box-shadow: 0 0 0 5px rgba(79,195,247,.24), 0 0 20px rgba(79,195,247,.75); }
     .defense-ability-marker.dragging { cursor: grabbing; border-color: #fff; box-shadow: 0 0 0 4px rgba(79,195,247,.24), 0 0 18px rgba(79,195,247,.7); }
     .defense-ability-marker img { width: 20px; height: 20px; object-fit: contain; }
+    .defense-line-anchor { position: absolute; z-index: 6; width: 17px; height: 17px; transform: translate(-50%, -50%); border: 2px solid #e8f7ff; border-radius: 50%; background: rgba(79,195,247,.9); box-shadow: 0 0 0 4px rgba(79,195,247,.18), 0 0 14px rgba(79,195,247,.55); pointer-events: auto; cursor: grab; touch-action: none; }
+    .defense-line-anchor.selected { background: #fff; border-color: var(--primary); }
+    .defense-line-anchor.draft { pointer-events: none; opacity: .82; }
     .ability-drag-ghost { position: fixed; left: 0; top: 0; z-index: 10000; width: 38px; height: 38px; transform: translate(-50%, -50%); border: 2px solid var(--primary); border-radius: 50%; background: rgba(15,23,42,.92); box-shadow: 0 0 0 5px rgba(79,195,247,.18), 0 12px 28px rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; pointer-events: none; }
     .ability-drag-ghost img { width: 27px; height: 27px; object-fit: contain; }
     .map-wrap > img.map-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }

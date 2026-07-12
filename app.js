@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-12T07:06:00+03:00';
+const SITE_VERSION = '2026-07-12T19:13:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -238,6 +238,20 @@ function abilityPlacementLimit(agentName, abilityName, slot = '') {
   return 1;
 }
 
+function defensePlacementShape(agentName, abilityName, slot = '') {
+  const key = `${agentName || ''} ${abilityName || ''} ${slot || ''}`.toLowerCase();
+  if (/cypher/.test(key) && /trapwire|растяж/.test(key)) {
+    return { kind: 'line_segment', points: 2 };
+  }
+  if (/viper/.test(key) && /toxic screen|завес/.test(key)) {
+    return { kind: 'line_segment', points: 2 };
+  }
+  if (/sage/.test(key) && /barrier|стен/.test(key)) {
+    return { kind: 'line_segment', points: 2 };
+  }
+  return { kind: 'point', points: 1 };
+}
+
 function selectedAgentAbilities() {
   const agent = agentsList.find(a => a.displayName === selectedAgent);
   if (!agent) return [];
@@ -249,6 +263,7 @@ function selectedAgentAbilities() {
       slot: ab.slot || '',
       icon: proxiedValorantUrl(ab.displayIcon || ''),
       limit: abilityPlacementLimit(agent.displayName, normalizeAbilityName(agent.displayName, ab.displayName, ab.slot), ab.slot || ''),
+      shape: defensePlacementShape(agent.displayName, normalizeAbilityName(agent.displayName, ab.displayName, ab.slot), ab.slot || ''),
     }));
 }
 
@@ -347,21 +362,55 @@ function renderDefenseAbilityPanel() {
 function renderDefenseAbilityMarkers() {
   const host = document.getElementById('defense-ability-markers');
   if (!host) return;
-  const content = mapContentRect();
-  host.innerHTML = defenseAbilities.map((item, idx) => {
-    const left = (content.left + item.x * content.width) / content.wrapWidth * 100;
-    const top = (content.top + item.y * content.height) / content.wrapHeight * 100;
+  const shapeItems = [...defenseAbilities, ...(defenseLineDraft ? [defenseLineDraft] : [])];
+  const lines = shapeItems.map((item, idx) => {
+    const points = normalizedDefensePoints(item);
+    if (defenseShapeKind(item) !== 'line_segment' || points.length < 2) return '';
+    const a = mapPointToPercent(points[0]);
+    const b = mapPointToPercent(points[1]);
+    const draft = idx >= defenseAbilities.length;
     return `
-      <div class="defense-ability-marker ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-marker-index="${idx}" style="left:${left}%;top:${top}%;" title="${esc(item.ability)} #${idx + 1}">
+      <line class="defense-shape-line-bg" x1="${a.left}%" y1="${a.top}%" x2="${b.left}%" y2="${b.top}%"></line>
+      <line class="defense-shape-line ${draft ? 'draft' : ''}" x1="${a.left}%" y1="${a.top}%" x2="${b.left}%" y2="${b.top}%"></line>
+    `;
+  }).join('');
+  const draftAnchors = defenseLineDraft && defenseShapeKind(defenseLineDraft) === 'line_segment'
+    ? normalizedDefensePoints(defenseLineDraft).map((point, pointIdx) => {
+        const pos = mapPointToPercent(point);
+        return `<div class="defense-line-anchor draft" style="left:${pos.left}%;top:${pos.top}%;"></div>`;
+      }).join('')
+    : '';
+  const markers = defenseAbilities.map((item, idx) => {
+    const isLine = defenseShapeKind(item) === 'line_segment';
+    const points = normalizedDefensePoints(item);
+    const center = defenseAbilityCenter(item);
+    const centerPos = mapPointToPercent(center);
+    const anchors = isLine ? points.map((point, pointIdx) => {
+      const pos = mapPointToPercent(point);
+      return `<div class="defense-line-anchor ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-line-index="${idx}" data-defense-line-point="${pointIdx}" style="left:${pos.left}%;top:${pos.top}%;" title="Край ${pointIdx + 1}: ${esc(item.ability)}"></div>`;
+    }).join('') : '';
+    return `
+      ${anchors}
+      <div class="defense-ability-marker ${isLine ? 'line-center' : ''} ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-marker-index="${idx}" style="left:${centerPos.left}%;top:${centerPos.top}%;" title="${esc(item.ability)} #${idx + 1}">
         ${item.icon ? `<img src="${esc(item.icon)}" alt="">` : `<span>${idx + 1}</span>`}
       </div>
     `;
   }).join('');
+  host.innerHTML = `<svg class="defense-shape-lines" aria-hidden="true">${lines}</svg>${draftAnchors}${markers}`;
 }
 
 function moveDefenseAbilityTo(index, x, y) {
   const item = defenseAbilities[index];
   if (!item) return;
+  const oldCenter = defenseAbilityCenter(item);
+  if (defenseShapeKind(item) === 'line_segment') {
+    const dx = x - oldCenter.x;
+    const dy = y - oldCenter.y;
+    item.points = normalizedDefensePoints(item).map(point => ({
+      x: clamp01(point.x + dx),
+      y: clamp01(point.y + dy),
+    }));
+  }
   item.x = x;
   item.y = y;
   renderDefenseAbilityMarkers();
@@ -398,7 +447,49 @@ function beginDefenseAbilityDrag(event, ability) {
   event.currentTarget.setPointerCapture?.(event.pointerId);
 }
 
-function placeDefenseAbilityAt(x, y) {
+function clamp01(value) {
+  return Math.max(0, Math.min(1, Number(value) || 0));
+}
+
+function mapPointToPercent(point) {
+  const content = mapContentRect();
+  return {
+    left: (content.left + clamp01(point.x) * content.width) / content.wrapWidth * 100,
+    top: (content.top + clamp01(point.y) * content.height) / content.wrapHeight * 100,
+  };
+}
+
+function defenseShapeKind(item) {
+  return item?.shape_kind || item?.shape?.kind || 'point';
+}
+
+function normalizedDefensePoints(item) {
+  const points = Array.isArray(item?.points) ? item.points : [];
+  const clean = points
+    .map(point => ({ x: Number(point?.x), y: Number(point?.y) }))
+    .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y))
+    .map(point => ({ x: clamp01(point.x), y: clamp01(point.y) }));
+  if (clean.length >= 2) return clean.slice(0, 2);
+  const x = Number.isFinite(Number(item?.x)) ? clamp01(item.x) : 0.5;
+  const y = Number.isFinite(Number(item?.y)) ? clamp01(item.y) : 0.5;
+  return [{ x, y }, { x: clamp01(x + 0.08), y }];
+}
+
+function defenseAbilityCenter(item) {
+  const points = normalizedDefensePoints(item);
+  if (defenseShapeKind(item) === 'line_segment' && points.length >= 2) {
+    return {
+      x: clamp01((points[0].x + points[1].x) / 2),
+      y: clamp01((points[0].y + points[1].y) / 2),
+    };
+  }
+  return {
+    x: Number.isFinite(Number(item?.x)) ? clamp01(item.x) : 0.5,
+    y: Number.isFinite(Number(item?.y)) ? clamp01(item.y) : 0.5,
+  };
+}
+
+function placeDefenseAbilityAt(x, y, options = {}) {
   if (!selectedDefenseAbility) {
     toast('Выбери способность сетапа', 'w');
     return false;
@@ -407,12 +498,21 @@ function placeDefenseAbilityAt(x, y) {
     toast('Лимит этой способности уже достигнут', 'w');
     return false;
   }
+  const shapeKind = options.shapeKind || selectedDefenseAbility.shape?.kind || 'point';
+  const points = shapeKind === 'line_segment'
+    ? normalizedDefensePoints({ x, y, points: options.points })
+    : [];
+  const center = shapeKind === 'line_segment'
+    ? defenseAbilityCenter({ shape_kind: shapeKind, points })
+    : { x, y };
   defenseAbilities.push({
     ability: selectedDefenseAbility.ability,
     slot: selectedDefenseAbility.slot,
     icon: selectedDefenseAbility.icon,
-    x,
-    y,
+    x: clamp01(center.x),
+    y: clamp01(center.y),
+    shape_kind: shapeKind,
+    points,
     order: defenseAbilities.length + 1,
   });
   selectedDefenseMarkerIndex = defenseAbilities.length - 1;
@@ -1013,6 +1113,8 @@ let defenseZoomJustSelected = false;
 let selectedDefenseAbility = null;
 let defenseAbilities = [];
 let defenseAbilityDrag = null;
+let defenseLineDraft = null;
+let defenseLineJustCreated = false;
 let selectedDefenseMarkerIndex = null;
 let mapMode = 'position';
 let videoUrl = null;
@@ -4768,7 +4870,25 @@ document.getElementById('map-wrap')?.addEventListener('drop', e => {
 });
 
 let defenseMarkerDrag = null;
+let defenseLinePointDrag = null;
 document.getElementById('defense-ability-markers')?.addEventListener('pointerdown', e => {
+  const anchor = e.target.closest('[data-defense-line-index]');
+  if (anchor && normalizeContentCategory(selectedCategory) === 'defense') {
+    e.preventDefault();
+    e.stopPropagation();
+    defenseLinePointDrag = {
+      index: Number(anchor.dataset.defenseLineIndex),
+      pointIndex: Number(anchor.dataset.defenseLinePoint),
+      pointerId: e.pointerId,
+    };
+    selectedDefenseAbility = null;
+    selectedDefenseMarkerIndex = defenseLinePointDrag.index;
+    setMapMode('position');
+    renderDefenseAbilityPanel();
+    renderDefenseAbilityMarkers();
+    anchor.setPointerCapture?.(e.pointerId);
+    return;
+  }
   const marker = e.target.closest('[data-defense-marker-index]');
   if (!marker || normalizeContentCategory(selectedCategory) !== 'defense') return;
   e.preventDefault();
@@ -4798,11 +4918,33 @@ window.addEventListener('pointermove', e => {
     setAbilityDragGhostPosition(e);
     return;
   }
+  if (defenseLinePointDrag && defenseLinePointDrag.pointerId === e.pointerId) {
+    const item = defenseAbilities[defenseLinePointDrag.index];
+    if (!item) return;
+    const point = eventToMapPoint(e);
+    const points = normalizedDefensePoints(item);
+    points[defenseLinePointDrag.pointIndex] = point;
+    const center = defenseAbilityCenter({ ...item, points });
+    item.points = points;
+    item.x = center.x;
+    item.y = center.y;
+    renderDefenseAbilityMarkers();
+    return;
+  }
   if (!defenseMarkerDrag || defenseMarkerDrag.pointerId !== e.pointerId) return;
   defenseMarkerDrag.moved = true;
   const { x, y } = eventToMapPoint(e);
   const item = defenseAbilities[defenseMarkerDrag.index];
   if (!item) return;
+  if (defenseShapeKind(item) === 'line_segment') {
+    const oldCenter = defenseAbilityCenter(item);
+    const dx = x - oldCenter.x;
+    const dy = y - oldCenter.y;
+    item.points = normalizedDefensePoints(item).map(point => ({
+      x: clamp01(point.x + dx),
+      y: clamp01(point.y + dy),
+    }));
+  }
   item.x = x;
   item.y = y;
   renderDefenseAbilityMarkers();
@@ -4815,6 +4957,24 @@ function finishDefenseMarkerDrag(e) {
 }
 window.addEventListener('pointerup', finishDefenseMarkerDrag);
 window.addEventListener('pointercancel', e => { if (defenseMarkerDrag?.pointerId === e.pointerId) defenseMarkerDrag = null; });
+function finishDefenseLinePointDrag(e) {
+  if (!defenseLinePointDrag || defenseLinePointDrag.pointerId !== e.pointerId) return;
+  const item = defenseAbilities[defenseLinePointDrag.index];
+  if (item) {
+    const point = eventToMapPoint(e);
+    const points = normalizedDefensePoints(item);
+    points[defenseLinePointDrag.pointIndex] = point;
+    const center = defenseAbilityCenter({ ...item, points });
+    item.points = points;
+    item.x = center.x;
+    item.y = center.y;
+    validateForm(); _saveDraft();
+  }
+  defenseLinePointDrag = null;
+  renderDefenseAbilityMarkers();
+}
+window.addEventListener('pointerup', finishDefenseLinePointDrag);
+window.addEventListener('pointercancel', e => { if (defenseLinePointDrag?.pointerId === e.pointerId) defenseLinePointDrag = null; });
 
 function finishDefenseAbilityDrag(e) {
   if (!defenseAbilityDrag || defenseAbilityDrag.pointerId !== e.pointerId) return;
@@ -4854,6 +5014,30 @@ function areaFromMapPoints(a, b) {
 }
 
 document.getElementById('map-wrap')?.addEventListener('pointerdown', e => {
+  if (
+    normalizeContentCategory(selectedCategory) === 'defense' &&
+    mapMode === 'defenseAbility' &&
+    selectedDefenseAbility?.shape?.kind === 'line_segment'
+  ) {
+    const img = document.getElementById('map-img');
+    if (img?.style.display === 'none') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const start = eventToMapPoint(e);
+    defenseLineDraft = {
+      ability: selectedDefenseAbility.ability,
+      slot: selectedDefenseAbility.slot,
+      icon: selectedDefenseAbility.icon,
+      shape_kind: 'line_segment',
+      x: start.x,
+      y: start.y,
+      points: [start, start],
+      pointerId: e.pointerId,
+    };
+    renderDefenseAbilityMarkers();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    return;
+  }
   if (normalizeContentCategory(selectedCategory) !== 'defense' || mapMode !== 'zoom') return;
   const img = document.getElementById('map-img');
   if (img?.style.display === 'none') return;
@@ -4868,6 +5052,15 @@ document.getElementById('map-wrap')?.addEventListener('pointerdown', e => {
 });
 
 window.addEventListener('pointermove', e => {
+  if (defenseLineDraft && defenseLineDraft.pointerId === e.pointerId) {
+    e.preventDefault();
+    const end = eventToMapPoint(e);
+    const points = normalizedDefensePoints({ ...defenseLineDraft, points: [defenseLineDraft.points[0], end] });
+    const center = defenseAbilityCenter({ ...defenseLineDraft, points });
+    defenseLineDraft = { ...defenseLineDraft, x: center.x, y: center.y, points };
+    renderDefenseAbilityMarkers();
+    return;
+  }
   if (!defenseZoomDrag || defenseZoomDrag.pointerId !== e.pointerId) return;
   e.preventDefault();
   defenseZoomDrag.moved = true;
@@ -4893,6 +5086,31 @@ window.addEventListener('pointercancel', e => {
   defenseZoomStart = null;
   defenseZoomDrag = null;
   renderCategoryMapExtras();
+});
+
+function finishDefenseLineDraft(e) {
+  if (!defenseLineDraft || defenseLineDraft.pointerId !== e.pointerId) return;
+  const draft = defenseLineDraft;
+  const points = normalizedDefensePoints({ ...draft, points: [draft.points[0], eventToMapPoint(e)] });
+  const distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
+  defenseLineDraft = null;
+  if (distance < 0.01) {
+    renderDefenseAbilityMarkers();
+    toast('Протяни линию между двумя стенками', 'w');
+    return;
+  }
+  const center = defenseAbilityCenter({ shape_kind: 'line_segment', points });
+  placeDefenseAbilityAt(center.x, center.y, { shapeKind: 'line_segment', points });
+  defenseLineJustCreated = true;
+  setTimeout(() => { defenseLineJustCreated = false; }, 0);
+}
+window.addEventListener('pointerup', finishDefenseLineDraft);
+window.addEventListener('pointercancel', e => {
+  if (defenseLineDraft?.pointerId !== e.pointerId) {
+    return;
+  }
+  defenseLineDraft = null;
+  renderDefenseAbilityMarkers();
 });
 
 function loadMapMinimap() {
@@ -4982,7 +5200,9 @@ function setMapMode(mode) {
   if (hint) {
     if (mode === 'target') hint.textContent = 'Кликни на карте точку, куда прилетает прострел.';
     else if (mode === 'zoom') hint.textContent = 'Зажми мышь на карте и выдели прямоугольник zoom-области.';
-    else if (mode === 'defenseAbility') hint.textContent = selectedDefenseAbility ? 'Кликни по карте или перетащи абилку, чтобы поставить точку сетапа.' : 'Обычный режим: перетаскивай уже поставленные абилки по карте.';
+    else if (mode === 'defenseAbility') hint.textContent = selectedDefenseAbility?.shape?.kind === 'line_segment'
+      ? 'Зажми на карте и протяни линию между двумя стенками.'
+      : (selectedDefenseAbility ? 'Кликни по карте или перетащи абилку, чтобы поставить точку сетапа.' : 'Обычный режим: перетаскивай уже поставленные абилки по карте.');
     else hint.textContent = 'Выбери режим и кликни на карту';
   }
 }
@@ -5045,6 +5265,7 @@ function trajectoryFromMarker(points = trajectoryPoints) {
 document.getElementById('map-wrap').addEventListener('click', e => {
   e.preventDefault();
   if (defenseZoomJustSelected) return;
+  if (defenseLineJustCreated) return;
   const img = document.getElementById('map-img');
   if (img.style.display === 'none') return;
   const { x, y } = eventToMapPoint(e);
@@ -5271,6 +5492,8 @@ function resetCategorySpecificData() {
   selectedDefenseAbility = null;
   selectedDefenseMarkerIndex = null;
   defenseAbilities = [];
+  defenseLineDraft = null;
+  defenseLineJustCreated = false;
   mapMode = 'position';
   document.getElementById('abilities-row')?.querySelectorAll('.ability-btn').forEach(btn => btn.classList.remove('selected'));
   document.querySelectorAll('#wallbang-weapons input[type="checkbox"]').forEach(input => { input.checked = false; });
@@ -5394,14 +5617,23 @@ function _restoreDraft(sourceDraft = null) {
         }
         if (Array.isArray(d.defenseAbilities)) {
           defenseAbilities = d.defenseAbilities
-            .map((item, idx) => ({
-              ability: item.ability || '',
-              slot: item.slot || '',
-              icon: item.icon || '',
-              x: Number(item.x),
-              y: Number(item.y),
-              order: Number(item.order || idx + 1),
-            }))
+            .map((item, idx) => {
+              const shapeKind = item.shape_kind || item.shape?.kind || 'point';
+              const points = shapeKind === 'line_segment' ? normalizedDefensePoints(item) : [];
+              const center = shapeKind === 'line_segment'
+                ? defenseAbilityCenter({ ...item, shape_kind: shapeKind, points })
+                : { x: Number(item.x), y: Number(item.y) };
+              return {
+                ability: item.ability || '',
+                slot: item.slot || '',
+                icon: item.icon || '',
+                x: Number(center.x),
+                y: Number(center.y),
+                shape_kind: shapeKind,
+                points,
+                order: Number(item.order || idx + 1),
+              };
+            })
             .filter(item => item.ability && Number.isFinite(item.x) && Number.isFinite(item.y));
           selectedDefenseMarkerIndex = defenseAbilities.length ? defenseAbilities.length - 1 : null;
         }
@@ -5674,6 +5906,10 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
           icon: item.icon || '',
           x: item.x,
           y: item.y,
+          shape_kind: defenseShapeKind(item),
+          points: defenseShapeKind(item) === 'line_segment'
+            ? normalizedDefensePoints(item).map(point => ({ x: point.x, y: point.y }))
+            : [],
           order: idx + 1,
         })),
       } : {}),
@@ -5740,6 +5976,8 @@ function resetUploadForm({ keepDraft = false } = {}) {
   defenseZoomArea = null;
   selectedDefenseAbility = null;
   defenseAbilities = [];
+  defenseLineDraft = null;
+  defenseLineJustCreated = false;
   mapMode = 'position';
   videoUrl = null; videoEdit = createDefaultVideoEdit(); screenshots = [];
   rememberCommittedVideoEdit();
