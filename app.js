@@ -338,11 +338,15 @@ function trajectoryFromMarkerFor(points = trajectoryPoints) {
 
 function renderExtraAbilityPanel() {
   const panel = document.getElementById('extra-abilities-panel');
+  const toolbox = document.getElementById('lineup-toolbox');
+  const mapContainer = document.getElementById('map-container');
   const picker = document.getElementById('extra-ability-picker');
   const list = document.getElementById('extra-ability-list');
   if (!panel || !picker || !list) return;
   const enabled = extraTrajectoriesEnabled() && !!selectedAgent && !!selectedAbility;
   panel.toggleAttribute('hidden', !enabled);
+  toolbox?.toggleAttribute('hidden', !enabled);
+  mapContainer?.classList.toggle('lineup-workbench', enabled);
   if (!enabled) {
     picker.innerHTML = '';
     list.innerHTML = '';
