@@ -124,6 +124,7 @@ function normalizeContentCategory(value) {
 const UPLOAD_IMPLEMENTED_CONTENT_TYPES = new Set(['lineup', 'wallbang', 'defense']);
 const DEFAULT_WALLBANG_WEAPONS = ['Vandal', 'Phantom', 'Guardian', 'Ares', 'Odin'];
 const DEFENSE_EXCLUDED_AGENTS = new Set(['Iso', 'Jett', 'Neon', 'Phoenix', 'Raze', 'Reyna', 'Waylay', 'Yoru']);
+const UPLOAD_CONFIG_CACHE_KEY = 'vl_upload_reference_config_v1';
 let uploadCategoryAccess = {
   lineup_enabled: true,
   combo_enabled: false,
@@ -131,6 +132,7 @@ let uploadCategoryAccess = {
   defense_enabled: false,
 };
 let uploadWeaponWhitelist = [...DEFAULT_WALLBANG_WEAPONS];
+let uploadDefenseAgents = new Set();
 
 function uploadCategoryFlag(category) {
   const normalized = normalizeContentCategory(category);
@@ -156,6 +158,7 @@ function categoryNeedsAbility(category = selectedCategory) {
 
 function agentAllowedForCategory(agent, category = selectedCategory) {
   if (normalizeContentCategory(category) !== 'defense') return true;
+  if (uploadDefenseAgents.size > 0) return uploadDefenseAgents.has(agent?.displayName || '');
   const roleName = String(agent?.role?.displayName || agent?.role?.displayNameLocalized || '').toLowerCase();
   if (roleName.includes('duelist') || roleName.includes('дуэлян')) return false;
   return !DEFENSE_EXCLUDED_AGENTS.has(agent?.displayName || '');
@@ -933,10 +936,19 @@ function updateUploadCategoryButtons() {
 }
 
 async function loadUploadCategoryConfig() {
+  let cached = {};
+  try { cached = JSON.parse(localStorage.getItem(UPLOAD_CONFIG_CACHE_KEY) || '{}') || {}; } catch (_) {}
   try {
-    const [accessSnap, weaponsSnap] = await Promise.all([
+    const versionsSnap = await getDoc(doc(db, 'settings', 'config_versions'));
+    const versions = versionsSnap.exists() ? versionsSnap.data() : {};
+    const weaponVersion = String(versions.weapon_whitelist || '');
+    const defenseVersion = String(versions.defense_agents || '');
+    const useCachedWeapons = weaponVersion && cached.weaponVersion === weaponVersion && Array.isArray(cached.weapons);
+    const useCachedDefense = defenseVersion && cached.defenseVersion === defenseVersion && Array.isArray(cached.defenseAgents);
+    const [accessSnap, weaponsSnap, defenseSnap] = await Promise.all([
       getDoc(doc(db, 'settings', 'category_access')),
-      getDoc(doc(db, 'settings', 'weapon_whitelist')),
+      useCachedWeapons ? Promise.resolve(null) : getDoc(doc(db, 'settings', 'weapon_whitelist')),
+      useCachedDefense ? Promise.resolve(null) : getDoc(doc(db, 'settings', 'defense_agents')),
     ]);
     if (accessSnap.exists()) {
       const data = accessSnap.data();
@@ -947,11 +959,27 @@ async function loadUploadCategoryConfig() {
         defense_enabled: data.defense_enabled === true,
       };
     }
-    if (weaponsSnap.exists() && Array.isArray(weaponsSnap.data().weapons)) {
+    if (useCachedWeapons) {
+      uploadWeaponWhitelist = cached.weapons.filter(Boolean);
+    } else if (weaponsSnap?.exists() && Array.isArray(weaponsSnap.data().weapons)) {
       uploadWeaponWhitelist = weaponsSnap.data().weapons.filter(Boolean);
     }
+    if (useCachedDefense) {
+      uploadDefenseAgents = new Set(cached.defenseAgents.filter(Boolean));
+    } else if (defenseSnap?.exists() && Array.isArray(defenseSnap.data().agents)) {
+      uploadDefenseAgents = new Set(defenseSnap.data().agents.filter(Boolean));
+    }
+    try {
+      localStorage.setItem(UPLOAD_CONFIG_CACHE_KEY, JSON.stringify({
+        weaponVersion, defenseVersion,
+        weapons: uploadWeaponWhitelist,
+        defenseAgents: [...uploadDefenseAgents],
+      }));
+    } catch (_) {}
   } catch (e) {
     console.warn('loadUploadCategoryConfig', e.message);
+    if (Array.isArray(cached.weapons)) uploadWeaponWhitelist = cached.weapons.filter(Boolean);
+    if (Array.isArray(cached.defenseAgents)) uploadDefenseAgents = new Set(cached.defenseAgents.filter(Boolean));
   }
   renderWallbangWeapons();
   updateUploadCategoryButtons();

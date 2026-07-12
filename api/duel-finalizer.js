@@ -49,7 +49,11 @@ export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
     const v1 = Number(duel.votes1 || 0), v2 = Number(duel.votes2 || 0);
     let winnerId = forcedWinnerId;
     if (!winnerId) {
-      if (v1 === v2) { outcome = { tie: true, duelId }; return; }
+      if (v1 === v2) {
+        tx.update(duelRef, { status: 'tied', tieDetectedAt: FieldValue.serverTimestamp() });
+        outcome = { tie: true, duelId };
+        return;
+      }
       winnerId = v1 > v2 ? duel.lineup1Id : duel.lineup2Id;
     }
     if (![duel.lineup1Id, duel.lineup2Id].includes(winnerId)) throw new Error('invalid_winner');
@@ -69,8 +73,11 @@ export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
     const announcementRef = db.collection('duel_announcements').doc(duelId);
     tx.set(announcementRef, { duel_id: duelId, lineup_id: winnerId, title: `Победил лайнап «${winner.title || winnerId}»!`, created_at: FieldValue.serverTimestamp(), visible: true });
     if (uid) {
+      const notification = { type: 'duel_win', title: '⚔️ Победа в дуэли!', body: `Твой лайнап «${winner.title || winnerId}» победил. Начислено +5 очков.`, lineup_id: winnerId, duel_id: duelId, points: 5, likes: likesAwarded };
       const notificationRef = db.collection('users').doc(uid).collection('notifications').doc();
-      tx.set(notificationRef, { type: 'duel_win', title: '⚔️ Победа в дуэли!', body: `Твой лайнап «${winner.title || winnerId}» победил. Начислено +5 очков.`, lineup_id: winnerId, duel_id: duelId, points: 5, likes: likesAwarded, read: false, created_at: FieldValue.serverTimestamp() });
+      tx.set(notificationRef, { ...notification, read: false, created_at: FieldValue.serverTimestamp() });
+      const inboxRef = db.collection('notifications').doc(uid).collection('items').doc();
+      tx.set(inboxRef, { ...notification, is_read: false, created_at: FieldValue.serverTimestamp() });
     }
     outcome = { duelId, winnerId, loserId, uid, likesAwarded };
   });
