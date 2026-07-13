@@ -91,6 +91,31 @@
     .status-chip.pending { background: rgba(245,158,11,.12); color: var(--orange); border: 1px solid rgba(245,158,11,.28); }
     .status-chip.rejected { background: rgba(239,68,68,.12); color: var(--red); border: 1px solid rgba(239,68,68,.28); }
     .lineup-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+    .moderator-tab { border-color: rgba(255,70,85,.38); }
+    .moderator-tab.active { color: #ff7180; border-color: #ff4655; background: rgba(255,70,85,.11); }
+    .moderation-shell { max-width: 1100px; margin: 0 auto; padding: 18px 16px 70px; }
+    .moderation-head { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding:22px; border:1px solid rgba(79,195,247,.22); border-radius:16px; background:linear-gradient(135deg,rgba(13,42,61,.92),rgba(16,25,43,.92)); }
+    .moderation-head h2 { margin:4px 0 8px; color:var(--text); font-size:clamp(22px,3vw,34px); letter-spacing:-.025em; }
+    .moderation-head p { max-width:720px; margin:0; color:var(--text2); font-size:13px; line-height:1.55; }
+    .moderation-kicker { color:var(--primary); font-size:11px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; }
+    .moderation-security-note { margin:12px 0; padding:10px 13px; border:1px solid rgba(102,187,106,.25); border-radius:10px; color:#9ad7ad; background:rgba(34,197,94,.06); font-size:12px; }
+    .moderation-status { padding:28px 14px; color:var(--text2); text-align:center; font-size:13px; }
+    .moderation-list { display:grid; gap:14px; }
+    .moderation-card { overflow:hidden; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+    .moderation-card-main { display:grid; grid-template-columns:minmax(260px,1fr) minmax(300px,1.15fr); gap:0; }
+    .moderation-video { min-height:260px; width:100%; height:100%; background:#050a12; object-fit:contain; }
+    .moderation-info { padding:18px; }
+    .moderation-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+    .moderation-chip { padding:5px 8px; border:1px solid var(--border); border-radius:999px; color:var(--text2); font-size:11px; font-weight:700; }
+    .moderation-title { margin:0 0 8px; color:var(--text); font-size:19px; }
+    .moderation-description { margin:0; color:var(--text2); white-space:pre-wrap; line-height:1.55; font-size:13px; }
+    .moderation-author { margin-top:14px; color:var(--primary); font-size:12px; }
+    .moderation-actions { display:flex; gap:10px; padding:14px 18px; border-top:1px solid var(--border); background:rgba(5,10,18,.22); }
+    .moderation-action { flex:1; min-height:42px; border:0; border-radius:9px; font-weight:800; cursor:pointer; }
+    .moderation-action:disabled { opacity:.45; cursor:wait; }
+    .moderation-promote { color:#07140b; background:#66bb6a; }
+    .moderation-reject { color:#ffd5d9; border:1px solid rgba(255,70,85,.5); background:rgba(255,70,85,.11); }
+    .moderation-empty { padding:50px 20px; border:1px dashed var(--border); border-radius:14px; color:var(--text2); text-align:center; }
     .empty-state { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--r); padding: 24px; color: var(--text2); font-size: 14px; line-height: 1.5; }
     .empty-state strong { display: block; color: var(--text1); font-size: 16px; margin-bottom: 4px; }
     .cabinet-stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -501,6 +526,10 @@
       .main { padding: 16px 0 60px; width: 100%; }
       .author-list-shell { padding: 10px 10px 60px; }
       .lineup-card { grid-template-columns: 1fr; }
+      .moderation-head { align-items:flex-start; flex-direction:column; }
+      .moderation-card-main { grid-template-columns:1fr; }
+      .moderation-video { min-height:220px; max-height:340px; }
+      .moderation-actions { flex-direction:column; }
       .lineup-card-actions { justify-content: flex-start; }
       .draft-actions { justify-content: stretch; }
       .draft-actions .copy-id-btn, .lineup-card-actions .copy-id-btn { flex: 1; }

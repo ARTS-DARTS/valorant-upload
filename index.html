@@ -78,6 +78,7 @@
       <button class="workspace-tab" data-workspace-tab="drafts">Черновики</button>
       <button class="workspace-tab" data-workspace-tab="stats">Статистика</button>
       <button class="workspace-tab" data-workspace-tab="materials">Материалы</button>
+      <button class="workspace-tab moderator-tab" data-workspace-tab="moderation" data-moderator-only="true" style="display:none;">🛡 Модерация</button>
     </nav>
   </div>
 
@@ -445,6 +446,22 @@
     </div>
   </aside>
   </div><!-- /.form-layout -->
+  </div>
+
+  <div class="workspace-panel" id="workspace-moderation">
+    <div class="moderation-shell">
+      <header class="moderation-head">
+        <div>
+          <div class="moderation-kicker">Очередь проверки</div>
+          <h2>Чистая база начинается здесь</h2>
+          <p>Проверь видео и данные. Хороший лайнап отправь в «Пирожки», ошибочный — верни автору с понятной причиной.</p>
+        </div>
+        <button class="copy-id-btn" id="moderation-refresh" type="button">Обновить очередь</button>
+      </header>
+      <div class="moderation-security-note">Доступ ограничен ролью. Удаление, редактирование и публикация лайнапов здесь недоступны.</div>
+      <div id="moderation-status" class="moderation-status" role="status" aria-live="polite">Открой раздел, чтобы загрузить очередь.</div>
+      <div id="moderation-list" class="moderation-list"></div>
+    </div>
   </div>
 
   <div class="workspace-panel" id="workspace-mine">

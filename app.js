@@ -1475,6 +1475,8 @@ let activeWorkspaceTab = 'upload';
 let myLineupsStatusFilter = 'all';
 let myLineupsSearch = '';
 let resubmissionSourceId = '';
+let moderationController = null;
+let moderationModulePromise = null;
 
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
@@ -1779,6 +1781,7 @@ function initWorkspaceTabs() {
 }
 
 function switchWorkspaceTab(tab) {
+  if (tab === 'moderation' && !canCurrentUserModerate()) return;
   activeWorkspaceTab = tab || 'upload';
   document.querySelectorAll('.workspace-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.workspaceTab === activeWorkspaceTab);
@@ -1787,6 +1790,7 @@ function switchWorkspaceTab(tab) {
     panel.classList.toggle('active', panel.id === `workspace-${activeWorkspaceTab}`);
   });
   if (activeWorkspaceTab === 'materials') loadAuthorMaterials();
+  if (activeWorkspaceTab === 'moderation') loadModerationWorkspace();
   renderAuthorWorkspace();
 }
 
@@ -1820,6 +1824,27 @@ function isCurrentUserAdmin() {
   return String(currentUserProfile?.role || '').toLowerCase() === 'admin';
 }
 
+function canCurrentUserModerate() {
+  return ['admin', 'moderator'].includes(String(currentUserProfile?.role || '').toLowerCase());
+}
+
+async function loadModerationWorkspace() {
+  if (!canCurrentUserModerate() || !currentUser) return;
+  try {
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js');
+    if (!moderationController) {
+      const module = await moderationModulePromise;
+      moderationController = module.initModeration({
+        getToken: () => currentUser.getIdToken(),
+        toast,
+      });
+    }
+    await moderationController.load();
+  } catch (error) {
+    toast('Не удалось открыть модерацию: ' + (error.message || error), 'e');
+  }
+}
+
 function updateAdminOnlyWorkspace() {
   const canManageAdminMaterials = isCurrentUserAdmin();
   document.querySelectorAll('[data-admin-only="true"]').forEach(el => {
@@ -1828,6 +1853,11 @@ function updateAdminOnlyWorkspace() {
   if (!canManageAdminMaterials && materialEditorId) {
     closeMaterialForm();
   }
+  const canModerate = canCurrentUserModerate();
+  document.querySelectorAll('[data-moderator-only="true"]').forEach(el => {
+    el.style.display = canModerate ? '' : 'none';
+  });
+  if (!canModerate && activeWorkspaceTab === 'moderation') switchWorkspaceTab('upload');
 }
 
 function searchableText(item) {
@@ -2567,6 +2597,8 @@ onAuthStateChanged(auth, async user => {
     loadMaps();
   } else {
     currentUserProfile = null;
+    moderationController = null;
+    moderationModulePromise = null;
     updateAdminOnlyWorkspace();
     updateUploadGate();
     _unsubscribeUserProfile();

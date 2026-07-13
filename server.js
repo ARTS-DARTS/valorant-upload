@@ -10,6 +10,7 @@ import yandexCallbackHandler from './api/yandex-callback.js';
 import yandexStartHandler from './api/yandex-start.js';
 import yandexUnlinkHandler from './api/yandex-unlink.js';
 import moderatorApplicationHandler from './api/moderator-application.js';
+import moderationHandler from './api/moderation.js';
 import { finalizeExpiredDuels } from './api/duel-finalizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,6 +21,15 @@ const port = Number(process.env.PORT || 3000);
 
 app.disable('x-powered-by');
 app.set('trust proxy', true);
+
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  next();
+});
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -48,6 +58,7 @@ app.all('/api/yandex-start', yandexStartHandler);
 app.all('/api/yandex-unlink', yandexUnlinkHandler);
 app.all('/api/yandex-callback', yandexCallbackHandler);
 app.all('/api/moderator-application', moderatorApplicationHandler);
+app.all('/api/moderation', moderationHandler);
 
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
