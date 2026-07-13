@@ -2821,9 +2821,17 @@ function selectAgent(agent) {
   }
   row.innerHTML = abilities.map(ab => `
     <button class="ability-btn" data-key="${esc(normalizeAbilityName(agent.displayName, ab.displayName, ab.slot))}" data-slot="${esc(ab.slot || '')}" title="${esc(normalizeAbilityName(agent.displayName, ab.displayName, ab.slot))}">
-      <img src="${esc(ab.displayIcon)}" alt="${esc(ab.displayName || '')}">
-      <span>${esc(normalizeAbilityName(agent.displayName, ab.displayName, ab.slot).split(' ')[0])}</span>
+      <span class="ability-icon-wrap">
+        <img src="${esc(ab.displayIcon)}" alt="" loading="eager" decoding="async" referrerpolicy="no-referrer">
+        <span class="ability-icon-fallback">${esc(({ Ability1: 'Q', Ability2: 'E', Grenade: 'C', Ultimate: 'X' })[ab.slot] || '•')}</span>
+      </span>
+      <span class="ability-name">${esc(normalizeAbilityName(agent.displayName, ab.displayName, ab.slot).split(' ')[0])}</span>
     </button>`).join('');
+  row.querySelectorAll('.ability-icon-wrap img').forEach(img => {
+    const markLoaded = () => img.closest('.ability-icon-wrap')?.classList.add('loaded');
+    if (img.complete && img.naturalWidth > 0) markLoaded();
+    else img.addEventListener('load', markLoaded, { once: true });
+  });
   row.querySelectorAll('.ability-btn').forEach(b => {
     b.addEventListener('click', () => {
       row.querySelectorAll('.ability-btn').forEach(x => x.classList.remove('selected'));
