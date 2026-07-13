@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-12T19:13:00+03:00';
+const SITE_VERSION = '2026-07-13T09:49:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -5296,6 +5296,9 @@ document.getElementById('map-wrap')?.addEventListener('drop', e => {
 
 let defenseMarkerDrag = null;
 let defenseLinePointDrag = null;
+// Marker DOM nodes are recreated by renderDefenseAbilityMarkers() during a drag.
+// Keep pointer tracking on the window handlers below instead of capturing a node
+// that is detached by the first render (which throws InvalidStateError in Chromium).
 document.getElementById('defense-ability-markers')?.addEventListener('pointerdown', e => {
   const anchor = e.target.closest('[data-defense-line-index]');
   if (anchor && normalizeContentCategory(selectedCategory) === 'defense') {
@@ -5311,7 +5314,6 @@ document.getElementById('defense-ability-markers')?.addEventListener('pointerdow
     setMapMode('position');
     renderDefenseAbilityPanel();
     renderDefenseAbilityMarkers();
-    anchor.setPointerCapture?.(e.pointerId);
     return;
   }
   const marker = e.target.closest('[data-defense-marker-index]');
@@ -5328,8 +5330,6 @@ document.getElementById('defense-ability-markers')?.addEventListener('pointerdow
   setMapMode('position');
   renderDefenseAbilityPanel();
   renderDefenseAbilityMarkers();
-  marker.classList.add('dragging');
-  marker.setPointerCapture?.(e.pointerId);
 });
 document.getElementById('defense-ability-markers')?.addEventListener('click', e => {
   if (e.target.closest('[data-defense-marker-index]')) {
