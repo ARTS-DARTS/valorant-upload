@@ -449,7 +449,7 @@ function renderExtraAbilityPanel() {
       const start = activeExtraAbility()?.trajectory?.[0];
       if (start) setMarkerPosition(start.x, start.y);
       updateMarkerIcon();
-      setMapMode('trajectory');
+      setMapMode(start ? 'trajectory' : 'position');
       renderExtraAbilityPanel();
       renderTrajectory();
       _saveDraft();
@@ -514,7 +514,7 @@ function addExtraAbilityByName(abilityName) {
     note: '',
   });
   selectedExtraAbilityIndex = extraAbilityTrajectories.length - 1;
-  setMapMode('trajectory');
+  setMapMode('position');
   renderExtraAbilityPanel();
   renderTrajectory();
   validateForm(); _saveDraft();
@@ -5819,7 +5819,18 @@ document.getElementById('map-wrap').addEventListener('click', e => {
     return;
   } else {
     const points = activeTrajectoryPoints();
-    if (markerX !== null && points.length === 0) {
+    const extra = activeExtraAbility();
+    if (extra && points.length === 0) {
+      points.push({ x, y });
+      setActiveTrajectoryPoints(points);
+      setMarkerPosition(x, y);
+      updateMarkerIcon();
+      renderExtraAbilityPanel();
+      renderTrajectory();
+      validateForm(); _saveDraft();
+      return;
+    }
+    if (!extra && markerX !== null && points.length === 0) {
       points.push({ x: markerX, y: markerY });
     }
     points.push({ x, y });
