@@ -360,6 +360,11 @@ function trajectoryFromMarkerFor(points = trajectoryPoints) {
   return path;
 }
 
+function trajectoryForSave(item = null) {
+  const points = normalizeTrajectoryPoints(item?.trajectory ?? trajectoryPoints);
+  return item ? points : trajectoryFromMarkerFor(points);
+}
+
 function renderExtraAbilityPanel() {
   const panel = document.getElementById('extra-abilities-panel');
   const toolbox = document.getElementById('lineup-toolbox');
@@ -431,6 +436,7 @@ function renderExtraAbilityPanel() {
     : '<span style="color:var(--text2);font-size:12px;">Нажми абилку выше, чтобы добавить доп. траекторию</span>');
   list.querySelector('[data-extra-main]')?.addEventListener('click', () => {
     selectedExtraAbilityIndex = null;
+    if (markerX !== null && markerY !== null) setMarkerPosition(markerX, markerY);
     setMapMode('trajectory');
     renderExtraAbilityPanel();
     renderTrajectory();
@@ -439,6 +445,8 @@ function renderExtraAbilityPanel() {
   list.querySelectorAll('[data-extra-select]').forEach(btn => {
     btn.addEventListener('click', () => {
       selectedExtraAbilityIndex = Number(btn.dataset.extraSelect);
+      const start = activeExtraAbility()?.trajectory?.[0];
+      if (start) setMarkerPosition(start.x, start.y);
       setMapMode('trajectory');
       renderExtraAbilityPanel();
       renderTrajectory();
@@ -1432,6 +1440,7 @@ let selectedAgent    = null;
 let selectedAbility  = null;
 let selectedCategory = null;
 let selectedDifficulty = null;
+let selectedRoundSide = null;
 let markerX = null, markerY = null;
 let trajectoryPoints = [];
 let extraAbilityTrajectories = [];
@@ -1790,6 +1799,10 @@ function difficultyLabel(value) {
   return labels[String(value || '').toLowerCase()] || firstText(value, '—');
 }
 
+function roundSideLabel(value) {
+  return value === 'attack' ? 'Атака' : value === 'defense' ? 'Защита' : 'Не указана';
+}
+
 function categoryLabel(value) {
   const normalized = normalizeContentCategory(value);
   const labels = {
@@ -1994,6 +2007,7 @@ function rejectedLineupDraft(item) {
     ability: item.ability || '',
     category: normalizeContentCategory(item.content_type || item.category || 'lineup'),
     difficulty: item.difficulty || '',
+    roundSide: item.round_side || '',
     title: item.title || '',
     desc: item.description || '',
     markerX: item.position_x ?? item.marker_x ?? null,
@@ -5331,6 +5345,14 @@ document.getElementById('defense-ability-markers')?.addEventListener('pointerdow
   renderDefenseAbilityPanel();
   renderDefenseAbilityMarkers();
 });
+document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
+    b.classList.add('selected');
+    selectedRoundSide = b.dataset.val;
+    validateForm(); _saveDraft();
+  });
+});
 document.getElementById('defense-ability-markers')?.addEventListener('click', e => {
   if (e.target.closest('[data-defense-marker-index]')) {
     e.preventDefault();
@@ -5767,16 +5789,22 @@ document.getElementById('map-wrap').addEventListener('click', e => {
 
   if (mapMode === 'position') {
     if (normalizeContentCategory(selectedCategory) === 'defense') return;
-    markerX = x; markerY = y;
-    if (trajectoryPoints.length) trajectoryPoints[0] = { x, y };
-    extraAbilityTrajectories.forEach(item => {
-      if (Array.isArray(item.trajectory) && item.trajectory.length) item.trajectory[0] = { x, y };
-    });
-    if (normalizeContentCategory(selectedCategory) === 'wallbang' && wallbangTargetX !== null) {
+    const extra = activeExtraAbility();
+    if (extra) {
+      const points = normalizeTrajectoryPoints(extra.trajectory);
+      if (points.length) points[0] = { x, y };
+      else points.push({ x, y });
+      extra.trajectory = points;
+    } else {
+      markerX = x; markerY = y;
+      if (trajectoryPoints.length) trajectoryPoints[0] = { x, y };
+    }
+    if (!extra && normalizeContentCategory(selectedCategory) === 'wallbang' && wallbangTargetX !== null) {
       trajectoryPoints = [{ x, y }, { x: wallbangTargetX, y: wallbangTargetY }];
     }
     setMarkerPosition(x, y);
     updateMarkerIcon();
+    renderExtraAbilityPanel();
     renderTrajectory();
   } else if (mapMode === 'target') {
     wallbangTargetX = x; wallbangTargetY = y;
@@ -5923,6 +5951,7 @@ function collectDraftData() {
     ability:    selectedAbility,
     category:   selectedCategory,
     difficulty: selectedDifficulty,
+    roundSide: selectedRoundSide,
     title:      document.getElementById('inp-title')?.value || '',
     desc:       document.getElementById('inp-desc')?.value || '',
     markerX, markerY, mapMode,
@@ -6153,6 +6182,11 @@ function _restoreDraft(sourceDraft = null) {
     const btn = document.querySelector(`#diff-row .pill-btn[data-val="${d.difficulty}"]`);
     if (btn) { document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); selectedDifficulty = d.difficulty; }
   }
+  if (d.roundSide || d.round_side) {
+    const side = d.roundSide || d.round_side;
+    const btn = document.querySelector(`#side-row .pill-btn[data-val="${side}"]`);
+    if (btn) { document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); selectedRoundSide = side; }
+  }
 
   // Map + marker (load minimap, then place marker after image loads)
   if (d.map) {
@@ -6306,6 +6340,7 @@ function validateForm() {
     canSubmitContentCategory(selectedCategory) &&
     categoryExtrasValid(category) &&
     selectedDifficulty &&
+    selectedRoundSide &&
     document.getElementById('inp-title').value.trim().length > 0 &&
     (category === 'defense' || markerX !== null);
   document.getElementById('btn-submit').disabled = !ok;
@@ -6363,7 +6398,7 @@ async function buildExtraAbilitiesPayload(map, agentName) {
       ability: normalizedAbility,
       slot: item.slot || '',
       icon: item.icon || '',
-      trajectory: trajectoryFromMarkerFor(item.trajectory),
+      trajectory: trajectoryForSave(item),
       range_radius: range || 0,
       effect_shape: effect.effect_shape || item.effect_shape || 'circle',
       effect_width: Number(effect.effect_width ?? item.effect_width ?? 0),
@@ -6389,7 +6424,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   const map   = document.getElementById('sel-map').value;
   const requestedContentType = normalizeContentCategory(selectedCategory);
 
-  if (!map || !selectedCategory || !selectedDifficulty ||
+  if (!map || !selectedCategory || !selectedDifficulty || !selectedRoundSide ||
       (categoryNeedsAgent(requestedContentType) && !selectedAgent) ||
       (categoryNeedsAbility(requestedContentType) && !selectedAbility)) {
     toast('Заполни все обязательные поля', 'e'); return;
@@ -6493,6 +6528,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       category: selectedCategory,
       content_type: contentType,
       difficulty: selectedDifficulty,
+      round_side: selectedRoundSide,
       range_radius: rangeRadius,
       category_extras_valid: categoryExtrasValid(contentType),
       user_id: uid,
@@ -6548,6 +6584,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       } : {}),
       schema_version: 2,
       difficulty:    selectedDifficulty,
+      round_side:    selectedRoundSide,
       status:        'pending',
       submitted_at:  serverTimestamp(),
       user_id:       uid,
@@ -6601,7 +6638,7 @@ function showSuccess() {
 function resetUploadForm({ keepDraft = false } = {}) {
   if (!keepDraft) _clearDraft();
   selectedAgent = null; selectedAbility = null;
-  selectedCategory = null; selectedDifficulty = null;
+  selectedCategory = null; selectedDifficulty = null; selectedRoundSide = null;
   markerX = null; markerY = null;
   trajectoryPoints = [];
   extraAbilityTrajectories = [];
@@ -6633,6 +6670,7 @@ function resetUploadForm({ keepDraft = false } = {}) {
   document.getElementById('abilities-row').innerHTML = '<span style="color:var(--text2);font-size:13px;">Сначала выбери агента</span>';
   document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('inp-title').value = '';
   document.getElementById('inp-desc').value = '';
   document.getElementById('defense-site').value = '';
