@@ -68,7 +68,29 @@ export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
     const uid = authorUid(winner);
     tx.update(winnerRef, { status: 'approved', likes_count: FieldValue.increment(likesAwarded), votes_actual: FieldValue.increment(5), duel_wins: FieldValue.increment(1), last_duel_id: duelId, updated_at: FieldValue.serverTimestamp() });
     tx.update(loserRef, { status: 'archived', archived_reason: 'duel_loss', lost_duel_id: duelId, updated_at: FieldValue.serverTimestamp() });
-    if (uid) tx.set(db.collection('users').doc(uid), { bonus_lineups: FieldValue.increment(5), total_likes: FieldValue.increment(likesAwarded), duel_wins: FieldValue.increment(1), last_duel_reward: 5, last_duel_reward_at: FieldValue.serverTimestamp(), last_duel_id: duelId }, { merge: true });
+    if (uid) {
+      tx.set(db.collection('users').doc(uid), {
+        bonus_lineups: FieldValue.increment(5), progress_points: FieldValue.increment(5),
+        total_likes: FieldValue.increment(likesAwarded), total_likes_received: FieldValue.increment(likesAwarded),
+        duel_wins: FieldValue.increment(1), last_duel_reward: 5,
+        last_duel_reward_at: FieldValue.serverTimestamp(), last_duel_id: duelId,
+      }, { merge: true });
+      tx.set(db.collection('user_stats').doc(uid), {
+        uid,
+        bonus_lineups: FieldValue.increment(5),
+        bonus_points: FieldValue.increment(5),
+        progress_points: FieldValue.increment(5),
+        total_likes: FieldValue.increment(likesAwarded),
+        total_likes_received: FieldValue.increment(likesAwarded),
+        duel_wins: FieldValue.increment(1),
+        last_duel_reward: 5,
+        last_duel_reward_points: 5,
+        last_duel_reward_at: FieldValue.serverTimestamp(),
+        last_duel_id: duelId,
+        updated_at: FieldValue.serverTimestamp(),
+        schema_version: 2,
+      }, { merge: true });
+    }
     tx.update(duelRef, { status: 'finished', finalized: true, winnerLineupId: winnerId, loserLineupId: loserId, winnerAuthorUid: uid, likesAwarded, pointsAwarded: uid ? 5 : 0, finalizedAt: FieldValue.serverTimestamp(), visible: true });
     const announcementRef = db.collection('duel_announcements').doc(duelId);
     tx.set(announcementRef, { duel_id: duelId, lineup_id: winnerId, title: `Победил лайнап «${winner.title || winnerId}»!`, created_at: FieldValue.serverTimestamp(), visible: true });

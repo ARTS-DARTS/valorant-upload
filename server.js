@@ -8,6 +8,7 @@ import notifyAgentSubscribersHandler from './api/notify-agent-subscribers.js';
 import valorantProxyHandler from './api/valorant-proxy.js';
 import yandexCallbackHandler from './api/yandex-callback.js';
 import yandexStartHandler from './api/yandex-start.js';
+import yandexUnlinkHandler from './api/yandex-unlink.js';
 import moderatorApplicationHandler from './api/moderator-application.js';
 import { finalizeExpiredDuels } from './api/duel-finalizer.js';
 
@@ -44,6 +45,7 @@ app.all('/api/send-push', sendPushHandler);
 app.all('/api/notify-agent-subscribers', notifyAgentSubscribersHandler);
 app.all('/api/valorant-proxy', valorantProxyHandler);
 app.all('/api/yandex-start', yandexStartHandler);
+app.all('/api/yandex-unlink', yandexUnlinkHandler);
 app.all('/api/yandex-callback', yandexCallbackHandler);
 app.all('/api/moderator-application', moderatorApplicationHandler);
 

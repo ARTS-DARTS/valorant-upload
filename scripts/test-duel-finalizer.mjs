@@ -44,6 +44,7 @@ async function run() {
   const loserRef = db.collection('lineups').doc(loserId);
   const duelRef = db.collection('duels').doc(duelId);
   const userRef = db.collection('users').doc(uid);
+  const userStatsRef = db.collection('user_stats').doc(uid);
   const announcementRef = db.collection('duel_announcements').doc(duelId);
   const inboxRef = db.collection('notifications').doc(uid);
 
@@ -65,8 +66,20 @@ async function run() {
     });
     seed.set(userRef, {
       bonus_lineups: 4,
+      progress_points: 4,
       total_likes: 11,
+      total_likes_received: 11,
       duel_wins: 0,
+    });
+    seed.set(userStatsRef, {
+      uid,
+      bonus_lineups: 4,
+      bonus_points: 4,
+      progress_points: 4,
+      total_likes: 11,
+      total_likes_received: 11,
+      duel_wins: 0,
+      schema_version: 2,
     });
     seed.set(duelRef, {
       status: 'active',
@@ -106,11 +119,12 @@ async function run() {
     assert.equal(outcome.uid, uid);
     assert.equal(outcome.likesAwarded, 100, 'winner vote conversion must cap at 100 likes');
 
-    const [winnerSnap, loserSnap, userSnap, duelSnap, announcementSnap, notificationsSnap, inboxSnap] =
+    const [winnerSnap, loserSnap, userSnap, userStatsSnap, duelSnap, announcementSnap, notificationsSnap, inboxSnap] =
       await Promise.all([
         winnerRef.get(),
         loserRef.get(),
         userRef.get(),
+        userStatsRef.get(),
         duelRef.get(),
         announcementRef.get(),
         userRef.collection('notifications').get(),
@@ -126,7 +140,13 @@ async function run() {
     assert.equal(loserSnap.get('votes_actual'), 8, 'loser relevance must remain unchanged');
     assert.equal(userSnap.get('bonus_lineups'), 9, 'winner author must receive +5 points');
     assert.equal(userSnap.get('total_likes'), 111);
+    assert.equal(userSnap.get('progress_points'), 9);
+    assert.equal(userSnap.get('total_likes_received'), 111);
     assert.equal(userSnap.get('duel_wins'), 1);
+    assert.equal(userStatsSnap.get('bonus_points'), 9);
+    assert.equal(userStatsSnap.get('progress_points'), 9);
+    assert.equal(userStatsSnap.get('total_likes_received'), 111);
+    assert.equal(userStatsSnap.get('duel_wins'), 1);
     assert.equal(duelSnap.get('status'), 'finished');
     assert.equal(duelSnap.get('finalized'), true);
     assert.equal(duelSnap.get('winnerLineupId'), winnerId);
@@ -147,15 +167,17 @@ async function run() {
       assert.equal(secondOutcome.alreadyFinalized, true);
     }
 
-    const [winnerAfterSecond, userAfterSecond, notificationsAfterSecond, inboxAfterSecond] = await Promise.all([
+    const [winnerAfterSecond, userAfterSecond, statsAfterSecond, notificationsAfterSecond, inboxAfterSecond] = await Promise.all([
       winnerRef.get(),
       userRef.get(),
+      userStatsRef.get(),
       userRef.collection('notifications').get(),
       inboxRef.collection('items').get(),
     ]);
     assert.equal(winnerAfterSecond.get('likes_count'), 107, 'idempotent retry must not add likes');
     assert.equal(winnerAfterSecond.get('votes_actual'), 7, 'idempotent retry must not add relevance');
     assert.equal(userAfterSecond.get('bonus_lineups'), 9, 'idempotent retry must not add points');
+    assert.equal(statsAfterSecond.get('progress_points'), 9, 'idempotent retry must not add library points');
     assert.equal(notificationsAfterSecond.size, 1, 'idempotent retry must not add notifications');
     assert.equal(inboxAfterSecond.size, 1, 'idempotent retry must not duplicate profile inbox items');
 
@@ -171,6 +193,7 @@ async function run() {
     cleanup.delete(winnerRef);
     cleanup.delete(loserRef);
     cleanup.delete(userRef);
+    cleanup.delete(userStatsRef);
     cleanup.delete(inboxRef);
     await cleanup.commit();
     console.log(`DUEL E2E CLEANUP COMPLETE: ${prefix}`);

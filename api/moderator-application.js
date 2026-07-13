@@ -41,7 +41,8 @@ export default async function handler(req, res) {
     const approved = action === 'approve';
 
     if (approved) {
-      await db.collection('users').doc(uid).set({
+      const batch = db.batch();
+      batch.set(db.collection('users').doc(uid), {
         uid,
         role: 'moderator',
         email: email || '',
@@ -51,6 +52,13 @@ export default async function handler(req, res) {
         name_lower: String(username || '').toLowerCase(),
         moderator_approved_at: FieldValue.serverTimestamp(),
       }, { merge: true });
+      batch.set(db.collection('user_private').doc(uid), {
+        uid,
+        contact_email: email || '',
+        updated_at: FieldValue.serverTimestamp(),
+        schema_version: 2,
+      }, { merge: true });
+      await batch.commit();
     }
 
     await db.collection('moderator_applications').doc(uid).set({

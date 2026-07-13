@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { verifyYandexLinkState } from './yandex-link-state.js';
 
 dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
@@ -51,6 +52,75 @@ function hasUsableNickname(data = {}) {
   const name = String(data.name || data.username || data.displayName || '').trim();
   const lower = String(data.name_lower || '').trim();
   return Boolean(name && lower);
+}
+
+const USER_SCHEMA_VERSION = 2;
+
+function yandexIdentityId(yandexId) {
+  return `yandex__${String(yandexId).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+}
+
+async function resolveYandexUid(db, yandexId) {
+  const identity = await db.collection('auth_identities').doc(yandexIdentityId(yandexId)).get();
+  if (identity.exists && identity.get('uid')) return String(identity.get('uid'));
+  const links = await db.collection('user_auth_links').where('yandex_id', '==', yandexId).limit(1).get();
+  if (!links.empty) return links.docs[0].id;
+  const legacy = await db.collection('users').where('yandex_id', '==', yandexId).limit(1).get();
+  return legacy.empty ? null : legacy.docs[0].id;
+}
+
+async function consumeLinkState(db, linkState) {
+  const stateRef = db.collection('oauth_link_states').doc(linkState.nonce);
+  return db.runTransaction(async tx => {
+    const snapshot = await tx.get(stateRef);
+    if (!snapshot.exists) return false;
+    const data = snapshot.data() || {};
+    const expiresAt = data.expires_at?.toMillis?.() || 0;
+    if (
+      data.uid !== linkState.uid ||
+      data.provider !== 'yandex' ||
+      data.consumed === true ||
+      expiresAt < Date.now()
+    ) return false;
+    tx.delete(stateRef);
+    return true;
+  });
+}
+
+async function writeYandexLibrary(db, { uid, yandexId, email, name = '', isNew = false }) {
+  const now = FieldValue.serverTimestamp();
+  const identityRef = db.collection('auth_identities').doc(yandexIdentityId(yandexId));
+  await db.runTransaction(async tx => {
+    const identity = await tx.get(identityRef);
+    const ownerUid = identity.exists ? String(identity.get('uid') || '') : '';
+    if (ownerUid && ownerUid !== uid) throw new Error('yandex_identity_conflict');
+    tx.set(identityRef, {
+      uid, provider: 'yandex', subject: yandexId, updated_at: now,
+      ...(isNew ? { created_at: now } : {}),
+      schema_version: USER_SCHEMA_VERSION,
+    }, { merge: true });
+  });
+  const batch = db.batch();
+  batch.set(db.collection('user_private').doc(uid), {
+    uid, contact_email: email, auth_email: email, updated_at: now,
+    ...(isNew ? { created_at: now, terms_accepted: true } : {}),
+    schema_version: USER_SCHEMA_VERSION,
+  }, { merge: true });
+  batch.set(db.collection('user_auth_links').doc(uid), {
+    uid, yandex_id: yandexId, yandex_email: email, yandex_linked: true,
+    yandex_linked_at: now, primary_provider: 'yandex', updated_at: now,
+    ...(isNew ? { created_at: now } : {}),
+    schema_version: USER_SCHEMA_VERSION,
+  }, { merge: true });
+  if (isNew) {
+    batch.set(db.collection('user_stats').doc(uid), {
+      uid, display_name: name, approved_lineups: 0, approved_lineups_count: 0,
+      bonus_lineups: 0, bonus_points: 0, progress_points: 0,
+      total_likes: 0, total_likes_received: 0, duel_wins: 0, level: 1,
+      created_at: now, updated_at: now, schema_version: USER_SCHEMA_VERSION,
+    }, { merge: true });
+  }
+  await batch.commit();
 }
 
 async function readJsonResponse(response, label) {
@@ -154,20 +224,33 @@ export default async function handler(req, res) {
     initFirebase();
     const db = getFirestore();
 
-    // Режим привязки: state=link_<firebaseUid>
-    if (state.startsWith('link_')) {
-      const firebaseUid = state.slice('link_'.length);
-      const alreadySnap = await db.collection('users').where('yandex_id', '==', yandexId).limit(1).get();
-      if (!alreadySnap.empty) {
-        const existingUid = alreadySnap.docs[0].id;
+    // Режим привязки использует только короткоживущий HMAC-signed state,
+    // выданный после проверки Firebase ID token в /api/yandex-start.
+    const linkState = state.startsWith('link.') ? verifyYandexLinkState(state) : null;
+    if (state.startsWith('link.') && !linkState) {
+      return appRedirect(res, `${APP_SCHEME}?error=invalid_link_state`);
+    }
+    if (linkState) {
+      const firebaseUid = linkState.uid;
+      const firebaseUser = await getAuth().getUser(firebaseUid);
+      if (firebaseUser.disabled || !(await consumeLinkState(db, linkState))) {
+        return appRedirect(res, `${APP_SCHEME}?error=invalid_link_state`);
+      }
+      const existingUid = await resolveYandexUid(db, yandexId);
+      if (existingUid) {
         if (existingUid !== firebaseUid) {
           // Если это автогенерированный пустой аккаунт (yandex_XXX) — очищаем привязку там
           // чтобы переназначить Яндекс ID на настоящий аккаунт пользователя.
           // Если это чужой настоящий аккаунт — возвращаем ошибку.
           if (existingUid.startsWith('yandex_')) {
-            await db.collection('users').doc(existingUid).update({
-              yandex_id: FieldValue.delete(),
-            });
+            const cleanup = db.batch();
+            cleanup.set(db.collection('users').doc(existingUid), { yandex_id: FieldValue.delete() }, { merge: true });
+            cleanup.set(db.collection('user_auth_links').doc(existingUid), {
+              yandex_id: FieldValue.delete(), yandex_email: FieldValue.delete(),
+              yandex_linked: false, updated_at: FieldValue.serverTimestamp(),
+            }, { merge: true });
+            cleanup.delete(db.collection('auth_identities').doc(yandexIdentityId(yandexId)));
+            await cleanup.commit();
           } else {
             return appRedirect(res, `${APP_SCHEME}?error=yandex_already_linked`);
           }
@@ -178,21 +261,30 @@ export default async function handler(req, res) {
         yandex_email:         email,
         auth_provider_linked: 'yandex',
       });
+      await writeYandexLibrary(db, { uid: firebaseUid, yandexId, email, name });
       return appRedirect(res, `${APP_SCHEME}?linked=true&yid=${yandexId}`);
     }
 
     // Проверяем — может уже есть аккаунт с этим yandex_id (soft-link)
-    const linkedSnap = await db.collection('users').where('yandex_id', '==', yandexId).limit(1).get();
+    const linkedUid = await resolveYandexUid(db, yandexId);
     let firebaseUid;
     let isNew = false;
 
-    if (!linkedSnap.empty) {
-      firebaseUid = linkedSnap.docs[0].id;
-      const linkedData = linkedSnap.docs[0].data() || {};
+    if (linkedUid) {
+      firebaseUid = linkedUid;
+      const linkedDoc = await db.collection('users').doc(firebaseUid).get();
+      const linkedData = linkedDoc.data() || {};
       if (webTarget && !hasUsableNickname(linkedData)) {
         return authErrorRedirect(res, webTarget, WEB_PROFILE_INCOMPLETE_ERROR);
       }
-      await db.collection('users').doc(firebaseUid).update({ last_seen: FieldValue.serverTimestamp() });
+      const activity = db.batch();
+      activity.set(db.collection('users').doc(firebaseUid), { last_seen: FieldValue.serverTimestamp() }, { merge: true });
+      activity.set(db.collection('user_stats').doc(firebaseUid), {
+        uid: firebaseUid, last_seen_at: FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp(),
+        schema_version: USER_SCHEMA_VERSION,
+      }, { merge: true });
+      await activity.commit();
+      await writeYandexLibrary(db, { uid: firebaseUid, yandexId, email, name });
     } else {
       if (webTarget) {
         return authErrorRedirect(res, webTarget, WEB_ACCOUNT_MISSING_ERROR);
@@ -214,10 +306,19 @@ export default async function handler(req, res) {
           is_banned:        false,
           terms_accepted:   true,
           approved_lineups: 0,
+          schema_version: USER_SCHEMA_VERSION,
         });
+        await writeYandexLibrary(db, { uid: firebaseUid, yandexId, email, name, isNew: true });
         isNew = true;
       } else {
-        await ref.update({ last_seen: FieldValue.serverTimestamp() });
+        await ref.set({
+          yandex_id: yandexId,
+          yandex_email: email,
+          auth_provider: 'yandex',
+          last_seen: FieldValue.serverTimestamp(),
+          schema_version: USER_SCHEMA_VERSION,
+        }, { merge: true });
+        await writeYandexLibrary(db, { uid: firebaseUid, yandexId, email, name });
       }
     }
 

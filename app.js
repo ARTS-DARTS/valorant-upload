@@ -1468,7 +1468,8 @@ let resubmissionSourceId = '';
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
 let _cooldownInterval = null;
-let _profileUnsub = null;
+let _profileUnsubs = [];
+let _profileParts = { public: {}, private: {}, stats: {}, auth: {} };
 
 const LEVELS = [
   { min: 0,   name: 'Новобранец', icon: '🎯', color: '#808080', cooldownMinutes: 60 },
@@ -1590,20 +1591,37 @@ function _unsubscribeStats() {
 }
 
 function _subscribeUserProfile(uid) {
-  if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
-  _profileUnsub = onSnapshot(doc(db, 'users', uid), snap => {
-    currentUserProfile = snap.exists() ? snap.data() : null;
+  _unsubscribeUserProfile();
+  _profileParts = { public: {}, private: {}, stats: {}, auth: {} };
+  const sources = [
+    ['public', 'users'],
+    ['private', 'user_private'],
+    ['stats', 'user_stats'],
+    ['auth', 'user_auth_links'],
+  ];
+  const refresh = () => {
+    currentUserProfile = mergeUserLibraryParts(_profileParts);
     updateAdminOnlyWorkspace();
     const approvedDocs = currentUserLineups.filter(x => x.status === 'approved').length;
     _updateLevelDisplay(effectiveApprovedLineups(approvedDocs));
     updateUploadGate();
     renderAuthorWorkspace();
     _updateCooldown(uid);
-  }, e => console.warn('profile listener', e.message));
+  };
+  _profileUnsubs = sources.map(([key, collectionName]) => onSnapshot(
+    doc(db, collectionName, uid),
+    snap => {
+      _profileParts[key] = snap.exists() ? snap.data() : {};
+      refresh();
+    },
+    e => console.warn(`${collectionName} profile listener`, e.message),
+  ));
 }
 
 function _unsubscribeUserProfile() {
-  if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
+  _profileUnsubs.forEach(unsubscribe => unsubscribe());
+  _profileUnsubs = [];
+  _profileParts = { public: {}, private: {}, stats: {}, auth: {} };
 }
 
 // ── Author workspace ─────────────────────────────────────────────────────────
@@ -2459,13 +2477,57 @@ async function loadCurrentUserProfile(user) {
   currentUserProfile = null;
   if (!user) return null;
   try {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    currentUserProfile = snap.exists() ? snap.data() : null;
+    const [publicSnap, privateSnap, statsSnap, authSnap] = await Promise.all([
+      getDoc(doc(db, 'users', user.uid)),
+      getDoc(doc(db, 'user_private', user.uid)),
+      getDoc(doc(db, 'user_stats', user.uid)),
+      getDoc(doc(db, 'user_auth_links', user.uid)),
+    ]);
+    _profileParts = {
+      public: publicSnap.data() || {},
+      private: privateSnap.data() || {},
+      stats: statsSnap.data() || {},
+      auth: authSnap.data() || {},
+    };
+    currentUserProfile = mergeUserLibraryParts(_profileParts);
   } catch (e) {
     console.warn('loadCurrentUserProfile', e.message);
-    currentUserProfile = null;
+    try {
+      const legacySnap = await getDoc(doc(db, 'users', user.uid));
+      currentUserProfile = legacySnap.data() || null;
+    } catch (_) {
+      currentUserProfile = null;
+    }
   }
   return currentUserProfile;
+}
+
+function mergeUserLibraryParts(parts) {
+  const publicProfile = parts.public || {};
+  const privateProfile = parts.private || {};
+  const stats = parts.stats || {};
+  const authLinks = parts.auth || {};
+  const merged = { ...publicProfile, ...stats, ...privateProfile, ...authLinks };
+  const maxNumber = (...values) => Math.max(0, ...values.map(value => Number(value || 0)));
+  merged.name = firstText(publicProfile.display_name, publicProfile.name, stats.display_name);
+  merged.approved_lineups = maxNumber(
+    publicProfile.approved_lineups,
+    publicProfile.approved_lineups_count,
+    stats.approved_lineups,
+    stats.approved_lineups_count,
+  );
+  merged.bonus_lineups = maxNumber(
+    publicProfile.bonus_lineups,
+    stats.bonus_lineups,
+    stats.bonus_points,
+  );
+  merged.total_likes = maxNumber(
+    publicProfile.total_likes,
+    publicProfile.total_likes_received,
+    stats.total_likes,
+    stats.total_likes_received,
+  );
+  return merged;
 }
 
 onAuthStateChanged(auth, async user => {
@@ -2574,6 +2636,9 @@ document.getElementById('btn-email-login').addEventListener('click', async () =>
 async function resolveLoginToEmail(login) {
   if (login.includes('@')) return login;
   const lower = login.toLowerCase().trim();
+  const claim = await getDoc(doc(db, 'usernames', lower));
+  const claimEmail = firstText(claim.data()?.login_email);
+  if (claimEmail) return claimEmail;
   const snap = await getDocs(query(collection(db, 'users'), where('name_lower', '==', lower), limit(1)));
   if (snap.empty) throw new Error('Ник не найден. Попробуй email или войди через Яндекс.');
   const u = snap.docs[0].data();
@@ -6596,7 +6661,7 @@ function resetUploadForm({ keepDraft = false } = {}) {
 
 window.addEventListener('beforeunload', () => {
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
-  if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
+  _unsubscribeUserProfile();
   _clearCooldownTimer();
 });
 
