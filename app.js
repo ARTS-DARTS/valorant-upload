@@ -437,6 +437,7 @@ function renderExtraAbilityPanel() {
   list.querySelector('[data-extra-main]')?.addEventListener('click', () => {
     selectedExtraAbilityIndex = null;
     if (markerX !== null && markerY !== null) setMarkerPosition(markerX, markerY);
+    updateMarkerIcon();
     setMapMode('trajectory');
     renderExtraAbilityPanel();
     renderTrajectory();
@@ -447,6 +448,7 @@ function renderExtraAbilityPanel() {
       selectedExtraAbilityIndex = Number(btn.dataset.extraSelect);
       const start = activeExtraAbility()?.trajectory?.[0];
       if (start) setMarkerPosition(start.x, start.y);
+      updateMarkerIcon();
       setMapMode('trajectory');
       renderExtraAbilityPanel();
       renderTrajectory();
@@ -5856,8 +5858,10 @@ function renderTrajectory() {
     defs.appendChild(mkr);
   }
 
-  function drawPath(rawPoints, { color, markerId, opacity = 0.85, width = 2, orderLabel = '' }) {
-    const path = trajectoryFromMarkerFor(rawPoints);
+  function drawPath(rawPoints, { color, markerId, opacity = 0.85, width = 2, orderLabel = '', useMainStart = false, iconUrl = '' }) {
+    const path = useMainStart
+      ? trajectoryFromMarkerFor(rawPoints)
+      : normalizeTrajectoryPoints(rawPoints);
     if (path.length < 2) return;
     drew = true;
     addMarker(markerId, color);
@@ -5884,6 +5888,17 @@ function renderTrajectory() {
       dot.setAttribute('stroke', 'rgba(255,255,255,0.45)');
       dot.setAttribute('stroke-width', '0.5');
       svg.appendChild(dot);
+      if (i === 0 && iconUrl) {
+        const icon = document.createElementNS(ns, 'image');
+        icon.setAttribute('href', iconUrl);
+        icon.setAttribute('x', String(Number(cx) - 9));
+        icon.setAttribute('y', String(Number(cy) - 9));
+        icon.setAttribute('width', '18');
+        icon.setAttribute('height', '18');
+        icon.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        icon.setAttribute('class', 'trajectory-start-icon');
+        svg.appendChild(icon);
+      }
       if (orderLabel && i === path.length - 1) {
         const label = document.createElementNS(ns, 'text');
         label.setAttribute('x', String(Number(cx) + 7));
@@ -5905,6 +5920,7 @@ function renderTrajectory() {
     markerId: 'ul-arr-primary',
     opacity: activeExtraAbility() ? 0.42 : 0.88,
     width: activeExtraAbility() ? 1.8 : 2.4,
+    useMainStart: true,
   });
   extraAbilityTrajectories.forEach((item, idx) => {
     const active = selectedExtraAbilityIndex === idx;
@@ -5914,6 +5930,7 @@ function renderTrajectory() {
       opacity: active ? 0.95 : 0.48,
       width: active ? 2.6 : 1.9,
       orderLabel: `+${idx + 1}`,
+      iconUrl: item.icon || '',
     });
   });
 
@@ -5925,13 +5942,15 @@ function updateMarkerIcon() {
   if (!img) return;
   const agent = agentsList.find(a => a.displayName === selectedAgent);
   if (!agent) { img.style.display = 'none'; return; }
-  const ability = (agent.abilities || []).find(ab =>
+  const extra = activeExtraAbility();
+  const ability = extra ? null : (agent.abilities || []).find(ab =>
     ab.displayName === selectedAbility ||
     ab.slot === selectedAbility ||
     normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === selectedAbility
   );
-  if (ability?.displayIcon) {
-    img.src = ability.displayIcon;
+  const iconUrl = extra?.icon || ability?.displayIcon || '';
+  if (iconUrl) {
+    img.src = iconUrl;
     img.style.display = 'block';
   } else {
     img.style.display = 'none';
@@ -6281,6 +6300,9 @@ function _restoreDraft(sourceDraft = null) {
         d.selectedExtraAbilityIndex < extraAbilityTrajectories.length
         ? d.selectedExtraAbilityIndex
         : null;
+      const restoredStart = activeExtraAbility()?.trajectory?.[0];
+      if (restoredStart) setMarkerPosition(restoredStart.x, restoredStart.y);
+      updateMarkerIcon();
       renderExtraAbilityPanel();
       renderTrajectory();
     }
