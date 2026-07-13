@@ -202,7 +202,9 @@
     .ability-btn .ability-name { font-size:11px; color:var(--text2); display:block; text-align:center; max-width:62px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .ability-btn.selected .ability-name { color:#fff; }
     .extra-ability-picker { display: flex; flex-wrap: wrap; gap: 8px; }
-    .extra-ability-pick { position: relative; min-width: 66px; min-height: 66px; }
+    .extra-ability-pick { position: relative; width:72px; min-width:72px; min-height:78px; }
+    .extra-ability-pick > img { width:34px; height:34px; object-fit:contain; flex:0 0 34px; }
+    .extra-ability-pick > span { display:block; max-width:62px; overflow:hidden; color:var(--text2); font-size:11px; text-align:center; text-overflow:ellipsis; white-space:nowrap; }
     .extra-ability-pick:disabled { opacity: .45; cursor: not-allowed; }
     .extra-ability-list { display: grid; gap: 8px; }
     .extra-ability-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface2); padding: 8px; }
