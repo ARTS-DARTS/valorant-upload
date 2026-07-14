@@ -731,6 +731,26 @@ function removeAbilityDragGhost() {
   defenseAbilityDrag?.ghost?.remove();
 }
 
+function safeSetPointerCapture(element, pointerId) {
+  if (!element || pointerId == null || typeof element.setPointerCapture !== 'function') return;
+  try {
+    element.setPointerCapture(pointerId);
+  } catch (_) {
+    // Pointer could already be released before a delayed handler runs.
+  }
+}
+
+function safeReleasePointerCapture(element, pointerId) {
+  if (!element || pointerId == null || typeof element.releasePointerCapture !== 'function') return;
+  try {
+    if (typeof element.hasPointerCapture !== 'function' || element.hasPointerCapture(pointerId)) {
+      element.releasePointerCapture(pointerId);
+    }
+  } catch (_) {
+    // Releasing an already lost pointer is harmless.
+  }
+}
+
 function beginDefenseAbilityDrag(event, ability) {
   if (event.button !== undefined && event.button !== 0) return;
   event.preventDefault();
@@ -748,7 +768,7 @@ function beginDefenseAbilityDrag(event, ability) {
     moved: false,
   };
   setAbilityDragGhostPosition(event);
-  event.currentTarget.setPointerCapture?.(event.pointerId);
+  safeSetPointerCapture(event.currentTarget, event.pointerId);
 }
 
 function clamp01(value) {
@@ -4205,7 +4225,7 @@ editorEls.shell?.addEventListener('pointerdown', event => {
       ? { kind: 'footage-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(footage?.at || 0), startOutputAt: effectOutputStart(footage), startDuration: Number(footage?.duration || 2) }
       : { kind: 'footage', id, moved: false, offset: footage ? outputTimeFromTimelineEvent(event) - effectOutputStart(footage) : 0 };
     suppressTimelineClick = true;
-    editorEls.shell.setPointerCapture?.(event.pointerId);
+    safeSetPointerCapture(editorEls.shell, event.pointerId);
     editorEls.shell.classList.add('dragging');
     renderVideoEditor();
     event.preventDefault();
@@ -4223,7 +4243,7 @@ editorEls.shell?.addEventListener('pointerdown', event => {
       ? { kind: 'zoom-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(zoom?.at || 0), startOutputAt: effectOutputStart(zoom), startDuration: Number(zoom?.duration || 2) }
       : { kind: 'zoom', id, moved: false, offset: zoom ? outputTimeFromTimelineEvent(event) - effectOutputStart(zoom) : 0 };
     suppressTimelineClick = true;
-    editorEls.shell.setPointerCapture?.(event.pointerId);
+    safeSetPointerCapture(editorEls.shell, event.pointerId);
     editorEls.shell.classList.add('dragging');
     renderVideoEditor();
     event.preventDefault();
@@ -4248,7 +4268,7 @@ editorEls.shell?.addEventListener('pointerdown', event => {
       ? { kind: 'freeze-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(freeze?.at || 0), startDuration: Number(freeze?.duration || 2) }
       : { kind: 'freeze', id, moved: false, offset: freeze ? timeFromTimelineEvent(event) - freeze.at : 0 };
     suppressTimelineClick = true;
-    editorEls.shell.setPointerCapture?.(event.pointerId);
+    safeSetPointerCapture(editorEls.shell, event.pointerId);
     editorEls.shell.classList.add('dragging');
     renderVideoEditor();
     event.preventDefault();
@@ -4256,7 +4276,7 @@ editorEls.shell?.addEventListener('pointerdown', event => {
   }
   const handle = event.target.closest('[data-trim-handle]');
   timelineDrag = { kind: handle?.dataset.trimHandle || 'playhead', moved: false };
-  editorEls.shell.setPointerCapture?.(event.pointerId);
+  safeSetPointerCapture(editorEls.shell, event.pointerId);
   editorEls.shell.classList.add('dragging');
   event.preventDefault();
 });
@@ -4357,7 +4377,7 @@ editorEls.shell?.addEventListener('pointerup', event => {
   const wasFreeze = timelineDrag.kind === 'freeze' || timelineDrag.kind === 'freeze-resize';
   const wasZoom = timelineDrag.kind === 'zoom' || timelineDrag.kind === 'zoom-resize';
   const wasFootage = timelineDrag.kind === 'footage' || timelineDrag.kind === 'footage-resize';
-  editorEls.shell.releasePointerCapture?.(event.pointerId);
+  safeReleasePointerCapture(editorEls.shell, event.pointerId);
   editorEls.shell.classList.remove('dragging');
   const moved = timelineDrag.moved;
   timelineDrag = null;
@@ -4457,7 +4477,7 @@ function beginFootageStageDrag(event) {
     startDistance,
     moved: false,
   };
-  event.currentTarget.setPointerCapture?.(event.pointerId);
+  safeSetPointerCapture(event.currentTarget, event.pointerId);
   event.preventDefault();
   event.stopPropagation();
   renderVideoEditor();
@@ -4485,7 +4505,7 @@ function moveFootageStageDrag(event) {
 
 function finishFootageStageDrag(event) {
   if (!footageStageDrag || footageStageDrag.pointerId !== event.pointerId) return;
-  event.currentTarget.releasePointerCapture?.(event.pointerId);
+  safeReleasePointerCapture(event.currentTarget, event.pointerId);
   const moved = footageStageDrag.moved;
   footageStageDrag = null;
   if (moved) saveVideoEdit();
@@ -4594,7 +4614,7 @@ function bindTransformDragNumber(el) {
       start: Number(String(el.value).replace(',', '.')) || 0,
       moved: false,
     };
-    el.setPointerCapture?.(event.pointerId);
+    safeSetPointerCapture(el, event.pointerId);
     el.classList.add('dragging');
     event.preventDefault();
   });
@@ -4611,7 +4631,7 @@ function bindTransformDragNumber(el) {
   });
   const finishDrag = event => {
     if (!drag) return;
-    el.releasePointerCapture?.(event.pointerId);
+    safeReleasePointerCapture(el, event.pointerId);
     el.classList.remove('dragging');
     if (drag.moved) saveVideoEdit();
     drag = null;
@@ -4626,7 +4646,7 @@ editorEls.zoomFrame?.addEventListener('pointerdown', event => {
   setEditorMode('zoom');
   zoomFrameDrag = { pointerId: event.pointerId, moved: false };
   editorEls.zoomFrame.classList.add('dragging');
-  editorEls.zoomFrame.setPointerCapture?.(event.pointerId);
+  safeSetPointerCapture(editorEls.zoomFrame, event.pointerId);
   updateZoomAreaFromPoint(event.clientX, event.clientY);
   event.preventDefault();
   event.stopPropagation();
@@ -4639,7 +4659,7 @@ editorEls.zoomFrame?.addEventListener('pointermove', event => {
 });
 function finishZoomFrameDrag(event) {
   if (!zoomFrameDrag || zoomFrameDrag.pointerId !== event.pointerId) return;
-  editorEls.zoomFrame.releasePointerCapture?.(event.pointerId);
+  safeReleasePointerCapture(editorEls.zoomFrame, event.pointerId);
   editorEls.zoomFrame.classList.remove('dragging');
   zoomFrameDrag = null;
   saveVideoEdit();
@@ -5524,7 +5544,7 @@ document.getElementById('map-wrap')?.addEventListener('pointerdown', e => {
       pointerId: e.pointerId,
     };
     renderDefenseAbilityMarkers();
-    e.currentTarget.setPointerCapture?.(e.pointerId);
+    safeSetPointerCapture(e.currentTarget, e.pointerId);
     return;
   }
   if (normalizeContentCategory(selectedCategory) !== 'defense' || mapMode !== 'zoom') return;
@@ -5537,7 +5557,7 @@ document.getElementById('map-wrap')?.addEventListener('pointerdown', e => {
   defenseZoomStart = start;
   defenseZoomArea = { x: start.x, y: start.y, width: 0.01, height: 0.01 };
   renderCategoryMapExtras();
-  e.currentTarget.setPointerCapture?.(e.pointerId);
+  safeSetPointerCapture(e.currentTarget, e.pointerId);
 });
 
 window.addEventListener('pointermove', e => {
@@ -5777,7 +5797,7 @@ document.getElementById('map-wrap')?.addEventListener('pointerdown', event => {
   event.stopImmediatePropagation();
   mapViewPanDrag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, panX: mapViewPanX, panY: mapViewPanY };
   event.currentTarget.classList.add('map-panning');
-  event.currentTarget.setPointerCapture?.(event.pointerId);
+  safeSetPointerCapture(event.currentTarget, event.pointerId);
 });
 window.addEventListener('pointermove', event => {
   if (!mapViewPanDrag || mapViewPanDrag.pointerId !== event.pointerId) return;
