@@ -36,6 +36,7 @@ async function api(path = '', options = {}) {
 }
 
 function render(items) {
+  loadedItems = items;
   const list = document.getElementById('moderation-list');
   const status = document.getElementById('moderation-status');
   status.textContent = items.length ? `В очереди: ${items.length}` : '';
@@ -45,7 +46,7 @@ function render(items) {
   }
   list.innerHTML = items.map(item => {
     const video = safeMediaUrl(item.video_url);
-    const meta = [item.map, item.agent, item.ability, sideLabel(item.round_side)].filter(Boolean);
+    const meta = [item.moderator_only ? 'ЗАГОТОВКА ДЛЯ МОДЕРАЦИИ' : '', item.map, item.agent, item.agent ? item.ability : 'Выбери агента', sideLabel(item.round_side)].filter(Boolean);
     return `<article class="moderation-card" data-moderation-id="${esc(item.id)}">
       <div class="moderation-card-main">
         ${video ? `<video class="moderation-video" src="${esc(video)}" controls preload="metadata"></video>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
@@ -57,6 +58,7 @@ function render(items) {
         </div>
       </div>
       <div class="moderation-actions">
+        ${item.moderator_only ? '<button class="moderation-action moderation-complete" data-moderation-action="complete" type="button">✏️ Доделать шаблон</button>' : ''}
         <button class="moderation-action moderation-reject" data-moderation-action="reject" type="button">Отклонить с причиной</button>
         <button class="moderation-action moderation-promote" data-moderation-action="promote" type="button">🔥 В пирожки</button>
       </div>
@@ -81,6 +83,11 @@ async function load() {
 }
 
 async function act(card, action) {
+  if (action === 'complete') {
+    const item = loadedItems.find(entry => entry.id === card.dataset.moderationId);
+    if (item && context.openDraft) context.openDraft(item);
+    return;
+  }
   let reason = '';
   if (action === 'reject') {
     reason = prompt('Что автор должен исправить? От 10 до 500 символов.')?.trim() || '';
@@ -101,6 +108,8 @@ async function act(card, action) {
     buttons.forEach(button => { button.disabled = false; });
   }
 }
+
+let loadedItems = [];
 
 export function initModeration(nextContext) {
   context = nextContext;

@@ -1848,6 +1848,17 @@ function canCurrentUserModerate() {
   return ['admin', 'moderator'].includes(String(currentUserProfile?.role || '').toLowerCase());
 }
 
+function openModeratorDraft(item) {
+  const draft = rejectedLineupDraft({ ...item, status: 'moderator_draft' });
+  draft.resubmissionSourceId = item.id || '';
+  try { localStorage.setItem(_DRAFT_KEY, JSON.stringify(draft)); } catch (_) {}
+  resetUploadForm({ keepDraft: true });
+  _restoreDraft();
+  switchWorkspaceTab('upload');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  toast('Видео открыто в форме. Заполни агента, способность и карту, затем отправь на проверку.', 's');
+}
+
 async function loadModerationWorkspace() {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
@@ -1857,6 +1868,7 @@ async function loadModerationWorkspace() {
       moderationController = module.initModeration({
         getToken: () => currentUser.getIdToken(),
         toast,
+        openDraft: openModeratorDraft,
       });
     }
     await moderationController.load();
@@ -2816,6 +2828,25 @@ function renderAgentsGrid() {
       selectAgent(agent);
     });
   });
+  if (!selectedAgent) {
+    const row = document.getElementById('abilities-row');
+    if (row) row.innerHTML = '<span class="ability-empty-hint">Сначала выбери агента</span>';
+  }
+}
+
+const DEFAULT_MAP_SITE_LABELS = {
+  Haven: [{ label: 'A', x: .78, y: .34 }, { label: 'B', x: .52, y: .50 }, { label: 'C', x: .22, y: .51 }],
+  Lotus: [{ label: 'A', x: .78, y: .33 }, { label: 'B', x: .50, y: .50 }, { label: 'C', x: .20, y: .55 }],
+  Corrode: [{ label: 'A', x: .38, y: .35 }, { label: 'B', x: .72, y: .48 }],
+  Summit: [{ label: 'A', x: .74, y: .30 }, { label: 'B', x: .32, y: .27 }],
+};
+
+function renderMapSiteLabels() {
+  const layer = document.getElementById('map-site-labels');
+  const map = document.getElementById('sel-map')?.value || '';
+  if (!layer) return;
+  const labels = DEFAULT_MAP_SITE_LABELS[map] || [];
+  layer.innerHTML = labels.map(item => `<span class="map-site-label" style="left:${item.x * 100}%;top:${item.y * 100}%">${esc(item.label)}</span>`).join('');
 }
 
 function selectAgent(agent) {
@@ -5668,6 +5699,7 @@ function loadMapMinimap() {
       ph.style.display = 'none';
       if (markerX != null && markerY != null) setMarkerPosition(markerX, markerY);
       renderTrajectory();
+      renderMapSiteLabels();
       renderCategoryMapExtras();
     };
     img.style.display = 'none';
@@ -5682,6 +5714,7 @@ function loadMapMinimap() {
     defenseZoomStart = null;
     defenseZoomArea = null;
     renderTrajectory();
+    renderMapSiteLabels();
     renderCategoryMapExtras();
   } else {
     img.style.display = 'none';

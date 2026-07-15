@@ -89,6 +89,7 @@ function safeLineup(doc) {
     difficulty: clean(d.difficulty).slice(0, 20),
     round_side: clean(d.round_side).slice(0, 20),
     content_type: clean(d.content_type || d.category).slice(0, 20),
+    moderator_only: d.moderator_only === true,
     submitted_by: clean(d.submitted_by || d.author).slice(0, 80),
     video_url: clean(d.video_url).slice(0, 1000),
     screenshots: Array.isArray(d.screenshots) ? d.screenshots.slice(0, 8).map(x => clean(x).slice(0, 1000)) : [],
@@ -97,12 +98,16 @@ function safeLineup(doc) {
 }
 
 async function listQueue(res) {
-  const snap = await getFirestore().collection('lineups')
-    .where('status', '==', 'pending')
-    .orderBy('submitted_at', 'desc')
-    .limit(30)
-    .get();
-  res.status(200).json({ items: snap.docs.map(safeLineup) });
+  const db = getFirestore();
+  const [pendingSnap, moderatorSnap] = await Promise.all([
+    db.collection('lineups').where('status', '==', 'pending').orderBy('submitted_at', 'desc').limit(30).get(),
+    db.collection('lineups').where('moderator_only', '==', true).limit(50).get(),
+  ]);
+  const items = [...pendingSnap.docs, ...moderatorSnap.docs.filter(doc => doc.data()?.status === 'moderator_draft')]
+    .map(safeLineup)
+    .sort((a, b) => b.submitted_at - a.submitted_at)
+    .slice(0, 50);
+  res.status(200).json({ items });
 }
 
 async function moderate(req, res, moderator) {
@@ -123,7 +128,7 @@ async function moderate(req, res, moderator) {
     const snap = await tx.get(ref);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const data = snap.data() || {};
-    if (data.status !== 'pending') throw Object.assign(new Error('Лайнап уже обработан другим модератором'), { status: 409 });
+    if (!['pending', 'moderator_draft'].includes(data.status)) throw Object.assign(new Error('Лайнап уже обработан другим модератором'), { status: 409 });
     authorUid = clean(data.user_id || data.uid || data.author_uid);
     const update = action === 'promote'
       ? { status: 'hot', moderated_at: FieldValue.serverTimestamp(), moderated_by_uid: moderator.uid }

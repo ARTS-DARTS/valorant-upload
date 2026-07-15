@@ -114,6 +114,7 @@
     .moderation-action { flex:1; min-height:42px; border:0; border-radius:9px; font-weight:800; cursor:pointer; }
     .moderation-action:disabled { opacity:.45; cursor:wait; }
     .moderation-promote { color:#07140b; background:#66bb6a; }
+    .moderation-complete { color:#04131c; background:#50d6ff; }
     .moderation-reject { color:#ffd5d9; border:1px solid rgba(255,70,85,.5); background:rgba(255,70,85,.11); }
     .moderation-empty { padding:50px 20px; border:1px dashed var(--border); border-radius:14px; color:var(--text2); text-align:center; }
     .empty-state { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--r); padding: 24px; color: var(--text2); font-size: 14px; line-height: 1.5; }
@@ -191,6 +192,7 @@
 
     /* Abilities */
     .abilities-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .ability-empty-hint { color: var(--text2); font-size: 13px; }
     .ability-btn { min-width:72px; min-height:78px; background: var(--surface2); color:var(--text2); border: 1.5px solid var(--border); border-radius: var(--r); padding: 8px 7px 7px; cursor: pointer; transition: border-color .15s, background .15s; display: flex; flex-direction: column; align-items: center; justify-content:center; gap:4px; }
     .ability-btn:hover { border-color: var(--primary); }
     .ability-btn.selected { border-color: var(--primary); background: rgba(79,195,247,0.12); }
@@ -441,6 +443,8 @@
     /* Map */
     .map-wrap { position: relative; cursor: crosshair; border-radius: var(--r); overflow: hidden; background: #0a0e1a; border: 1px solid var(--border); user-select: none; -webkit-user-select: none; -webkit-user-drag: none; touch-action: manipulation; aspect-ratio: 1 / 1; }
     .map-stage { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; }
+    .map-site-labels { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+    .map-site-label { position: absolute; transform: translate(-50%, -50%); color: #fff; font-size: 22px; font-weight: 900; line-height: 1; text-shadow: 0 1px 5px #000, 0 0 2px #000; }
     .map-wrap.map-panning { cursor: grabbing !important; }
     #map-container.defense-workbench .map-wrap { cursor: default; }
     #map-container.defense-workbench .map-wrap.zoom-picking { cursor: crosshair; }
