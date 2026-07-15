@@ -4,7 +4,7 @@ import { getAuth,
          signOut, onAuthStateChanged }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, doc, collection, getDoc, setDoc, deleteDoc, writeBatch,
-          serverTimestamp, onSnapshot,
+          serverTimestamp, onSnapshot, updateDoc, arrayUnion,
           query, where, getDocs, limit }      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const cfg = {
@@ -1811,8 +1811,72 @@ function switchWorkspaceTab(tab) {
   });
   if (activeWorkspaceTab === 'materials') loadAuthorMaterials();
   if (activeWorkspaceTab === 'moderation') loadModerationWorkspace();
+  if (activeWorkspaceTab === 'admin-chat') openAdminChat();
   renderAuthorWorkspace();
 }
+
+let adminChatUnsub = null;
+let adminChatDoc = null;
+const adminChatId = uid => `moderator_application_${uid}`;
+
+function chatMessageTime(ts) {
+  const date = typeof ts?.toDate === 'function' ? ts.toDate() : new Date(Number(ts) || Date.now());
+  return date.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+function renderAdminChat(data) {
+  adminChatDoc = data || null;
+  const thread = document.getElementById('admin-chat-thread');
+  const messages = Array.isArray(data?.thread) ? data.thread : [];
+  if (thread) {
+    thread.innerHTML = messages.length ? messages.map(message => {
+      const mine = message.from === 'user';
+      return `<div class="admin-chat-row ${mine ? 'mine' : 'theirs'}"><div class="admin-chat-bubble"><div>${esc(message.text || '')}</div><time>${chatMessageTime(message.ts)}</time></div></div>`;
+    }).join('') : '<div class="admin-chat-empty">Администратор ещё не начал диалог. Ты можешь написать первым.</div>';
+    thread.scrollTop = thread.scrollHeight;
+  }
+  const unread = data?.user_unread === true;
+  const badge = document.getElementById('admin-chat-badge');
+  if (badge) { badge.hidden = !unread; badge.textContent = unread ? '1' : ''; }
+  if (unread && activeWorkspaceTab === 'admin-chat' && currentUser) {
+    updateDoc(doc(db, 'feedback', adminChatId(currentUser.uid)), { user_unread:false, reply_read:true }).catch(() => {});
+  }
+  const status = document.getElementById('admin-chat-status');
+  if (status) status.textContent = data?.status === 'closed' ? 'Диалог закрыт' : 'Онлайн-переписка';
+  const input = document.getElementById('admin-chat-input');
+  const button = document.querySelector('#admin-chat-form button');
+  if (input) input.disabled = data?.status === 'closed';
+  if (button) button.disabled = data?.status === 'closed';
+}
+
+function openAdminChat() {
+  if (!currentUser) return;
+  adminChatUnsub?.();
+  adminChatUnsub = onSnapshot(doc(db, 'feedback', adminChatId(currentUser.uid)), snap => {
+    renderAdminChat(snap.exists() ? snap.data() : null);
+  }, error => {
+    const status = document.getElementById('admin-chat-status');
+    if (status) status.textContent = 'Ошибка: ' + error.message;
+  });
+}
+
+document.getElementById('admin-chat-form')?.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!currentUser) return;
+  const input = document.getElementById('admin-chat-input');
+  const text = input?.value.trim() || '';
+  if (!text) return;
+  const ref = doc(db, 'feedback', adminChatId(currentUser.uid));
+  const message = { from:'user', text, ts:Date.now() };
+  const profileName = currentUserProfile?.name || currentUserProfile?.display_name || currentUser.email || 'Пользователь';
+  const existing = await getDoc(ref);
+  if (existing.exists()) {
+    await updateDoc(ref, { thread:arrayUnion(message), admin_unread:true, user_unread:false, last_from:'user', status:'open' });
+  } else {
+    await setDoc(ref, { text, category:'заявка модератора', username:profileName, user_id:currentUser.uid, source:'moderator_application', thread:[message], status:'open', admin_unread:true, user_unread:false, last_from:'user', created_at:serverTimestamp() });
+  }
+  input.value = '';
+});
 
 function statusLabel(status) {
   if (status === 'approved') return 'Одобрен';

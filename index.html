@@ -78,6 +78,7 @@
       <button class="workspace-tab" data-workspace-tab="drafts">Черновики</button>
       <button class="workspace-tab" data-workspace-tab="stats">Статистика</button>
       <button class="workspace-tab" data-workspace-tab="materials">Материалы</button>
+      <button class="workspace-tab" data-workspace-tab="admin-chat">💬 Чат с админом <span id="admin-chat-badge" class="chat-tab-badge" hidden></span></button>
       <button class="workspace-tab moderator-tab" data-workspace-tab="moderation" data-moderator-only="true" style="display:none;">🛡 Модерация</button>
     </nav>
   </div>
@@ -462,6 +463,20 @@
       <div class="moderation-security-note">Доступ ограничен ролью. Удаление, редактирование и публикация лайнапов здесь недоступны.</div>
       <div id="moderation-status" class="moderation-status" role="status" aria-live="polite">Открой раздел, чтобы загрузить очередь.</div>
       <div id="moderation-list" class="moderation-list"></div>
+    </div>
+  </div>
+
+  <div class="workspace-panel" id="workspace-admin-chat">
+    <div class="admin-chat-shell">
+      <header class="admin-chat-head">
+        <div><div class="workspace-kicker">Связь по заявке</div><h2>Чат с администрацией</h2></div>
+        <span id="admin-chat-status">Подключение…</span>
+      </header>
+      <div id="admin-chat-thread" class="admin-chat-thread"><div class="admin-chat-empty">Сообщений пока нет</div></div>
+      <form id="admin-chat-form" class="admin-chat-compose">
+        <textarea id="admin-chat-input" maxlength="2000" rows="2" placeholder="Напиши сообщение…"></textarea>
+        <button type="submit">Отправить</button>
+      </form>
     </div>
   </div>
 
