@@ -93,14 +93,16 @@ function safeLineup(doc) {
     submitted_by: clean(d.submitted_by || d.author).slice(0, 80),
     video_url: clean(d.video_url).slice(0, 1000),
     screenshots: Array.isArray(d.screenshots) ? d.screenshots.slice(0, 8).map(x => clean(x).slice(0, 1000)) : [],
-    submitted_at: timestampMillis(d.submitted_at || d.created_at),
+    submitted_at: timestampMillis(d.submitted_at || d.created_at || d.createdAt),
   };
 }
 
 async function listQueue(res) {
   const db = getFirestore();
   const [pendingSnap, moderatorSnap] = await Promise.all([
-    db.collection('lineups').where('status', '==', 'pending').orderBy('submitted_at', 'desc').limit(30).get(),
+    // Admin-created pending lineups can have created_at without submitted_at.
+    // orderBy('submitted_at') silently excludes those documents from the queue.
+    db.collection('lineups').where('status', '==', 'pending').limit(100).get(),
     db.collection('lineups').where('moderator_only', '==', true).limit(50).get(),
   ]);
   const items = [...pendingSnap.docs, ...moderatorSnap.docs.filter(doc => doc.data()?.status === 'moderator_draft')]
