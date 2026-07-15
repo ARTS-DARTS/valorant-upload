@@ -1883,7 +1883,11 @@ function renderAdminChat(data) {
   const badge = document.getElementById('admin-chat-badge');
   if (badge) { badge.hidden = !unread; badge.textContent = unread ? '1' : ''; }
   if (unread && activeWorkspaceTab === 'admin-chat' && currentUser) {
-    updateDoc(doc(db, 'feedback', adminChatId(currentUser.uid)), { user_unread:false, reply_read:true }).catch(() => {});
+    updateDoc(doc(db, 'feedback', adminChatId(currentUser.uid)), {
+      user_unread:false,
+      reply_read:true,
+      user_read_at:serverTimestamp(),
+    }).catch(() => {});
   }
   const status = document.getElementById('admin-chat-status');
   if (status) status.textContent = data?.status === 'closed' ? 'Диалог закрыт' : 'Онлайн-переписка';
