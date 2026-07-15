@@ -1824,6 +1824,20 @@ adminChatSound.preload = 'auto';
 adminChatSound.volume = 0.55;
 const adminChatId = uid => `moderator_application_${uid}`;
 
+let presenceTimer = null;
+async function sendSitePresence() {
+  if (!currentUser) return;
+  try {
+    const token = await currentUser.getIdToken();
+    await fetch('/api/site-presence', { method:'POST', headers:{ Authorization:`Bearer ${token}` }, credentials:'same-origin', keepalive:true });
+  } catch (_) {}
+}
+function startSitePresence() {
+  clearInterval(presenceTimer);
+  sendSitePresence();
+  presenceTimer = setInterval(sendSitePresence, 45_000);
+}
+
 document.addEventListener('pointerdown', () => {
   adminChatSound.volume = 0;
   adminChatSound.play().then(() => {
@@ -2723,6 +2737,7 @@ onAuthStateChanged(auth, async user => {
     if (!agentsList.length) loadAgents();
     loadMaps();
     openAdminChat();
+    startSitePresence();
   } else {
     currentUserProfile = null;
     moderationController = null;
@@ -2733,6 +2748,7 @@ onAuthStateChanged(auth, async user => {
     _unsubscribeStats();
     adminChatUnsub?.();
     adminChatUnsub = null;
+    clearInterval(presenceTimer);
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('form-screen').style.display = 'none';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
