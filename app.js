@@ -1495,6 +1495,7 @@ let activeWorkspaceTab = 'upload';
 let myLineupsStatusFilter = 'all';
 let myLineupsSearch = '';
 let resubmissionSourceId = '';
+let moderatorDraftSourceId = '';
 let moderationController = null;
 let moderationModulePromise = null;
 
@@ -1959,7 +1960,8 @@ function canCurrentUserModerate() {
 
 function openModeratorDraft(item) {
   const draft = rejectedLineupDraft({ ...item, status: 'moderator_draft' });
-  draft.resubmissionSourceId = item.id || '';
+  draft.resubmissionSourceId = '';
+  draft.moderatorDraftSourceId = item.id || '';
   try { localStorage.setItem(_DRAFT_KEY, JSON.stringify(draft)); } catch (_) {}
   resetUploadForm({ keepDraft: true });
   _restoreDraft();
@@ -2283,17 +2285,18 @@ function startRejectedResubmission(lineupId) {
 function renderResubmissionBanner() {
   const banner = document.getElementById('resubmit-banner');
   if (!banner) return;
-  if (!resubmissionSourceId) {
+  if (!resubmissionSourceId && !moderatorDraftSourceId) {
     banner.style.display = 'none';
     banner.innerHTML = '';
     return;
   }
-  const source = findOwnLineup(resubmissionSourceId);
-  const title = firstText(source?.title, resubmissionSourceId);
+  const sourceId = moderatorDraftSourceId || resubmissionSourceId;
+  const source = findOwnLineup(sourceId);
+  const title = firstText(source?.title, sourceId);
   const reason = source ? firstText(source.rejection_reason, source.reject_reason, source.moderation_reason) : '';
   banner.innerHTML = `
     <div>
-      <strong>Доработка отклонённого лайнапа</strong>
+      <strong>${moderatorDraftSourceId ? 'Доработка шаблона для модерации' : 'Доработка отклонённого лайнапа'}</strong>
       <span>${esc(title)}${reason ? ` · ${esc(reason)}` : ''}</span>
     </div>
     <button class="copy-id-btn" type="button" data-cancel-resubmission>Отменить</button>
@@ -2303,6 +2306,7 @@ function renderResubmissionBanner() {
 
 function cancelResubmissionDraft() {
   resubmissionSourceId = '';
+  moderatorDraftSourceId = '';
   _saveDraft();
   renderResubmissionBanner();
   renderDrafts();
@@ -6206,6 +6210,7 @@ function collectDraftData() {
     videoEdit: videoUrl ? normalizedVideoEdit() : createDefaultVideoEdit(),
     screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
     resubmissionSourceId,
+    moderatorDraftSourceId,
   };
 }
 
@@ -6390,6 +6395,7 @@ function _clearDraft() {
   try { localStorage.removeItem(_DRAFT_KEY); } catch(_) {}
   try { localStorage.removeItem(_ACTIVE_DRAFT_ID_KEY); } catch(_) {}
   resubmissionSourceId = '';
+  moderatorDraftSourceId = '';
   renderResubmissionBanner();
 }
 
@@ -6398,6 +6404,7 @@ function _restoreDraft(sourceDraft = null) {
   try { if (!d) d = JSON.parse(localStorage.getItem(_DRAFT_KEY)); } catch(_) {}
   if (!d) return;
   resubmissionSourceId = d.resubmissionSourceId || '';
+  moderatorDraftSourceId = d.moderatorDraftSourceId || '';
   renderResubmissionBanner();
 
   // Text fields
