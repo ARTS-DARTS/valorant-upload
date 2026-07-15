@@ -1817,7 +1817,32 @@ function switchWorkspaceTab(tab) {
 
 let adminChatUnsub = null;
 let adminChatDoc = null;
+let adminChatSnapshotReady = false;
+let adminChatLastAdminTs = 0;
+const adminChatSound = new Audio('/assets/audio/chat-message.mp3');
+adminChatSound.preload = 'auto';
+adminChatSound.volume = 0.55;
 const adminChatId = uid => `moderator_application_${uid}`;
+
+document.addEventListener('pointerdown', () => {
+  adminChatSound.volume = 0;
+  adminChatSound.play().then(() => {
+    adminChatSound.pause();
+    adminChatSound.currentTime = 0;
+    adminChatSound.volume = 0.55;
+  }).catch(() => { adminChatSound.volume = 0.55; });
+}, { once:true });
+
+function newestAdminMessageTs(data) {
+  return (Array.isArray(data?.thread) ? data.thread : [])
+    .filter(message => message.from === 'admin')
+    .reduce((latest, message) => Math.max(latest, Number(message.ts) || 0), 0);
+}
+
+function playIncomingChatSound() {
+  adminChatSound.currentTime = 0;
+  adminChatSound.play().catch(() => {});
+}
 
 function chatMessageTime(ts) {
   const date = typeof ts?.toDate === 'function' ? ts.toDate() : new Date(Number(ts) || Date.now());
@@ -1825,6 +1850,10 @@ function chatMessageTime(ts) {
 }
 
 function renderAdminChat(data) {
+  const newestAdminTs = newestAdminMessageTs(data);
+  if (adminChatSnapshotReady && newestAdminTs > adminChatLastAdminTs) playIncomingChatSound();
+  adminChatLastAdminTs = Math.max(adminChatLastAdminTs, newestAdminTs);
+  adminChatSnapshotReady = true;
   adminChatDoc = data || null;
   const thread = document.getElementById('admin-chat-thread');
   const messages = Array.isArray(data?.thread) ? data.thread : [];
@@ -1852,6 +1881,8 @@ function renderAdminChat(data) {
 function openAdminChat() {
   if (!currentUser) return;
   adminChatUnsub?.();
+  adminChatSnapshotReady = false;
+  adminChatLastAdminTs = 0;
   adminChatUnsub = onSnapshot(doc(db, 'feedback', adminChatId(currentUser.uid)), snap => {
     renderAdminChat(snap.exists() ? snap.data() : null);
   }, error => {
@@ -2691,6 +2722,7 @@ onAuthStateChanged(auth, async user => {
     if (user.photoURL) { av.src = user.photoURL; av.style.display = ''; }
     if (!agentsList.length) loadAgents();
     loadMaps();
+    openAdminChat();
   } else {
     currentUserProfile = null;
     moderationController = null;
@@ -2699,6 +2731,8 @@ onAuthStateChanged(auth, async user => {
     updateUploadGate();
     _unsubscribeUserProfile();
     _unsubscribeStats();
+    adminChatUnsub?.();
+    adminChatUnsub = null;
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('form-screen').style.display = 'none';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
