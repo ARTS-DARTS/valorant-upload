@@ -5995,6 +5995,7 @@ let mapViewScale = 1;
 let mapViewPanX = 0;
 let mapViewPanY = 0;
 let mapViewPanDrag = null;
+let mapViewPanSuppressClick = false;
 
 function clampMapViewPan() {
   const wrap = document.getElementById('map-wrap');
@@ -6026,23 +6027,43 @@ document.getElementById('map-wrap')?.addEventListener('wheel', event => {
 }, { passive: false });
 
 document.getElementById('map-wrap')?.addEventListener('pointerdown', event => {
-  if (event.button !== 1) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  mapViewPanDrag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, panX: mapViewPanX, panY: mapViewPanY };
-  event.currentTarget.classList.add('map-panning');
+  if (event.button !== 0 && event.button !== 1) return;
+  if (mapViewScale <= 1 || event.target.closest('.defense-ability-marker,.map-marker')) return;
+  mapViewPanDrag = {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    panX: mapViewPanX,
+    panY: mapViewPanY,
+    dragging: event.button === 1,
+  };
+  if (event.button === 1) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    event.currentTarget.classList.add('map-panning');
+  }
   safeSetPointerCapture(event.currentTarget, event.pointerId);
 });
 window.addEventListener('pointermove', event => {
   if (!mapViewPanDrag || mapViewPanDrag.pointerId !== event.pointerId) return;
+  if (!mapViewPanDrag.dragging) {
+    const distance = Math.hypot(event.clientX - mapViewPanDrag.x, event.clientY - mapViewPanDrag.y);
+    if (distance < 5) return;
+    mapViewPanDrag.dragging = true;
+    document.getElementById('map-wrap')?.classList.add('map-panning');
+  }
+  event.preventDefault();
+  mapViewPanSuppressClick = true;
   mapViewPanX = mapViewPanDrag.panX + event.clientX - mapViewPanDrag.x;
   mapViewPanY = mapViewPanDrag.panY + event.clientY - mapViewPanDrag.y;
   applyMapViewTransform();
 });
 function finishMapViewPan(event) {
   if (!mapViewPanDrag || mapViewPanDrag.pointerId !== event.pointerId) return;
+  const dragged = mapViewPanDrag.dragging;
   mapViewPanDrag = null;
   document.getElementById('map-wrap')?.classList.remove('map-panning');
+  if (dragged) setTimeout(() => { mapViewPanSuppressClick = false; }, 0);
 }
 window.addEventListener('pointerup', finishMapViewPan);
 window.addEventListener('pointercancel', finishMapViewPan);
@@ -6076,6 +6097,11 @@ function trajectoryFromMarker(points = trajectoryPoints) {
 }
 
 document.getElementById('map-wrap').addEventListener('click', e => {
+  if (mapViewPanSuppressClick) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
   e.preventDefault();
   if (defenseZoomJustSelected) return;
   if (defenseLineJustCreated) return;
