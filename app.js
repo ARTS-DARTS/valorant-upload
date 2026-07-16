@@ -3146,6 +3146,7 @@ const vidTimeEl   = document.getElementById('vid-time');
 const vidPlayBtn  = document.getElementById('vid-play-btn');
 let activeEditorMode = 'trim';
 let timelineDrag = null;
+let scrubberDragging = false;
 let suppressTimelineClick = false;
 let selectedEditorItem = null;
 let freezeHoldTimer = null;
@@ -3896,6 +3897,7 @@ function stepEditorFrame(direction) {
 }
 
 function renderVideoTransport() {
+  if (scrubberDragging) return;
   const sourceDuration = videoDuration();
   const outputDuration = editedOutputDuration() || sourceDuration;
   const outputTime = currentOutputTime();
@@ -5297,7 +5299,7 @@ vidPlayer.addEventListener('seeking', () => {
   lastVideoTime = vidPlayer.currentTime;
   updateTimelinePlaybackUi({ keepVisible: true });
 });
-vidScrubber.addEventListener('input', () => {
+function seekFromScrubberValue() {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   playedFreezeHolds.clear();
@@ -5310,6 +5312,41 @@ vidScrubber.addEventListener('input', () => {
     setFreezeOverlay('');
     vidPlayer.currentTime = snapFrameTime(ratio * vidPlayer.duration);
   }
+  updateTimelinePlaybackUi();
+}
+
+function seekScrubberAtClientX(clientX) {
+  const rect = vidScrubber.getBoundingClientRect();
+  if (!rect.width) return;
+  const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  vidScrubber.value = String(ratio * 100);
+  seekFromScrubberValue();
+}
+
+vidScrubber.addEventListener('input', seekFromScrubberValue);
+vidScrubber.addEventListener('pointerdown', event => {
+  scrubberDragging = true;
+  vidScrubber.setPointerCapture?.(event.pointerId);
+  seekScrubberAtClientX(event.clientX);
+  event.preventDefault();
+});
+vidScrubber.addEventListener('pointermove', event => {
+  if (!scrubberDragging) return;
+  seekScrubberAtClientX(event.clientX);
+  event.preventDefault();
+});
+const finishScrubberDrag = event => {
+  if (!scrubberDragging) return;
+  seekScrubberAtClientX(event.clientX);
+  scrubberDragging = false;
+  try { vidScrubber.releasePointerCapture?.(event.pointerId); } catch (_) {}
+  updateTimelinePlaybackUi();
+};
+vidScrubber.addEventListener('pointerup', finishScrubberDrag);
+vidScrubber.addEventListener('pointercancel', event => {
+  scrubberDragging = false;
+  try { vidScrubber.releasePointerCapture?.(event.pointerId); } catch (_) {}
+  updateTimelinePlaybackUi();
 });
 vidPlayBtn.addEventListener('click', toggleEditorPlayback);
 document.addEventListener('visibilitychange', () => {
