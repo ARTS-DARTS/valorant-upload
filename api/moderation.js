@@ -153,6 +153,7 @@ async function saveDraft(req, res, moderator) {
       video_url: clean(data.video_url).slice(0, 1000), user_id: authorUid, submitted_by: authorName,
       category: 'lineup', content_type: 'lineup', status: 'pending', moderator_only: false,
       edited_by_moderator_uid: moderator.uid, edited_at: FieldValue.serverTimestamp(), submitted_at: FieldValue.serverTimestamp(),
+      moderator_template_completed: true,
     });
   });
   res.status(200).json({ ok: true, id: lineupId, status: 'pending' });
@@ -166,7 +167,13 @@ async function listQueue(res) {
     db.collection('lineups').where('status', '==', 'pending').limit(100).get(),
     db.collection('lineups').where('moderator_only', '==', true).limit(50).get(),
   ]);
-  const items = [...pendingSnap.docs, ...moderatorSnap.docs.filter(doc => doc.data()?.status === 'moderator_draft')]
+  const items = [
+    ...pendingSnap.docs.filter(doc => {
+      const data = doc.data() || {};
+      return data.moderator_template_completed !== true && !data.edited_by_moderator_uid;
+    }),
+    ...moderatorSnap.docs.filter(doc => doc.data()?.status === 'moderator_draft'),
+  ]
     .map(safeLineup)
     .sort((a, b) => b.submitted_at - a.submitted_at)
     .slice(0, 50);

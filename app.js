@@ -6167,20 +6167,22 @@ function renderTrajectory() {
     const path = useMainStart
       ? trajectoryFromMarkerFor(rawPoints)
       : normalizeTrajectoryPoints(rawPoints);
-    if (path.length < 2) return;
+    if (!path.length) return;
     drew = true;
-    addMarker(markerId, color);
-    const coords = path.map(p => `${(content.left + p.x * content.width).toFixed(1)},${(content.top + p.y * content.height).toFixed(1)}`).join(' ');
-    const poly = document.createElementNS(ns, 'polyline');
-    poly.setAttribute('points', coords);
-    poly.setAttribute('fill', 'none');
-    poly.setAttribute('stroke', color);
-    poly.setAttribute('stroke-opacity', String(opacity));
-    poly.setAttribute('stroke-width', String(width));
-    poly.setAttribute('stroke-linejoin', 'round');
-    poly.setAttribute('stroke-linecap', 'round');
-    poly.setAttribute('marker-end', `url(#${markerId})`);
-    svg.appendChild(poly);
+    if (path.length >= 2) {
+      addMarker(markerId, color);
+      const coords = path.map(p => `${(content.left + p.x * content.width).toFixed(1)},${(content.top + p.y * content.height).toFixed(1)}`).join(' ');
+      const poly = document.createElementNS(ns, 'polyline');
+      poly.setAttribute('points', coords);
+      poly.setAttribute('fill', 'none');
+      poly.setAttribute('stroke', color);
+      poly.setAttribute('stroke-opacity', String(opacity));
+      poly.setAttribute('stroke-width', String(width));
+      poly.setAttribute('stroke-linejoin', 'round');
+      poly.setAttribute('stroke-linecap', 'round');
+      poly.setAttribute('marker-end', `url(#${markerId})`);
+      svg.appendChild(poly);
+    }
     path.forEach((point, i) => {
       const cx = (content.left + point.x * content.width).toFixed(1);
       const cy = (content.top + point.y * content.height).toFixed(1);
@@ -6226,6 +6228,11 @@ function renderTrajectory() {
     opacity: activeExtraAbility() ? 0.42 : 0.88,
     width: activeExtraAbility() ? 1.8 : 2.4,
     useMainStart: true,
+    iconUrl: (() => {
+      const agent = agentsList.find(a => a.displayName === selectedAgent);
+      const ability = (agent?.abilities || []).find(ab => ab.displayName === selectedAbility || ab.slot === selectedAbility || normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === selectedAbility);
+      return ability?.displayIcon || '';
+    })(),
   });
   extraAbilityTrajectories.forEach((item, idx) => {
     const active = selectedExtraAbilityIndex === idx;
@@ -6252,7 +6259,10 @@ function updateMarkerIcon() {
     ab.slot === selectedAbility ||
     normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === selectedAbility
   );
-  const iconUrl = ability?.displayIcon || '';
+  const extra = activeExtraAbility();
+  const iconUrl = extra?.icon || ability?.displayIcon || '';
+  const marker = document.getElementById('map-marker');
+  if (marker) marker.style.visibility = extra ? 'hidden' : '';
   if (iconUrl) {
     img.src = iconUrl;
     img.style.display = 'block';
