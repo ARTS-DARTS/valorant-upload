@@ -1496,6 +1496,9 @@ let myLineupsStatusFilter = 'all';
 let myLineupsSearch = '';
 let resubmissionSourceId = '';
 let moderatorDraftSourceId = '';
+let moderatorSelectedAuthor = null;
+let moderatorAuthorMatches = [];
+let moderatorAuthorTimer = null;
 let moderationController = null;
 let moderationModulePromise = null;
 
@@ -1966,13 +1969,52 @@ function openModeratorDraft(item) {
   const draft = rejectedLineupDraft({ ...item, status: 'moderator_draft' });
   draft.resubmissionSourceId = '';
   draft.moderatorDraftSourceId = item.id || '';
+  draft.moderatorAuthor = { uid: item.user_id || '', name: item.submitted_by || '' };
   try { localStorage.setItem(_DRAFT_KEY, JSON.stringify(draft)); } catch (_) {}
   resetUploadForm({ keepDraft: true });
   _restoreDraft();
+  showModeratorAuthorPicker(draft.moderatorAuthor);
   switchWorkspaceTab('upload');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   toast('Видео открыто в форме. Заполни агента, способность и карту, затем отправь на проверку.', 's');
 }
+
+function showModeratorAuthorPicker(author = null) {
+  moderatorSelectedAuthor = author?.uid ? { uid: author.uid, name: author.name || '' } : null;
+  const section = document.getElementById('moderator-author-section');
+  const input = document.getElementById('moderator-author-search');
+  const status = document.getElementById('moderator-author-status');
+  if (section) section.hidden = !moderatorDraftSourceId;
+  if (input) input.value = moderatorSelectedAuthor?.name || '';
+  if (status) status.textContent = moderatorSelectedAuthor
+    ? `Выбран автор: ${moderatorSelectedAuthor.name}`
+    : 'Начни вводить ник и выбери автора из списка.';
+}
+
+async function searchModeratorAuthors(queryText) {
+  const q = String(queryText || '').trim();
+  const options = document.getElementById('moderator-author-options');
+  if (q.length < 2) { if (options) options.innerHTML = ''; return; }
+  try {
+    const token = await currentUser.getIdToken();
+    const response = await fetch(`/api/moderation?q=${encodeURIComponent(q)}`, { headers: { Authorization: `Bearer ${token}` } });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || `Ошибка ${response.status}`);
+    moderatorAuthorMatches = Array.isArray(body.users) ? body.users : [];
+    if (options) options.innerHTML = moderatorAuthorMatches.map(user => `<option value="${esc(user.name)}"></option>`).join('');
+  } catch (error) {
+    document.getElementById('moderator-author-status').textContent = `Поиск не выполнен: ${error.message}`;
+  }
+}
+
+document.getElementById('moderator-author-search')?.addEventListener('input', event => {
+  const value = event.target.value.trim();
+  const match = moderatorAuthorMatches.find(user => user.name.toLocaleLowerCase('ru-RU') === value.toLocaleLowerCase('ru-RU'));
+  moderatorSelectedAuthor = match || null;
+  document.getElementById('moderator-author-status').textContent = match ? `Выбран автор: ${match.name}` : 'Выбери точное имя из найденных вариантов.';
+  clearTimeout(moderatorAuthorTimer);
+  moderatorAuthorTimer = setTimeout(() => searchModeratorAuthors(value), 250);
+});
 
 async function loadModerationWorkspace() {
   if (!canCurrentUserModerate() || !currentUser) return;
@@ -6168,13 +6210,12 @@ function updateMarkerIcon() {
   if (!img) return;
   const agent = agentsList.find(a => a.displayName === selectedAgent);
   if (!agent) { img.style.display = 'none'; return; }
-  const extra = activeExtraAbility();
-  const ability = extra ? null : (agent.abilities || []).find(ab =>
+  const ability = (agent.abilities || []).find(ab =>
     ab.displayName === selectedAbility ||
     ab.slot === selectedAbility ||
     normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === selectedAbility
   );
-  const iconUrl = extra?.icon || ability?.displayIcon || '';
+  const iconUrl = ability?.displayIcon || '';
   if (iconUrl) {
     img.src = iconUrl;
     img.style.display = 'block';
@@ -6215,6 +6256,7 @@ function collectDraftData() {
     screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
     resubmissionSourceId,
     moderatorDraftSourceId,
+    moderatorAuthor: moderatorSelectedAuthor,
   };
 }
 
@@ -6409,6 +6451,8 @@ function _restoreDraft(sourceDraft = null) {
   if (!d) return;
   resubmissionSourceId = d.resubmissionSourceId || '';
   moderatorDraftSourceId = d.moderatorDraftSourceId || '';
+  moderatorSelectedAuthor = d.moderatorAuthor?.uid ? d.moderatorAuthor : null;
+  showModeratorAuthorPicker(moderatorSelectedAuthor);
   renderResubmissionBanner();
 
   // Text fields
@@ -6711,7 +6755,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         const cooldownMin = cooldownMinutesFor(_approvedLineups);
         rateLimitDiagnostics.minutes_since_last_lineup = Math.floor(diffMin * 10) / 10;
         rateLimitDiagnostics.remaining_minutes = Math.max(0, Math.ceil(cooldownMin - diffMin));
-        if (diffMin < cooldownMin) {
+        if (!moderatorDraftSourceId && diffMin < cooldownMin) {
           toast(`Подожди ещё ${Math.ceil(cooldownMin - diffMin)} мин.`, 'w');
           return;
         }
@@ -6759,11 +6803,44 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     extraAbilitiesPayload = requestedContentType === 'lineup'
       ? await buildExtraAbilitiesPayload(map, selectedAgent)
       : [];
-    const submittedBy = authorDisplayName();
+    const submittedBy = moderatorDraftSourceId ? (moderatorSelectedAuthor?.name || '') : authorDisplayName();
+    const submittedUid = moderatorDraftSourceId ? (moderatorSelectedAuthor?.uid || '') : uid;
+    if (moderatorDraftSourceId && (!submittedBy || !submittedUid)) {
+      toast('Выбери автора лайнапа', 'e');
+      btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
+      return;
+    }
     contentType = normalizeContentCategory(selectedCategory);
     if (!canSubmitContentCategory(contentType)) {
       toast('Эта категория пока закрыта для отправки.', 'e');
       btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
+      return;
+    }
+    if (moderatorDraftSourceId) {
+      submitStage = 'moderator_draft_save';
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/moderation', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lineupId: moderatorDraftSourceId,
+          action: 'save_draft',
+          data: {
+            map, agent: selectedAgent, ability: normalizedAbility, title, description: desc,
+            difficulty: selectedDifficulty, round_side: selectedRoundSide,
+            position_x: markerX, position_y: markerY, trajectory: trajectoryFromMarker(),
+            extra_abilities: extraAbilitiesPayload, range_radius: rangeRadius,
+            screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl), video_url: videoUrl || '',
+            user_id: submittedUid, submitted_by: submittedBy,
+          },
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `Ошибка ${response.status}`);
+      moderatorDraftSourceId = '';
+      moderatorSelectedAuthor = null;
+      showModeratorAuthorPicker();
+      showSuccess();
       return;
     }
     const lineupRef = doc(collection(db, 'lineups'));

@@ -90,11 +90,72 @@ function safeLineup(doc) {
     round_side: clean(d.round_side).slice(0, 20),
     content_type: clean(d.content_type || d.category).slice(0, 20),
     moderator_only: d.moderator_only === true,
+    user_id: clean(d.user_id || d.uid || d.author_uid).slice(0, 128),
     submitted_by: clean(d.submitted_by || d.author).slice(0, 80),
     video_url: clean(d.video_url).slice(0, 1000),
     screenshots: Array.isArray(d.screenshots) ? d.screenshots.slice(0, 8).map(x => clean(x).slice(0, 1000)) : [],
+    position_x: Number(d.position_x ?? 0.5),
+    position_y: Number(d.position_y ?? 0.5),
+    trajectory: Array.isArray(d.trajectory) ? d.trajectory.slice(0, 30) : [],
+    extra_abilities: Array.isArray(d.extra_abilities) ? d.extra_abilities.slice(0, 2) : [],
     submitted_at: timestampMillis(d.submitted_at || d.created_at || d.createdAt),
   };
+}
+
+async function searchAuthors(req, res) {
+  const q = clean(req.query?.q).slice(0, 80);
+  if (q.length < 2) return res.status(200).json({ users: [] });
+  const db = getFirestore();
+  const snap = await db.collection('users').orderBy('name').startAt(q).endAt(`${q}\uf8ff`).limit(20).get();
+  const users = snap.docs.map(doc => ({
+    uid: doc.id,
+    name: clean(doc.data()?.name || doc.data()?.username || doc.data()?.displayName).slice(0, 80),
+  })).filter(user => user.name);
+  res.status(200).json({ users });
+}
+
+function finite01(value, fallback = 0.5) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
+}
+
+function safePoints(raw, limit = 30) {
+  return Array.isArray(raw) ? raw.slice(0, limit).map(point => ({ x: finite01(point?.x), y: finite01(point?.y) })) : [];
+}
+
+async function saveDraft(req, res, moderator) {
+  const lineupId = clean(req.body?.lineupId);
+  const data = req.body?.data || {};
+  const authorUid = clean(data.user_id).slice(0, 128);
+  const authorName = clean(data.submitted_by).slice(0, 80);
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
+  if (!authorUid || !authorName) return res.status(400).json({ error: 'Выбери автора лайнапа' });
+  const db = getFirestore();
+  const author = await db.collection('users').doc(authorUid).get();
+  if (!author.exists) return res.status(400).json({ error: 'Автор не найден' });
+  const ref = db.collection('lineups').doc(lineupId);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
+    if (snap.data()?.status !== 'moderator_draft') throw Object.assign(new Error('Шаблон уже обработан'), { status: 409 });
+    const extras = Array.isArray(data.extra_abilities) ? data.extra_abilities.slice(0, 2).map((item, index) => ({
+      ability: clean(item?.ability).slice(0, 80), icon: clean(item?.icon).slice(0, 1000), order: index + 1,
+      trajectory: safePoints(item?.trajectory), range_radius: Math.max(0, Math.min(.5, Number(item?.range_radius) || 0)),
+      effect_shape: clean(item?.effect_shape || 'circle').slice(0, 30),
+    })) : [];
+    tx.update(ref, {
+      map: clean(data.map).slice(0, 40), agent: clean(data.agent).slice(0, 40), ability: clean(data.ability).slice(0, 80),
+      title: clean(data.title).slice(0, 100), description: clean(data.description).slice(0, 1000),
+      difficulty: clean(data.difficulty).slice(0, 20), round_side: clean(data.round_side).slice(0, 20),
+      position_x: finite01(data.position_x), position_y: finite01(data.position_y), trajectory: safePoints(data.trajectory),
+      extra_abilities: extras, range_radius: Math.max(0, Math.min(.5, Number(data.range_radius) || 0)),
+      screenshots: Array.isArray(data.screenshots) ? data.screenshots.slice(0, 8).map(value => clean(value).slice(0, 1000)) : [],
+      video_url: clean(data.video_url).slice(0, 1000), user_id: authorUid, submitted_by: authorName,
+      category: 'lineup', content_type: 'lineup', status: 'pending', moderator_only: false,
+      edited_by_moderator_uid: moderator.uid, edited_at: FieldValue.serverTimestamp(), submitted_at: FieldValue.serverTimestamp(),
+    });
+  });
+  res.status(200).json({ ok: true, id: lineupId, status: 'pending' });
 }
 
 async function listQueue(res) {
@@ -116,6 +177,7 @@ async function moderate(req, res, moderator) {
   checkActionRate(moderator.uid);
   const lineupId = clean(req.body?.lineupId);
   const action = clean(req.body?.action);
+  if (action === 'save_draft') return saveDraft(req, res, moderator);
   const reason = clean(req.body?.reason);
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
   if (!['promote', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
@@ -172,7 +234,7 @@ export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
   try {
     const moderator = await authorize(req);
-    if (req.method === 'GET') return await listQueue(res);
+    if (req.method === 'GET') return req.query?.q !== undefined ? await searchAuthors(req, res) : await listQueue(res);
     return await moderate(req, res, moderator);
   } catch (error) {
     const status = Number(error.status) || (error.code?.startsWith('auth/') ? 401 : 500);

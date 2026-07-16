@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 19:13 · 12.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 21:05 · 16.07.2026</div>
   <a class="header-telegram" href="https://t.me/Vlineups" target="_blank" rel="noopener noreferrer" aria-label="Telegram-сообщество Vlineups">
     <span class="header-telegram-icon">➤</span>
     <span class="header-telegram-label">@Vlineups</span>
@@ -113,31 +113,6 @@
       <div id="agents-grid" class="agents-grid">
         <span style="color:var(--text2);font-size:13px;grid-column:1/-1;">Загрузка агентов…</span>
       </div>
-    </div>
-
-    <div class="section-title">⚡ СПОСОБНОСТЬ</div>
-    <div class="card">
-      <div class="abilities-row" id="abilities-row">
-        <span style="color:var(--text2);font-size:13px;">Сначала выбери агента</span>
-      </div>
-    </div>
-
-    <div class="section-title">💪 СЛОЖНОСТЬ</div>
-    <div class="card">
-      <div class="pill-row" id="diff-row">
-        <button class="pill-btn" data-val="easy">🟢 Легко</button>
-        <button class="pill-btn" data-val="medium">🟡 Средне</button>
-        <button class="pill-btn" data-val="hard">🔴 Сложно</button>
-      </div>
-    </div>
-
-    <div class="section-title">⚔️ СТОРОНА РАУНДА</div>
-    <div class="card">
-      <div class="pill-row" id="side-row">
-        <button class="pill-btn" data-val="attack">🔴 Атака</button>
-        <button class="pill-btn" data-val="defense">🔵 Защита</button>
-      </div>
-      <div class="extra-status" style="margin-top:8px;">Выбери сторону, за которую используется этот лайнап.</div>
     </div>
 
     <div class="section-title">📝 НАЗВАНИЕ</div>
@@ -327,6 +302,26 @@
       </div>
     </div>
 
+    <div class="section-title">⚡ СПОСОБНОСТЬ</div>
+    <div class="card">
+      <div class="abilities-row" id="abilities-row"><span style="color:var(--text2);font-size:13px;">Сначала выбери агента</span></div>
+    </div>
+    <div class="section-title">💪 СЛОЖНОСТЬ</div>
+    <div class="card"><div class="pill-row" id="diff-row">
+      <button class="pill-btn" data-val="easy">🟢 Легко</button><button class="pill-btn" data-val="medium">🟡 Средне</button><button class="pill-btn" data-val="hard">🔴 Сложно</button>
+    </div></div>
+    <div class="section-title">⚔️ СТОРОНА РАУНДА</div>
+    <div class="card"><div class="pill-row" id="side-row">
+      <button class="pill-btn" data-val="attack">🔴 Атака</button><button class="pill-btn" data-val="defense">🔵 Защита</button>
+    </div><div class="extra-status" style="margin-top:8px;">Выбери сторону, за которую используется этот лайнап.</div></div>
+    <div id="moderator-author-section" hidden>
+      <div class="section-title">👤 АВТОР ЛАЙНАПА</div>
+      <div class="card">
+        <input class="finput" id="moderator-author-search" list="moderator-author-options" placeholder="Начни вводить ник автора" autocomplete="off">
+        <datalist id="moderator-author-options"></datalist>
+        <div class="extra-status" id="moderator-author-status">Выбери пользователя из найденных вариантов.</div>
+      </div>
+    </div>
     <div class="section-title" id="map-section-title">📍 МЕТКА НА КАРТЕ</div>
     <div class="card">
       <div id="map-container">
@@ -610,6 +605,6 @@
 
 <div id="toasts"></div>
 
-<script type="module" src="/app.js?v=2026-07-13T09-49"></script>
+<script type="module" src="/app.js?v=2026-07-16T21-05"></script>
 </body>
 </html>
