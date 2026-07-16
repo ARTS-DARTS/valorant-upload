@@ -462,6 +462,7 @@
     .map-stage { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; }
     .map-site-labels { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
     .map-site-label { position: absolute; transform: translate(-50%, -50%); color: #fff; font-size: 22px; font-weight: 900; line-height: 1; text-shadow: 0 1px 5px #000, 0 0 2px #000; }
+    .map-spawn-zone { position:absolute;display:flex;align-items:center;justify-content:center;border:2px solid;border-radius:5px;box-sizing:border-box;font-size:10px;font-weight:900; }
     .map-wrap.map-panning { cursor: grabbing !important; }
     #map-container.defense-workbench .map-wrap { cursor: default; }
     #map-container.defense-workbench .map-wrap.zoom-picking { cursor: crosshair; }

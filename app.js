@@ -3005,13 +3005,55 @@ const DEFAULT_MAP_SITE_LABELS = {
   Summit: [{ label: 'A', x: .74, y: .30 }, { label: 'B', x: .32, y: .27 }],
 };
 
+let mapSiteLabelsConfig = {};
+let mapSpawnZonesConfig = {};
+let mapAnnotationModesConfig = {};
+let currentAnnotationMode = null;
+let mapAnnotationsPromise = null;
+function loadMapAnnotations() {
+  if (mapAnnotationsPromise) return mapAnnotationsPromise;
+  mapAnnotationsPromise = Promise.all([
+    getDoc(doc(db, 'settings', 'map_site_labels')),
+    getDoc(doc(db, 'settings', 'map_spawn_zones')),
+    getDoc(doc(db, 'settings', 'map_annotation_modes')),
+  ]).then(([labels, zones, modes]) => {
+    mapSiteLabelsConfig = labels.exists() ? labels.data() : {};
+    mapSpawnZonesConfig = zones.exists() ? zones.data() : {};
+    mapAnnotationModesConfig = modes.exists() ? modes.data() : {};
+    renderMapSiteLabels();
+  }).catch(error => console.warn('map annotations', error));
+  return mapAnnotationsPromise;
+}
+
+function annotationModeFor(map) { return currentAnnotationMode || mapAnnotationModesConfig[map] || 'full'; }
+function renderAnnotationModeButtons(map) {
+  const mode = annotationModeFor(map);
+  document.querySelectorAll('.map-annotation-mode').forEach(button => button.classList.toggle('selected-mode', button.dataset.mapAnnotationMode === mode));
+}
+
 function renderMapSiteLabels() {
   const layer = document.getElementById('map-site-labels');
   const map = document.getElementById('sel-map')?.value || '';
   if (!layer) return;
-  const labels = DEFAULT_MAP_SITE_LABELS[map] || [];
-  layer.innerHTML = labels.map(item => `<span class="map-site-label" style="left:${item.x * 100}%;top:${item.y * 100}%">${esc(item.label)}</span>`).join('');
+  const mode = annotationModeFor(map);
+  renderAnnotationModeButtons(map);
+  if (mode === 'clean') { layer.innerHTML = ''; return; }
+  const labels = (Array.isArray(mapSiteLabelsConfig[map]) ? mapSiteLabelsConfig[map] : (DEFAULT_MAP_SITE_LABELS[map] || []))
+    .filter(item => mode === 'full' || item.level !== 'full');
+  const zones = mapSpawnZonesConfig[map] || {};
+  const zoneHtml = Object.entries(zones).filter(([,zone]) => zone && typeof zone === 'object').map(([side, zone]) => {
+    const color = side === 'attack' ? '255,70,85' : '79,195,247';
+    const label = side === 'attack' ? 'T SPAWN' : 'CT SPAWN';
+    return `<span class="map-spawn-zone" style="left:${Number(zone.x||0)*100}%;top:${Number(zone.y||0)*100}%;width:${Number(zone.width||0)*100}%;height:${Number(zone.height||0)*100}%;color:rgb(${color});border-color:rgba(${color},.85);background:rgba(${color},.16)">${label}</span>`;
+  }).join('');
+  layer.innerHTML = zoneHtml + labels.map(item => `<span class="map-site-label" style="left:${Number(item.x) * 100}%;top:${Number(item.y) * 100}%">${esc(item.label)}</span>`).join('');
 }
+
+document.querySelectorAll('.map-annotation-mode').forEach(button => button.addEventListener('click', () => {
+  currentAnnotationMode = button.dataset.mapAnnotationMode || 'full';
+  renderMapSiteLabels();
+}));
+loadMapAnnotations();
 
 function selectAgent(agent) {
   selectedAgent   = agent.displayName;
