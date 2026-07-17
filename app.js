@@ -659,18 +659,18 @@ function renderDefenseAbilityMarkers() {
     }
     if (kind === 'sensor_area' || kind === 'sensor_rect') {
       const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
-      const center = defenseAbilityCenter(item);
-      const width = Math.max(.01, Number(item.shape_width || canonical.width || .12));
+      const points = normalizedDefensePoints(item);
       const height = Math.max(.01, Number(item.shape_height || canonical.height || .08));
-      const rotation = Number(item.shape_rotation ?? canonical.rotation ?? 0) * Math.PI / 180;
-      const axis = { x:Math.cos(rotation) * width / 2, y:Math.sin(rotation) * width / 2 };
-      const normal = { x:-Math.sin(rotation) * height / 2, y:Math.cos(rotation) * height / 2 };
+      const a = points[0], b = points[1];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const length = Math.max(.001, Math.hypot(dx, dy));
+      const normal = { x:-dy / length * height / 2, y:dx / length * height / 2 };
       const content = mapContentRect();
       const corners = [
-        { x:center.x-axis.x-normal.x, y:center.y-axis.y-normal.y },
-        { x:center.x+axis.x-normal.x, y:center.y+axis.y-normal.y },
-        { x:center.x+axis.x+normal.x, y:center.y+axis.y+normal.y },
-        { x:center.x-axis.x+normal.x, y:center.y-axis.y+normal.y },
+        { x:a.x+normal.x, y:a.y+normal.y },
+        { x:b.x+normal.x, y:b.y+normal.y },
+        { x:b.x-normal.x, y:b.y-normal.y },
+        { x:a.x-normal.x, y:a.y-normal.y },
       ].map(mapPointToPercent).map(point => ({ x:point.left * content.wrapWidth / 100, y:point.top * content.wrapHeight / 100 }));
       return `<polygon class="defense-sensor-zone" points="${corners.map(point => `${point.x},${point.y}`).join(' ')}"></polygon>`;
     }
@@ -697,24 +697,28 @@ function renderDefenseAbilityMarkers() {
       }).join('')
     : '';
     const markers = defenseAbilities.map((item, idx) => {
-    const isLine = defenseShapeKind(item) === 'line_segment';
+    const shapeKind = defenseShapeKind(item);
+    const isLine = shapeKind === 'line_segment';
+    const isSensor = shapeKind === 'sensor_rect';
+    const hasEndpoints = isLine || isSensor;
     const markerShape = defensePlacementShape(selectedAgent, item.ability, item.slot);
     const isBareArea = defenseShapeKind(item) === 'circle_area' && !markerShape.theme;
     const points = normalizedDefensePoints(item);
     const center = defenseAbilityCenter(item);
     const centerPos = mapPointToPercent(center);
-    const anchors = isLine ? points.map((point, pointIdx) => {
+    const anchors = hasEndpoints ? points.map((point, pointIdx) => {
       const pos = mapPointToPercent(point);
-      return `<div class="defense-line-anchor ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-line-index="${idx}" data-defense-line-point="${pointIdx}" style="left:${pos.left}%;top:${pos.top}%;" title="Край ${pointIdx + 1}: ${esc(item.ability)}"></div>`;
+      const sensorRole = isSensor ? (pointIdx === 0 ? ' sensor-pivot' : ' sensor-rotate') : '';
+      const title = isSensor ? (pointIdx === 0 ? 'Белая точка: переместить сенсор' : 'Красная точка: повернуть и изменить длину') : `Край ${pointIdx + 1}: ${item.ability}`;
+      return `<div class="defense-line-anchor${sensorRole} ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-line-index="${idx}" data-defense-line-point="${pointIdx}" style="left:${pos.left}%;top:${pos.top}%;" title="${esc(title)}"></div>`;
     }).join('') : '';
     const meshAnchors = ['mesh_burst','sensor_area'].includes(defenseShapeKind(item)) && selectedDefenseMarkerIndex === idx
       ? [[-1,-1],[1,-1],[-1,1],[1,1]].map(([sx,sy]) => { const r=Number(item.shape_radius||markerShape.radius||.097)*100/Math.sqrt(2); return `<div class="defense-line-anchor selected" data-defense-radius-index="${idx}" style="left:${centerPos.left+sx*r}%;top:${centerPos.top+sy*r}%;" title="Изменить размер"></div>`; }).join('') : '';
-    return `
-      ${anchors}${meshAnchors}
+    const centerMarker = isSensor ? '' : `
       <div class="defense-ability-marker ${isLine ? 'line-center' : ''} ${isBareArea ? 'bare-area-handle' : ''} ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-marker-index="${idx}" style="left:${centerPos.left}%;top:${centerPos.top}%;" title="${esc(item.ability)} #${idx + 1}">
         ${isBareArea ? '' : (item.icon ? `<img src="${esc(item.icon)}" alt="">` : `<span>${idx + 1}</span>`)}
-      </div>
-    `;
+      </div>`;
+    return `${anchors}${meshAnchors}${centerMarker}`;
   }).join('');
   host.innerHTML = `<svg class="defense-shape-lines" aria-hidden="true">
     <defs><pattern id="deadlock-net-grid" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -822,12 +826,20 @@ function normalizedDefensePoints(item) {
   if (clean.length >= 2) return clean.slice(0, 2);
   const x = Number.isFinite(Number(item?.x)) ? clamp01(item.x) : 0.5;
   const y = Number.isFinite(Number(item?.y)) ? clamp01(item.y) : 0.5;
+  if (defenseShapeKind(item) === 'sensor_rect') {
+    const canonical = defensePlacementShape(item?.agent || selectedAgent, item?.ability, item?.slot);
+    const width = Math.max(.01, Number(item?.shape_width || canonical.width || .12));
+    const rotation = Number(item?.shape_rotation ?? canonical.rotation ?? 0) * Math.PI / 180;
+    const dx = Math.cos(rotation) * width / 2;
+    const dy = Math.sin(rotation) * width / 2;
+    return [{ x:clamp01(x-dx), y:clamp01(y-dy) }, { x:clamp01(x+dx), y:clamp01(y+dy) }];
+  }
   return [{ x, y }, { x: clamp01(x + 0.08), y }];
 }
 
 function defenseAbilityCenter(item) {
   const points = normalizedDefensePoints(item);
-  if (defenseShapeKind(item) === 'line_segment' && points.length >= 2) {
+  if (['line_segment','sensor_rect'].includes(defenseShapeKind(item)) && points.length >= 2) {
     return {
       x: clamp01((points[0].x + points[1].x) / 2),
       y: clamp01((points[0].y + points[1].y) / 2),
@@ -839,15 +851,81 @@ function defenseAbilityCenter(item) {
   };
 }
 
+function setDefenseAbilityEndpoint(item, pointIndex, nextPoint) {
+  if (!item || ![0,1].includes(pointIndex)) return;
+  const kind = defenseShapeKind(item);
+  let points = normalizedDefensePoints(item);
+  if (kind === 'sensor_rect' && pointIndex === 0) {
+    const requestedDx = nextPoint.x - points[0].x;
+    const requestedDy = nextPoint.y - points[0].y;
+    const minX = Math.min(points[0].x, points[1].x), maxX = Math.max(points[0].x, points[1].x);
+    const minY = Math.min(points[0].y, points[1].y), maxY = Math.max(points[0].y, points[1].y);
+    const dx = Math.max(-minX, Math.min(1-maxX, requestedDx));
+    const dy = Math.max(-minY, Math.min(1-maxY, requestedDy));
+    points = points.map(point => ({ x:point.x+dx, y:point.y+dy }));
+  } else {
+    points[pointIndex] = { x:clamp01(nextPoint.x), y:clamp01(nextPoint.y) };
+  }
+  item.points = points.map((point, index) => ({
+    ...(kind === 'sensor_rect' ? { role:index === 0 ? 'pivot' : 'rotation' } : {}),
+    x:clamp01(point.x), y:clamp01(point.y),
+  }));
+  const center = defenseAbilityCenter({ ...item, points:item.points });
+  item.x = center.x;
+  item.y = center.y;
+  if (kind === 'sensor_rect') {
+    const dx = item.points[1].x - item.points[0].x;
+    const dy = item.points[1].y - item.points[0].y;
+    item.shape_width = Math.max(.01, Math.hypot(dx,dy));
+    item.shape_rotation = Math.atan2(dy,dx) * 180 / Math.PI;
+    item.shape_anchor = 'edge_midpoints';
+  }
+}
+
+function serializedDefenseAbilities() {
+  return defenseAbilities.map((item, idx) => ({
+    ability:item.ability,
+    slot:item.slot || '',
+    icon:item.icon || '',
+    x:item.x,
+    y:item.y,
+    shape_kind:defenseShapeKind(item),
+    shape_radius:Number(item.shape_radius || 0),
+    shape_anchor:item.shape_anchor || '',
+    shape_width:Number(item.shape_width || 0),
+    shape_height:Number(item.shape_height || 0),
+    shape_rotation:Number(item.shape_rotation || 0),
+    points:['line_segment','sensor_rect'].includes(defenseShapeKind(item))
+      ? normalizedDefensePoints(item).map((point, pointIndex) => ({
+          ...(defenseShapeKind(item) === 'sensor_rect' ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
+          x:point.x, y:point.y,
+        }))
+      : [],
+    order:idx + 1,
+  }));
+}
+
+function defenseSubmissionPayload() {
+  return {
+    site:defenseSiteValue(),
+    number:defenseNumberValue(),
+    zoom_area:defenseZoomArea,
+    abilities:serializedDefenseAbilities(),
+  };
+}
+
 const configuredDefenseShapeCache = new Map();
 
 async function getConfiguredDefenseShape(map, agent, ability, fallback = {}) {
   if (!map || !agent || !ability) return fallback;
-  const key = rangeConfigId(map, agent, ability);
-  if (configuredDefenseShapeCache.has(key)) return configuredDefenseShapeCache.get(key);
-  try {
-    const snap = await getDoc(doc(db, 'range_config', key));
-    if (snap.exists()) {
+  const requestedKey = rangeConfigId(map, agent, ability);
+  if (configuredDefenseShapeCache.has(requestedKey)) return configuredDefenseShapeCache.get(requestedKey);
+  const candidates = [...new Set([ability, ...abilityAliasesFor(ability)].filter(Boolean))];
+  for (const candidate of candidates) {
+    const key = rangeConfigId(map, agent, candidate);
+    try {
+      const snap = await getDoc(doc(db, 'range_config', key));
+      if (!snap.exists()) continue;
       const data = snap.data();
       const points = Array.isArray(data.points) ? data.points : [];
       const pivot = points.find(point => point?.role === 'pivot') || points[0];
@@ -863,13 +941,14 @@ async function getConfiguredDefenseShape(map, agent, ability, fallback = {}) {
         height: Number(data.shape_height || fallback.height || 0.08),
         rotation: Number.isFinite(Number(data.shape_rotation)) ? Number(data.shape_rotation) : pointAngle,
       };
+      configuredDefenseShapeCache.set(requestedKey, configured);
       configuredDefenseShapeCache.set(key, configured);
       return configured;
+    } catch (error) {
+      console.warn('getConfiguredDefenseShape', candidate, error.message);
     }
-  } catch (error) {
-    console.warn('getConfiguredDefenseShape', ability, error.message);
   }
-  configuredDefenseShapeCache.set(key, fallback);
+  configuredDefenseShapeCache.set(requestedKey, fallback);
   return fallback;
 }
 
@@ -5830,13 +5909,7 @@ window.addEventListener('pointermove', e => {
   if (defenseLinePointDrag && defenseLinePointDrag.pointerId === e.pointerId) {
     const item = defenseAbilities[defenseLinePointDrag.index];
     if (!item) return;
-    const point = eventToMapPoint(e);
-    const points = normalizedDefensePoints(item);
-    points[defenseLinePointDrag.pointIndex] = point;
-    const center = defenseAbilityCenter({ ...item, points });
-    item.points = points;
-    item.x = center.x;
-    item.y = center.y;
+    setDefenseAbilityEndpoint(item, defenseLinePointDrag.pointIndex, eventToMapPoint(e));
     renderDefenseAbilityMarkers();
     return;
   }
@@ -5845,11 +5918,12 @@ window.addEventListener('pointermove', e => {
   const { x, y } = eventToMapPoint(e);
   const item = defenseAbilities[defenseMarkerDrag.index];
   if (!item) return;
-  if (defenseShapeKind(item) === 'line_segment') {
+  if (['line_segment','sensor_rect'].includes(defenseShapeKind(item))) {
     const oldCenter = defenseAbilityCenter(item);
     const dx = x - oldCenter.x;
     const dy = y - oldCenter.y;
-    item.points = normalizedDefensePoints(item).map(point => ({
+    item.points = normalizedDefensePoints(item).map((point, pointIndex) => ({
+      ...(defenseShapeKind(item) === 'sensor_rect' ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
       x: clamp01(point.x + dx),
       y: clamp01(point.y + dy),
     }));
@@ -5871,13 +5945,7 @@ function finishDefenseLinePointDrag(e) {
   if (!defenseLinePointDrag || defenseLinePointDrag.pointerId !== e.pointerId) return;
   const item = defenseAbilities[defenseLinePointDrag.index];
   if (item) {
-    const point = eventToMapPoint(e);
-    const points = normalizedDefensePoints(item);
-    points[defenseLinePointDrag.pointIndex] = point;
-    const center = defenseAbilityCenter({ ...item, points });
-    item.points = points;
-    item.x = center.x;
-    item.y = center.y;
+    setDefenseAbilityEndpoint(item, defenseLinePointDrag.pointIndex, eventToMapPoint(e));
     validateForm(); _saveDraft();
   }
   defenseLinePointDrag = null;
@@ -7080,8 +7148,12 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
           data: {
             map, agent: selectedAgent, ability: normalizedAbility, title, description: desc,
             difficulty: selectedDifficulty, round_side: selectedRoundSide,
-            position_x: markerX, position_y: markerY, trajectory: trajectoryFromMarker(),
-            extra_abilities: extraAbilitiesPayload, range_radius: rangeRadius,
+            position_x: contentType === 'defense' ? 0 : markerX,
+            position_y: contentType === 'defense' ? 0 : markerY,
+            trajectory: contentType === 'defense' ? [] : trajectoryFromMarker(),
+            extra_abilities: contentType === 'lineup' ? extraAbilitiesPayload : [], range_radius: rangeRadius,
+            category: contentType, content_type: contentType,
+            ...(contentType === 'defense' ? defenseSubmissionPayload() : {}),
             screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl), video_url: videoUrl || '',
             user_id: submittedUid, submitted_by: submittedBy,
           },
@@ -7144,31 +7216,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         target_x: wallbangTargetX,
         target_y: wallbangTargetY,
       } : {}),
-      ...(contentType === 'defense' ? {
-        site: defenseSiteValue(),
-        number: defenseNumberValue(),
-        zoom_area: defenseZoomArea,
-        abilities: defenseAbilities.map((item, idx) => ({
-          ability: item.ability,
-          slot: item.slot || '',
-          icon: item.icon || '',
-          x: item.x,
-          y: item.y,
-          shape_kind: defenseShapeKind(item),
-          shape_radius: Number(item.shape_radius || 0),
-          shape_anchor: item.shape_anchor || '',
-          shape_width: Number(item.shape_width || 0),
-          shape_height: Number(item.shape_height || 0),
-          shape_rotation: Number(item.shape_rotation || 0),
-          points: ['line_segment','sensor_rect'].includes(defenseShapeKind(item))
-            ? normalizedDefensePoints(item).map((point, pointIndex) => ({
-                ...(defenseShapeKind(item) === 'sensor_rect' ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
-                x:point.x, y:point.y,
-              }))
-            : [],
-          order: idx + 1,
-        })),
-      } : {}),
+      ...(contentType === 'defense' ? defenseSubmissionPayload() : {}),
       schema_version: 2,
       difficulty:    selectedDifficulty,
       round_side:    selectedRoundSide,

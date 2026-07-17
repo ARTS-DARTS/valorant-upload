@@ -475,7 +475,7 @@
     .defense-shape-line.sensor { stroke: #65dcff; stroke-width: 1.8; filter: drop-shadow(0 0 3px rgba(101,220,255,.8)); }
     .defense-sensor-ring { fill: #173b52; stroke: #9cecff; stroke-width: 1.1; filter: drop-shadow(0 0 4px rgba(101,220,255,.9)); }
     .defense-sensor-node { fill: #8de5ff; stroke: #dff8ff; stroke-width: 1; filter: drop-shadow(0 0 3px rgba(79,195,247,.95)); }
-    .defense-sensor-zone { fill: rgba(184,190,113,.42); stroke: rgba(211,216,145,.55); stroke-width: .8; }
+    .defense-sensor-zone { fill: rgba(54,89,173,.42); stroke: #65dcff; stroke-width: 1.35; filter: drop-shadow(0 0 2px rgba(101,220,255,.6)); }
     .defense-sensor-core { fill: #3659ad; }
     .defense-sensor-dot { fill: #fff; }
     .defense-sensor-diamond { fill: #a34c55; stroke: #d78387; stroke-width: .25; }
@@ -490,6 +490,8 @@
     .defense-ability-marker img { width: 8px; height: 8px; object-fit: contain; }
     .defense-line-anchor { position: absolute; z-index: 6; width: 6.8px; height: 6.8px; transform: translate(-50%, -50%); border: 1px solid #e8f7ff; border-radius: 50%; background: rgba(79,195,247,.95); box-shadow: 0 0 0 1.6px rgba(79,195,247,.18), 0 0 5.6px rgba(79,195,247,.55); pointer-events: auto; cursor: grab; touch-action: none; }
     .defense-line-anchor.selected { background: #fff; border-color: var(--primary); }
+    .defense-line-anchor.sensor-pivot { width: 11px; height: 11px; background: #fff; border: 1.5px solid #17233b; box-shadow: 0 0 0 2px rgba(101,220,255,.32), 0 0 7px rgba(101,220,255,.72); }
+    .defense-line-anchor.sensor-rotate { width: 11px; height: 11px; background: #ff4655; border: 1.5px solid #fff; box-shadow: 0 0 0 2px rgba(255,70,85,.24), 0 0 7px rgba(255,70,85,.72); }
     .defense-line-anchor.draft { pointer-events: none; opacity: .82; }
     .ability-drag-ghost { position: fixed; left: 0; top: 0; z-index: 10000; width: 38px; height: 38px; transform: translate(-50%, -50%); border: 2px solid var(--primary); border-radius: 50%; background: rgba(15,23,42,.92); box-shadow: 0 0 0 5px rgba(79,195,247,.18), 0 12px 28px rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; pointer-events: none; }
     .ability-drag-ghost img { width: 27px; height: 27px; object-fit: contain; }
