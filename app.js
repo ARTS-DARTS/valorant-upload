@@ -791,7 +791,12 @@ function mapPointToPercent(point) {
 }
 
 function defenseShapeKind(item) {
-  return item?.shape_kind || item?.shape?.kind || 'point';
+  const stored = item?.shape_kind || item?.shape?.kind;
+  if (stored && stored !== 'point') return stored;
+  // Older saved setups stored Sonic Sensor as a plain point; upgrade its
+  // presentation on read without requiring a Firestore migration.
+  const canonical = defensePlacementShape(item?.agent || selectedAgent, item?.ability, item?.slot);
+  return canonical.kind || stored || 'point';
 }
 
 function normalizedDefensePoints(item) {
