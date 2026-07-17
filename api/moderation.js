@@ -77,7 +77,7 @@ function timestampMillis(value) {
   return typeof value?.toMillis === 'function' ? value.toMillis() : 0;
 }
 
-const MODERATION_LOCK_MS = 2 * 60_000;
+const MODERATION_LOCK_MS = 10 * 60_000;
 
 function safeLineup(doc, viewerUid = '') {
   const d = doc.data() || {};
@@ -147,8 +147,12 @@ async function saveDraft(req, res, moderator) {
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const currentData = snap.data() || {};
     if (currentData.status !== 'moderator_draft') throw Object.assign(new Error('Шаблон уже обработан'), { status: 409 });
-    if (clean(currentData.moderation_lock_uid) !== moderator.uid || timestampMillis(currentData.moderation_lock_expires_at) <= Date.now()) {
-      throw Object.assign(new Error('Бронь лайнапа истекла. Возьми его в работу заново.'), { status: 409 });
+    // An expired lease may be reclaimed by another moderator, but expiration
+    // alone must not destroy completed work. The original editor may still
+    // save while the lock UID is theirs; once somebody reclaims it, the UID
+    // changes atomically and this check safely rejects the old editor.
+    if (clean(currentData.moderation_lock_uid) !== moderator.uid) {
+      throw Object.assign(new Error('Этот лайнап уже взял другой модератор. Обнови очередь.'), { status: 409 });
     }
     const extras = Array.isArray(data.extra_abilities) ? data.extra_abilities.slice(0, 2).map((item, index) => ({
       ability: clean(item?.ability).slice(0, 80), icon: clean(item?.icon).slice(0, 1000), order: index + 1,
