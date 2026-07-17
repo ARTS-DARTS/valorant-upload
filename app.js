@@ -941,6 +941,23 @@ function defenseSubmissionPayload() {
 
 const configuredDefenseShapeCache = new Map();
 
+function configuredDefenseShapeFromData(data, fallback = {}) {
+  const points = Array.isArray(data?.points) ? data.points : [];
+  const pivot = points.find(point => point?.role === 'pivot') || points[0];
+  const rotationPoint = points.find(point => point?.role === 'rotation') || points[1];
+  const pointAngle = pivot && rotationPoint
+    ? Math.atan2(Number(rotationPoint.y) - Number(pivot.y), Number(rotationPoint.x) - Number(pivot.x)) * 180 / Math.PI
+    : 0;
+  return {
+    ...fallback,
+    kind: data?.shape_kind || fallback.kind,
+    anchor: data?.shape_anchor || fallback.anchor || 'edge_midpoints',
+    width: Number(data?.shape_width || fallback.width || 0.12),
+    height: Number(data?.shape_height || fallback.height || 0.08),
+    rotation: Number.isFinite(Number(data?.shape_rotation)) ? Number(data.shape_rotation) : pointAngle,
+  };
+}
+
 async function getConfiguredDefenseShape(map, agent, ability, fallback = {}) {
   if (!map || !agent || !ability) return fallback;
   const requestedKey = rangeConfigId(map, agent, ability);
@@ -951,27 +968,34 @@ async function getConfiguredDefenseShape(map, agent, ability, fallback = {}) {
     try {
       const snap = await getDoc(doc(db, 'range_config', key));
       if (!snap.exists()) continue;
-      const data = snap.data();
-      const points = Array.isArray(data.points) ? data.points : [];
-      const pivot = points.find(point => point?.role === 'pivot') || points[0];
-      const rotationPoint = points.find(point => point?.role === 'rotation') || points[1];
-      const pointAngle = pivot && rotationPoint
-        ? Math.atan2(Number(rotationPoint.y) - Number(pivot.y), Number(rotationPoint.x) - Number(pivot.x)) * 180 / Math.PI
-        : 0;
-      const configured = {
-        ...fallback,
-        kind: data.shape_kind || fallback.kind,
-        anchor: data.shape_anchor || fallback.anchor || 'edge_midpoints',
-        width: Number(data.shape_width || fallback.width || 0.12),
-        height: Number(data.shape_height || fallback.height || 0.08),
-        rotation: Number.isFinite(Number(data.shape_rotation)) ? Number(data.shape_rotation) : pointAngle,
-      };
+      const configured = configuredDefenseShapeFromData(snap.data(), fallback);
       configuredDefenseShapeCache.set(requestedKey, configured);
       configuredDefenseShapeCache.set(key, configured);
       return configured;
     } catch (error) {
       console.warn('getConfiguredDefenseShape', candidate, error.message);
     }
+  }
+  const globalKey=`__sensor_shape__${agent}`;
+  if (configuredDefenseShapeCache.has(globalKey)) {
+    const configured=configuredDefenseShapeCache.get(globalKey);
+    configuredDefenseShapeCache.set(requestedKey,configured);
+    return configured;
+  }
+  try {
+    const snap=await getDocs(query(collection(db,'range_config'),where('agent','==',agent),limit(200)));
+    const matches=snap.docs
+      .map(item=>item.data())
+      .filter(data=>data.shape_kind==='sensor_rect' && defensePlacementShape(agent,data.ability).kind==='sensor_rect')
+      .sort((a,b)=>(b.updatedAt?.toMillis?.()||0)-(a.updatedAt?.toMillis?.()||0));
+    if(matches.length){
+      const configured=configuredDefenseShapeFromData(matches[0],fallback);
+      configuredDefenseShapeCache.set(globalKey,configured);
+      configuredDefenseShapeCache.set(requestedKey,configured);
+      return configured;
+    }
+  } catch(error) {
+    console.warn('getConfiguredDefenseShape global fallback',ability,error.message);
   }
   configuredDefenseShapeCache.set(requestedKey, fallback);
   return fallback;
