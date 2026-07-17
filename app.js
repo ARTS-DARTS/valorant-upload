@@ -255,7 +255,7 @@ function defensePlacementShape(agentName, abilityName, slot = '') {
     return { kind: 'net_area', points: 1, radius: 0.04335, source: 'valoplant' };
   }
   if (/deadlock/.test(key) && /sonic|звуков|датчик|сенсор|sensor/.test(key)) {
-    return { kind: 'sensor_area', points: 1, radius: 0.055, source: 'valoplant' };
+    return { kind: 'sensor_rect', points: 2, width: 0.12, height: 0.08, rotation: 0, anchor: 'edge_midpoints', source: 'range_config' };
   }
   if (/cypher/.test(key) && /trapwire|растяж/.test(key)) {
     return { kind: 'line_segment', points: 2 };
@@ -658,13 +658,21 @@ function renderDefenseAbilityMarkers() {
         <circle class="defense-area-net-grid" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
     }
     if (kind === 'sensor_area' || kind === 'sensor_rect') {
-      const center = mapPointToPercent(defenseAbilityCenter(item));
       const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
-      const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.055) * 100);
-      const d = radius / Math.sqrt(2);
-      const ends=[[-d,-d],[d,-d],[-d,d],[d,d]];
-      const box=radius*Math.sqrt(2);
-      return `<rect class="defense-sensor-zone" x="${center.left-box/2}%" y="${center.top-box/2}%" width="${box}%" height="${box}%"></rect>`;
+      const center = defenseAbilityCenter(item);
+      const width = Math.max(.01, Number(item.shape_width || canonical.width || .12));
+      const height = Math.max(.01, Number(item.shape_height || canonical.height || .08));
+      const rotation = Number(item.shape_rotation ?? canonical.rotation ?? 0) * Math.PI / 180;
+      const axis = { x:Math.cos(rotation) * width / 2, y:Math.sin(rotation) * width / 2 };
+      const normal = { x:-Math.sin(rotation) * height / 2, y:Math.cos(rotation) * height / 2 };
+      const content = mapContentRect();
+      const corners = [
+        { x:center.x-axis.x-normal.x, y:center.y-axis.y-normal.y },
+        { x:center.x+axis.x-normal.x, y:center.y+axis.y-normal.y },
+        { x:center.x+axis.x+normal.x, y:center.y+axis.y+normal.y },
+        { x:center.x-axis.x+normal.x, y:center.y-axis.y+normal.y },
+      ].map(mapPointToPercent).map(point => ({ x:point.left * content.wrapWidth / 100, y:point.top * content.wrapHeight / 100 }));
+      return `<polygon class="defense-sensor-zone" points="${corners.map(point => `${point.x},${point.y}`).join(' ')}"></polygon>`;
     }
     if (kind === 'circle_area') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
@@ -718,10 +726,11 @@ function moveDefenseAbilityTo(index, x, y) {
   const item = defenseAbilities[index];
   if (!item) return;
   const oldCenter = defenseAbilityCenter(item);
-  if (defenseShapeKind(item) === 'line_segment') {
+  if (defenseShapeKind(item) === 'line_segment' || defenseShapeKind(item) === 'sensor_rect') {
     const dx = x - oldCenter.x;
     const dy = y - oldCenter.y;
-    item.points = normalizedDefensePoints(item).map(point => ({
+    item.points = normalizedDefensePoints(item).map((point, pointIndex) => ({
+      ...(defenseShapeKind(item) === 'sensor_rect' ? { role: pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
       x: clamp01(point.x + dx),
       y: clamp01(point.y + dy),
     }));
@@ -796,10 +805,11 @@ function mapPointToPercent(point) {
 
 function defenseShapeKind(item) {
   const stored = item?.shape_kind || item?.shape?.kind;
+  const canonical = defensePlacementShape(item?.agent || selectedAgent, item?.ability, item?.slot);
+  if ((stored === 'point' || stored === 'sensor_area') && canonical.kind === 'sensor_rect') return 'sensor_rect';
   if (stored && stored !== 'point') return stored;
   // Older saved setups stored Sonic Sensor as a plain point; upgrade its
   // presentation on read without requiring a Firestore migration.
-  const canonical = defensePlacementShape(item?.agent || selectedAgent, item?.ability, item?.slot);
   return canonical.kind || stored || 'point';
 }
 
@@ -829,35 +839,126 @@ function defenseAbilityCenter(item) {
   };
 }
 
-function placeDefenseAbilityAt(x, y, options = {}) {
-  if (!selectedDefenseAbility) {
+const configuredDefenseShapeCache = new Map();
+
+async function getConfiguredDefenseShape(map, agent, ability, fallback = {}) {
+  if (!map || !agent || !ability) return fallback;
+  const key = rangeConfigId(map, agent, ability);
+  if (configuredDefenseShapeCache.has(key)) return configuredDefenseShapeCache.get(key);
+  try {
+    const snap = await getDoc(doc(db, 'range_config', key));
+    if (snap.exists()) {
+      const data = snap.data();
+      const points = Array.isArray(data.points) ? data.points : [];
+      const pivot = points.find(point => point?.role === 'pivot') || points[0];
+      const rotationPoint = points.find(point => point?.role === 'rotation') || points[1];
+      const pointAngle = pivot && rotationPoint
+        ? Math.atan2(Number(rotationPoint.y) - Number(pivot.y), Number(rotationPoint.x) - Number(pivot.x)) * 180 / Math.PI
+        : 0;
+      const configured = {
+        ...fallback,
+        kind: data.shape_kind || fallback.kind,
+        anchor: data.shape_anchor || fallback.anchor || 'edge_midpoints',
+        width: Number(data.shape_width || fallback.width || 0.12),
+        height: Number(data.shape_height || fallback.height || 0.08),
+        rotation: Number.isFinite(Number(data.shape_rotation)) ? Number(data.shape_rotation) : pointAngle,
+      };
+      configuredDefenseShapeCache.set(key, configured);
+      return configured;
+    }
+  } catch (error) {
+    console.warn('getConfiguredDefenseShape', ability, error.message);
+  }
+  configuredDefenseShapeCache.set(key, fallback);
+  return fallback;
+}
+
+async function syncConfiguredDefenseAbilityShapes() {
+  const map = document.getElementById('sel-map')?.value || '';
+  if (!map || !selectedAgent || !defenseAbilities.length) return;
+  let changed = false;
+  await Promise.all(defenseAbilities.map(async item => {
+    const fallback = defensePlacementShape(selectedAgent, item.ability, item.slot);
+    if (fallback.kind !== 'sensor_rect') return;
+    const configured = await getConfiguredDefenseShape(map, selectedAgent, item.ability, fallback);
+    const center = defenseAbilityCenter(item);
+    const width = Math.max(.01, Number(configured.width || fallback.width || .12));
+    const rotation = Number(configured.rotation ?? fallback.rotation ?? 0);
+    const radians = rotation * Math.PI / 180;
+    const dx = Math.cos(radians) * width / 2;
+    const dy = Math.sin(radians) * width / 2;
+    Object.assign(item, {
+      x:center.x, y:center.y,
+      shape_kind:'sensor_rect',
+      shape_anchor:configured.anchor || 'edge_midpoints',
+      shape_width:width,
+      shape_height:Math.max(.01, Number(configured.height || fallback.height || .08)),
+      shape_rotation:rotation,
+      points:[
+        { role:'pivot', x:clamp01(center.x-dx), y:clamp01(center.y-dy) },
+        { role:'rotation', x:clamp01(center.x+dx), y:clamp01(center.y+dy) },
+      ],
+    });
+    changed = true;
+  }));
+  if (changed) {
+    renderDefenseAbilityPanel();
+    renderDefenseAbilityMarkers();
+    validateForm();
+    _saveDraft();
+  }
+}
+
+async function placeDefenseAbilityAt(x, y, options = {}) {
+  const chosenAbility = selectedDefenseAbility;
+  if (!chosenAbility) {
     toast('Выбери способность сетапа', 'w');
     return false;
   }
-  if (placedDefenseCount(selectedDefenseAbility.ability) >= selectedDefenseAbility.limit) {
+  if (placedDefenseCount(chosenAbility.ability) >= chosenAbility.limit) {
     toast('Лимит этой способности уже достигнут', 'w');
     return false;
   }
-  const shapeKind = options.shapeKind || selectedDefenseAbility.shape?.kind || 'point';
+  const map = document.getElementById('sel-map')?.value || '';
+  const configuredShape = options.shapeKind
+    ? chosenAbility.shape
+    : await getConfiguredDefenseShape(map, selectedAgent, chosenAbility.ability, chosenAbility.shape || {});
+  const shapeKind = options.shapeKind || configuredShape?.kind || chosenAbility.shape?.kind || 'point';
   const points = shapeKind === 'line_segment'
     ? normalizedDefensePoints({ x, y, points: options.points })
     : [];
   const center = shapeKind === 'line_segment'
     ? defenseAbilityCenter({ shape_kind: shapeKind, points })
     : { x, y };
+  const shapeWidth = Number(options.shapeWidth || configuredShape?.width || 0);
+  const shapeHeight = Number(options.shapeHeight || configuredShape?.height || 0);
+  const shapeRotation = Number(options.shapeRotation ?? configuredShape?.rotation ?? 0);
+  const sensorPoints = shapeKind === 'sensor_rect' ? (() => {
+    const radians = shapeRotation * Math.PI / 180;
+    const dx = Math.cos(radians) * shapeWidth / 2;
+    const dy = Math.sin(radians) * shapeWidth / 2;
+    return [
+      { role:'pivot', x:clamp01(center.x - dx), y:clamp01(center.y - dy) },
+      { role:'rotation', x:clamp01(center.x + dx), y:clamp01(center.y + dy) },
+    ];
+  })() : points;
   defenseAbilities.push({
-    ability: selectedDefenseAbility.ability,
-    slot: selectedDefenseAbility.slot,
-    icon: selectedDefenseAbility.icon,
+    ability: chosenAbility.ability,
+    slot: chosenAbility.slot,
+    icon: chosenAbility.icon,
     x: clamp01(center.x),
     y: clamp01(center.y),
     shape_kind: shapeKind,
-    shape_radius: Number(options.shapeRadius || selectedDefenseAbility.shape?.radius || 0),
-    points,
+    shape_radius: Number(options.shapeRadius || configuredShape?.radius || chosenAbility.shape?.radius || 0),
+    shape_anchor: configuredShape?.anchor || 'edge_midpoints',
+    shape_width: shapeWidth,
+    shape_height: shapeHeight,
+    shape_rotation: shapeRotation,
+    points: sensorPoints,
     order: defenseAbilities.length + 1,
   });
   selectedDefenseMarkerIndex = defenseAbilities.length - 1;
-  if (placedDefenseCount(selectedDefenseAbility.ability) >= selectedDefenseAbility.limit) {
+  if (selectedDefenseAbility?.ability === chosenAbility.ability && placedDefenseCount(chosenAbility.ability) >= chosenAbility.limit) {
     selectedDefenseAbility = null;
     setMapMode('position');
   }
@@ -6647,10 +6748,15 @@ function _restoreDraft(sourceDraft = null) {
             .map((item, idx) => {
               const storedShapeKind = item.shape_kind || item.shape?.kind || 'point';
               const catalogShape = defensePlacementShape(d.agent || selectedAgent, item.ability, item.slot);
-              const shapeKind = storedShapeKind === 'point' && catalogShape.kind !== 'point'
+              const shapeKind = (storedShapeKind === 'point' || storedShapeKind === 'sensor_area') && catalogShape.kind !== 'point'
                 ? catalogShape.kind
-                : (storedShapeKind === 'sensor_area' ? 'point' : storedShapeKind);
-              const points = shapeKind === 'line_segment' ? normalizedDefensePoints(item) : [];
+                : storedShapeKind;
+              const points = (shapeKind === 'line_segment' || shapeKind === 'sensor_rect')
+                ? normalizedDefensePoints(item).map((point, pointIndex) => ({
+                    ...(shapeKind === 'sensor_rect' ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
+                    x:point.x, y:point.y,
+                  }))
+                : [];
               const center = shapeKind === 'line_segment'
                 ? defenseAbilityCenter({ ...item, shape_kind: shapeKind, points })
                 : { x: Number(item.x), y: Number(item.y) };
@@ -6662,6 +6768,10 @@ function _restoreDraft(sourceDraft = null) {
                 y: Number(center.y),
                 shape_kind: shapeKind,
                 shape_radius: Number(catalogShape.radius || item.shape_radius || item.shape?.radius || 0),
+                shape_anchor: item.shape_anchor || catalogShape.anchor || 'edge_midpoints',
+                shape_width: Number(item.shape_width || catalogShape.width || 0.12),
+                shape_height: Number(item.shape_height || catalogShape.height || 0.08),
+                shape_rotation: Number(item.shape_rotation ?? catalogShape.rotation ?? 0),
                 points,
                 order: Number(item.order || idx + 1),
               };
@@ -6676,6 +6786,7 @@ function _restoreDraft(sourceDraft = null) {
         }
         renderCategoryMapExtras();
         renderDefenseAbilityMarkers();
+        syncConfiguredDefenseAbilityShapes();
         validateForm();
       };
       if (img.complete && img.naturalWidth) afterLoad();
@@ -7045,8 +7156,15 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
           y: item.y,
           shape_kind: defenseShapeKind(item),
           shape_radius: Number(item.shape_radius || 0),
-          points: defenseShapeKind(item) === 'line_segment'
-            ? normalizedDefensePoints(item).map(point => ({ x: point.x, y: point.y }))
+          shape_anchor: item.shape_anchor || '',
+          shape_width: Number(item.shape_width || 0),
+          shape_height: Number(item.shape_height || 0),
+          shape_rotation: Number(item.shape_rotation || 0),
+          points: ['line_segment','sensor_rect'].includes(defenseShapeKind(item))
+            ? normalizedDefensePoints(item).map((point, pointIndex) => ({
+                ...(defenseShapeKind(item) === 'sensor_rect' ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
+                x:point.x, y:point.y,
+              }))
             : [],
           order: idx + 1,
         })),
