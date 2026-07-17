@@ -662,7 +662,8 @@ function renderDefenseAbilityMarkers() {
       const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
       const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.055) * 100);
       const d = radius / Math.sqrt(2);
-      return `<line class="defense-shape-line sensor" x1="${center.left-d}%" y1="${center.top-d}%" x2="${center.left+d}%" y2="${center.top+d}%"></line><line class="defense-shape-line sensor" x1="${center.left-d}%" y1="${center.top+d}%" x2="${center.left+d}%" y2="${center.top-d}%"></line><circle class="defense-sensor-ring" cx="${center.left}%" cy="${center.top}%" r="1.7%"></circle>`;
+      const ends=[[-d,-d],[d,-d],[-d,d],[d,d]];
+      return ends.map(([dx,dy]) => `<line class="defense-shape-line sensor" x1="${center.left}%" y1="${center.top}%" x2="${center.left+dx}%" y2="${center.top+dy}%"></line><circle class="defense-sensor-node" cx="${center.left+dx}%" cy="${center.top+dy}%" r="1.25%"></circle>`).join('') + `<circle class="defense-sensor-ring" cx="${center.left}%" cy="${center.top}%" r="1.7%"></circle>`;
     }
     if (kind === 'circle_area') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
