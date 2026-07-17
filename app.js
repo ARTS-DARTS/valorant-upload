@@ -3039,7 +3039,7 @@ function renderMapSiteLabels() {
   renderAnnotationModeButtons(map);
   if (mode === 'clean') { layer.innerHTML = ''; return; }
   const labels = (Array.isArray(mapSiteLabelsConfig[map]) ? mapSiteLabelsConfig[map] : (DEFAULT_MAP_SITE_LABELS[map] || []))
-    .filter(item => mode === 'full' || item.level !== 'full');
+    .filter(item => item.level === 'site');
   const zones = mapSpawnZonesConfig[map] || {};
   const zoneHtml = Object.entries(zones).filter(([,zone]) => zone && typeof zone === 'object').map(([side, zone]) => {
     const color = side === 'attack' ? '255,70,85' : '79,195,247';
