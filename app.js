@@ -657,7 +657,7 @@ function renderDefenseAbilityMarkers() {
       return `<circle class="defense-area-shape net" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>
         <circle class="defense-area-net-grid" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
     }
-    if (kind === 'sensor_area') {
+    if (kind === 'sensor_area' || kind === 'sensor_rect') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
       const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
       const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.055) * 100);
