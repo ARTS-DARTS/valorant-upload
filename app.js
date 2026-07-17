@@ -686,7 +686,7 @@ function renderDefenseAbilityMarkers() {
         return `<div class="defense-line-anchor draft" style="left:${pos.left}%;top:${pos.top}%;"></div>`;
       }).join('')
     : '';
-  const markers = defenseAbilities.map((item, idx) => {
+    const markers = defenseAbilities.map((item, idx) => {
     const isLine = defenseShapeKind(item) === 'line_segment';
     const markerShape = defensePlacementShape(selectedAgent, item.ability, item.slot);
     const isBareArea = defenseShapeKind(item) === 'circle_area' && !markerShape.theme;
@@ -697,8 +697,10 @@ function renderDefenseAbilityMarkers() {
       const pos = mapPointToPercent(point);
       return `<div class="defense-line-anchor ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-line-index="${idx}" data-defense-line-point="${pointIdx}" style="left:${pos.left}%;top:${pos.top}%;" title="Край ${pointIdx + 1}: ${esc(item.ability)}"></div>`;
     }).join('') : '';
+    const meshAnchors = defenseShapeKind(item) === 'mesh_burst' && selectedDefenseMarkerIndex === idx
+      ? [[-1,-1],[1,-1],[-1,1],[1,1]].map(([sx,sy]) => { const r=Number(item.shape_radius||markerShape.radius||.097)*100/Math.sqrt(2); return `<div class="defense-line-anchor selected" data-defense-radius-index="${idx}" style="left:${centerPos.left+sx*r}%;top:${centerPos.top+sy*r}%;" title="Изменить размер"></div>`; }).join('') : '';
     return `
-      ${anchors}
+      ${anchors}${meshAnchors}
       <div class="defense-ability-marker ${isLine ? 'line-center' : ''} ${isBareArea ? 'bare-area-handle' : ''} ${selectedDefenseMarkerIndex === idx ? 'selected' : ''}" data-defense-marker-index="${idx}" style="left:${centerPos.left}%;top:${centerPos.top}%;" title="${esc(item.ability)} #${idx + 1}">
         ${isBareArea ? '' : (item.icon ? `<img src="${esc(item.icon)}" alt="">` : `<span>${idx + 1}</span>`)}
       </div>
@@ -5658,10 +5660,13 @@ document.getElementById('map-wrap')?.addEventListener('drop', e => {
 
 let defenseMarkerDrag = null;
 let defenseLinePointDrag = null;
+let defenseRadiusDrag = null;
 // Marker DOM nodes are recreated by renderDefenseAbilityMarkers() during a drag.
 // Keep pointer tracking on the window handlers below instead of capturing a node
 // that is detached by the first render (which throws InvalidStateError in Chromium).
 document.getElementById('defense-ability-markers')?.addEventListener('pointerdown', e => {
+  const radiusAnchor = e.target.closest('[data-defense-radius-index]');
+  if (radiusAnchor) { e.preventDefault(); e.stopPropagation(); defenseRadiusDrag={index:Number(radiusAnchor.dataset.defenseRadiusIndex),pointerId:e.pointerId}; selectedDefenseMarkerIndex=defenseRadiusDrag.index; return; }
   const anchor = e.target.closest('[data-defense-line-index]');
   if (anchor && normalizeContentCategory(selectedCategory) === 'defense') {
     e.preventDefault();
@@ -5708,6 +5713,12 @@ document.getElementById('defense-ability-markers')?.addEventListener('click', e 
   }
 }, true);
 window.addEventListener('pointermove', e => {
+  if (defenseRadiusDrag?.pointerId === e.pointerId) {
+    const item=defenseAbilities[defenseRadiusDrag.index]; if (!item) return;
+    const p=eventToMapPoint(e), c=defenseAbilityCenter(item);
+    item.shape_radius=Math.max(.02, Math.min(.25, Math.hypot(p.x-c.x,p.y-c.y)*Math.sqrt(2)));
+    renderDefenseAbilityMarkers(); return;
+  }
   if (defenseAbilityDrag && defenseAbilityDrag.pointerId === e.pointerId) {
     defenseAbilityDrag.moved = true;
     setAbilityDragGhostPosition(e);
@@ -5751,6 +5762,7 @@ function finishDefenseMarkerDrag(e) {
   defenseMarkerDrag = null;
 }
 window.addEventListener('pointerup', finishDefenseMarkerDrag);
+window.addEventListener('pointerup', e => { if (defenseRadiusDrag?.pointerId === e.pointerId) { defenseRadiusDrag=null; _saveDraft(); } });
 window.addEventListener('pointercancel', e => { if (defenseMarkerDrag?.pointerId === e.pointerId) defenseMarkerDrag = null; });
 function finishDefenseLinePointDrag(e) {
   if (!defenseLinePointDrag || defenseLinePointDrag.pointerId !== e.pointerId) return;
