@@ -77,8 +77,12 @@ function timestampMillis(value) {
   return typeof value?.toMillis === 'function' ? value.toMillis() : 0;
 }
 
-function safeLineup(doc) {
+const MODERATION_LOCK_MS = 2 * 60_000;
+
+function safeLineup(doc, viewerUid = '') {
   const d = doc.data() || {};
+  const lockExpiresAt = timestampMillis(d.moderation_lock_expires_at);
+  const lockActive = !!d.moderation_lock_uid && lockExpiresAt > Date.now();
   return {
     id: doc.id,
     title: clean(d.title).slice(0, 100),
@@ -99,6 +103,10 @@ function safeLineup(doc) {
     trajectory: Array.isArray(d.trajectory) ? d.trajectory.slice(0, 30) : [],
     extra_abilities: Array.isArray(d.extra_abilities) ? d.extra_abilities.slice(0, 2) : [],
     submitted_at: timestampMillis(d.submitted_at || d.created_at || d.createdAt),
+    moderation_lock_active: lockActive,
+    moderation_lock_owned: lockActive && clean(d.moderation_lock_uid) === viewerUid,
+    moderation_lock_name: lockActive ? clean(d.moderation_lock_name).slice(0, 80) : '',
+    moderation_lock_expires_at: lockActive ? lockExpiresAt : 0,
   };
 }
 
@@ -137,7 +145,11 @@ async function saveDraft(req, res, moderator) {
   await db.runTransaction(async tx => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
-    if (snap.data()?.status !== 'moderator_draft') throw Object.assign(new Error('Шаблон уже обработан'), { status: 409 });
+    const currentData = snap.data() || {};
+    if (currentData.status !== 'moderator_draft') throw Object.assign(new Error('Шаблон уже обработан'), { status: 409 });
+    if (clean(currentData.moderation_lock_uid) !== moderator.uid || timestampMillis(currentData.moderation_lock_expires_at) <= Date.now()) {
+      throw Object.assign(new Error('Бронь лайнапа истекла. Возьми его в работу заново.'), { status: 409 });
+    }
     const extras = Array.isArray(data.extra_abilities) ? data.extra_abilities.slice(0, 2).map((item, index) => ({
       ability: clean(item?.ability).slice(0, 80), icon: clean(item?.icon).slice(0, 1000), order: index + 1,
       trajectory: safePoints(item?.trajectory), range_radius: Math.max(0, Math.min(.5, Number(item?.range_radius) || 0)),
@@ -153,13 +165,16 @@ async function saveDraft(req, res, moderator) {
       video_url: clean(data.video_url).slice(0, 1000), user_id: authorUid, submitted_by: authorName,
       category: 'lineup', content_type: 'lineup', status: 'pending', moderator_only: false,
       edited_by_moderator_uid: moderator.uid, edited_at: FieldValue.serverTimestamp(), submitted_at: FieldValue.serverTimestamp(),
+      edited_by_moderator_name: moderator.name,
       moderator_template_completed: true,
+      moderation_lock_uid: FieldValue.delete(), moderation_lock_name: FieldValue.delete(),
+      moderation_lock_expires_at: FieldValue.delete(),
     });
   });
   res.status(200).json({ ok: true, id: lineupId, status: 'pending' });
 }
 
-async function listQueue(res) {
+async function listQueue(res, moderator) {
   const db = getFirestore();
   const [pendingSnap, moderatorSnap] = await Promise.all([
     // Admin-created pending lineups can have created_at without submitted_at.
@@ -174,10 +189,60 @@ async function listQueue(res) {
     }),
     ...moderatorSnap.docs.filter(doc => doc.data()?.status === 'moderator_draft'),
   ]
-    .map(safeLineup)
+    .map(doc => safeLineup(doc, moderator.uid))
     .sort((a, b) => b.submitted_at - a.submitted_at)
     .slice(0, 50);
   res.status(200).json({ items });
+}
+
+async function listLocks(req, res, moderator) {
+  const ids = clean(req.query?.locks).split(',').filter(id => /^[A-Za-z0-9_-]{6,128}$/.test(id)).slice(0, 50);
+  if (!ids.length) return res.status(200).json({ locks: {} });
+  const db = getFirestore();
+  const refs = ids.map(id => db.collection('lineups').doc(id));
+  const snaps = await db.getAll(...refs);
+  const locks = {};
+  snaps.forEach(snap => {
+    if (!snap.exists) return;
+    const data = snap.data() || {};
+    const expiresAt = timestampMillis(data.moderation_lock_expires_at);
+    if (clean(data.moderation_lock_uid) && expiresAt > Date.now()) {
+      locks[snap.id] = {
+        active: true,
+        owned: clean(data.moderation_lock_uid) === moderator.uid,
+        name: clean(data.moderation_lock_name).slice(0, 80),
+        expires_at: expiresAt,
+      };
+    }
+  });
+  res.status(200).json({ locks });
+}
+
+async function claimDraft(req, res, moderator) {
+  const lineupId = clean(req.body?.lineupId);
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
+  const db = getFirestore();
+  const ref = db.collection('lineups').doc(lineupId);
+  const expiresAt = new Date(Date.now() + MODERATION_LOCK_MS);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
+    const data = snap.data() || {};
+    if (data.status !== 'moderator_draft' || data.moderator_only !== true) {
+      throw Object.assign(new Error('Шаблон уже обработан'), { status: 409 });
+    }
+    const lockUid = clean(data.moderation_lock_uid);
+    const lockActive = lockUid && timestampMillis(data.moderation_lock_expires_at) > Date.now();
+    if (lockActive && lockUid !== moderator.uid) {
+      throw Object.assign(new Error(`Этот лайнап уже редактирует ${clean(data.moderation_lock_name) || 'другой модератор'}`), { status: 409 });
+    }
+    tx.update(ref, {
+      moderation_lock_uid: moderator.uid,
+      moderation_lock_name: moderator.name,
+      moderation_lock_expires_at: expiresAt,
+    });
+  });
+  res.status(200).json({ ok: true, expires_at: expiresAt.getTime() });
 }
 
 async function moderate(req, res, moderator) {
@@ -185,6 +250,7 @@ async function moderate(req, res, moderator) {
   const lineupId = clean(req.body?.lineupId);
   const action = clean(req.body?.action);
   if (action === 'save_draft') return saveDraft(req, res, moderator);
+  if (action === 'claim' || action === 'renew_claim') return claimDraft(req, res, moderator);
   const reason = clean(req.body?.reason);
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
   if (action !== 'reject') return res.status(400).json({ error: 'Модератору недоступна отправка в «Пирожки»' });
@@ -200,6 +266,10 @@ async function moderate(req, res, moderator) {
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const data = snap.data() || {};
     if (!['pending', 'moderator_draft'].includes(data.status)) throw Object.assign(new Error('Лайнап уже обработан другим модератором'), { status: 409 });
+    const lockUid = clean(data.moderation_lock_uid);
+    if (lockUid && lockUid !== moderator.uid && timestampMillis(data.moderation_lock_expires_at) > Date.now()) {
+      throw Object.assign(new Error(`Этот лайнап сейчас редактирует ${clean(data.moderation_lock_name) || 'другой модератор'}`), { status: 409 });
+    }
     authorUid = clean(data.user_id || data.uid || data.author_uid);
     const update = {
       status: 'rejected',
@@ -239,7 +309,11 @@ export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
   try {
     const moderator = await authorize(req);
-    if (req.method === 'GET') return req.query?.q !== undefined ? await searchAuthors(req, res) : await listQueue(res);
+    if (req.method === 'GET') {
+      if (req.query?.q !== undefined) return await searchAuthors(req, res);
+      if (req.query?.locks !== undefined) return await listLocks(req, res, moderator);
+      return await listQueue(res, moderator);
+    }
     return await moderate(req, res, moderator);
   } catch (error) {
     const status = Number(error.status) || (error.code?.startsWith('auth/') ? 401 : 500);

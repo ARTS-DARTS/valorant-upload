@@ -7278,6 +7278,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || `Ошибка ${response.status}`);
+      moderationController?.clearClaim?.();
       moderatorDraftSourceId = '';
       moderatorSelectedAuthor = null;
       showModeratorAuthorPicker();

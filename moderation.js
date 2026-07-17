@@ -1,5 +1,8 @@
 let context = null;
 let loading = false;
+let lockPollTimer = null;
+let claimHeartbeatTimer = null;
+let claimedLineupId = '';
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
@@ -57,12 +60,62 @@ function render(items) {
           <div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>
         </div>
       </div>
+      <div class="moderation-lock-status" data-moderation-lock-status></div>
       <div class="moderation-actions">
         ${item.moderator_only ? '<button class="moderation-action moderation-complete" data-moderation-action="complete" type="button">✏️ Доделать шаблон</button>' : ''}
         <button class="moderation-action moderation-reject" data-moderation-action="reject" type="button">Отклонить с причиной</button>
       </div>
     </article>`;
   }).join('');
+  items.forEach(item => applyLockToCard(item));
+}
+
+function applyLockToCard(item) {
+  const card = document.querySelector(`[data-moderation-id="${CSS.escape(item.id)}"]`);
+  if (!card) return;
+  const lockedByOther = item.moderation_lock_active && !item.moderation_lock_owned;
+  const status = card.querySelector('[data-moderation-lock-status]');
+  if (status) {
+    status.textContent = lockedByOther ? `🔒 Сейчас редактирует: ${item.moderation_lock_name || 'другой модератор'}` : '';
+    status.style.display = lockedByOther ? '' : 'none';
+  }
+  card.classList.toggle('moderation-card-locked', !!lockedByOther);
+  card.querySelectorAll('[data-moderation-action]').forEach(button => { button.disabled = !!lockedByOther; });
+}
+
+async function refreshLocks() {
+  const ids = loadedItems.filter(item => item.moderator_only).map(item => item.id);
+  if (!ids.length || document.hidden) return;
+  try {
+    const body = await api(`?locks=${encodeURIComponent(ids.join(','))}`);
+    loadedItems.forEach(item => {
+      const lock = body.locks?.[item.id];
+      item.moderation_lock_active = !!lock?.active;
+      item.moderation_lock_owned = !!lock?.owned;
+      item.moderation_lock_name = lock?.name || '';
+      applyLockToCard(item);
+    });
+  } catch (_) {}
+}
+
+function startClaimHeartbeat(lineupId) {
+  claimedLineupId = lineupId;
+  clearInterval(claimHeartbeatTimer);
+  claimHeartbeatTimer = setInterval(async () => {
+    if (!claimedLineupId || document.hidden) return;
+    try {
+      await api('', { method: 'POST', body: JSON.stringify({ lineupId: claimedLineupId, action: 'renew_claim' }) });
+    } catch (error) {
+      clearClaim();
+      context.toast('Бронь лайнапа потеряна: ' + error.message, 'e');
+    }
+  }, 30_000);
+}
+
+function clearClaim() {
+  claimedLineupId = '';
+  clearInterval(claimHeartbeatTimer);
+  claimHeartbeatTimer = null;
 }
 
 async function load() {
@@ -84,7 +137,21 @@ async function load() {
 async function act(card, action) {
   if (action === 'complete') {
     const item = loadedItems.find(entry => entry.id === card.dataset.moderationId);
-    if (item && context.openDraft) context.openDraft(item);
+    if (!item || !context.openDraft) return;
+    const buttons = card.querySelectorAll('button');
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+      await api('', { method: 'POST', body: JSON.stringify({ lineupId: item.id, action: 'claim' }) });
+      item.moderation_lock_active = true;
+      item.moderation_lock_owned = true;
+      startClaimHeartbeat(item.id);
+      context.openDraft(item);
+    } catch (error) {
+      context.toast(error.message, 'e');
+      await refreshLocks();
+    } finally {
+      if (!item.moderation_lock_active) buttons.forEach(button => { button.disabled = false; });
+    }
     return;
   }
   let reason = '';
@@ -116,5 +183,19 @@ export function initModeration(nextContext) {
     const card = button?.closest('[data-moderation-id]');
     if (button && card) act(card, button.dataset.moderationAction);
   });
-  return { load };
+  clearInterval(lockPollTimer);
+  lockPollTimer = setInterval(refreshLocks, 10_000);
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) return;
+    if (claimedLineupId) {
+      try {
+        await api('', { method: 'POST', body: JSON.stringify({ lineupId: claimedLineupId, action: 'renew_claim' }) });
+      } catch (error) {
+        clearClaim();
+        context.toast('Бронь лайнапа потеряна: ' + error.message, 'e');
+      }
+    }
+    refreshLocks();
+  });
+  return { load, clearClaim };
 }
