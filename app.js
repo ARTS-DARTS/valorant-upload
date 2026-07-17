@@ -255,7 +255,7 @@ function defensePlacementShape(agentName, abilityName, slot = '') {
     return { kind: 'net_area', points: 1, radius: 0.04335, source: 'valoplant' };
   }
   if (/deadlock/.test(key) && /sonic|звуков|датчик|сенсор|sensor/.test(key)) {
-    return { kind: 'point', points: 1, radius: 0.073, source: 'valoplant' };
+    return { kind: 'sensor_area', points: 1, radius: 0.055, source: 'valoplant' };
   }
   if (/cypher/.test(key) && /trapwire|растяж/.test(key)) {
     return { kind: 'line_segment', points: 2 };
@@ -656,6 +656,13 @@ function renderDefenseAbilityMarkers() {
       const radius = Math.max(2, Number(canonical.radius || 0.04335) * 100);
       return `<circle class="defense-area-shape net" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>
         <circle class="defense-area-net-grid" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
+    }
+    if (kind === 'sensor_area') {
+      const center = mapPointToPercent(defenseAbilityCenter(item));
+      const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
+      const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.055) * 100);
+      const d = radius / Math.sqrt(2);
+      return `<line class="defense-shape-line sensor" x1="${center.left-d}%" y1="${center.top-d}%" x2="${center.left+d}%" y2="${center.top+d}%"></line><line class="defense-shape-line sensor" x1="${center.left-d}%" y1="${center.top+d}%" x2="${center.left+d}%" y2="${center.top-d}%"></line><circle class="defense-sensor-ring" cx="${center.left}%" cy="${center.top}%" r="1.7%"></circle>`;
     }
     if (kind === 'circle_area') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
