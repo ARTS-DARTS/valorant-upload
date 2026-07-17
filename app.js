@@ -663,7 +663,8 @@ function renderDefenseAbilityMarkers() {
       const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.055) * 100);
       const d = radius / Math.sqrt(2);
       const ends=[[-d,-d],[d,-d],[-d,d],[d,d]];
-      return `<rect class="defense-sensor-zone" x="${center.left-radius/Math.sqrt(2)}%" y="${center.top-radius/Math.sqrt(2)}%" width="${radius*Math.sqrt(2)}%" height="${radius*Math.sqrt(2)}%"></rect><circle class="defense-sensor-ring" cx="${center.left}%" cy="${center.top}%" r="1.7%"></circle>`;
+      const box=radius*Math.sqrt(2), innerW=box*.52, innerH=box*.34;
+      return `<rect class="defense-sensor-zone" x="${center.left-box/2}%" y="${center.top-box/2}%" width="${box}%" height="${box}%"></rect><rect class="defense-sensor-core" x="${center.left-innerW/2}%" y="${center.top-innerH/2}%" width="${innerW}%" height="${innerH}%"></rect><circle class="defense-sensor-dot" cx="${center.left-innerW*.38}%" cy="${center.top}%" r=".9%"></circle><rect class="defense-sensor-diamond" x="${center.left+innerW*.28-0.65}%" y="${center.top-.65}%" width="1.3%" height="1.3%" transform="rotate(45 ${center.left+innerW*.28} ${center.top})"></rect>`;
     }
     if (kind === 'circle_area') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
