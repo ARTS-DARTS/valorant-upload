@@ -855,6 +855,23 @@ function setDefenseAbilityEndpoint(item, pointIndex, nextPoint) {
   if (!item || ![0,1].includes(pointIndex)) return;
   const kind = defenseShapeKind(item);
   let points = normalizedDefensePoints(item);
+  const map = document.getElementById('sel-map')?.value || '';
+  const configured = kind === 'sensor_rect'
+    ? configuredDefenseShapeCache.get(rangeConfigId(map, selectedAgent, item.ability))
+    : null;
+  const lockedWidth = kind === 'sensor_rect'
+    ? Math.max(.01, Number(configured?.width || item.shape_width || .12))
+    : 0;
+  const lockedHeight = kind === 'sensor_rect'
+    ? Math.max(.01, Number(configured?.height || item.shape_height || .08))
+    : 0;
+  if (kind === 'sensor_rect') {
+    const currentDx=points[1].x-points[0].x,currentDy=points[1].y-points[0].y;
+    const currentLength=Math.max(.001,Math.hypot(currentDx,currentDy));
+    const center={x:(points[0].x+points[1].x)/2,y:(points[0].y+points[1].y)/2};
+    const dx=currentDx/currentLength*lockedWidth/2,dy=currentDy/currentLength*lockedWidth/2;
+    points=[{x:center.x-dx,y:center.y-dy},{x:center.x+dx,y:center.y+dy}];
+  }
   if (kind === 'sensor_rect' && pointIndex === 0) {
     const requestedDx = nextPoint.x - points[0].x;
     const requestedDy = nextPoint.y - points[0].y;
@@ -863,6 +880,13 @@ function setDefenseAbilityEndpoint(item, pointIndex, nextPoint) {
     const dx = Math.max(-minX, Math.min(1-maxX, requestedDx));
     const dy = Math.max(-minY, Math.min(1-maxY, requestedDy));
     points = points.map(point => ({ x:point.x+dx, y:point.y+dy }));
+  } else if (kind === 'sensor_rect') {
+    const dx=nextPoint.x-points[0].x,dy=nextPoint.y-points[0].y;
+    const length=Math.hypot(dx,dy);
+    if (length < .001) return;
+    const candidate={x:points[0].x+dx/length*lockedWidth,y:points[0].y+dy/length*lockedWidth};
+    if (candidate.x < 0 || candidate.x > 1 || candidate.y < 0 || candidate.y > 1) return;
+    points[1]=candidate;
   } else {
     points[pointIndex] = { x:clamp01(nextPoint.x), y:clamp01(nextPoint.y) };
   }
@@ -876,7 +900,8 @@ function setDefenseAbilityEndpoint(item, pointIndex, nextPoint) {
   if (kind === 'sensor_rect') {
     const dx = item.points[1].x - item.points[0].x;
     const dy = item.points[1].y - item.points[0].y;
-    item.shape_width = Math.max(.01, Math.hypot(dx,dy));
+    item.shape_width = lockedWidth;
+    item.shape_height = lockedHeight;
     item.shape_rotation = Math.atan2(dy,dx) * 180 / Math.PI;
     item.shape_anchor = 'edge_midpoints';
   }
@@ -962,7 +987,13 @@ async function syncConfiguredDefenseAbilityShapes() {
     const configured = await getConfiguredDefenseShape(map, selectedAgent, item.ability, fallback);
     const center = defenseAbilityCenter(item);
     const width = Math.max(.01, Number(configured.width || fallback.width || .12));
-    const rotation = Number(configured.rotation ?? fallback.rotation ?? 0);
+    const currentPoints = normalizedDefensePoints(item);
+    const currentDx = currentPoints[1].x - currentPoints[0].x;
+    const currentDy = currentPoints[1].y - currentPoints[0].y;
+    const hasStoredDirection = Array.isArray(item.points) && item.points.length >= 2 && Math.hypot(currentDx,currentDy) > .001;
+    const rotation = hasStoredDirection
+      ? Math.atan2(currentDy,currentDx) * 180 / Math.PI
+      : Number(configured.rotation ?? fallback.rotation ?? 0);
     const radians = rotation * Math.PI / 180;
     const dx = Math.cos(radians) * width / 2;
     const dy = Math.sin(radians) * width / 2;
@@ -6825,7 +6856,7 @@ function _restoreDraft(sourceDraft = null) {
                     x:point.x, y:point.y,
                   }))
                 : [];
-              const center = shapeKind === 'line_segment'
+              const center = ['line_segment','sensor_rect'].includes(shapeKind)
                 ? defenseAbilityCenter({ ...item, shape_kind: shapeKind, points })
                 : { x: Number(item.x), y: Number(item.y) };
               return {
@@ -6917,6 +6948,7 @@ function _restoreDraft(sourceDraft = null) {
     if (el) el.value = d.defenseNumber;
   }
   renderDefenseAbilityPanel();
+  if (defenseAbilities.length) syncConfiguredDefenseAbilityShapes();
 
   // Video
   if (d.videoUrl) {
@@ -7135,6 +7167,10 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       toast('Эта категория пока закрыта для отправки.', 'e');
       btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
       return;
+    }
+    if (contentType === 'defense') {
+      submitStage = 'sync_defense_shapes';
+      await syncConfiguredDefenseAbilityShapes();
     }
     if (moderatorDraftSourceId) {
       submitStage = 'moderator_draft_save';
