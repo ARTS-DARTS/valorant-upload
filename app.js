@@ -809,8 +809,12 @@ function mapPointToPercent(point) {
 
 function defenseShapeKind(item) {
   const stored = item?.shape_kind || item?.shape?.kind;
-  const canonical = defensePlacementShape(item?.agent || selectedAgent, item?.ability, item?.slot);
-  if ((stored === 'point' || stored === 'sensor_area') && canonical.kind === 'sensor_rect') return 'sensor_rect';
+  const agent = item?.agent || selectedAgent;
+  const canonical = defensePlacementShape(agent, item?.ability, item?.slot);
+  const hasCanonicalGeometry = canonical.kind !== 'point' || /^deadlock$/i.test(String(agent || '').trim());
+  // Repair drafts created while the global Sonic Sensor fallback was
+  // accidentally applied to every Deadlock ability.
+  if (hasCanonicalGeometry) return canonical.kind;
   if (stored && stored !== 'point') return stored;
   // Older saved setups stored Sonic Sensor as a plain point; upgrade its
   // presentation on read without requiring a Firestore migration.
@@ -960,6 +964,9 @@ function configuredDefenseShapeFromData(data, fallback = {}) {
 
 async function getConfiguredDefenseShape(map, agent, ability, fallback = {}) {
   if (!map || !agent || !ability) return fallback;
+  // range_config stores the adjustable Sonic Sensor rectangle. It must never
+  // replace the canonical geometry of Barrier Mesh, GravNet or Annihilation.
+  if (fallback.kind !== 'sensor_rect') return fallback;
   const requestedKey = rangeConfigId(map, agent, ability);
   if (configuredDefenseShapeCache.has(requestedKey)) return configuredDefenseShapeCache.get(requestedKey);
   const candidates = [...new Set([ability, ...abilityAliasesFor(ability)].filter(Boolean))];
@@ -6869,11 +6876,10 @@ function _restoreDraft(sourceDraft = null) {
         if (Array.isArray(d.defenseAbilities)) {
           defenseAbilities = d.defenseAbilities
             .map((item, idx) => {
-              const storedShapeKind = item.shape_kind || item.shape?.kind || 'point';
               const catalogShape = defensePlacementShape(d.agent || selectedAgent, item.ability, item.slot);
-              const shapeKind = (storedShapeKind === 'point' || storedShapeKind === 'sensor_area') && catalogShape.kind !== 'point'
-                ? catalogShape.kind
-                : storedShapeKind;
+              const storedShapeKind = item.shape_kind || item.shape?.kind || 'point';
+              const hasCanonicalGeometry = catalogShape.kind !== 'point' || /^deadlock$/i.test(String(d.agent || selectedAgent || '').trim());
+              const shapeKind = hasCanonicalGeometry ? catalogShape.kind : storedShapeKind;
               const points = (shapeKind === 'line_segment' || shapeKind === 'sensor_rect')
                 ? normalizedDefensePoints(item).map((point, pointIndex) => ({
                     ...(shapeKind === 'sensor_rect' ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
