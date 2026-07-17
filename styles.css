@@ -18,6 +18,10 @@
     .logo { font-size: 16px; font-weight: 800; letter-spacing: 2px; color: var(--primary); }
     .logo span { color: var(--text1); }
     .site-update { margin-right: auto; margin-left: 22px; color: var(--text2); font-size: 12px; letter-spacing: .4px; white-space: nowrap; }
+    .moderation-lease-timer { display:inline-flex;align-items:center;gap:7px;margin-right:12px;padding:6px 10px;border:1px solid rgba(245,158,11,.48);border-radius:999px;background:rgba(245,158,11,.12);color:#fbbf24;font-size:11px;font-weight:800;white-space:nowrap; }
+    .moderation-lease-timer[hidden] { display:none; }
+    .moderation-lease-timer strong { min-width:34px;color:#fff;font-variant-numeric:tabular-nums;text-align:center; }
+    .moderation-lease-timer.expiring { border-color:rgba(239,68,68,.65);background:rgba(239,68,68,.13);color:#ff6b75; }
     .header-telegram { display:inline-flex;align-items:center;gap:7px;margin-right:14px;padding:7px 11px;border:1px solid rgba(79,195,247,.42);border-radius:999px;background:rgba(34,158,217,.12);color:#4fc3f7;text-decoration:none;font-size:12px;font-weight:900;letter-spacing:.03em;white-space:nowrap;transition:background .16s,border-color .16s,transform .16s; }
     .header-telegram:hover { background:rgba(34,158,217,.22);border-color:#4fc3f7;transform:translateY(-1px); }
     .header-telegram-icon { font-size:15px;line-height:1;transform:rotate(-12deg); }
@@ -608,6 +612,7 @@
     @media (max-width: 500px) {
       .auth-card { padding: 28px 18px; }
       .site-update { display: none; }
+      .moderation-lease-timer span { display:none; }
       .header-telegram { margin-left:auto;margin-right:10px;padding:7px 10px; }
       .site-update-banner { right: 12px; bottom: 12px; align-items: stretch; flex-direction: column; }
       .site-update-banner button { width: 100%; }
