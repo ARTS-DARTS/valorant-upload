@@ -187,8 +187,8 @@ async function moderate(req, res, moderator) {
   if (action === 'save_draft') return saveDraft(req, res, moderator);
   const reason = clean(req.body?.reason);
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
-  if (!['promote', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
-  if (action === 'reject' && (reason.length < 10 || reason.length > 500)) {
+  if (action !== 'reject') return res.status(400).json({ error: 'Модератору недоступна отправка в «Пирожки»' });
+  if (reason.length < 10 || reason.length > 500) {
     return res.status(400).json({ error: 'Причина должна содержать от 10 до 500 символов' });
   }
 
@@ -201,25 +201,23 @@ async function moderate(req, res, moderator) {
     const data = snap.data() || {};
     if (!['pending', 'moderator_draft'].includes(data.status)) throw Object.assign(new Error('Лайнап уже обработан другим модератором'), { status: 409 });
     authorUid = clean(data.user_id || data.uid || data.author_uid);
-    const update = action === 'promote'
-      ? { status: 'hot', moderated_at: FieldValue.serverTimestamp(), moderated_by_uid: moderator.uid }
-      : {
-          status: 'rejected',
-          rejection_reason: reason,
-          rejected_at: FieldValue.serverTimestamp(),
-          rejected_by_uid: moderator.uid,
-          rejected_by_name: moderator.name,
-        };
+    const update = {
+      status: 'rejected',
+      rejection_reason: reason,
+      rejected_at: FieldValue.serverTimestamp(),
+      rejected_by_uid: moderator.uid,
+      rejected_by_name: moderator.name,
+    };
     tx.update(ref, update);
     tx.create(db.collection('moderator_logs').doc(), {
       lineup_id: lineupId,
       action,
-      reason: action === 'reject' ? reason : '',
+      reason,
       moderator_uid: moderator.uid,
       moderator_role: moderator.role,
       created_at: FieldValue.serverTimestamp(),
     });
-    if (action === 'reject' && authorUid) {
+    if (authorUid) {
       tx.create(db.collection('notifications').doc(authorUid).collection('items').doc(), {
         type: 'lineup_rejected',
         lineup_id: lineupId,
@@ -231,7 +229,7 @@ async function moderate(req, res, moderator) {
       });
     }
   });
-  res.status(200).json({ ok: true, status: action === 'promote' ? 'hot' : 'rejected' });
+  res.status(200).json({ ok: true, status: 'rejected' });
 }
 
 export default async function handler(req, res) {

@@ -60,7 +60,6 @@ function render(items) {
       <div class="moderation-actions">
         ${item.moderator_only ? '<button class="moderation-action moderation-complete" data-moderation-action="complete" type="button">✏️ Доделать шаблон</button>' : ''}
         <button class="moderation-action moderation-reject" data-moderation-action="reject" type="button">Отклонить с причиной</button>
-        <button class="moderation-action moderation-promote" data-moderation-action="promote" type="button">🔥 В пирожки</button>
       </div>
     </article>`;
   }).join('');
@@ -93,15 +92,13 @@ async function act(card, action) {
     reason = prompt('Что автор должен исправить? От 10 до 500 символов.')?.trim() || '';
     if (!reason) return;
     if (reason.length < 10) return context.toast('Напиши более понятную причину — минимум 10 символов', 'e');
-  } else if (!confirm('Отправить этот лайнап на финальную публикацию в «Пирожки»?')) {
-    return;
   }
   const buttons = card.querySelectorAll('button');
   buttons.forEach(button => { button.disabled = true; });
   try {
     await api('', { method: 'POST', body: JSON.stringify({ lineupId: card.dataset.moderationId, action, reason }) });
     card.remove();
-    context.toast(action === 'promote' ? 'Лайнап отправлен в «Пирожки»' : 'Лайнап отклонён, причина отправлена автору', 's');
+    context.toast('Лайнап отклонён, причина отправлена автору', 's');
     if (!document.querySelector('.moderation-card')) load();
   } catch (error) {
     context.toast(error.message, 'e');
