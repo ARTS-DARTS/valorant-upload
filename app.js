@@ -663,7 +663,7 @@ function renderDefenseAbilityMarkers() {
       const radius = Math.max(2, Number(item.shape_radius || canonical.radius || 0.055) * 100);
       const d = radius / Math.sqrt(2);
       const ends=[[-d,-d],[d,-d],[-d,d],[d,d]];
-      return ends.map(([dx,dy]) => `<line class="defense-shape-line sensor" x1="${center.left}%" y1="${center.top}%" x2="${center.left+dx}%" y2="${center.top+dy}%"></line><circle class="defense-sensor-node" cx="${center.left+dx}%" cy="${center.top+dy}%" r="1.25%"></circle>`).join('') + `<circle class="defense-sensor-ring" cx="${center.left}%" cy="${center.top}%" r="1.7%"></circle>`;
+      return `<rect class="defense-sensor-zone" x="${center.left-radius/Math.sqrt(2)}%" y="${center.top-radius/Math.sqrt(2)}%" width="${radius*Math.sqrt(2)}%" height="${radius*Math.sqrt(2)}%"></rect>` + ends.map(([dx,dy]) => `<line class="defense-shape-line sensor" x1="${center.left}%" y1="${center.top}%" x2="${center.left+dx}%" y2="${center.top+dy}%"></line><circle class="defense-sensor-node" cx="${center.left+dx}%" cy="${center.top+dy}%" r="1.25%"></circle>`).join('') + `<circle class="defense-sensor-ring" cx="${center.left}%" cy="${center.top}%" r="1.7%"></circle>`;
     }
     if (kind === 'circle_area') {
       const center = mapPointToPercent(defenseAbilityCenter(item));
