@@ -5871,7 +5871,7 @@ function renderScreenshots() {
   const row = document.getElementById('shots-row');
   row.innerHTML = screenshots.map((s, i) => `
     <div class="shot-item">
-      <img src="${esc(s.localUrl)}" alt="${s.uploading ? '⏳' : '✓'}" style="opacity:${s.uploading ? 0.5 : 1};">
+      <img src="${esc(s.localUrl)}" alt="Скриншот ${i + 1}" data-shot-preview="${i}" style="opacity:${s.uploading ? 0.5 : 1};cursor:zoom-in;">
       <button class="rm" data-idx="${i}">✕</button>
     </div>`).join('');
   if (screenshots.length < 5) {
@@ -5882,13 +5882,41 @@ function renderScreenshots() {
     });
   }
   row.querySelectorAll('.rm').forEach(b => {
-    b.addEventListener('click', () => {
+    b.addEventListener('click', event => {
+      event.stopPropagation();
       const idx = parseInt(b.dataset.idx);
       if (screenshots[idx].localUrl?.startsWith('blob:')) URL.revokeObjectURL(screenshots[idx].localUrl);
       screenshots.splice(idx, 1);
       renderScreenshots(); _saveDraft();
     });
   });
+  row.querySelectorAll('[data-shot-preview]').forEach(img => {
+    img.addEventListener('click', () => {
+      const shot = screenshots[Number(img.dataset.shotPreview)];
+      if (shot?.localUrl) openScreenshotPreview(shot.localUrl, img.alt);
+    });
+  });
+}
+
+function openScreenshotPreview(src, alt = 'Предпросмотр скриншота') {
+  document.getElementById('shot-preview-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'shot-preview-overlay';
+  overlay.className = 'shot-preview-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.innerHTML = `<img src="${esc(src)}" alt="${esc(alt)}"><button class="shot-preview-close" type="button" aria-label="Закрыть">✕</button>`;
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKeyDown);
+  };
+  const onKeyDown = event => { if (event.key === 'Escape') close(); };
+  overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+  overlay.querySelector('.shot-preview-close').addEventListener('click', close);
+  overlay.querySelector('img').addEventListener('click', event => event.stopPropagation());
+  document.addEventListener('keydown', onKeyDown);
+  document.body.appendChild(overlay);
+  overlay.querySelector('.shot-preview-close').focus();
 }
 
 // ── Map minimap ───────────────────────────────────────────────────────────────
