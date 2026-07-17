@@ -3810,7 +3810,8 @@ function reviveEditorVideo(reason = 'resume') {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   setFreezeOverlay('');
-  vidPlayer.crossOrigin = 'anonymous';
+  if (vidPlayer.dataset.corsFallback === '1') vidPlayer.removeAttribute('crossorigin');
+  else vidPlayer.crossOrigin = 'anonymous';
   vidPlayer.src = videoUrl;
   vidPlayer.load();
   const restoreTime = () => {
@@ -5539,6 +5540,7 @@ async function handleVideoFile(file) {
     videoUrl = url;
     videoXhr = null;
     prog.style.display = 'none';
+    vidPlayer.dataset.corsFallback = '0';
     vidPlayer.crossOrigin = 'anonymous';
     vidPlayer.src = url;
     document.getElementById('vid-player-wrap').style.display = '';
@@ -5575,7 +5577,28 @@ vidPlayer.addEventListener('loadedmetadata', () => {
   if (!videoEdit.trimEnd) videoEdit.trimEnd = videoDuration();
   renderVideoEditor();
 });
-vidPlayer.addEventListener('error', () => reviveEditorVideo('error'));
+vidPlayer.addEventListener('error', () => {
+  // Some older/external lineup videos are playable by the browser but their
+  // storage does not allow CORS. In that case crossorigin="anonymous" blocks
+  // even metadata and leaves the editor at 0:00 / 0:00. Retry once as a plain
+  // media request; canvas-based frame capture may then be unavailable, while
+  // playback, trimming and the rest of the editor keep working.
+  if (videoUrl && vidPlayer.dataset.corsFallback !== '1') {
+    const current = Number.isFinite(vidPlayer.currentTime) ? vidPlayer.currentTime : 0;
+    vidPlayer.dataset.corsFallback = '1';
+    vidPlayer.removeAttribute('crossorigin');
+    vidPlayer.src = videoUrl;
+    vidPlayer.load();
+    vidPlayer.addEventListener('loadedmetadata', () => {
+      if (current > 0 && vidPlayer.duration) {
+        vidPlayer.currentTime = Math.min(current, Math.max(0, vidPlayer.duration - 0.05));
+      }
+      renderVideoEditor();
+    }, { once: true });
+    return;
+  }
+  reviveEditorVideo('error');
+});
 vidPlayer.addEventListener('play',  () => {
   if ((videoEdit.freezeFrames || []).length && !outputPlaybackActive) {
     vidPlayer.pause();
@@ -6990,7 +7013,7 @@ function _restoreDraft(sourceDraft = null) {
     const vid   = document.getElementById('vid-player');
     if (dropZ) dropZ.style.display = 'none';
     if (wrap)  wrap.style.display = '';
-    if (vid)   { vid.crossOrigin = 'anonymous'; vid.src = d.videoUrl; }
+    if (vid)   { vid.dataset.corsFallback = '0'; vid.crossOrigin = 'anonymous'; vid.src = d.videoUrl; }
     renderVideoEditor();
   } else {
     videoEdit = createDefaultVideoEdit();
