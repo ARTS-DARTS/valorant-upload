@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   const { title, body, translations, type, targetUid, data: extraData = {} } = req.body || {};
   if (!title || !body) return res.status(400).json({ error: 'title and body required' });
 
-  const localized = normalizeTranslations(translations, title, body);
+  const localized = await normalizeTranslations(translations, title, body);
 
   const OS_APP_ID  = clean(process.env.ONESIGNAL_APP_ID);
   const OS_REST    = clean(process.env.ONESIGNAL_REST_KEY);
@@ -52,17 +52,40 @@ export default async function handler(req, res) {
   return res.status(osRes.status).json(data);
 }
 
-function normalizeTranslations(value, fallbackTitle, fallbackBody) {
+async function normalizeTranslations(value, fallbackTitle, fallbackBody) {
   const locales = ['ru', 'en', 'tr', 'es', 'pt'];
   const source = value && typeof value === 'object' ? value : {};
   const russian = source.ru && typeof source.ru === 'object' ? source.ru : {};
   const ruTitle = clean(russian.title) || clean(fallbackTitle);
   const ruBody = clean(russian.body) || clean(fallbackBody);
-  return Object.fromEntries(locales.map((locale) => {
+  const result = { ru: { title: ruTitle, body: ruBody } };
+  await Promise.all(locales.filter((locale) => locale !== 'ru').map(async (locale) => {
     const item = source[locale] && typeof source[locale] === 'object' ? source[locale] : {};
-    return [locale, {
-      title: clean(item.title) || ruTitle,
-      body: clean(item.body) || ruBody,
-    }];
+    const localizedTitle = clean(item.title);
+    const localizedBody = clean(item.body);
+    if (localizedTitle && localizedBody) {
+      result[locale] = { title: localizedTitle, body: localizedBody };
+      return;
+    }
+    result[locale] = {
+      title: await translateFromRussian(ruTitle, locale),
+      body: await translateFromRussian(ruBody, locale),
+    };
   }));
+  return result;
+}
+
+async function translateFromRussian(text, targetLocale) {
+  if (!text) return text;
+  try {
+    const query = new URLSearchParams({
+      client: 'gtx', sl: 'ru', tl: targetLocale, dt: 't', q: text,
+    });
+    const response = await fetch(`https://translate.googleapis.com/translate_a/single?${query}`);
+    if (!response.ok) return text;
+    const payload = await response.json();
+    return (payload?.[0] || []).map((part) => part?.[0] || '').join('').trim() || text;
+  } catch (_) {
+    return text;
+  }
 }
