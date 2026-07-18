@@ -20,15 +20,15 @@ function agentSubDocId(agent) {
     .toLowerCase();
 }
 
-async function sendOneSignal({ title, body, targetUid, data }) {
+async function sendOneSignal({ translations, targetUid, data }) {
   const appId = clean(process.env.ONESIGNAL_APP_ID);
   const restKey = clean(process.env.ONESIGNAL_REST_KEY);
   if (!appId || !restKey) throw new Error('OneSignal is not configured');
 
   const payload = {
     app_id: appId,
-    headings: { en: title, ru: title },
-    contents: { en: body, ru: body },
+    headings: Object.fromEntries(Object.entries(translations).map(([locale, text]) => [locale, text.title])),
+    contents: Object.fromEntries(Object.entries(translations).map(([locale, text]) => [locale, text.body])),
     data,
     priority: 10,
     include_aliases: { external_id: [targetUid] },
@@ -48,6 +48,16 @@ async function sendOneSignal({ title, body, targetUid, data }) {
     throw new Error(result.error || (result.errors ?? []).join(', ') || `OneSignal ${osRes.status}`);
   }
   return result;
+}
+
+function agentNotificationTranslations(agent, map) {
+  return {
+    ru: { title: 'Поступили новые лайнапы!', body: `На ${agent} вышел 1 лайнап на карте ${map}` },
+    en: { title: 'New lineups are available!', body: `A new ${agent} lineup is available on ${map}` },
+    tr: { title: 'Yeni lineup yayınlandı!', body: `${map} haritasında ${agent} için yeni bir lineup yayınlandı` },
+    es: { title: '¡Hay nuevos lineups!', body: `Hay un nuevo lineup de ${agent} en ${map}` },
+    pt: { title: 'Novos lineups disponíveis!', body: `Há um novo lineup de ${agent} em ${map}` },
+  };
 }
 
 async function findSubscriberUids(db, agent) {
@@ -117,9 +127,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, subscribers: 0, notified: 0 });
   }
 
-  const pushTitle = 'Поступили новые лайнапы!';
-  const pushBody = `На ${agent} вышел 1 лайнап на карте ${map}`;
-  const notificationBody = `На ${agent} вышел новый лайнап на карте ${map}`;
+  const translations = agentNotificationTranslations(agent, map);
 
   for (let i = 0; i < uids.length; i += 450) {
     const batch = db.batch();
@@ -132,7 +140,8 @@ export default async function handler(req, res) {
         maps: [map],
         total: 1,
         title: lineupTitle,
-        body: notificationBody,
+        body: translations.ru.body,
+        translations,
         created_at: FieldValue.serverTimestamp(),
         read: false,
       });
@@ -143,8 +152,7 @@ export default async function handler(req, res) {
   const pushResults = await Promise.allSettled(
     uids.map((uid) =>
       sendOneSignal({
-        title: pushTitle,
-        body: pushBody,
+        translations,
         targetUid: uid,
         data: {
           type: 'new_lineups_batch',

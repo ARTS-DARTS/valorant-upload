@@ -19,15 +19,14 @@ async function sendWinnerPush(outcome) {
   const appId = String(process.env.ONESIGNAL_APP_ID || '').trim();
   const restKey = String(process.env.ONESIGNAL_REST_KEY || '').trim();
   if (!appId || !restKey) return;
-  const title = '⚔️ Победа в дуэли!';
-  const body = `Твой лайнап победил. Начислено +5 очков и +${outcome.likesAwarded} лайков.`;
+  const translations = duelWinTranslations(outcome.likesAwarded);
   const response = await fetch('https://api.onesignal.com/notifications', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Key ${restKey}` },
     body: JSON.stringify({
       app_id: appId,
-      headings: { ru: title, en: title },
-      contents: { ru: body, en: body },
+      headings: Object.fromEntries(Object.entries(translations).map(([locale, text]) => [locale, text.title])),
+      contents: Object.fromEntries(Object.entries(translations).map(([locale, text]) => [locale, text.body])),
       include_aliases: { external_id: [outcome.uid] },
       target_channel: 'push',
       data: { type: 'duel_win', duel_id: outcome.duelId, lineup_id: outcome.winnerId },
@@ -35,6 +34,16 @@ async function sendWinnerPush(outcome) {
     }),
   });
   if (!response.ok) throw new Error(`onesignal_${response.status}`);
+}
+
+function duelWinTranslations(likesAwarded) {
+  return {
+    ru: { title: '⚔️ Победа в дуэли!', body: `Твой лайнап победил. Начислено +5 очков и +${likesAwarded} лайков.` },
+    en: { title: '⚔️ Duel victory!', body: `Your lineup won. You received +5 points and +${likesAwarded} likes.` },
+    tr: { title: '⚔️ Düello zaferi!', body: `Lineup'ın kazandı. +5 puan ve +${likesAwarded} beğeni kazandın.` },
+    es: { title: '⚔️ ¡Victoria en duelo!', body: `Tu lineup ganó. Recibiste +5 puntos y +${likesAwarded} me gusta.` },
+    pt: { title: '⚔️ Vitória no duelo!', body: `Seu lineup venceu. Você recebeu +5 pontos e +${likesAwarded} curtidas.` },
+  };
 }
 
 export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
@@ -95,7 +104,8 @@ export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
     const announcementRef = db.collection('duel_announcements').doc(duelId);
     tx.set(announcementRef, { duel_id: duelId, lineup_id: winnerId, title: `Победил лайнап «${winner.title || winnerId}»!`, created_at: FieldValue.serverTimestamp(), visible: true });
     if (uid) {
-      const notification = { type: 'duel_win', title: '⚔️ Победа в дуэли!', body: `Твой лайнап «${winner.title || winnerId}» победил. Начислено +5 очков.`, lineup_id: winnerId, duel_id: duelId, points: 5, likes: likesAwarded };
+      const translations = duelWinTranslations(likesAwarded);
+      const notification = { type: 'duel_win', title: translations.ru.title, body: translations.ru.body, translations, lineup_id: winnerId, duel_id: duelId, points: 5, likes: likesAwarded };
       const notificationRef = db.collection('users').doc(uid).collection('notifications').doc();
       tx.set(notificationRef, { ...notification, read: false, created_at: FieldValue.serverTimestamp() });
       const inboxRef = db.collection('notifications').doc(uid).collection('items').doc();

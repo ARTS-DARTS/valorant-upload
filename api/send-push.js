@@ -16,16 +16,18 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { title, body, type, targetUid, data: extraData = {} } = req.body || {};
+  const { title, body, translations, type, targetUid, data: extraData = {} } = req.body || {};
   if (!title || !body) return res.status(400).json({ error: 'title and body required' });
+
+  const localized = normalizeTranslations(translations, title, body);
 
   const OS_APP_ID  = clean(process.env.ONESIGNAL_APP_ID);
   const OS_REST    = clean(process.env.ONESIGNAL_REST_KEY);
 
   const payload = {
     app_id:   OS_APP_ID,
-    headings: { en: title, ru: title },
-    contents: { en: body,  ru: body  },
+    headings: Object.fromEntries(Object.entries(localized).map(([locale, text]) => [locale, text.title])),
+    contents: Object.fromEntries(Object.entries(localized).map(([locale, text]) => [locale, text.body])),
     data:     { ...extraData, type: type || extraData.type || 'admin_message' },
     priority: 10,
   };
@@ -48,4 +50,19 @@ export default async function handler(req, res) {
 
   const data = await osRes.json().catch(() => ({}));
   return res.status(osRes.status).json(data);
+}
+
+function normalizeTranslations(value, fallbackTitle, fallbackBody) {
+  const locales = ['ru', 'en', 'tr', 'es', 'pt'];
+  const source = value && typeof value === 'object' ? value : {};
+  const russian = source.ru && typeof source.ru === 'object' ? source.ru : {};
+  const ruTitle = clean(russian.title) || clean(fallbackTitle);
+  const ruBody = clean(russian.body) || clean(fallbackBody);
+  return Object.fromEntries(locales.map((locale) => {
+    const item = source[locale] && typeof source[locale] === 'object' ? source[locale] : {};
+    return [locale, {
+      title: clean(item.title) || ruTitle,
+      body: clean(item.body) || ruBody,
+    }];
+  }));
 }
