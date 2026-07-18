@@ -201,7 +201,8 @@ function loadAgentCategoryAvailability(category = selectedCategory) {
   if (agentCategoryAvailability.has(normalized)) return Promise.resolve();
   if (agentCategoryLoadPromises.has(normalized)) return agentCategoryLoadPromises.get(normalized);
   const promise = Promise.all(agentsList.map(async agent => {
-    let snap = await getDoc(doc(db, 'agents_config', agentConfigId(agent.displayName), 'categories', normalized));
+    let snap = await getDoc(doc(db, 'agents_config', agentConfigId(agent.displayName), 'categories', `${normalized}__site`));
+    if (!snap.exists()) snap = await getDoc(doc(db, 'agents_config', agentConfigId(agent.displayName), 'categories', normalized));
     const abilities = snap.exists() ? (snap.data().abilities || {}) : {};
     agentCategoryAbilityConfigs.set(`${normalized}|${agent.displayName}`, abilities);
     return [agent.displayName, categoryAbilityEnabled(agent, abilities)];
