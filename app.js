@@ -203,9 +203,10 @@ function loadAgentCategoryAvailability(category = selectedCategory) {
   const promise = Promise.all(agentsList.map(async agent => {
     let snap = await getDoc(doc(db, 'agents_config', agentConfigId(agent.displayName), 'categories', `${normalized}__site`));
     if (!snap.exists()) snap = await getDoc(doc(db, 'agents_config', agentConfigId(agent.displayName), 'categories', normalized));
-    const abilities = snap.exists() ? (snap.data().abilities || {}) : {};
+    const data = snap.exists() ? snap.data() : {};
+    const abilities = data.abilities || {};
     agentCategoryAbilityConfigs.set(`${normalized}|${agent.displayName}`, abilities);
-    return [agent.displayName, categoryAbilityEnabled(agent, abilities)];
+    return [agent.displayName, data.visible !== false && categoryAbilityEnabled(agent, abilities)];
   })).then(entries => {
     agentCategoryAvailability.set(normalized, new Map(entries));
     if (normalizeContentCategory(selectedCategory) !== normalized) return;
@@ -1291,7 +1292,7 @@ async function loadUploadCategoryConfig() {
     const useCachedWeapons = weaponVersion && cached.weaponVersion === weaponVersion && Array.isArray(cached.weapons);
     const useCachedDefense = defenseVersion && cached.defenseVersion === defenseVersion && Array.isArray(cached.defenseAgents);
     const [accessSnap, weaponsSnap, defenseSnap] = await Promise.all([
-      getDoc(doc(db, 'settings', 'category_access')),
+      getDoc(doc(db, 'settings', 'category_access_site')).then(async snap => snap.exists() ? snap : getDoc(doc(db, 'settings', 'category_access'))),
       useCachedWeapons ? Promise.resolve(null) : getDoc(doc(db, 'settings', 'weapon_whitelist')),
       useCachedDefense ? Promise.resolve(null) : getDoc(doc(db, 'settings', 'defense_agents')),
     ]);
