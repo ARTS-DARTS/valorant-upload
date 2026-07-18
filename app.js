@@ -133,6 +133,9 @@ let uploadCategoryAccess = {
 };
 let uploadWeaponWhitelist = [...DEFAULT_WALLBANG_WEAPONS];
 let uploadDefenseAgents = new Set();
+const agentCategoryAvailability = new Map();
+const agentCategoryLoadPromises = new Map();
+const agentCategoryAbilityConfigs = new Map();
 
 function uploadCategoryFlag(category) {
   const normalized = normalizeContentCategory(category);
@@ -165,7 +168,59 @@ function agentAllowedForCategory(agent, category = selectedCategory) {
 }
 
 function agentsForCurrentCategory() {
-  return agentsList.filter(agent => agentAllowedForCategory(agent, selectedCategory));
+  const category = normalizeContentCategory(selectedCategory);
+  const availability = agentCategoryAvailability.get(category);
+  return agentsList.filter(agent =>
+    agentAllowedForCategory(agent, category) &&
+    (!availability || availability.get(agent.displayName) !== false)
+  );
+}
+
+function agentConfigId(name) { return String(name || '').replaceAll('/', '_'); }
+
+function categoryAbilityEnabled(agent, stored = {}) {
+  const abilities = (agent?.abilities || []).filter(ab => ab.displayIcon && ab.slot !== 'Passive');
+  if (!abilities.length) return false;
+  return abilities.some(ab => {
+    const normalized = normalizeAbilityName(agent.displayName, ab.displayName, ab.slot);
+    return stored[normalized] !== false && stored[ab.displayName] !== false;
+  });
+}
+
+function agentAbilityEnabled(agent, ability, category = selectedCategory) {
+  const normalizedCategory = normalizeContentCategory(category);
+  const stored = agentCategoryAbilityConfigs.get(`${normalizedCategory}|${agent?.displayName || ''}`);
+  if (!stored) return true;
+  const normalizedAbility = normalizeAbilityName(agent.displayName, ability.displayName, ability.slot);
+  return stored[normalizedAbility] !== false && stored[ability.displayName] !== false;
+}
+
+function loadAgentCategoryAvailability(category = selectedCategory) {
+  const normalized = normalizeContentCategory(category);
+  if (!normalized || normalized === 'wallbang') return Promise.resolve();
+  if (agentCategoryAvailability.has(normalized)) return Promise.resolve();
+  if (agentCategoryLoadPromises.has(normalized)) return agentCategoryLoadPromises.get(normalized);
+  const promise = Promise.all(agentsList.map(async agent => {
+    let snap = await getDoc(doc(db, 'agents_config', agentConfigId(agent.displayName), 'categories', normalized));
+    const abilities = snap.exists() ? (snap.data().abilities || {}) : {};
+    agentCategoryAbilityConfigs.set(`${normalized}|${agent.displayName}`, abilities);
+    return [agent.displayName, categoryAbilityEnabled(agent, abilities)];
+  })).then(entries => {
+    agentCategoryAvailability.set(normalized, new Map(entries));
+    if (normalizeContentCategory(selectedCategory) !== normalized) return;
+    const selectedStillAllowed = !selectedAgent || entries.some(([name, enabled]) => name === selectedAgent && enabled);
+    if (!selectedStillAllowed) {
+      selectedAgent = null;
+      selectedAbility = null;
+      document.getElementById('abilities-row').innerHTML = '<span class="ability-empty-hint">Сначала выбери агента</span>';
+    }
+    renderAgentsGrid();
+    validateForm();
+  }).catch(error => {
+    console.warn('agent category config', normalized, error);
+  }).finally(() => agentCategoryLoadPromises.delete(normalized));
+  agentCategoryLoadPromises.set(normalized, promise);
+  return promise;
 }
 
 function selectedWallbangWeapons() {
@@ -285,7 +340,7 @@ function selectedAgentAbilities() {
   const agent = agentsList.find(a => a.displayName === selectedAgent);
   if (!agent) return [];
   return (agent.abilities || [])
-    .filter(ab => ab.displayIcon && ab.slot !== 'Passive')
+    .filter(ab => ab.displayIcon && ab.slot !== 'Passive' && agentAbilityEnabled(agent, ab, selectedCategory))
     .map(ab => ({
       agent: agent.displayName,
       ability: normalizeAbilityName(agent.displayName, ab.displayName, ab.slot),
@@ -1152,6 +1207,7 @@ function renderCategoryMapExtras() {
 
 function updateCategoryUi() {
   const normalized = normalizeContentCategory(selectedCategory || '');
+  if (normalized && agentsList.length) loadAgentCategoryAvailability(normalized);
   if (normalized === 'defense') {
     const selected = agentsList.find(agent => agent.displayName === selectedAgent);
     if (selected && !agentAllowedForCategory(selected, normalized)) {
@@ -3328,7 +3384,9 @@ function selectAgent(agent) {
     validateForm(); _saveDraft();
   }
   const row = document.getElementById('abilities-row');
-  const abilities = (agent.abilities || []).filter(ab => ab.displayIcon && ab.slot !== 'Passive');
+  const abilities = (agent.abilities || []).filter(ab =>
+    ab.displayIcon && ab.slot !== 'Passive' && agentAbilityEnabled(agent, ab, selectedCategory)
+  );
   if (!abilities.length) {
     row.innerHTML = '<span style="color:var(--text2);font-size:13px;">Нет доступных абилок</span>';
     validateForm();
