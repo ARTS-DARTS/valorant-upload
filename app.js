@@ -161,6 +161,9 @@ function categoryNeedsAbility(category = selectedCategory) {
 
 function agentAllowedForCategory(agent, category = selectedCategory) {
   if (normalizeContentCategory(category) !== 'defense') return true;
+  // The platform-specific agent config is the source of truth now. The
+  // legacy defense_agents list is only a fallback until site configs load.
+  if (agentCategoryAvailability.has('defense')) return true;
   if (uploadDefenseAgents.size > 0) return uploadDefenseAgents.has(agent?.displayName || '');
   const roleName = String(agent?.role?.displayName || agent?.role?.displayNameLocalized || '').toLowerCase();
   if (roleName.includes('duelist') || roleName.includes('дуэлян')) return false;
