@@ -266,12 +266,15 @@ async function saveDraft(req, res, moderator) {
 
 async function listQueue(res, moderator) {
   const db = getFirestore();
-  const [pendingSnap, moderatorSnap, metadataSnap] = await Promise.all([
+  const [pendingSnap, moderatorSnap, metadataSnap, staffCountSnap] = await Promise.all([
     // Admin-created pending lineups can have created_at without submitted_at.
     // orderBy('submitted_at') silently excludes those documents from the queue.
     db.collection('lineups').where('status', '==', 'pending').get(),
     db.collection('lineups').where('moderator_only', '==', true).get(),
     db.collection('lineups').where('metadata_review_required', '==', true).get(),
+    // The shared live window contains two tasks per person who can moderate.
+    // count() avoids downloading every user document just to size the queue.
+    db.collection('users').where('role', 'in', ['admin', 'moderator']).count().get(),
   ]);
   const queueDocs = [
     ...pendingSnap.docs.filter(doc => isQueuedForModeration(doc.data() || {})),
@@ -283,10 +286,17 @@ async function listQueue(res, moderator) {
   const uniqueQueueDocs = [...new Map(queueDocs.map(doc => [doc.id, doc])).values()];
   const queue = uniqueQueueDocs
     .map(doc => safeLineup(doc, moderator.uid))
-    .sort((a, b) => b.submitted_at - a.submitted_at);
+    .sort((a, b) => a.submitted_at - b.submitted_at);
   const total = queue.length;
-  const items = queue.slice(0, 50);
-  res.status(200).json({ items, total });
+  const staffCount = Number(staffCountSnap.data().count) || 1;
+  const capacity = staffCount * 2;
+  // Other people's claimed work is not offered as part of the shared window.
+  // The owner's task stays visible and atomic claim transactions remain the
+  // final protection against two people taking the same lineup simultaneously.
+  const items = queue
+    .filter(item => !item.moderation_lock_active || item.moderation_lock_owned)
+    .slice(0, capacity);
+  res.status(200).json({ items, total, capacity, staff_count: staffCount });
 }
 
 async function listLocks(req, res, moderator) {

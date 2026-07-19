@@ -1,6 +1,7 @@
 let context = null;
 let loading = false;
 let lockPollTimer = null;
+let queuePollTimer = null;
 let claimHeartbeatTimer = null;
 let claimedLineupId = '';
 let claimExpiresAt = 0;
@@ -92,10 +93,13 @@ function render(items, total = totalQueueItems) {
   // Defensive client-side deduplication in case an older/cached API response
   // contains the same Firestore document through overlapping queue queries.
   items = [...new Map(items.map(item => [item.id, item])).values()];
-  const playback = new Map();
+  // Keep the actual media elements alive across live queue redraws. Recreating
+  // a <video> discards its buffered ranges and makes the CDN receive the same
+  // range requests again.
+  const existingVideos = new Map();
   document.querySelectorAll('[data-moderation-id] video').forEach(video => {
     const id = video.closest('[data-moderation-id]')?.dataset.moderationId;
-    if (id) playback.set(id, { time: video.currentTime || 0, playing: !video.paused && !video.ended });
+    if (id) existingVideos.set(id, video);
   });
   loadedItems = items;
   totalQueueItems = Number.isFinite(Number(total)) ? Number(total) : items.length;
@@ -113,7 +117,7 @@ function render(items, total = totalQueueItems) {
     const meta = [item.moderator_only ? 'ЗАГОТОВКА ДЛЯ МОДЕРАЦИИ' : '', item.map, item.agent, item.agent ? item.ability : 'Выбери агента', sideLabel(item.round_side)].filter(Boolean);
     return `<article class="moderation-card" data-moderation-id="${esc(item.id)}">
       <div class="moderation-card-main">
-        ${video ? `<video class="moderation-video" src="${esc(video)}" controls preload="metadata"></video>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
+        ${video ? `<video class="moderation-video" src="${esc(video)}" controls preload="none"></video>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
         <div class="moderation-info">
           <div class="moderation-meta">${meta.map(value => `<span class="moderation-chip">${esc(value)}</span>`).join('')}</div>
           <h3 class="moderation-title">${metadataTask ? 'Проверить параметры лайнапа' : esc(item.title || 'Без названия')}</h3>
@@ -130,17 +134,11 @@ function render(items, total = totalQueueItems) {
       </div>
     </article>`;
   }).join('');
-  items.forEach(item => applyLockToCard(item));
-  playback.forEach((state, id) => {
-    const video = document.querySelector(`[data-moderation-id="${CSS.escape(id)}"] video`);
-    if (!video) return;
-    const restore = () => {
-      if (state.time > 0) video.currentTime = Math.min(state.time, Number.isFinite(video.duration) ? video.duration : state.time);
-      if (state.playing) video.play().catch(() => {});
-    };
-    if (video.readyState >= 1) restore();
-    else video.addEventListener('loadedmetadata', restore, { once: true });
+  existingVideos.forEach((video, id) => {
+    const replacement = document.querySelector(`[data-moderation-id="${CSS.escape(id)}"] video`);
+    if (replacement && replacement.src === video.src) replacement.replaceWith(video);
   });
+  items.forEach(item => applyLockToCard(item));
 }
 
 function applyLockToCard(item) {
@@ -223,11 +221,11 @@ function clearClaim() {
   renderClaimTimer();
 }
 
-async function load() {
+async function load({ silent = false } = {}) {
   if (loading) return;
   loading = true;
   const status = document.getElementById('moderation-status');
-  status.textContent = 'Загрузка очереди…';
+  if (!silent) status.textContent = 'Загрузка очереди…';
   try {
     if (context.getRole?.() === 'admin' && !sessionStorage.getItem('metadata-review-seeded-v1')) {
       await api('', { method: 'POST', body: JSON.stringify({ action: 'seed_metadata_queue' }) });
@@ -278,6 +276,7 @@ async function act(card, action) {
       item.moderation_lock_expires_at = Number(claim.expires_at) || 0;
       startClaimHeartbeat(item.id, claim.expires_at);
       render(loadedItems);
+      await load({ silent: true });
       context.toast('Задание взято в работу', 's');
     } catch (error) {
       context.toast(error.message, 'e');
@@ -322,6 +321,7 @@ async function act(card, action) {
       item.moderation_lock_owned = true;
       startClaimHeartbeat(item.id, claim.expires_at);
       context.openDraft(item);
+      await load({ silent: true });
     } catch (error) {
       context.toast(error.message, 'e');
       await refreshLocks();
@@ -378,7 +378,11 @@ export function initModeration(nextContext) {
     picker.querySelectorAll('[data-metadata-bounce]').forEach(item => item.classList.toggle('active', Number(item.dataset.metadataBounce) <= next));
   });
   clearInterval(lockPollTimer);
-  lockPollTimer = setInterval(refreshLocks, 10_000);
+  clearInterval(queuePollTimer);
+  lockPollTimer = setInterval(refreshLocks, 3_000);
+  queuePollTimer = setInterval(() => {
+    if (!document.hidden) load({ silent: true });
+  }, 5_000);
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden) return;
     if (claimedLineupId) {
