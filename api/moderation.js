@@ -95,6 +95,16 @@ function missingMetadata(data = {}) {
   return missing;
 }
 
+function isQueuedForModeration(data = {}) {
+  if (data.status === 'approved') {
+    return data.metadata_review_required === true && missingMetadata(data).length > 0;
+  }
+  if (data.status === 'moderator_draft') return data.moderator_only === true;
+  return data.status === 'pending' &&
+    data.moderator_template_completed !== true &&
+    !clean(data.edited_by_moderator_uid);
+}
+
 function safeLineup(doc, viewerUid = '') {
   const d = doc.data() || {};
   const lockExpiresAt = timestampMillis(d.moderation_lock_expires_at);
@@ -264,12 +274,9 @@ async function listQueue(res, moderator) {
     db.collection('lineups').where('metadata_review_required', '==', true).get(),
   ]);
   const queue = [
-    ...pendingSnap.docs.filter(doc => {
-      const data = doc.data() || {};
-      return data.moderator_template_completed !== true && !data.edited_by_moderator_uid;
-    }),
-    ...moderatorSnap.docs.filter(doc => doc.data()?.status === 'moderator_draft'),
-    ...metadataSnap.docs.filter(doc => doc.data()?.status === 'approved' && missingMetadata(doc.data()).length),
+    ...pendingSnap.docs.filter(doc => isQueuedForModeration(doc.data() || {})),
+    ...moderatorSnap.docs.filter(doc => isQueuedForModeration(doc.data() || {})),
+    ...metadataSnap.docs.filter(doc => isQueuedForModeration(doc.data() || {})),
   ]
     .map(doc => safeLineup(doc, moderator.uid))
     .sort((a, b) => b.submitted_at - a.submitted_at);
@@ -285,9 +292,17 @@ async function listLocks(req, res, moderator) {
   const refs = ids.map(id => db.collection('lineups').doc(id));
   const snaps = await db.getAll(...refs);
   const locks = {};
+  const processed = [];
   snaps.forEach(snap => {
-    if (!snap.exists) return;
+    if (!snap.exists) {
+      processed.push(snap.id);
+      return;
+    }
     const data = snap.data() || {};
+    if (!isQueuedForModeration(data)) {
+      processed.push(snap.id);
+      return;
+    }
     const expiresAt = timestampMillis(data.moderation_lock_expires_at);
     if (clean(data.moderation_lock_uid) && expiresAt > Date.now()) {
       locks[snap.id] = {
@@ -298,7 +313,7 @@ async function listLocks(req, res, moderator) {
       };
     }
   });
-  res.status(200).json({ locks });
+  res.status(200).json({ locks, processed });
 }
 
 async function claimDraft(req, res, moderator) {

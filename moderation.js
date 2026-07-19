@@ -57,16 +57,48 @@ async function api(path = '', options = {}) {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) },
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || `Ошибка ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(body.error || `Ошибка ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return body;
 }
 
+function updateQueueStatus() {
+  const status = document.getElementById('moderation-status');
+  if (status) status.textContent = `В очереди: ${loadedItems.length} · Всего: ${totalQueueItems}`;
+}
+
+function removeQueueItems(ids) {
+  const removed = new Set(ids || []);
+  if (!removed.size) return;
+  let removedCount = 0;
+  loadedItems = loadedItems.filter(item => {
+    if (!removed.has(item.id)) return true;
+    document.querySelector(`[data-moderation-id="${CSS.escape(item.id)}"]`)?.remove();
+    removedCount += 1;
+    return false;
+  });
+  totalQueueItems = Math.max(0, totalQueueItems - removedCount);
+  updateQueueStatus();
+  if (!loadedItems.length) {
+    const list = document.getElementById('moderation-list');
+    if (list) list.innerHTML = '<div class="moderation-empty"><strong>Очередь пуста</strong><br>Новые лайнапы появятся здесь автоматически.</div>';
+  }
+}
+
 function render(items, total = totalQueueItems) {
+  const playback = new Map();
+  document.querySelectorAll('[data-moderation-id] video').forEach(video => {
+    const id = video.closest('[data-moderation-id]')?.dataset.moderationId;
+    if (id) playback.set(id, { time: video.currentTime || 0, playing: !video.paused && !video.ended });
+  });
   loadedItems = items;
   totalQueueItems = Number.isFinite(Number(total)) ? Number(total) : items.length;
   const list = document.getElementById('moderation-list');
   const status = document.getElementById('moderation-status');
-  status.textContent = `В очереди: ${items.length} · Всего: ${totalQueueItems}`;
+  updateQueueStatus();
   if (!items.length) {
     list.innerHTML = '<div class="moderation-empty"><strong>Очередь пуста</strong><br>Новые лайнапы появятся здесь автоматически.</div>';
     return;
@@ -96,6 +128,16 @@ function render(items, total = totalQueueItems) {
     </article>`;
   }).join('');
   items.forEach(item => applyLockToCard(item));
+  playback.forEach((state, id) => {
+    const video = document.querySelector(`[data-moderation-id="${CSS.escape(id)}"] video`);
+    if (!video) return;
+    const restore = () => {
+      if (state.time > 0) video.currentTime = Math.min(state.time, Number.isFinite(video.duration) ? video.duration : state.time);
+      if (state.playing) video.play().catch(() => {});
+    };
+    if (video.readyState >= 1) restore();
+    else video.addEventListener('loadedmetadata', restore, { once: true });
+  });
 }
 
 function applyLockToCard(item) {
@@ -110,8 +152,6 @@ function applyLockToCard(item) {
   }
   card.classList.toggle('moderation-card-locked', !!lockedByOther);
   card.classList.toggle('moderation-card-editing', isBeingEdited && item.task_kind !== 'metadata');
-  const video = card.querySelector('video');
-  if (isBeingEdited && video) video.pause();
   card.querySelectorAll('[data-moderation-action]').forEach(button => { button.disabled = !!lockedByOther; });
 }
 
@@ -120,6 +160,7 @@ async function refreshLocks() {
   if (!ids.length || document.hidden) return;
   try {
     const body = await api(`?locks=${encodeURIComponent(ids.join(','))}`);
+    removeQueueItems(body.processed);
     let ownershipChanged = false;
     loadedItems.forEach(item => {
       const lock = body.locks?.[item.id];
@@ -258,9 +299,13 @@ async function act(card, action) {
     try {
       await api('', { method: 'POST', body: JSON.stringify({ lineupId: item.id, action: 'complete_metadata', data }) });
       if (claimedLineupId === item.id) clearClaim();
-      card.remove(); context.toast('Параметры лайнапа сохранены', 's');
-      if (!document.querySelector('.moderation-card')) load();
-    } catch (error) { context.toast(error.message, 'e'); buttons.forEach(button => { button.disabled = false; }); }
+      removeQueueItems([item.id]);
+      context.toast('Параметры лайнапа сохранены', 's');
+    } catch (error) {
+      context.toast(error.message, 'e');
+      if (error.status === 404 || error.status === 409) removeQueueItems([item.id]);
+      else buttons.forEach(button => { button.disabled = false; });
+    }
     return;
   }
   if (action === 'complete') {
@@ -292,12 +337,12 @@ async function act(card, action) {
   buttons.forEach(button => { button.disabled = true; });
   try {
     await api('', { method: 'POST', body: JSON.stringify({ lineupId: card.dataset.moderationId, action, reason }) });
-    card.remove();
+    removeQueueItems([card.dataset.moderationId]);
     context.toast('Лайнап отклонён, причина отправлена автору', 's');
-    if (!document.querySelector('.moderation-card')) load();
   } catch (error) {
     context.toast(error.message, 'e');
-    buttons.forEach(button => { button.disabled = false; });
+    if (error.status === 404 || error.status === 409) removeQueueItems([card.dataset.moderationId]);
+    else buttons.forEach(button => { button.disabled = false; });
   }
 }
 
