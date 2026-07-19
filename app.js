@@ -3327,6 +3327,8 @@ const DEFAULT_MAP_SITE_LABELS = {
 let mapSiteLabelsConfig = {};
 let mapSpawnZonesConfig = {};
 let mapAnnotationModesConfig = {};
+const DEFAULT_MAP_ORIENTATIONS = { Haven: 1 };
+let mapOrientationsConfig = { ...DEFAULT_MAP_ORIENTATIONS };
 let currentAnnotationMode = null;
 let mapAnnotationsPromise = null;
 function loadMapAnnotations() {
@@ -3335,13 +3337,26 @@ function loadMapAnnotations() {
     getDoc(doc(db, 'settings', 'map_site_labels')),
     getDoc(doc(db, 'settings', 'map_spawn_zones')),
     getDoc(doc(db, 'settings', 'map_annotation_modes')),
-  ]).then(([labels, zones, modes]) => {
+    getDoc(doc(db, 'settings', 'map_orientations')),
+  ]).then(([labels, zones, modes, orientations]) => {
     mapSiteLabelsConfig = labels.exists() ? labels.data() : {};
     mapSpawnZonesConfig = zones.exists() ? zones.data() : {};
     mapAnnotationModesConfig = modes.exists() ? modes.data() : {};
+    const storedOrientations = orientations.data()?.defense_quarter_turns;
+    if (storedOrientations && typeof storedOrientations === 'object') {
+      mapOrientationsConfig = { ...DEFAULT_MAP_ORIENTATIONS, ...storedOrientations };
+    }
+    applyMapViewTransform();
     renderMapSiteLabels();
   }).catch(error => console.warn('map annotations', error));
   return mapAnnotationsPromise;
+}
+
+function currentMapQuarterTurns() {
+  const map = document.getElementById('sel-map')?.value || '';
+  if (!map || !selectedRoundSide) return 0;
+  const attackTurns = ((Number(mapOrientationsConfig[map]) || 0) % 4 + 4) % 4;
+  return selectedRoundSide === 'defense' ? (attackTurns + 2) % 4 : attackTurns;
 }
 
 function annotationModeFor(map) { return currentAnnotationMode || mapAnnotationModesConfig[map] || 'full'; }
@@ -3363,7 +3378,7 @@ function renderMapSiteLabels() {
   const zoneHtml = Object.entries(zones).filter(([,zone]) => zone && typeof zone === 'object').map(([side, zone]) => {
     const color = side === 'attack' ? '255,70,85' : '79,195,247';
     const label = side === 'attack' ? 'T SPAWN' : 'CT SPAWN';
-    return `<span class="map-spawn-zone" style="left:${Number(zone.x||0)*100}%;top:${Number(zone.y||0)*100}%;width:${Number(zone.width||0)*100}%;height:${Number(zone.height||0)*100}%;color:rgb(${color});border-color:rgba(${color},.85);background:rgba(${color},.16)">${label}</span>`;
+    return `<span class="map-spawn-zone" style="left:${Number(zone.x||0)*100}%;top:${Number(zone.y||0)*100}%;width:${Number(zone.width||0)*100}%;height:${Number(zone.height||0)*100}%;color:rgb(${color});border-color:rgba(${color},.85);background:rgba(${color},.16)"><b>${label}</b></span>`;
   }).join('');
   layer.innerHTML = zoneHtml + labels.map(item => `<span class="map-site-label" style="left:${Number(item.x) * 100}%;top:${Number(item.y) * 100}%">${esc(item.label)}</span>`).join('');
 }
@@ -3496,6 +3511,7 @@ document.getElementById('inp-desc').addEventListener('input', e => {
   _saveDraft();
 });
 document.getElementById('sel-map').addEventListener('change', () => {
+  resetMapView();
   loadMapMinimap();
   validateForm(); _saveDraft();
 });
@@ -6061,6 +6077,7 @@ document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(b => {
     document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
     b.classList.add('selected');
     selectedRoundSide = b.dataset.val;
+    applyMapViewTransform();
     validateForm(); _saveDraft();
   });
 });
@@ -6420,7 +6437,20 @@ function clampMapViewPan() {
 function applyMapViewTransform() {
   clampMapViewPan();
   const stage = document.getElementById('map-stage');
-  if (stage) stage.style.transform = `translate(${mapViewPanX}px, ${mapViewPanY}px) scale(${mapViewScale})`;
+  const orientationLayer = document.getElementById('map-orientation-layer');
+  if (!stage || !orientationLayer) return;
+  const quarterTurns = currentMapQuarterTurns();
+  stage.style.transform = `translate(${mapViewPanX}px, ${mapViewPanY}px) scale(${mapViewScale})`;
+  orientationLayer.dataset.quarterTurns = String(quarterTurns);
+  orientationLayer.style.transform = `rotate(${quarterTurns * 90}deg)`;
+  orientationLayer.style.setProperty('--map-counter-rotation', `${quarterTurns * -90}deg`);
+}
+
+function resetMapView() {
+  mapViewScale = 1;
+  mapViewPanX = 0;
+  mapViewPanY = 0;
+  applyMapViewTransform();
 }
 
 document.getElementById('map-wrap')?.addEventListener('wheel', event => {
@@ -6485,8 +6515,14 @@ function eventToMapPoint(e) {
   const wrap = document.getElementById('map-wrap');
   const rect = wrap.getBoundingClientRect();
   const content = mapContentRect();
-  const localX = (e.clientX - rect.left - mapViewPanX) / mapViewScale;
-  const localY = (e.clientY - rect.top - mapViewPanY) / mapViewScale;
+  let localX = (e.clientX - rect.left - mapViewPanX) / mapViewScale;
+  let localY = (e.clientY - rect.top - mapViewPanY) / mapViewScale;
+  const quarterTurns = currentMapQuarterTurns();
+  for (let i = 0; i < quarterTurns; i++) {
+    const previousX = localX;
+    localX = localY;
+    localY = content.wrapWidth - previousX;
+  }
   const px = localX - content.left;
   const py = localY - content.top;
   return {
@@ -6963,7 +6999,7 @@ function _restoreDraft(sourceDraft = null) {
   if (d.roundSide || d.round_side) {
     const side = d.roundSide || d.round_side;
     const btn = document.querySelector(`#side-row .pill-btn[data-val="${side}"]`);
-    if (btn) { document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); selectedRoundSide = side; }
+    if (btn) { document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); selectedRoundSide = side; applyMapViewTransform(); }
   }
 
   // Map + marker (load minimap, then place marker after image loads)
