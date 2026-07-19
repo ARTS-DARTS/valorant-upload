@@ -653,5 +653,3 @@
 @media(max-width:520px){.sova-shot-panel{padding:16px 14px}.sova-shot-control{align-items:stretch}.sova-bounce-picker{width:auto}.sova-bounce-picker button{flex:0 0 38px}}
 .header-notifications:focus-visible,.notification-card:focus-visible,.notifications-intro-actions button:focus-visible{outline:2px solid #7dd3fc;outline-offset:3px}
 @media(prefers-reduced-motion:reduce){.notification-banner{animation:none}.header-notifications,.notification-card,.sidebar-action{transition:none}}
-.moderation-sova-bounces .moderation-sova-zero{border:1px solid #526574;border-radius:8px;color:#9aabb6;font-size:14px;background:rgba(111,126,134,.12)}
-.moderation-sova-bounces .moderation-sova-zero.active{border-color:#efffff;color:#06191f;background:#6bddc7;box-shadow:0 0 10px rgba(107,221,199,.45)}

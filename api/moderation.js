@@ -96,7 +96,10 @@ function missingMetadata(data = {}) {
   if (!['attack', 'defense', 'any'].includes(clean(data.round_side))) missing.push('round_side');
   if (isSovaArrow(data)) {
     if (!(typeof data.sova_charge === 'number' && data.sova_charge >= 0 && data.sova_charge <= 3)) missing.push('sova_charge');
-    if (normalizedSovaBounces(data.sova_bounces) === null) missing.push('sova_bounces');
+    const rawBounces = data.sova_bounces;
+    if (rawBounces !== '' && rawBounces !== null && rawBounces !== undefined && normalizedSovaBounces(rawBounces) === null) {
+      missing.push('sova_bounces');
+    }
   }
   return missing;
 }
@@ -433,7 +436,7 @@ async function completeMetadata(req, res, moderator) {
         update.sova_charge = value;
       }
       if (normalizedSovaBounces(current.sova_bounces) === null) {
-        const value = input.sova_bounces;
+        const value = input.sova_bounces ?? 0;
         if (!Number.isInteger(value) || value < 0 || value > 2) throw Object.assign(new Error('Укажи отскоки'), { status: 400 });
         update.sova_bounces = value;
       }

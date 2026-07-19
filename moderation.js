@@ -46,7 +46,7 @@ function metadataFields(item) {
     </div></fieldset>` : ''}
     ${missing.has('sova_charge') || missing.has('sova_bounces') ? `<fieldset><legend>🏹 Стрела Совы</legend>
       ${missing.has('sova_charge') ? `<div class="moderation-sova-charge" style="--sova-charge-pct:50%"><input type="range" min="0" max="3" step="0.05" value="1.5" data-metadata-charge><div class="moderation-sova-ticks"><span></span><span></span></div><span class="moderation-sova-caption">ЗАРЯД</span></div>` : ''}
-      ${missing.has('sova_bounces') ? `<div class="moderation-sova-bounces" data-metadata-bounces data-value=""><span>ОТСКОКИ</span><div><button class="moderation-sova-zero" type="button" data-metadata-bounce="0" aria-label="Без отскоков"><b>0</b></button><button type="button" data-metadata-bounce="1" aria-label="Первый отскок"><i></i></button><button type="button" data-metadata-bounce="2" aria-label="Второй отскок"><i></i></button></div><small>Выбери 0, 1 или 2 отскока</small></div>` : ''}
+      ${missing.has('sova_bounces') ? `<div class="moderation-sova-bounces" data-metadata-bounces data-value=""><span>ОТСКОКИ</span><div><button type="button" data-metadata-bounce="1" aria-label="Первый отскок"><i></i></button><button type="button" data-metadata-bounce="2" aria-label="Второй отскок"><i></i></button></div><small>Не выбирай ромбы, если отскоков нет</small></div>` : ''}
     </fieldset>` : ''}
   </div>`;
 }
@@ -366,7 +366,7 @@ async function act(card, action) {
     if (missing.has('sova_charge')) data.sova_charge = Number(card.querySelector('[data-metadata-charge]')?.value);
     if (missing.has('sova_bounces')) {
       const raw = card.querySelector('[data-metadata-bounces]')?.dataset.value ?? '';
-      data.sova_bounces = raw === '' ? null : Number(raw);
+      data.sova_bounces = raw === '' ? 0 : Number(raw);
     }
     const buttons = card.querySelectorAll('button'); buttons.forEach(button => { button.disabled = true; });
     try {
@@ -443,12 +443,12 @@ export function initModeration(nextContext) {
     const picker = button.closest('[data-metadata-bounces]');
     const requested = Number(button.dataset.metadataBounce);
     const current = picker.dataset.value === '' ? 0 : Number(picker.dataset.value);
-    const next = requested === 0 ? 0 : (current === requested ? requested - 1 : requested);
+    const next = current === requested ? requested - 1 : requested;
     picker.dataset.value = String(next);
     picker.classList.add('selected');
     picker.querySelectorAll('[data-metadata-bounce]').forEach(item => {
       const value = Number(item.dataset.metadataBounce);
-      item.classList.toggle('active', value === 0 ? next === 0 : value <= next);
+      item.classList.toggle('active', value <= next);
     });
   });
   clearInterval(lockPollTimer);
