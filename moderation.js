@@ -5,6 +5,7 @@ let claimHeartbeatTimer = null;
 let claimedLineupId = '';
 let claimExpiresAt = 0;
 let claimCountdownTimer = null;
+let totalQueueItems = 0;
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
@@ -60,11 +61,12 @@ async function api(path = '', options = {}) {
   return body;
 }
 
-function render(items) {
+function render(items, total = totalQueueItems) {
   loadedItems = items;
+  totalQueueItems = Number.isFinite(Number(total)) ? Number(total) : items.length;
   const list = document.getElementById('moderation-list');
   const status = document.getElementById('moderation-status');
-  status.textContent = items.length ? `В очереди: ${items.length}` : '';
+  status.textContent = `В очереди: ${items.length} · Всего: ${totalQueueItems}`;
   if (!items.length) {
     list.innerHTML = '<div class="moderation-empty"><strong>Очередь пуста</strong><br>Новые лайнапы появятся здесь автоматически.</div>';
     return;
@@ -189,7 +191,7 @@ async function load() {
     }
     const body = await api();
     const items = Array.isArray(body.items) ? body.items : [];
-    render(items);
+    render(items, body.total);
     const owned = items.find(item => item.moderation_lock_owned && item.moderation_lock_expires_at > Date.now());
     if (owned) startClaimHeartbeat(owned.id, owned.moderation_lock_expires_at);
   } catch (error) {

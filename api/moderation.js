@@ -259,11 +259,11 @@ async function listQueue(res, moderator) {
   const [pendingSnap, moderatorSnap, metadataSnap] = await Promise.all([
     // Admin-created pending lineups can have created_at without submitted_at.
     // orderBy('submitted_at') silently excludes those documents from the queue.
-    db.collection('lineups').where('status', '==', 'pending').limit(100).get(),
-    db.collection('lineups').where('moderator_only', '==', true).limit(50).get(),
-    db.collection('lineups').where('metadata_review_required', '==', true).limit(100).get(),
+    db.collection('lineups').where('status', '==', 'pending').get(),
+    db.collection('lineups').where('moderator_only', '==', true).get(),
+    db.collection('lineups').where('metadata_review_required', '==', true).get(),
   ]);
-  const items = [
+  const queue = [
     ...pendingSnap.docs.filter(doc => {
       const data = doc.data() || {};
       return data.moderator_template_completed !== true && !data.edited_by_moderator_uid;
@@ -272,9 +272,10 @@ async function listQueue(res, moderator) {
     ...metadataSnap.docs.filter(doc => doc.data()?.status === 'approved' && missingMetadata(doc.data()).length),
   ]
     .map(doc => safeLineup(doc, moderator.uid))
-    .sort((a, b) => b.submitted_at - a.submitted_at)
-    .slice(0, 50);
-  res.status(200).json({ items });
+    .sort((a, b) => b.submitted_at - a.submitted_at);
+  const total = queue.length;
+  const items = queue.slice(0, 50);
+  res.status(200).json({ items, total });
 }
 
 async function listLocks(req, res, moderator) {
