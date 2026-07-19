@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-19T19:46:00+03:00';
+const SITE_VERSION = '2026-07-19T20:00:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -2128,6 +2128,15 @@ function initWorkspaceTabs() {
     event.preventDefault();
     saveCurrentDraftSnapshot();
   });
+  document.getElementById('btn-cancel-moderation')?.addEventListener('click', event => {
+    event.preventDefault();
+    cancelResubmissionDraft();
+  });
+  document.getElementById('btn-reset-upload')?.addEventListener('click', event => {
+    event.preventDefault();
+    if (!confirm('Полностью очистить форму и удалить несохранённые изменения?')) return;
+    cancelResubmissionDraft({ skipConfirm: true, resetOnly: true });
+  });
   document.getElementById('drafts-list')?.addEventListener('click', event => {
     const resume = event.target.closest('[data-draft-action="resume"]');
     const remove = event.target.closest('[data-draft-action="delete"]');
@@ -2411,7 +2420,7 @@ document.getElementById('moderator-author-search')?.addEventListener('input', ev
 async function loadModerationWorkspace() {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19-metadata-review-v1');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19-moderation-workflow-v2');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({
@@ -2725,6 +2734,13 @@ function startRejectedResubmission(lineupId) {
 
 function renderResubmissionBanner() {
   const banner = document.getElementById('resubmit-banner');
+  const cancelButton = document.getElementById('btn-cancel-moderation');
+  const submitButton = document.getElementById('btn-submit');
+  if (cancelButton) {
+    cancelButton.hidden = !moderatorDraftSourceId && !resubmissionSourceId;
+    cancelButton.textContent = moderatorDraftSourceId ? '✕ Отменить проверку' : '✕ Отменить редактирование';
+  }
+  if (submitButton && !submitButton.disabled) submitButton.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
   if (!banner) return;
   if (!resubmissionSourceId && !moderatorDraftSourceId) {
     banner.style.display = 'none';
@@ -2737,21 +2753,41 @@ function renderResubmissionBanner() {
   const reason = source ? firstText(source.rejection_reason, source.reject_reason, source.moderation_reason) : '';
   banner.innerHTML = `
     <div>
-      <strong>${moderatorDraftSourceId ? 'Доработка шаблона для модерации' : 'Доработка отклонённого лайнапа'}</strong>
+      <strong>${moderatorDraftSourceId ? 'Проверка и доработка лайнапа' : 'Редактирование отклонённого лайнапа'}</strong>
       <span>${esc(title)}${reason ? ` · ${esc(reason)}` : ''}</span>
     </div>
-    <button class="copy-id-btn" type="button" data-cancel-resubmission>Отменить</button>
+    <button class="copy-id-btn danger-soft" type="button" data-cancel-resubmission>${moderatorDraftSourceId ? 'Отменить проверку' : 'Отменить редактирование'}</button>
   `;
   banner.style.display = '';
 }
 
-function cancelResubmissionDraft() {
+async function cancelResubmissionDraft({ skipConfirm = false, resetOnly = false } = {}) {
+  const claimedId = moderatorDraftSourceId;
+  if (!skipConfirm && !confirm(claimedId
+    ? 'Отменить проверку? Бронь будет снята, а данные этого лайнапа полностью удалены из формы.'
+    : 'Отменить редактирование и полностью очистить форму?')) return;
+  if (claimedId) {
+    try {
+      if (!moderationController) await loadModerationWorkspace();
+      await moderationController?.releaseClaim?.(claimedId);
+    } catch (error) {
+      toast('Не удалось снять бронь: ' + (error.message || error), 'e');
+      return;
+    }
+  }
   resubmissionSourceId = '';
   moderatorDraftSourceId = '';
-  _saveDraft();
+  moderatorSelectedAuthor = null;
+  deleteActiveSavedDraft();
+  resetUploadForm();
+  showModeratorAuthorPicker();
   renderResubmissionBanner();
   renderDrafts();
-  toast('Связь с отклонённым лайнапом снята', 's');
+  if (claimedId && !resetOnly) {
+    switchWorkspaceTab('moderation');
+    await loadModerationWorkspace();
+  }
+  toast(claimedId ? 'Проверка отменена, бронь снята и форма очищена' : 'Форма полностью очищена', 's');
 }
 
 function renderDrafts() {
@@ -3172,6 +3208,7 @@ onAuthStateChanged(auth, async user => {
     await loadCurrentUserProfile(user);
     await loadUploadCategoryConfig();
     updateAdminOnlyWorkspace();
+    if (canCurrentUserModerate() && moderatorDraftSourceId) loadModerationWorkspace();
     document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
     updateUploadGate();
     _subscribeUserProfile(user.uid);
@@ -3343,6 +3380,7 @@ async function loadAgents() {
     agentsList = (data.data || []).sort((a, b) => a.displayName.localeCompare(b.displayName));
     renderAgentsGrid();
     _restoreDraft();
+    if (canCurrentUserModerate() && moderatorDraftSourceId) loadModerationWorkspace();
   } catch (e) {
     toast('Не удалось загрузить агентов', 'e');
   }
@@ -3453,7 +3491,7 @@ function renderMapSiteLabels() {
   renderAnnotationModeButtons(map);
   if (mode === 'clean') { layer.innerHTML = ''; return; }
   const labels = (Array.isArray(mapSiteLabelsConfig[map]) ? mapSiteLabelsConfig[map] : (DEFAULT_MAP_SITE_LABELS[map] || []))
-    .filter(item => item.level === 'site');
+    .filter(item => item && (item.level === 'site' || (!item.level && /^[ABC]$/i.test(String(item.label || '').trim()))));
   const zones = mapSpawnZonesConfig[map] || {};
   const zoneHtml = Object.entries(zones).filter(([,zone]) => zone && typeof zone === 'object').map(([side, zone]) => {
     const color = side === 'attack' ? '255,70,85' : '79,195,247';
@@ -7425,7 +7463,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       : '';
     if (categoryNeedsAbility(requestedContentType) && !normalizedAbility) {
       toast('Выбери способность агента', 'e');
-      btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
+      btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
       return;
     }
     submitStage = 'load_range_radius';
@@ -7440,13 +7478,13 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     const submittedUid = moderatorDraftSourceId ? (moderatorSelectedAuthor?.uid || '') : uid;
     if (moderatorDraftSourceId && (!submittedBy || !submittedUid)) {
       toast('Выбери автора лайнапа', 'e');
-      btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
+      btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
       return;
     }
     contentType = normalizeContentCategory(selectedCategory);
     if (!canSubmitContentCategory(contentType)) {
       toast('Эта категория пока закрыта для отправки.', 'e');
-      btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
+      btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
       return;
     }
     if (contentType === 'defense') {
@@ -7579,7 +7617,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       },
     });
     toast('Ошибка отправки: ' + toSafeErrorMessage(e), 'e');
-    btn.disabled = false; btn.textContent = '⬆ Отправить лайнап';
+    btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
   }
 });
 
@@ -7651,6 +7689,7 @@ function resetUploadForm({ keepDraft = false } = {}) {
   document.getElementById('success-screen').style.display = 'none';
   document.getElementById('btn-submit').disabled = true;
   document.getElementById('btn-submit').textContent = '⬆ Отправить лайнап';
+  renderResubmissionBanner();
   window.scrollTo(0, 0);
 }
 

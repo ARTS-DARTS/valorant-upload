@@ -326,6 +326,25 @@ async function claimDraft(req, res, moderator) {
   res.status(200).json({ ok: true, expires_at: expiresAt.getTime() });
 }
 
+async function releaseClaim(req, res, moderator) {
+  const lineupId = clean(req.body?.lineupId);
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
+  const db = getFirestore();
+  const ref = db.collection('lineups').doc(lineupId);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    const data = snap.data() || {};
+    if (clean(data.moderation_lock_uid) !== moderator.uid) return;
+    tx.update(ref, {
+      moderation_lock_uid: FieldValue.delete(),
+      moderation_lock_name: FieldValue.delete(),
+      moderation_lock_expires_at: FieldValue.delete(),
+    });
+  });
+  res.status(200).json({ ok: true });
+}
+
 async function completeMetadata(req, res, moderator) {
   const lineupId = clean(req.body?.lineupId);
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
@@ -356,7 +375,7 @@ async function completeMetadata(req, res, moderator) {
         update.sova_charge = value;
       }
       if (!(Number.isInteger(current.sova_bounces) && current.sova_bounces >= 0 && current.sova_bounces <= 2)) {
-        const value = Number(input.sova_bounces);
+        const value = input.sova_bounces;
         if (!Number.isInteger(value) || value < 0 || value > 2) throw Object.assign(new Error('Укажи отскоки'), { status: 400 });
         update.sova_bounces = value;
       }
@@ -400,6 +419,7 @@ async function moderate(req, res, moderator) {
   if (action === 'save_draft') return saveDraft(req, res, moderator);
   if (action === 'seed_metadata_queue') return seedMetadataQueue(res, moderator);
   if (action === 'complete_metadata') return completeMetadata(req, res, moderator);
+  if (action === 'release_claim') return releaseClaim(req, res, moderator);
   if (action === 'claim' || action === 'renew_claim') return claimDraft(req, res, moderator);
   const reason = clean(req.body?.reason);
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });

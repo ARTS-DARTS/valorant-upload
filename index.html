@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-19-sova-layout-v3">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-19-moderation-workflow-v2">
 </head>
 <body>
 
@@ -421,10 +421,6 @@
     </div>
 
     <div class="upload-gate" id="upload-gate" style="display:none;"></div>
-    <div class="draft-actions" style="justify-content:stretch;margin-bottom:10px;">
-      <button class="copy-id-btn" id="btn-save-draft" type="button" style="flex:1;">💾 Сохранить черновик</button>
-    </div>
-    <button class="btn-submit" id="btn-submit" disabled>⬆ Отправить лайнап</button>
   </div><!-- /.main -->
   <aside class="stats-sidebar" id="stats-sidebar">
     <div class="stats-sidebar-title">МОЯ СТАТИСТИКА</div>
@@ -468,6 +464,13 @@
         </span>
         <span class="sidebar-telegram-open">↗</span>
       </a>
+      <section class="sidebar-actions" aria-label="Действия с формой">
+        <div class="sidebar-actions-title">ДЕЙСТВИЯ С ЛАЙНАПОМ</div>
+        <button class="btn-submit" id="btn-submit" disabled>⬆ Отправить лайнап</button>
+        <button class="sidebar-action" id="btn-save-draft" type="button">💾 Сохранить черновик</button>
+        <button class="sidebar-action danger-soft" id="btn-cancel-moderation" type="button" hidden>✕ Отменить проверку</button>
+        <button class="sidebar-action danger-soft" id="btn-reset-upload" type="button">↺ Сбросить всё</button>
+      </section>
     </div>
   </aside>
   </div><!-- /.form-layout -->
@@ -633,6 +636,6 @@
 
 <div id="toasts"></div>
 
-<script type="module" src="/app.js?v=2026-07-19-metadata-review-v1"></script>
+<script type="module" src="/app.js?v=2026-07-19-moderation-workflow-v2"></script>
 </body>
 </html>

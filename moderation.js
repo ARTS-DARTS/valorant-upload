@@ -41,8 +41,8 @@ function metadataFields(item) {
       <label><input type="radio" name="round-side-${esc(item.id)}" value="defense"> Защита</label>
     </div></fieldset>` : ''}
     ${missing.has('sova_charge') || missing.has('sova_bounces') ? `<fieldset><legend>🏹 Стрела Совы</legend>
-      ${missing.has('sova_charge') ? `<label class="moderation-charge"><span>Натяжение</span><input type="range" min="0" max="3" step="0.05" value="1.5" data-metadata-charge><output>1.50 / 3</output></label>` : ''}
-      ${missing.has('sova_bounces') ? `<div class="moderation-choice-row"><label><input type="radio" name="bounces-${esc(item.id)}" value="0"> 0 отскоков</label><label><input type="radio" name="bounces-${esc(item.id)}" value="1"> 1 отскок</label><label><input type="radio" name="bounces-${esc(item.id)}" value="2"> 2 отскока</label></div>` : ''}
+      ${missing.has('sova_charge') ? `<div class="moderation-sova-charge" style="--sova-charge-pct:50%"><input type="range" min="0" max="3" step="0.05" value="1.5" data-metadata-charge><div class="moderation-sova-ticks"><span></span><span></span></div><span class="moderation-sova-caption">ЗАРЯД</span><output>1.50 / 3</output></div>` : ''}
+      ${missing.has('sova_bounces') ? `<div class="moderation-sova-bounces" data-metadata-bounces data-value=""><span>ОТСКОКИ</span><div><button type="button" data-metadata-bounce="1" aria-label="Первый отскок"><i></i></button><button type="button" data-metadata-bounce="2" aria-label="Второй отскок"><i></i></button></div><small>Нажми ромбы и выставь 0, 1 или 2</small></div>` : ''}
     </fieldset>` : ''}
   </div>`;
 }
@@ -77,13 +77,13 @@ function render(items) {
         ${video ? `<video class="moderation-video" src="${esc(video)}" controls preload="metadata"></video>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
         <div class="moderation-info">
           <div class="moderation-meta">${meta.map(value => `<span class="moderation-chip">${esc(value)}</span>`).join('')}</div>
-          <h3 class="moderation-title">${metadataTask ? 'Доработать лайнап' : esc(item.title || 'Без названия')}</h3>
+          <h3 class="moderation-title">${metadataTask ? 'Проверить параметры лайнапа' : esc(item.title || 'Без названия')}</h3>
           ${metadataTask ? metadataFields(item) : `<p class="moderation-description">${esc(item.description || 'Описание отсутствует')}</p><div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>`}
         </div>
       </div>
       <div class="moderation-lock-status" data-moderation-lock-status></div>
       <div class="moderation-actions">
-        <button class="moderation-action moderation-complete" data-moderation-action="${metadataTask ? 'complete-metadata' : 'complete'}" type="button">${metadataTask ? '✅ Сохранить параметры' : '✏️ Доработать'}</button>
+        <button class="moderation-action moderation-complete" data-moderation-action="${metadataTask ? 'complete-metadata' : 'complete'}" type="button">${metadataTask ? '✅ Подтвердить параметры' : '🔎 Проверить лайнап'}</button>
         ${metadataTask ? '' : '<button class="moderation-action moderation-reject" data-moderation-action="reject" type="button">Отклонить с причиной</button>'}
       </div>
     </article>`;
@@ -179,7 +179,10 @@ async function load() {
       sessionStorage.setItem('metadata-review-seeded-v1', '1');
     }
     const body = await api();
-    render(Array.isArray(body.items) ? body.items : []);
+    const items = Array.isArray(body.items) ? body.items : [];
+    render(items);
+    const owned = items.find(item => item.moderation_lock_owned && item.moderation_lock_expires_at > Date.now());
+    if (owned) startClaimHeartbeat(owned.id, owned.moderation_lock_expires_at);
   } catch (error) {
     status.textContent = `Не удалось загрузить очередь: ${error.message}`;
     document.getElementById('moderation-list').innerHTML = '';
@@ -197,7 +200,10 @@ async function act(card, action) {
     if (missing.has('difficulty')) data.difficulty = card.querySelector(`input[name="difficulty-${CSS.escape(item.id)}"]:checked`)?.value || '';
     if (missing.has('round_side')) data.round_side = card.querySelector(`input[name="round-side-${CSS.escape(item.id)}"]:checked`)?.value || '';
     if (missing.has('sova_charge')) data.sova_charge = Number(card.querySelector('[data-metadata-charge]')?.value);
-    if (missing.has('sova_bounces')) data.sova_bounces = Number(card.querySelector(`input[name="bounces-${CSS.escape(item.id)}"]:checked`)?.value);
+    if (missing.has('sova_bounces')) {
+      const raw = card.querySelector('[data-metadata-bounces]')?.dataset.value ?? '';
+      data.sova_bounces = raw === '' ? null : Number(raw);
+    }
     const buttons = card.querySelectorAll('button'); buttons.forEach(button => { button.disabled = true; });
     try {
       await api('', { method: 'POST', body: JSON.stringify({ lineupId: item.id, action: 'claim' }) });
@@ -257,8 +263,21 @@ export function initModeration(nextContext) {
   });
   document.getElementById('moderation-list')?.addEventListener('input', event => {
     if (!event.target.matches('[data-metadata-charge]')) return;
-    const output = event.target.parentElement?.querySelector('output');
+    const wrapper = event.target.parentElement;
+    wrapper?.style.setProperty('--sova-charge-pct', `${Number(event.target.value) / 3 * 100}%`);
+    const output = wrapper?.querySelector('output');
     if (output) output.textContent = `${Number(event.target.value).toFixed(2)} / 3`;
+  });
+  document.getElementById('moderation-list')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-metadata-bounce]');
+    if (!button) return;
+    const picker = button.closest('[data-metadata-bounces]');
+    const requested = Number(button.dataset.metadataBounce);
+    const current = picker.dataset.value === '' ? 0 : Number(picker.dataset.value);
+    const next = current === requested ? requested - 1 : requested;
+    picker.dataset.value = String(next);
+    picker.classList.add('selected');
+    picker.querySelectorAll('[data-metadata-bounce]').forEach(item => item.classList.toggle('active', Number(item.dataset.metadataBounce) <= next));
   });
   clearInterval(lockPollTimer);
   lockPollTimer = setInterval(refreshLocks, 10_000);
@@ -276,5 +295,11 @@ export function initModeration(nextContext) {
     }
     refreshLocks();
   });
-  return { load, clearClaim };
+  async function releaseClaim(lineupId) {
+    if (!lineupId) return;
+    await api('', { method: 'POST', body: JSON.stringify({ lineupId, action: 'release_claim' }) });
+    clearClaim();
+    await load();
+  }
+  return { load, clearClaim, releaseClaim };
 }
