@@ -22,7 +22,7 @@ const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
 const SITE_VERSION = '2026-07-19T22:06:00+03:00';
-const SITE_VERSION_POLL_MS = 60 * 1000;
+const SITE_VERSION_POLL_MS = 10 * 1000;
 let loadedDeploymentVersion = '';
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1519,9 +1519,7 @@ async function checkSiteVersion() {
       hideSiteUpdateBanner();
       return;
     }
-    let dismissed = '';
-    try { dismissed = localStorage.getItem('vl_dismissed_site_update') || ''; } catch (_) {}
-    if (liveVersion && liveVersion !== loadedDeploymentVersion && dismissed !== liveVersion) showSiteUpdateBanner();
+    if (liveVersion && liveVersion !== loadedDeploymentVersion) showSiteUpdateBanner();
     else hideSiteUpdateBanner();
   } catch (_) {}
 }
@@ -1529,9 +1527,8 @@ async function checkSiteVersion() {
 function initSiteVersionWatcher() {
   document.getElementById('btn-reload-site')?.addEventListener('click', () => {
     hideSiteUpdateBanner();
-    try { localStorage.setItem('vl_dismissed_site_update', String(window.__vlLiveVersion || '')); } catch (_) {}
     const url = new URL(window.location.href);
-    url.searchParams.set('site_refresh', `${SITE_VERSION}_${Date.now()}`);
+    url.searchParams.set('site_refresh', `${window.__vlLiveVersion || SITE_VERSION}_${Date.now()}`);
     window.location.assign(url.toString());
     setTimeout(() => window.location.reload(), 250);
   });
