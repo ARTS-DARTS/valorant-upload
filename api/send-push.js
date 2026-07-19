@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     translations,
     type,
     targetUid,
-    excludeAppVersion,
+    maxAndroidVersionCode,
     data: extraData = {},
   } = req.body || {};
   if (!title || !body) return res.status(400).json({ error: 'title and body required' });
@@ -46,9 +46,9 @@ export default async function handler(req, res) {
   if (targetUid) {
     payload.include_aliases = { external_id: [targetUid] };
     payload.target_channel  = 'push';
-  } else if (excludeAppVersion) {
+  } else if (maxAndroidVersionCode) {
     payload.filters = [
-      { field: 'app_version', relation: '!=', value: clean(excludeAppVersion) },
+      { field: 'app_version', relation: '<', value: clean(maxAndroidVersionCode) },
     ];
   } else {
     payload.included_segments = ['All'];
