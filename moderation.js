@@ -7,6 +7,7 @@ let claimedLineupId = '';
 let claimExpiresAt = 0;
 let claimCountdownTimer = null;
 let totalQueueItems = 0;
+let renderedQueueSignature = '';
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
@@ -89,6 +90,65 @@ function removeQueueItems(ids) {
   }
 }
 
+function queueSignature(items) {
+  return JSON.stringify(items.map(item => [
+    item.id,
+    item.task_kind,
+    item.moderation_lock_active,
+    item.moderation_lock_owned,
+    item.moderation_lock_name,
+    item.missing_fields,
+  ]));
+}
+
+function captureMetadataFormState() {
+  const state = new Map();
+  document.querySelectorAll('[data-moderation-id]').forEach(card => {
+    const id = card.dataset.moderationId;
+    const charge = card.querySelector('[data-metadata-charge]');
+    const bounces = card.querySelector('[data-metadata-bounces]');
+    state.set(id, {
+      difficulty: card.querySelector(`input[name="difficulty-${CSS.escape(id)}"]:checked`)?.value || '',
+      roundSide: card.querySelector(`input[name="round-side-${CSS.escape(id)}"]:checked`)?.value || '',
+      charge: charge?.value ?? '',
+      bounces: bounces?.dataset.value ?? '',
+    });
+  });
+  return state;
+}
+
+function restoreMetadataFormState(state) {
+  state.forEach((values, id) => {
+    const card = document.querySelector(`[data-moderation-id="${CSS.escape(id)}"]`);
+    if (!card) return;
+    if (values.difficulty) {
+      const input = card.querySelector(`input[name="difficulty-${CSS.escape(id)}"][value="${CSS.escape(values.difficulty)}"]`);
+      if (input) input.checked = true;
+    }
+    if (values.roundSide) {
+      const input = card.querySelector(`input[name="round-side-${CSS.escape(id)}"][value="${CSS.escape(values.roundSide)}"]`);
+      if (input) input.checked = true;
+    }
+    const charge = card.querySelector('[data-metadata-charge]');
+    if (charge && values.charge !== '') {
+      charge.value = values.charge;
+      const value = Number(values.charge);
+      charge.parentElement?.style.setProperty('--sova-charge-pct', `${value / 3 * 100}%`);
+      charge.parentElement?.classList.toggle('is-max', value >= 3);
+    }
+    const bounces = card.querySelector('[data-metadata-bounces]');
+    if (bounces && values.bounces !== '') {
+      const selected = Number(values.bounces);
+      bounces.dataset.value = values.bounces;
+      bounces.classList.add('selected');
+      bounces.querySelectorAll('[data-metadata-bounce]').forEach(item => {
+        const value = Number(item.dataset.metadataBounce);
+        item.classList.toggle('active', value === 0 ? selected === 0 : value <= selected);
+      });
+    }
+  });
+}
+
 function render(items, total = totalQueueItems) {
   // Defensive client-side deduplication in case an older/cached API response
   // contains the same Firestore document through overlapping queue queries.
@@ -97,11 +157,13 @@ function render(items, total = totalQueueItems) {
   // a <video> discards its buffered ranges and makes the CDN receive the same
   // range requests again.
   const existingVideos = new Map();
+  const metadataFormState = captureMetadataFormState();
   document.querySelectorAll('[data-moderation-id] video').forEach(video => {
     const id = video.closest('[data-moderation-id]')?.dataset.moderationId;
     if (id) existingVideos.set(id, video);
   });
   loadedItems = items;
+  renderedQueueSignature = queueSignature(items);
   totalQueueItems = Number.isFinite(Number(total)) ? Number(total) : items.length;
   const list = document.getElementById('moderation-list');
   const status = document.getElementById('moderation-status');
@@ -138,6 +200,7 @@ function render(items, total = totalQueueItems) {
     const replacement = document.querySelector(`[data-moderation-id="${CSS.escape(id)}"] video`);
     if (replacement && replacement.src === video.src) replacement.replaceWith(video);
   });
+  restoreMetadataFormState(metadataFormState);
   items.forEach(item => applyLockToCard(item));
 }
 
@@ -233,7 +296,14 @@ async function load({ silent = false } = {}) {
     }
     const body = await api();
     const items = Array.isArray(body.items) ? body.items : [];
-    render(items, body.total);
+    const nextSignature = queueSignature(items);
+    if (nextSignature === renderedQueueSignature) {
+      loadedItems = items;
+      totalQueueItems = Number.isFinite(Number(body.total)) ? Number(body.total) : items.length;
+      updateQueueStatus();
+    } else {
+      render(items, body.total);
+    }
     const owned = items.find(item => item.moderation_lock_owned && item.moderation_lock_expires_at > Date.now());
     if (owned) startClaimHeartbeat(owned.id, owned.moderation_lock_expires_at);
   } catch (error) {
