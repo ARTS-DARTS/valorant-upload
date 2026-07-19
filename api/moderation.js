@@ -190,8 +190,9 @@ async function saveDraft(req, res, moderator) {
   const author = await db.collection('users').doc(authorUid).get();
   if (!author.exists) return res.status(400).json({ error: 'Автор не найден' });
   const ref = db.collection('lineups').doc(lineupId);
+  const claimRef = db.collection('moderation_claims').doc(moderator.uid);
   await db.runTransaction(async tx => {
-    const snap = await tx.get(ref);
+    const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const currentData = snap.data() || {};
     if (!['pending', 'moderator_draft'].includes(currentData.status)) throw Object.assign(new Error('Лайнап уже обработан'), { status: 409 });
@@ -248,6 +249,7 @@ async function saveDraft(req, res, moderator) {
       update.trajectory = [];
     }
     tx.update(ref, update);
+    if (claimSnap.exists && clean(claimSnap.data()?.lineup_id) === lineupId) tx.delete(claimRef);
   });
   res.status(200).json({ ok: true, id: lineupId, status: 'pending' });
 }
@@ -303,9 +305,10 @@ async function claimDraft(req, res, moderator) {
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
   const db = getFirestore();
   const ref = db.collection('lineups').doc(lineupId);
+  const claimRef = db.collection('moderation_claims').doc(moderator.uid);
   const expiresAt = new Date(Date.now() + MODERATION_LOCK_MS);
   await db.runTransaction(async tx => {
-    const snap = await tx.get(ref);
+    const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const data = snap.data() || {};
     const metadataTask = data.status === 'approved' && data.metadata_review_required === true && missingMetadata(data).length > 0;
@@ -317,10 +320,22 @@ async function claimDraft(req, res, moderator) {
     if (lockActive && lockUid !== moderator.uid) {
       throw Object.assign(new Error(`Этот лайнап уже редактирует ${clean(data.moderation_lock_name) || 'другой модератор'}`), { status: 409 });
     }
+    const currentClaim = claimSnap.data() || {};
+    const claimedLineupId = clean(currentClaim.lineup_id);
+    const claimedUntil = timestampMillis(currentClaim.expires_at);
+    if (claimedLineupId && claimedLineupId !== lineupId && claimedUntil > Date.now()) {
+      throw Object.assign(new Error('У тебя уже есть задание в работе. Заверши его или нажми «Отказаться».'), { status: 409 });
+    }
     tx.update(ref, {
       moderation_lock_uid: moderator.uid,
       moderation_lock_name: moderator.name,
       moderation_lock_expires_at: expiresAt,
+    });
+    tx.set(claimRef, {
+      lineup_id: lineupId,
+      moderator_name: moderator.name,
+      expires_at: expiresAt,
+      updated_at: FieldValue.serverTimestamp(),
     });
   });
   res.status(200).json({ ok: true, expires_at: expiresAt.getTime() });
@@ -331,8 +346,9 @@ async function releaseClaim(req, res, moderator) {
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
   const db = getFirestore();
   const ref = db.collection('lineups').doc(lineupId);
+  const claimRef = db.collection('moderation_claims').doc(moderator.uid);
   await db.runTransaction(async tx => {
-    const snap = await tx.get(ref);
+    const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
     if (!snap.exists) return;
     const data = snap.data() || {};
     if (clean(data.moderation_lock_uid) !== moderator.uid) return;
@@ -341,6 +357,7 @@ async function releaseClaim(req, res, moderator) {
       moderation_lock_name: FieldValue.delete(),
       moderation_lock_expires_at: FieldValue.delete(),
     });
+    if (claimSnap.exists && clean(claimSnap.data()?.lineup_id) === lineupId) tx.delete(claimRef);
   });
   res.status(200).json({ ok: true });
 }
@@ -351,8 +368,9 @@ async function completeMetadata(req, res, moderator) {
   const input = req.body?.data || {};
   const db = getFirestore();
   const ref = db.collection('lineups').doc(lineupId);
+  const claimRef = db.collection('moderation_claims').doc(moderator.uid);
   await db.runTransaction(async tx => {
-    const snap = await tx.get(ref);
+    const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const current = snap.data() || {};
     if (current.status !== 'approved' || current.metadata_review_required !== true) throw Object.assign(new Error('Задание уже выполнено'), { status: 409 });
@@ -390,6 +408,7 @@ async function completeMetadata(req, res, moderator) {
       moderation_lock_uid: FieldValue.delete(), moderation_lock_name: FieldValue.delete(), moderation_lock_expires_at: FieldValue.delete(),
     });
     tx.update(ref, update);
+    if (claimSnap.exists && clean(claimSnap.data()?.lineup_id) === lineupId) tx.delete(claimRef);
     tx.create(db.collection('moderator_logs').doc(), { lineup_id: lineupId, action: 'complete_metadata', fields: Object.keys(update), moderator_uid: moderator.uid, moderator_role: moderator.role, created_at: FieldValue.serverTimestamp() });
   });
   res.status(200).json({ ok: true });

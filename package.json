@@ -2,9 +2,10 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check api/duel-finalizer.js && node --check scripts/test-duel-finalizer.mjs && node --check api/send-push.js && node --check api/notify-agent-subscribers.js && node --check api/valorant-proxy.js && node --check api/yandex-link-state.js && node --check api/yandex-start.js && node --check api/yandex-callback.js && node --check api/yandex-unlink.js && node --check api/moderator-application.js && node --check api/moderation.js && node --check moderation.js && node --check app.js",
+    "check": "node --check server.js && node --check api/duel-finalizer.js && node --check scripts/test-duel-finalizer.mjs && node --check scripts/clear-moderation-locks.mjs && node --check api/send-push.js && node --check api/notify-agent-subscribers.js && node --check api/valorant-proxy.js && node --check api/yandex-link-state.js && node --check api/yandex-start.js && node --check api/yandex-callback.js && node --check api/yandex-unlink.js && node --check api/moderator-application.js && node --check api/moderation.js && node --check moderation.js && node --check app.js",
     "test:e2e:duel": "node scripts/test-duel-finalizer.mjs",
-    "test:e2e:duel:server": "node scripts/test-duel-finalizer.mjs"
+    "test:e2e:duel:server": "node scripts/test-duel-finalizer.mjs",
+    "moderation:clear-locks": "node scripts/clear-moderation-locks.mjs"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
