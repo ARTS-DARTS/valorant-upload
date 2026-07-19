@@ -119,6 +119,8 @@
     .moderation-action:disabled { opacity:.45; cursor:wait; }
     .moderation-lock-status { padding:10px 18px; border-top:1px solid rgba(245,158,11,.28); background:rgba(245,158,11,.09); color:#fbbf24; font-size:12px; font-weight:800; }
     .moderation-card-locked { border-color:rgba(245,158,11,.42); }
+    .moderation-card-locked .moderation-metadata-form,
+    .moderation-card-locked .moderation-actions { display:none; }
     .moderation-card-editing .moderation-card-main { grid-template-columns:1fr; }
     .moderation-card-editing .moderation-video { display:none; }
     .moderation-promote { color:#07140b; background:#66bb6a; }
