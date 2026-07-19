@@ -71,6 +71,7 @@ function render(items) {
   list.innerHTML = items.map(item => {
     const video = safeMediaUrl(item.video_url);
     const metadataTask = item.task_kind === 'metadata';
+    const ownedByCurrentModerator = item.moderation_lock_owned === true;
     const meta = [item.moderator_only ? 'ЗАГОТОВКА ДЛЯ МОДЕРАЦИИ' : '', item.map, item.agent, item.agent ? item.ability : 'Выбери агента', sideLabel(item.round_side)].filter(Boolean);
     return `<article class="moderation-card" data-moderation-id="${esc(item.id)}">
       <div class="moderation-card-main">
@@ -78,12 +79,14 @@ function render(items) {
         <div class="moderation-info">
           <div class="moderation-meta">${meta.map(value => `<span class="moderation-chip">${esc(value)}</span>`).join('')}</div>
           <h3 class="moderation-title">${metadataTask ? 'Проверить параметры лайнапа' : esc(item.title || 'Без названия')}</h3>
-          ${metadataTask ? metadataFields(item) : `<p class="moderation-description">${esc(item.description || 'Описание отсутствует')}</p><div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>`}
+          ${metadataTask
+            ? (ownedByCurrentModerator ? metadataFields(item) : '<p class="moderation-description">Сначала возьми задание в работу. После этого откроются параметры для проверки.</p>')
+            : `<p class="moderation-description">${esc(item.description || 'Описание отсутствует')}</p><div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>`}
         </div>
       </div>
       <div class="moderation-lock-status" data-moderation-lock-status></div>
       <div class="moderation-actions">
-        <button class="moderation-action moderation-complete" data-moderation-action="${metadataTask ? 'complete-metadata' : 'complete'}" type="button">${metadataTask ? '✅ Подтвердить параметры' : '🔎 Проверить лайнап'}</button>
+        <button class="moderation-action moderation-complete" data-moderation-action="${metadataTask ? (ownedByCurrentModerator ? 'complete-metadata' : 'claim-metadata') : 'complete'}" type="button">${metadataTask && ownedByCurrentModerator ? '✅ Подтвердить параметры' : '🔒 Взять в работу'}</button>
         ${metadataTask ? '' : '<button class="moderation-action moderation-reject" data-moderation-action="reject" type="button">Отклонить с причиной</button>'}
       </div>
     </article>`;
@@ -113,13 +116,17 @@ async function refreshLocks() {
   if (!ids.length || document.hidden) return;
   try {
     const body = await api(`?locks=${encodeURIComponent(ids.join(','))}`);
+    let ownershipChanged = false;
     loadedItems.forEach(item => {
       const lock = body.locks?.[item.id];
+      const wasOwned = item.moderation_lock_owned === true;
       item.moderation_lock_active = !!lock?.active;
       item.moderation_lock_owned = !!lock?.owned;
       item.moderation_lock_name = lock?.name || '';
+      ownershipChanged ||= wasOwned !== item.moderation_lock_owned;
       applyLockToCard(item);
     });
+    if (ownershipChanged) render(loadedItems);
   } catch (_) {}
 }
 
@@ -192,6 +199,26 @@ async function load() {
 }
 
 async function act(card, action) {
+  if (action === 'claim-metadata') {
+    const item = loadedItems.find(entry => entry.id === card.dataset.moderationId);
+    if (!item) return;
+    const buttons = card.querySelectorAll('button');
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+      const claim = await api('', { method: 'POST', body: JSON.stringify({ lineupId: item.id, action: 'claim' }) });
+      item.moderation_lock_active = true;
+      item.moderation_lock_owned = true;
+      item.moderation_lock_expires_at = Number(claim.expires_at) || 0;
+      startClaimHeartbeat(item.id, claim.expires_at);
+      render(loadedItems);
+      context.toast('Задание взято в работу', 's');
+    } catch (error) {
+      context.toast(error.message, 'e');
+      buttons.forEach(button => { button.disabled = false; });
+      await refreshLocks();
+    }
+    return;
+  }
   if (action === 'complete-metadata') {
     const item = loadedItems.find(entry => entry.id === card.dataset.moderationId);
     if (!item) return;
@@ -206,8 +233,8 @@ async function act(card, action) {
     }
     const buttons = card.querySelectorAll('button'); buttons.forEach(button => { button.disabled = true; });
     try {
-      await api('', { method: 'POST', body: JSON.stringify({ lineupId: item.id, action: 'claim' }) });
       await api('', { method: 'POST', body: JSON.stringify({ lineupId: item.id, action: 'complete_metadata', data }) });
+      if (claimedLineupId === item.id) clearClaim();
       card.remove(); context.toast('Параметры лайнапа сохранены', 's');
       if (!document.querySelector('.moderation-card')) load();
     } catch (error) { context.toast(error.message, 'e'); buttons.forEach(button => { button.disabled = false; }); }
