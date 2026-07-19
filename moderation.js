@@ -174,12 +174,13 @@ function render(items, total = totalQueueItems) {
   }
   list.innerHTML = items.map(item => {
     const video = safeMediaUrl(item.video_url);
+    const poster = safeMediaUrl(item.video_thumbnail_url || item.screenshots?.[0]);
     const metadataTask = item.task_kind === 'metadata';
     const ownedByCurrentModerator = item.moderation_lock_owned === true;
     const meta = [item.moderator_only ? 'ЗАГОТОВКА ДЛЯ МОДЕРАЦИИ' : '', item.map, item.agent, item.agent ? item.ability : 'Выбери агента', sideLabel(item.round_side)].filter(Boolean);
     return `<article class="moderation-card" data-moderation-id="${esc(item.id)}">
       <div class="moderation-card-main">
-        ${video ? `<video class="moderation-video" src="${esc(video)}" controls preload="none"></video>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
+        ${video ? `<video class="moderation-video" src="${esc(video)}"${poster ? ` poster="${esc(poster)}"` : ''} controls preload="none"></video>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
         <div class="moderation-info">
           <div class="moderation-meta">${meta.map(value => `<span class="moderation-chip">${esc(value)}</span>`).join('')}</div>
           <h3 class="moderation-title">${metadataTask ? 'Проверить параметры лайнапа' : esc(item.title || 'Без названия')}</h3>

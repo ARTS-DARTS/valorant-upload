@@ -133,6 +133,10 @@ function safeLineup(doc, viewerUid = '') {
     user_id: clean(d.user_id || d.uid || d.author_uid).slice(0, 128),
     submitted_by: clean(d.submitted_by || d.author).slice(0, 80),
     video_url: clean(d.video_url).slice(0, 1000),
+    video_thumbnail_url: clean(
+      d.video_thumbnail_url || d.thumbnail_url || d.poster_url ||
+      (Array.isArray(d.screenshots) ? d.screenshots[0] : ''),
+    ).slice(0, 1000),
     screenshots: Array.isArray(d.screenshots) ? d.screenshots.slice(0, 8).map(x => clean(x).slice(0, 1000)) : [],
     position_x: Number(d.position_x ?? 0.5),
     position_y: Number(d.position_y ?? 0.5),
