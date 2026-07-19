@@ -64,7 +64,7 @@ function render(items) {
       </div>
       <div class="moderation-lock-status" data-moderation-lock-status></div>
       <div class="moderation-actions">
-        ${item.moderator_only ? '<button class="moderation-action moderation-complete" data-moderation-action="complete" type="button">✏️ Доделать шаблон</button>' : ''}
+        <button class="moderation-action moderation-complete" data-moderation-action="complete" type="button">✏️ Доработать</button>
         <button class="moderation-action moderation-reject" data-moderation-action="reject" type="button">Отклонить с причиной</button>
       </div>
     </article>`;
@@ -86,7 +86,7 @@ function applyLockToCard(item) {
 }
 
 async function refreshLocks() {
-  const ids = loadedItems.filter(item => item.moderator_only).map(item => item.id);
+  const ids = loadedItems.map(item => item.id);
   if (!ids.length || document.hidden) return;
   try {
     const body = await api(`?locks=${encodeURIComponent(ids.join(','))}`);

@@ -131,6 +131,34 @@ function safePoints(raw, limit = 30) {
   return Array.isArray(raw) ? raw.slice(0, limit).map(point => ({ x: finite01(point?.x), y: finite01(point?.y) })) : [];
 }
 
+function safeDefenseAbilities(raw) {
+  if (!Array.isArray(raw)) return [];
+  const allowedKinds = new Set(['circle_area', 'line_segment', 'sensor_rect', 'mesh_burst', 'net_area']);
+  return raw.slice(0, 8).map((item, index) => {
+    const shapeKind = clean(item?.shape_kind).slice(0, 30);
+    const points = Array.isArray(item?.points) ? item.points.slice(0, 8).map(point => ({
+      role: clean(point?.role).slice(0, 20),
+      x: finite01(point?.x),
+      y: finite01(point?.y),
+    })) : [];
+    return {
+      ability: clean(item?.ability).slice(0, 80),
+      slot: clean(item?.slot).slice(0, 40),
+      icon: clean(item?.icon).slice(0, 1000),
+      x: finite01(item?.x),
+      y: finite01(item?.y),
+      shape_kind: allowedKinds.has(shapeKind) ? shapeKind : 'circle_area',
+      shape_radius: Math.max(0, Math.min(.5, Number(item?.shape_radius) || 0)),
+      shape_anchor: clean(item?.shape_anchor).slice(0, 30),
+      shape_width: Math.max(0, Math.min(1, Number(item?.shape_width) || 0)),
+      shape_height: Math.max(0, Math.min(1, Number(item?.shape_height) || 0)),
+      shape_rotation: Math.max(-360, Math.min(360, Number(item?.shape_rotation) || 0)),
+      points,
+      order: index + 1,
+    };
+  }).filter(item => item.ability);
+}
+
 async function saveDraft(req, res, moderator) {
   const lineupId = clean(req.body?.lineupId);
   const data = req.body?.data || {};
@@ -146,7 +174,7 @@ async function saveDraft(req, res, moderator) {
     const snap = await tx.get(ref);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const currentData = snap.data() || {};
-    if (currentData.status !== 'moderator_draft') throw Object.assign(new Error('Шаблон уже обработан'), { status: 409 });
+    if (!['pending', 'moderator_draft'].includes(currentData.status)) throw Object.assign(new Error('Лайнап уже обработан'), { status: 409 });
     // An expired lease may be reclaimed by another moderator, but expiration
     // alone must not destroy completed work. The original editor may still
     // save while the lock UID is theirs; once somebody reclaims it, the UID
@@ -159,7 +187,10 @@ async function saveDraft(req, res, moderator) {
       trajectory: safePoints(item?.trajectory), range_radius: Math.max(0, Math.min(.5, Number(item?.range_radius) || 0)),
       effect_shape: clean(item?.effect_shape || 'circle').slice(0, 30),
     })) : [];
-    tx.update(ref, {
+    const contentType = ['lineup', 'combo', 'wallbang', 'defense'].includes(clean(data.content_type || data.category))
+      ? clean(data.content_type || data.category)
+      : clean(currentData.content_type || currentData.category || 'lineup');
+    const update = {
       map: clean(data.map).slice(0, 40), agent: clean(data.agent).slice(0, 40), ability: clean(data.ability).slice(0, 80),
       title: clean(data.title).slice(0, 100), description: clean(data.description).slice(0, 1000),
       difficulty: clean(data.difficulty).slice(0, 20), round_side: clean(data.round_side).slice(0, 20),
@@ -167,13 +198,28 @@ async function saveDraft(req, res, moderator) {
       extra_abilities: extras, range_radius: Math.max(0, Math.min(.5, Number(data.range_radius) || 0)),
       screenshots: Array.isArray(data.screenshots) ? data.screenshots.slice(0, 8).map(value => clean(value).slice(0, 1000)) : [],
       video_url: clean(data.video_url).slice(0, 1000), user_id: authorUid, submitted_by: authorName,
-      category: 'lineup', content_type: 'lineup', status: 'pending', moderator_only: false,
+      category: contentType, content_type: contentType, status: 'pending', moderator_only: false,
       edited_by_moderator_uid: moderator.uid, edited_at: FieldValue.serverTimestamp(), submitted_at: FieldValue.serverTimestamp(),
       edited_by_moderator_name: moderator.name,
       moderator_template_completed: true,
       moderation_lock_uid: FieldValue.delete(), moderation_lock_name: FieldValue.delete(),
       moderation_lock_expires_at: FieldValue.delete(),
-    });
+    };
+    if (contentType === 'defense') {
+      const zoom = data.zoom_area || {};
+      update.site = clean(data.site).slice(0, 10);
+      update.number = Math.max(1, Math.min(999, Math.trunc(Number(data.number) || 1)));
+      update.zoom_area = {
+        x: finite01(zoom.x), y: finite01(zoom.y),
+        width: Math.max(.01, Math.min(1, Number(zoom.width) || .25)),
+        height: Math.max(.01, Math.min(1, Number(zoom.height) || .25)),
+      };
+      update.abilities = safeDefenseAbilities(data.abilities);
+      update.position_x = 0;
+      update.position_y = 0;
+      update.trajectory = [];
+    }
+    tx.update(ref, update);
   });
   res.status(200).json({ ok: true, id: lineupId, status: 'pending' });
 }
@@ -232,8 +278,8 @@ async function claimDraft(req, res, moderator) {
     const snap = await tx.get(ref);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const data = snap.data() || {};
-    if (data.status !== 'moderator_draft' || data.moderator_only !== true) {
-      throw Object.assign(new Error('Шаблон уже обработан'), { status: 409 });
+    if (!['pending', 'moderator_draft'].includes(data.status)) {
+      throw Object.assign(new Error('Лайнап уже обработан'), { status: 409 });
     }
     const lockUid = clean(data.moderation_lock_uid);
     const lockActive = lockUid && timestampMillis(data.moderation_lock_expires_at) > Date.now();
