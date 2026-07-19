@@ -87,7 +87,7 @@ function isSovaArrow(data = {}) {
 function missingMetadata(data = {}) {
   const missing = [];
   if (!['easy', 'medium', 'hard'].includes(clean(data.difficulty))) missing.push('difficulty');
-  if (!['attack', 'defense'].includes(clean(data.round_side))) missing.push('round_side');
+  if (!['attack', 'defense', 'any'].includes(clean(data.round_side))) missing.push('round_side');
   if (isSovaArrow(data)) {
     if (!(typeof data.sova_charge === 'number' && data.sova_charge >= 0 && data.sova_charge <= 3)) missing.push('sova_charge');
     if (!(Number.isInteger(data.sova_bounces) && data.sova_bounces >= 0 && data.sova_bounces <= 2)) missing.push('sova_bounces');
@@ -363,9 +363,9 @@ async function completeMetadata(req, res, moderator) {
       if (!['easy', 'medium', 'hard'].includes(value)) throw Object.assign(new Error('Укажи сложность'), { status: 400 });
       update.difficulty = value;
     }
-    if (!['attack', 'defense'].includes(clean(current.round_side))) {
+    if (!['attack', 'defense', 'any'].includes(clean(current.round_side))) {
       const value = clean(input.round_side);
-      if (!['attack', 'defense'].includes(value)) throw Object.assign(new Error('Укажи сторону раунда'), { status: 400 });
+      if (!['attack', 'defense', 'any'].includes(value)) throw Object.assign(new Error('Укажи сторону раунда'), { status: 400 });
       update.round_side = value;
     }
     if (isSovaArrow(current)) {

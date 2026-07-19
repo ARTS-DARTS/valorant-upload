@@ -25,7 +25,7 @@ function safeMediaUrl(value) {
 }
 
 function sideLabel(value) {
-  return value === 'attack' ? 'Атака' : value === 'defense' ? 'Защита' : 'Сторона не указана';
+  return value === 'attack' ? 'Атака' : value === 'defense' ? 'Защита' : value === 'any' ? 'Любая сторона' : 'Сторона не указана';
 }
 
 function metadataFields(item) {
@@ -39,6 +39,7 @@ function metadataFields(item) {
     ${missing.has('round_side') ? `<fieldset><legend>⚔ Сторона раунда</legend><div class="moderation-choice-row">
       <label><input type="radio" name="round-side-${esc(item.id)}" value="attack"> Атака</label>
       <label><input type="radio" name="round-side-${esc(item.id)}" value="defense"> Защита</label>
+      <label><input type="radio" name="round-side-${esc(item.id)}" value="any"> Любая</label>
     </div></fieldset>` : ''}
     ${missing.has('sova_charge') || missing.has('sova_bounces') ? `<fieldset><legend>🏹 Стрела Совы</legend>
       ${missing.has('sova_charge') ? `<div class="moderation-sova-charge" style="--sova-charge-pct:50%"><input type="range" min="0" max="3" step="0.05" value="1.5" data-metadata-charge><div class="moderation-sova-ticks"><span></span><span></span></div><span class="moderation-sova-caption">ЗАРЯД</span></div>` : ''}
@@ -87,6 +88,7 @@ function render(items) {
       <div class="moderation-lock-status" data-moderation-lock-status></div>
       <div class="moderation-actions">
         <button class="moderation-action moderation-complete" data-moderation-action="${metadataTask ? (ownedByCurrentModerator ? 'complete-metadata' : 'claim-metadata') : 'complete'}" type="button">${metadataTask && ownedByCurrentModerator ? '✅ Подтвердить параметры' : '🔒 Взять в работу'}</button>
+        ${metadataTask && ownedByCurrentModerator ? '<button class="moderation-action moderation-reject" data-moderation-action="release-metadata" type="button">✕ Отказаться</button>' : ''}
         ${metadataTask ? '' : '<button class="moderation-action moderation-reject" data-moderation-action="reject" type="button">Отклонить с причиной</button>'}
       </div>
     </article>`;
@@ -105,7 +107,7 @@ function applyLockToCard(item) {
     status.style.display = lockedByOther ? '' : 'none';
   }
   card.classList.toggle('moderation-card-locked', !!lockedByOther);
-  card.classList.toggle('moderation-card-editing', isBeingEdited);
+  card.classList.toggle('moderation-card-editing', isBeingEdited && item.task_kind !== 'metadata');
   const video = card.querySelector('video');
   if (isBeingEdited && video) video.pause();
   card.querySelectorAll('[data-moderation-action]').forEach(button => { button.disabled = !!lockedByOther; });
@@ -199,6 +201,25 @@ async function load() {
 }
 
 async function act(card, action) {
+  if (action === 'release-metadata') {
+    const item = loadedItems.find(entry => entry.id === card.dataset.moderationId);
+    if (!item) return;
+    const buttons = card.querySelectorAll('button');
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+      await api('', { method: 'POST', body: JSON.stringify({ lineupId: item.id, action: 'release_claim' }) });
+      if (claimedLineupId === item.id) clearClaim();
+      item.moderation_lock_active = false;
+      item.moderation_lock_owned = false;
+      item.moderation_lock_name = '';
+      render(loadedItems);
+      context.toast('Задание возвращено в очередь', 's');
+    } catch (error) {
+      context.toast(error.message, 'e');
+      buttons.forEach(button => { button.disabled = false; });
+    }
+    return;
+  }
   if (action === 'claim-metadata') {
     const item = loadedItems.find(entry => entry.id === card.dataset.moderationId);
     if (!item) return;
@@ -291,7 +312,9 @@ export function initModeration(nextContext) {
   document.getElementById('moderation-list')?.addEventListener('input', event => {
     if (!event.target.matches('[data-metadata-charge]')) return;
     const wrapper = event.target.parentElement;
-    wrapper?.style.setProperty('--sova-charge-pct', `${Number(event.target.value) / 3 * 100}%`);
+    const value = Number(event.target.value);
+    wrapper?.style.setProperty('--sova-charge-pct', `${value / 3 * 100}%`);
+    wrapper?.classList.toggle('is-max', value >= 3);
   });
   document.getElementById('moderation-list')?.addEventListener('click', event => {
     const button = event.target.closest('[data-metadata-bounce]');

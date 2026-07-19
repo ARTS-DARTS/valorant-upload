@@ -1833,6 +1833,7 @@ function renderSovaShotPanel() {
   if (range) {
     range.value = String(sovaCharge);
     range.style.setProperty('--sova-charge-pct', `${Math.max(0, Math.min(100, sovaCharge / 3 * 100))}%`);
+    range.closest('.sova-charge-slider')?.classList.toggle('is-max', sovaCharge >= 3);
   }
   panel.querySelectorAll('[data-sova-bounce-index]').forEach(button => {
     button.classList.toggle('active', Number(button.dataset.sovaBounceIndex) <= sovaBounces);
@@ -2488,7 +2489,7 @@ function difficultyLabel(value) {
 }
 
 function roundSideLabel(value) {
-  return value === 'attack' ? 'Атака' : value === 'defense' ? 'Защита' : 'Не указана';
+  return value === 'attack' ? 'Атака' : value === 'defense' ? 'Защита' : value === 'any' ? 'Любая' : 'Не указана';
 }
 
 function categoryLabel(value) {
@@ -2564,7 +2565,7 @@ document.getElementById('moderator-author-search')?.addEventListener('input', ev
 async function loadModerationWorkspace() {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19-sova-charge-clean-v1');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19-round-side-any-v2');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({
