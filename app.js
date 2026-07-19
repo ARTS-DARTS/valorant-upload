@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-19T20:00:00+03:00';
+const SITE_VERSION = '2026-07-19T20:11:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -2217,6 +2217,7 @@ function switchWorkspaceTab(tab) {
   if (activeWorkspaceTab === 'materials') loadAuthorMaterials();
   if (activeWorkspaceTab === 'moderation') loadModerationWorkspace();
   if (activeWorkspaceTab === 'admin-chat') openAdminChat();
+  if (activeWorkspaceTab === 'notifications') renderSiteNotifications();
   renderAuthorWorkspace();
 }
 
@@ -2227,6 +2228,9 @@ let adminChatLastAdminTs = 0;
 const adminChatSound = new Audio('/assets/audio/chat-message.mp3');
 adminChatSound.preload = 'auto';
 adminChatSound.volume = 0.55;
+const siteNotificationSound = new Audio('/assets/audio/chat-message.mp3');
+siteNotificationSound.preload = 'auto';
+siteNotificationSound.volume = 0.7;
 const adminChatId = uid => `moderator_application_${uid}`;
 
 let presenceTimer = null;
@@ -2251,6 +2255,148 @@ document.addEventListener('pointerdown', () => {
     adminChatSound.volume = 0.55;
   }).catch(() => { adminChatSound.volume = 0.55; });
 }, { once:true });
+
+document.addEventListener('pointerdown', () => {
+  siteNotificationSound.volume = 0;
+  siteNotificationSound.play().then(() => {
+    siteNotificationSound.pause();
+    siteNotificationSound.currentTime = 0;
+    siteNotificationSound.volume = 0.7;
+  }).catch(() => { siteNotificationSound.volume = 0.7; });
+}, { once:true });
+
+let siteNotificationsUnsub = null;
+let siteNotifications = [];
+let siteNotificationsReady = false;
+let knownSiteNotificationIds = new Set();
+
+function notificationTimestamp(value) {
+  if (typeof value?.toDate === 'function') return value.toDate();
+  return new Date(Number(value) || Date.now());
+}
+
+function notificationIcon(item) {
+  if (item.type === 'lineup_hot') return '🔥';
+  if (item.type === 'lineup_approved') return '✅';
+  if (item.type === 'lineup_rejected') return '↩';
+  if (item.type === 'duel_win') return '🏆';
+  return '🔔';
+}
+
+function notificationDate(value) {
+  return notificationTimestamp(value).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+function updateNotificationBadges() {
+  const unread = siteNotifications.filter(item => item.is_read !== true).length;
+  const headerBadge = document.getElementById('header-notifications-badge');
+  const tabBadge = document.getElementById('notifications-tab-badge');
+  if (headerBadge) { headerBadge.hidden = unread === 0; headerBadge.textContent = unread > 99 ? '99+' : String(unread); }
+  if (tabBadge) { tabBadge.hidden = unread === 0; tabBadge.textContent = unread > 99 ? '99+' : String(unread); }
+}
+
+function renderSiteNotifications() {
+  const list = document.getElementById('notifications-list');
+  if (!list) return;
+  if (!siteNotifications.length) {
+    list.innerHTML = '<div class="notifications-empty"><strong>Пока тихо</strong><br>Когда модератор примет решение по лайнапу, оно появится здесь.</div>';
+    return;
+  }
+  list.innerHTML = siteNotifications.map(item => `
+    <article class="notification-card ${item.is_read === true ? '' : 'unread'}" data-site-notification="${esc(item.id)}" tabindex="0">
+      <div class="notification-card-icon">${notificationIcon(item)}</div>
+      <div><h3>${esc(item.title || 'Уведомление')}</h3><p>${esc(item.body || '')}</p>${item.cooldown_reset ? '<span class="notification-cooldown">✓ КД на отправку сброшено</span>' : ''}</div>
+      <time>${notificationDate(item.created_at)}</time>
+    </article>`).join('');
+}
+
+async function markSiteNotificationRead(id) {
+  const item = siteNotifications.find(value => value.id === id);
+  if (!item || item.is_read === true || !currentUser) return;
+  item.is_read = true;
+  updateNotificationBadges();
+  renderSiteNotifications();
+  await updateDoc(doc(db, 'notifications', currentUser.uid, 'items', id), { is_read:true, read_at:serverTimestamp() }).catch(() => {});
+}
+
+function showIncomingNotification(item) {
+  const host = document.getElementById('notification-banners');
+  if (!host) return;
+  const banner = document.createElement('div');
+  banner.className = 'notification-banner';
+  banner.innerHTML = `<div class="notification-banner-icon">${notificationIcon(item)}</div><div><strong>${esc(item.title || 'Новое уведомление')}</strong><span>${esc(item.body || '')}</span></div><button type="button" aria-label="Закрыть">×</button>`;
+  banner.addEventListener('click', event => {
+    if (event.target.closest('button')) { banner.remove(); return; }
+    switchWorkspaceTab('notifications');
+    markSiteNotificationRead(item.id);
+    banner.remove();
+  });
+  host.prepend(banner);
+  while (host.children.length > 3) host.lastElementChild?.remove();
+  setTimeout(() => banner.remove(), 9000);
+  siteNotificationSound.currentTime = 0;
+  siteNotificationSound.play().catch(() => {});
+}
+
+function showNotificationsIntro(uid) {
+  const key = `notifications-intro-v1:${uid}`;
+  if (localStorage.getItem(key)) return;
+  localStorage.setItem(key, '1');
+  setTimeout(() => { const intro = document.getElementById('notifications-intro'); if (intro) intro.hidden = false; }, 900);
+}
+
+function startSiteNotifications(uid) {
+  siteNotificationsUnsub?.();
+  siteNotificationsReady = false;
+  knownSiteNotificationIds = new Set();
+  const inbox = query(collection(db, 'notifications', uid, 'items'), limit(50));
+  siteNotificationsUnsub = onSnapshot(inbox, snap => {
+    const next = snap.docs.map(entry => ({ id:entry.id, ...entry.data() }))
+      .sort((a, b) => notificationTimestamp(b.created_at) - notificationTimestamp(a.created_at));
+    if (siteNotificationsReady) {
+      const incoming = next.filter(item => !knownSiteNotificationIds.has(item.id));
+      incoming.slice(0, 3).reverse().forEach(showIncomingNotification);
+      if (incoming.some(item => item.cooldown_reset === true) && currentUser) _updateCooldown(currentUser.uid);
+    }
+    siteNotifications = next;
+    knownSiteNotificationIds = new Set(next.map(item => item.id));
+    siteNotificationsReady = true;
+    updateNotificationBadges();
+    renderSiteNotifications();
+  }, error => {
+    const list = document.getElementById('notifications-list');
+    if (list) list.innerHTML = `<div class="notifications-empty">Не удалось загрузить уведомления: ${esc(error.message)}</div>`;
+  });
+  showNotificationsIntro(uid);
+}
+
+document.getElementById('header-notifications')?.addEventListener('click', () => switchWorkspaceTab('notifications'));
+document.getElementById('notifications-list')?.addEventListener('click', event => {
+  const card = event.target.closest('[data-site-notification]');
+  if (card) markSiteNotificationRead(card.dataset.siteNotification);
+});
+document.getElementById('notifications-list')?.addEventListener('keydown', event => {
+  if (!['Enter', ' '].includes(event.key)) return;
+  const card = event.target.closest('[data-site-notification]');
+  if (!card) return;
+  event.preventDefault();
+  markSiteNotificationRead(card.dataset.siteNotification);
+});
+document.getElementById('notifications-mark-all')?.addEventListener('click', async () => {
+  if (!currentUser) return;
+  const unread = siteNotifications.filter(item => item.is_read !== true);
+  if (!unread.length) { toast('Непрочитанных уведомлений нет', 'i'); return; }
+  const batch = writeBatch(db);
+  unread.forEach(item => batch.update(doc(db, 'notifications', currentUser.uid, 'items', item.id), { is_read:true, read_at:serverTimestamp() }));
+  await batch.commit();
+  toast('Все уведомления прочитаны', 's');
+});
+document.getElementById('notifications-intro')?.addEventListener('click', event => {
+  const action = event.target.closest('[data-notifications-intro]')?.dataset.notificationsIntro;
+  if (!action) return;
+  event.currentTarget.hidden = true;
+  if (action === 'open') switchWorkspaceTab('notifications');
+});
 
 function newestAdminMessageTs(data) {
   return (Array.isArray(data?.thread) ? data.thread : [])
@@ -3205,6 +3351,7 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('form-screen').style.display = '';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'flex';
+    document.getElementById('header-notifications').hidden = false;
     await loadCurrentUserProfile(user);
     await loadUploadCategoryConfig();
     updateAdminOnlyWorkspace();
@@ -3219,6 +3366,7 @@ onAuthStateChanged(auth, async user => {
     if (!agentsList.length) loadAgents();
     loadMaps();
     openAdminChat();
+    startSiteNotifications(user.uid);
     startSitePresence();
   } else {
     currentUserProfile = null;
@@ -3230,11 +3378,17 @@ onAuthStateChanged(auth, async user => {
     _unsubscribeStats();
     adminChatUnsub?.();
     adminChatUnsub = null;
+    siteNotificationsUnsub?.();
+    siteNotificationsUnsub = null;
+    siteNotifications = [];
+    siteNotificationsReady = false;
+    updateNotificationBadges();
     clearInterval(presenceTimer);
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('form-screen').style.display = 'none';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'none';
+    document.getElementById('header-notifications').hidden = true;
     const loginButton = document.getElementById('btn-email-login');
     loginButton.disabled = false;
     loginButton.textContent = 'Войти';
@@ -3379,6 +3533,7 @@ async function loadAgents() {
     const data = await res.json();
     agentsList = (data.data || []).sort((a, b) => a.displayName.localeCompare(b.displayName));
     renderAgentsGrid();
+    await loadMapAnnotations();
     _restoreDraft();
     if (canCurrentUserModerate() && moderatorDraftSourceId) loadModerationWorkspace();
   } catch (e) {
@@ -3630,8 +3785,9 @@ document.getElementById('inp-desc').addEventListener('input', e => {
   document.getElementById('desc-count').textContent = e.target.value.length;
   _saveDraft();
 });
-document.getElementById('sel-map').addEventListener('change', () => {
+document.getElementById('sel-map').addEventListener('change', async () => {
   resetMapView();
+  await loadMapAnnotations();
   loadMapMinimap();
   validateForm(); _saveDraft();
 });

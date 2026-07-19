@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-19-moderation-workflow-v2">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-19-site-notifications-v1">
 </head>
 <body>
 
@@ -15,10 +15,13 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 19:46 · 19.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 20:11 · 19.07.2026</div>
   <div class="moderation-lease-timer" id="moderation-lease-timer" hidden aria-live="polite">
     <span>🔒 Бронь</span><strong id="moderation-lease-time">10:00</strong>
   </div>
+  <button class="header-notifications" id="header-notifications" type="button" aria-label="Уведомления" title="Уведомления" hidden>
+    <span aria-hidden="true">🔔</span><b id="header-notifications-badge" hidden>0</b>
+  </button>
   <a class="header-telegram" href="https://t.me/Vlineups" target="_blank" rel="noopener noreferrer" aria-label="Telegram-сообщество Vlineups">
     <span class="header-telegram-icon">➤</span>
     <span class="header-telegram-label">@Vlineups</span>
@@ -81,6 +84,7 @@
       <button class="workspace-tab" data-workspace-tab="drafts">Черновики</button>
       <button class="workspace-tab" data-workspace-tab="stats">Статистика</button>
       <button class="workspace-tab" data-workspace-tab="materials">Материалы</button>
+      <button class="workspace-tab" data-workspace-tab="notifications">🔔 Уведомления <span id="notifications-tab-badge" class="chat-tab-badge" hidden></span></button>
       <button class="workspace-tab" data-workspace-tab="admin-chat">💬 Чат с админом <span id="admin-chat-badge" class="chat-tab-badge" hidden></span></button>
       <button class="workspace-tab moderator-tab" data-workspace-tab="moderation" data-moderator-only="true" style="display:none;">🛡 Модерация</button>
     </nav>
@@ -506,6 +510,16 @@
     </div>
   </div>
 
+  <div class="workspace-panel" id="workspace-notifications">
+    <section class="notifications-shell">
+      <header class="notifications-head">
+        <div><div class="workspace-kicker">Центр уведомлений</div><h2>Что происходит с твоими лайнапами</h2><p>Здесь сохраняются решения модерации и важные события аккаунта.</p></div>
+        <button class="copy-id-btn" id="notifications-mark-all" type="button">Прочитать всё</button>
+      </header>
+      <div id="notifications-list" class="notifications-list"><div class="notifications-empty">Загрузка уведомлений…</div></div>
+    </section>
+  </div>
+
   <div class="workspace-panel" id="workspace-mine">
     <div class="author-list-shell">
       <div class="section-title">МОИ ЛАЙНАПЫ</div>
@@ -635,7 +649,15 @@
 </aside>
 
 <div id="toasts"></div>
+<div id="notification-banners" class="notification-banners" aria-live="polite"></div>
+<div id="notifications-intro" class="notifications-intro" hidden>
+  <div class="notifications-intro-card">
+    <div class="notifications-intro-icon">🔔</div>
+    <div><span>НОВАЯ ФУНКЦИЯ</span><h2>Все решения по лайнапам — в одном месте</h2><p>Колокольчик в шапке покажет новые уведомления. Когда лайнап попадёт в «Пирожки», ты узнаешь об этом сразу.</p></div>
+    <div class="notifications-intro-actions"><button type="button" data-notifications-intro="later">Понятно</button><button type="button" data-notifications-intro="open">Открыть уведомления</button></div>
+  </div>
+</div>
 
-<script type="module" src="/app.js?v=2026-07-19-moderation-workflow-v2"></script>
+<script type="module" src="/app.js?v=2026-07-19-site-notifications-v1"></script>
 </body>
 </html>
