@@ -19,7 +19,15 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { title, body, translations, type, targetUid, data: extraData = {} } = req.body || {};
+  const {
+    title,
+    body,
+    translations,
+    type,
+    targetUid,
+    excludeAppVersion,
+    data: extraData = {},
+  } = req.body || {};
   if (!title || !body) return res.status(400).json({ error: 'title and body required' });
 
   const localized = await normalizeTranslations(translations, title, body);
@@ -38,6 +46,10 @@ export default async function handler(req, res) {
   if (targetUid) {
     payload.include_aliases = { external_id: [targetUid] };
     payload.target_channel  = 'push';
+  } else if (excludeAppVersion) {
+    payload.filters = [
+      { field: 'app_version', relation: '!=', value: clean(excludeAppVersion) },
+    ];
   } else {
     payload.included_segments = ['All'];
   }
