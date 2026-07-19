@@ -3122,6 +3122,9 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('form-screen').style.display = 'none';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'none';
+    const loginButton = document.getElementById('btn-email-login');
+    loginButton.disabled = false;
+    loginButton.textContent = 'Войти';
   }
 });
 
@@ -3192,6 +3195,7 @@ document.getElementById('btn-email-login').addEventListener('click', async () =>
   } catch (e) {
     await logUploadError(e, { action: 'login', login: login.includes('@') ? 'email' : 'nickname' });
     showAuthErr(e.code === 'auth/invalid-credential' ? 'Неверный ник/email или пароль' : e.message);
+  } finally {
     btn.disabled = false; btn.textContent = 'Войти';
   }
 });
