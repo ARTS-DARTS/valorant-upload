@@ -196,7 +196,7 @@ async function saveDraft(req, res, moderator) {
       difficulty: clean(data.difficulty).slice(0, 20), round_side: clean(data.round_side).slice(0, 20),
       position_x: finite01(data.position_x), position_y: finite01(data.position_y), trajectory: safePoints(data.trajectory),
         extra_abilities: extras, range_radius: Math.max(0, Math.min(.5, Number(data.range_radius) || 0)),
-        sova_charge: Math.max(1, Math.min(3, Math.trunc(Number(data.sova_charge) || 3))),
+        sova_charge: Math.max(0, Math.min(3, Number(data.sova_charge ?? 3))),
         sova_bounces: Math.max(0, Math.min(2, Math.trunc(Number(data.sova_bounces) || 0))),
       screenshots: Array.isArray(data.screenshots) ? data.screenshots.slice(0, 8).map(value => clean(value).slice(0, 1000)) : [],
       video_url: clean(data.video_url).slice(0, 1000), user_id: authorUid, submitted_by: authorName,
