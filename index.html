@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-19T17-30">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-19-sova-shot-v1">
 </head>
 <body>
 
@@ -283,6 +283,25 @@
                 <div class="footage-library" id="footage-library" hidden></div>
               </div>
             </aside>
+          </div>
+        </div>
+      </div>
+      <div class="sova-shot-panel" id="sova-shot-panel" hidden>
+        <div class="sova-shot-heading">🏹 ПАРАМЕТРЫ СТРЕЛЫ СОВЫ</div>
+        <div class="sova-shot-control">
+          <span class="sova-shot-label">Сила натяжения</span>
+          <div class="sova-charge-picker" id="sova-charge-picker">
+            <button type="button" data-sova-charge="1" aria-label="Одно деление"><span></span></button>
+            <button type="button" data-sova-charge="2" aria-label="Два деления"><span></span><span></span></button>
+            <button type="button" data-sova-charge="3" aria-label="Три деления"><span></span><span></span><span></span></button>
+          </div>
+        </div>
+        <div class="sova-shot-control">
+          <span class="sova-shot-label">Отскоки</span>
+          <div class="sova-bounce-picker" id="sova-bounce-picker">
+            <button type="button" data-sova-bounces="0">0</button>
+            <button type="button" data-sova-bounces="1"><span class="bounce-glyph">↗</span> 1</button>
+            <button type="button" data-sova-bounces="2"><span class="bounce-glyph">↗</span><span class="bounce-glyph second">↗</span> 2</button>
           </div>
         </div>
       </div>
@@ -614,6 +633,6 @@
 
 <div id="toasts"></div>
 
-<script type="module" src="/app.js?v=2026-07-19T17-55"></script>
+<script type="module" src="/app.js?v=2026-07-19-sova-shot-v1"></script>
 </body>
 </html>

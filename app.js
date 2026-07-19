@@ -1815,6 +1815,40 @@ let agentsList       = [];
 let mapsData         = [];
 let selectedAgent    = null;
 let selectedAbility  = null;
+let sovaCharge = 3;
+let sovaBounces = 0;
+
+function isSovaArrowSelection(agent = selectedAgent, ability = selectedAbility) {
+  const agentKey = String(agent || '').trim().toLowerCase();
+  const abilityKey = String(ability || '').trim().toLowerCase();
+  return (agentKey === 'sova' || agentKey === 'сова') &&
+    (/shock|recon|шок|развед|стрел/.test(abilityKey));
+}
+
+function renderSovaShotPanel() {
+  const panel = document.getElementById('sova-shot-panel');
+  if (!panel) return;
+  panel.hidden = !isSovaArrowSelection();
+  panel.querySelectorAll('[data-sova-charge]').forEach(button => {
+    button.classList.toggle('selected', Number(button.dataset.sovaCharge) === sovaCharge);
+  });
+  panel.querySelectorAll('[data-sova-bounces]').forEach(button => {
+    button.classList.toggle('selected', Number(button.dataset.sovaBounces) === sovaBounces);
+  });
+}
+
+document.getElementById('sova-charge-picker')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-sova-charge]');
+  if (!button) return;
+  sovaCharge = Math.max(1, Math.min(3, Number(button.dataset.sovaCharge) || 1));
+  renderSovaShotPanel(); _saveDraft();
+});
+document.getElementById('sova-bounce-picker')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-sova-bounces]');
+  if (!button) return;
+  sovaBounces = Math.max(0, Math.min(2, Number(button.dataset.sovaBounces) || 0));
+  renderSovaShotPanel(); _saveDraft();
+});
 let selectedCategory = null;
 let selectedDifficulty = null;
 let selectedRoundSide = null;
@@ -2581,6 +2615,8 @@ function rejectedLineupDraft(item) {
     map: item.map || '',
     agent: item.agent || '',
     ability: item.ability || '',
+    sovaCharge: item.sova_charge ?? 3,
+    sovaBounces: item.sova_bounces ?? 0,
     category: normalizeContentCategory(item.content_type || item.category || 'lineup'),
     difficulty: item.difficulty || '',
     roundSide: item.round_side || '',
@@ -3432,6 +3468,7 @@ loadMapAnnotations();
 function selectAgent(agent) {
   selectedAgent   = agent.displayName;
   selectedAbility = null;
+  renderSovaShotPanel();
   extraAbilityTrajectories = [];
   selectedExtraAbilityIndex = null;
   selectedDefenseAbility = null;
@@ -3470,6 +3507,7 @@ function selectAgent(agent) {
       row.querySelectorAll('.ability-btn').forEach(x => x.classList.remove('selected'));
       b.classList.add('selected');
       selectedAbility = b.dataset.key;
+      renderSovaShotPanel();
       extraAbilityTrajectories = extraAbilityTrajectories.filter(item => item.ability !== selectedAbility);
       selectedExtraAbilityIndex = null;
       updateMarkerIcon();
@@ -6797,6 +6835,8 @@ function collectDraftData() {
     map:        document.getElementById('sel-map')?.value || '',
     agent:      selectedAgent,
     ability:    selectedAbility,
+    sovaCharge,
+    sovaBounces,
     category:   selectedCategory,
     difficulty: selectedDifficulty,
     roundSide: selectedRoundSide,
@@ -7127,6 +7167,9 @@ function _restoreDraft(sourceDraft = null) {
           normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === d.ability
         );
         selectedAbility = normalizeAbilityName(agent.displayName, ability?.displayName || d.ability, ability?.slot || d.ability);
+        sovaCharge = Math.max(1, Math.min(3, Number(d.sovaCharge ?? d.sova_charge) || 3));
+        sovaBounces = Math.max(0, Math.min(2, Number(d.sovaBounces ?? d.sova_bounces) || 0));
+        renderSovaShotPanel();
         const abilBtn = [...document.querySelectorAll('.ability-btn')].find(btn =>
           btn.dataset.key === selectedAbility || btn.dataset.slot === d.ability
         );
@@ -7408,6 +7451,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
             position_y: contentType === 'defense' ? 0 : markerY,
             trajectory: contentType === 'defense' ? [] : trajectoryFromMarker(),
             extra_abilities: contentType === 'lineup' ? extraAbilitiesPayload : [], range_radius: rangeRadius,
+            ...(isSovaArrowSelection(selectedAgent, normalizedAbility) ? { sova_charge: sovaCharge, sova_bounces: sovaBounces } : {}),
             category: contentType, content_type: contentType,
             ...(contentType === 'defense' ? defenseSubmissionPayload() : {}),
             screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl), video_url: videoUrl || '',
@@ -7460,6 +7504,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       description:   desc,
       video_url:     videoUrl || null,
       video_edit:    videoUrl ? normalizedVideoEdit() : null,
+      ...(isSovaArrowSelection() ? { sova_charge: sovaCharge, sova_bounces: sovaBounces } : {}),
       screenshots:   screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
       position_x: contentType === 'defense' ? 0 : markerX,
       position_y: contentType === 'defense' ? 0 : markerY,
@@ -7530,6 +7575,7 @@ function showSuccess() {
 function resetUploadForm({ keepDraft = false } = {}) {
   if (!keepDraft) _clearDraft();
   selectedAgent = null; selectedAbility = null;
+  sovaCharge = 3; sovaBounces = 0;
   selectedCategory = null; selectedDifficulty = null; selectedRoundSide = null;
   markerX = null; markerY = null;
   trajectoryPoints = [];
@@ -7573,6 +7619,7 @@ function resetUploadForm({ keepDraft = false } = {}) {
   document.getElementById('drop-zone').style.display = '';
   document.getElementById('vid-player-wrap').style.display = 'none';
   document.getElementById('vid-upload-progress').style.display = 'none';
+  renderSovaShotPanel();
   document.getElementById('map-img').style.display = 'none';
   document.getElementById('map-placeholder').style.display = '';
   document.getElementById('map-marker').style.display = 'none';

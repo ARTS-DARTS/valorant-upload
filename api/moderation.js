@@ -190,12 +190,14 @@ async function saveDraft(req, res, moderator) {
     const contentType = ['lineup', 'combo', 'wallbang', 'defense'].includes(clean(data.content_type || data.category))
       ? clean(data.content_type || data.category)
       : clean(currentData.content_type || currentData.category || 'lineup');
-    const update = {
+      const update = {
       map: clean(data.map).slice(0, 40), agent: clean(data.agent).slice(0, 40), ability: clean(data.ability).slice(0, 80),
       title: clean(data.title).slice(0, 100), description: clean(data.description).slice(0, 1000),
       difficulty: clean(data.difficulty).slice(0, 20), round_side: clean(data.round_side).slice(0, 20),
       position_x: finite01(data.position_x), position_y: finite01(data.position_y), trajectory: safePoints(data.trajectory),
-      extra_abilities: extras, range_radius: Math.max(0, Math.min(.5, Number(data.range_radius) || 0)),
+        extra_abilities: extras, range_radius: Math.max(0, Math.min(.5, Number(data.range_radius) || 0)),
+        sova_charge: Math.max(1, Math.min(3, Math.trunc(Number(data.sova_charge) || 3))),
+        sova_bounces: Math.max(0, Math.min(2, Math.trunc(Number(data.sova_bounces) || 0))),
       screenshots: Array.isArray(data.screenshots) ? data.screenshots.slice(0, 8).map(value => clean(value).slice(0, 1000)) : [],
       video_url: clean(data.video_url).slice(0, 1000), user_id: authorUid, submitted_by: authorName,
       category: contentType, content_type: contentType, status: 'pending', moderator_only: false,
@@ -203,8 +205,14 @@ async function saveDraft(req, res, moderator) {
       edited_by_moderator_name: moderator.name,
       moderator_template_completed: true,
       moderation_lock_uid: FieldValue.delete(), moderation_lock_name: FieldValue.delete(),
-      moderation_lock_expires_at: FieldValue.delete(),
-    };
+        moderation_lock_expires_at: FieldValue.delete(),
+      };
+      const sovaArrow = ['sova', 'сова'].includes(clean(data.agent).toLowerCase()) &&
+        /shock|recon|шок|развед|стрел/.test(clean(data.ability).toLowerCase());
+      if (!sovaArrow) {
+        update.sova_charge = FieldValue.delete();
+        update.sova_bounces = FieldValue.delete();
+      }
     if (contentType === 'defense') {
       const zoom = data.zoom_area || {};
       update.site = clean(data.site).slice(0, 10);
