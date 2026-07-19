@@ -75,6 +75,7 @@ function render(items) {
 function applyLockToCard(item) {
   const card = document.querySelector(`[data-moderation-id="${CSS.escape(item.id)}"]`);
   if (!card) return;
+  const isBeingEdited = !!item.moderation_lock_active;
   const lockedByOther = item.moderation_lock_active && !item.moderation_lock_owned;
   const status = card.querySelector('[data-moderation-lock-status]');
   if (status) {
@@ -82,6 +83,9 @@ function applyLockToCard(item) {
     status.style.display = lockedByOther ? '' : 'none';
   }
   card.classList.toggle('moderation-card-locked', !!lockedByOther);
+  card.classList.toggle('moderation-card-editing', isBeingEdited);
+  const video = card.querySelector('video');
+  if (isBeingEdited && video) video.pause();
   card.querySelectorAll('[data-moderation-action]').forEach(button => { button.disabled = !!lockedByOther; });
 }
 
