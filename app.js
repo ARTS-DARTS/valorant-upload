@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-19T17:30:00+03:00';
+const SITE_VERSION = '2026-07-19T17:55:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1695,6 +1695,42 @@ function uploadToCloudinary(blob, onProgress) {
       } else { reject(new Error('Cloudinary ' + xhr.status)); }
     };
     xhr.onerror = () => reject(new Error('Сетевая ошибка'));
+    xhr.onabort = () => reject(new Error('canceled'));
+    xhr.send(fd);
+  });
+  promise.abort = () => xhr?.abort();
+  return promise;
+}
+
+function uploadCompatibleLineupVideo(file, onProgress) {
+  const fd = new FormData();
+  fd.append('file', file, file.name || 'lineup-video.mp4');
+  fd.append('upload_preset', '4343242');
+  fd.append('folder', 'lineups_videos');
+  let xhr;
+  const promise = new Promise((resolve, reject) => {
+    xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://api.cloudinary.com/v1_1/djxgwkbqn/video/upload');
+    xhr.upload.onprogress = event => {
+      if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(`Cloudinary video upload error: ${xhr.status}`));
+        return;
+      }
+      try {
+        const result = JSON.parse(xhr.responseText);
+        if (!result.version || !result.public_id) throw new Error('Неполный ответ Cloudinary');
+        resolve(
+          `https://res.cloudinary.com/djxgwkbqn/video/upload/` +
+          `f_mp4,vc_h264,q_auto/v${result.version}/${result.public_id}.mp4`,
+        );
+      } catch (error) {
+        reject(error);
+      }
+    };
+    xhr.onerror = () => reject(new Error('Сетевая ошибка загрузки видео'));
     xhr.onabort = () => reject(new Error('canceled'));
     xhr.send(fd);
   });
@@ -5598,7 +5634,7 @@ async function handleVideoFile(file) {
   document.getElementById('vid-pct').textContent = '0%';
   document.getElementById('vid-prog').style.width = '0%';
 
-  const upload = uploadVideoToSelectel(file, pct => {
+  const upload = uploadCompatibleLineupVideo(file, pct => {
     const p = Math.round(pct * 100);
     document.getElementById('vid-pct').textContent = p + '%';
     document.getElementById('vid-prog').style.width = p + '%';
