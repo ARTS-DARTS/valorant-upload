@@ -84,13 +84,19 @@ function isSovaArrow(data = {}) {
     /shock|recon|шок|развед|стрел/.test(clean(data.ability).toLowerCase());
 }
 
+function normalizedSovaBounces(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 && number <= 2 ? number : null;
+}
+
 function missingMetadata(data = {}) {
   const missing = [];
   if (!['easy', 'medium', 'hard'].includes(clean(data.difficulty))) missing.push('difficulty');
   if (!['attack', 'defense', 'any'].includes(clean(data.round_side))) missing.push('round_side');
   if (isSovaArrow(data)) {
     if (!(typeof data.sova_charge === 'number' && data.sova_charge >= 0 && data.sova_charge <= 3)) missing.push('sova_charge');
-    if (!(Number.isInteger(data.sova_bounces) && data.sova_bounces >= 0 && data.sova_bounces <= 2)) missing.push('sova_bounces');
+    if (normalizedSovaBounces(data.sova_bounces) === null) missing.push('sova_bounces');
   }
   return missing;
 }
@@ -119,7 +125,7 @@ function safeLineup(doc, viewerUid = '') {
     difficulty: clean(d.difficulty).slice(0, 20),
     round_side: clean(d.round_side).slice(0, 20),
     sova_charge: typeof d.sova_charge === 'number' ? d.sova_charge : null,
-    sova_bounces: Number.isInteger(d.sova_bounces) ? d.sova_bounces : null,
+    sova_bounces: normalizedSovaBounces(d.sova_bounces),
     task_kind: d.status === 'approved' && d.metadata_review_required === true ? 'metadata' : 'full',
     missing_fields: missingMetadata(d),
     content_type: clean(d.content_type || d.category).slice(0, 20),
@@ -422,7 +428,7 @@ async function completeMetadata(req, res, moderator) {
         if (!Number.isFinite(value) || value < 0 || value > 3) throw Object.assign(new Error('Укажи натяжение стрелы'), { status: 400 });
         update.sova_charge = value;
       }
-      if (!(Number.isInteger(current.sova_bounces) && current.sova_bounces >= 0 && current.sova_bounces <= 2)) {
+      if (normalizedSovaBounces(current.sova_bounces) === null) {
         const value = input.sova_bounces;
         if (!Number.isInteger(value) || value < 0 || value > 2) throw Object.assign(new Error('Укажи отскоки'), { status: 400 });
         update.sova_bounces = value;
