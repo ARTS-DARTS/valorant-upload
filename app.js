@@ -21,8 +21,9 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-19T20:19:00+03:00';
+const SITE_VERSION = '2026-07-19T22:06:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
+let loadedDeploymentVersion = '';
 const EDITOR_MAX_ZOOM = 2.2;
 
 const DESCRIPTION_SAMPLES = [
@@ -1505,7 +1506,7 @@ function hideSiteUpdateBanner() {
 
 async function checkSiteVersion() {
   try {
-    const res = await fetch(`/site-version.json?v=${Date.now()}`, {
+    const res = await fetch(`/api/site-version?v=${Date.now()}`, {
       cache: 'no-store',
       headers: { 'Cache-Control': 'no-cache' },
     });
@@ -1513,9 +1514,14 @@ async function checkSiteVersion() {
     const data = await res.json();
     const liveVersion = String(data.version || '').trim();
     window.__vlLiveVersion = liveVersion;
+    if (!loadedDeploymentVersion) {
+      loadedDeploymentVersion = liveVersion;
+      hideSiteUpdateBanner();
+      return;
+    }
     let dismissed = '';
     try { dismissed = localStorage.getItem('vl_dismissed_site_update') || ''; } catch (_) {}
-    if (liveVersion && liveVersion !== SITE_VERSION && dismissed !== liveVersion) showSiteUpdateBanner();
+    if (liveVersion && liveVersion !== loadedDeploymentVersion && dismissed !== liveVersion) showSiteUpdateBanner();
     else hideSiteUpdateBanner();
   } catch (_) {}
 }

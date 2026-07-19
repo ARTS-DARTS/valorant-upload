@@ -12,6 +12,7 @@ import yandexUnlinkHandler from './api/yandex-unlink.js';
 import moderatorApplicationHandler from './api/moderator-application.js';
 import moderationHandler from './api/moderation.js';
 import sitePresenceHandler from './api/site-presence.js';
+import siteVersionHandler from './api/site-version.js';
 import { finalizeExpiredDuels } from './api/duel-finalizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -61,6 +62,7 @@ app.all('/api/yandex-callback', yandexCallbackHandler);
 app.all('/api/moderator-application', moderatorApplicationHandler);
 app.all('/api/moderation', moderationHandler);
 app.all('/api/site-presence', sitePresenceHandler);
+app.all('/api/site-version', siteVersionHandler);
 
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
