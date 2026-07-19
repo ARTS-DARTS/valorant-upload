@@ -2571,7 +2571,7 @@ document.getElementById('moderator-author-search')?.addEventListener('input', ev
 async function loadModerationWorkspace() {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19-live-moderation-queue-v1');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19-moderation-dedup-v1');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({

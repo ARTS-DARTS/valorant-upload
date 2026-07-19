@@ -273,11 +273,15 @@ async function listQueue(res, moderator) {
     db.collection('lineups').where('moderator_only', '==', true).get(),
     db.collection('lineups').where('metadata_review_required', '==', true).get(),
   ]);
-  const queue = [
+  const queueDocs = [
     ...pendingSnap.docs.filter(doc => isQueuedForModeration(doc.data() || {})),
-    ...moderatorSnap.docs.filter(doc => isQueuedForModeration(doc.data() || {})),
+    ...moderatorSnap.docs.filter(doc => doc.data()?.status === 'moderator_draft' && isQueuedForModeration(doc.data() || {})),
     ...metadataSnap.docs.filter(doc => isQueuedForModeration(doc.data() || {})),
-  ]
+  ];
+  // Queries intentionally cover overlapping moderation states. A lineup may
+  // match more than one query, but it must only appear once in the queue.
+  const uniqueQueueDocs = [...new Map(queueDocs.map(doc => [doc.id, doc])).values()];
+  const queue = uniqueQueueDocs
     .map(doc => safeLineup(doc, moderator.uid))
     .sort((a, b) => b.submitted_at - a.submitted_at);
   const total = queue.length;

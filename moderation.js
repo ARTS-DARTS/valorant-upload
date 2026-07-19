@@ -89,6 +89,9 @@ function removeQueueItems(ids) {
 }
 
 function render(items, total = totalQueueItems) {
+  // Defensive client-side deduplication in case an older/cached API response
+  // contains the same Firestore document through overlapping queue queries.
+  items = [...new Map(items.map(item => [item.id, item])).values()];
   const playback = new Map();
   document.querySelectorAll('[data-moderation-id] video').forEach(video => {
     const id = video.closest('[data-moderation-id]')?.dataset.moderationId;
