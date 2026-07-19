@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-19T17:55:00+03:00';
+const SITE_VERSION = '2026-07-19T18:25:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1829,24 +1829,27 @@ function renderSovaShotPanel() {
   const panel = document.getElementById('sova-shot-panel');
   if (!panel) return;
   panel.hidden = !isSovaArrowSelection();
-  panel.querySelectorAll('[data-sova-charge]').forEach(button => {
-    button.classList.toggle('selected', Number(button.dataset.sovaCharge) === sovaCharge);
-  });
-  panel.querySelectorAll('[data-sova-bounces]').forEach(button => {
-    button.classList.toggle('selected', Number(button.dataset.sovaBounces) === sovaBounces);
+  const range = document.getElementById('sova-charge-range');
+  const value = document.getElementById('sova-charge-value');
+  if (range) {
+    range.value = String(sovaCharge);
+    range.style.setProperty('--sova-charge-pct', `${Math.max(0, Math.min(100, sovaCharge / 3 * 100))}%`);
+  }
+  if (value) value.textContent = `${sovaCharge.toFixed(2)} / 3`;
+  panel.querySelectorAll('[data-sova-bounce-index]').forEach(button => {
+    button.classList.toggle('active', Number(button.dataset.sovaBounceIndex) <= sovaBounces);
   });
 }
 
-document.getElementById('sova-charge-picker')?.addEventListener('click', event => {
-  const button = event.target.closest('[data-sova-charge]');
-  if (!button) return;
-  sovaCharge = Math.max(1, Math.min(3, Number(button.dataset.sovaCharge) || 1));
+document.getElementById('sova-charge-range')?.addEventListener('input', event => {
+  sovaCharge = Math.max(0, Math.min(3, Number(event.target.value) || 0));
   renderSovaShotPanel(); _saveDraft();
 });
 document.getElementById('sova-bounce-picker')?.addEventListener('click', event => {
-  const button = event.target.closest('[data-sova-bounces]');
+  const button = event.target.closest('[data-sova-bounce-index]');
   if (!button) return;
-  sovaBounces = Math.max(0, Math.min(2, Number(button.dataset.sovaBounces) || 0));
+  const index = Math.max(1, Math.min(2, Number(button.dataset.sovaBounceIndex) || 1));
+  sovaBounces = sovaBounces === index ? index - 1 : index;
   renderSovaShotPanel(); _saveDraft();
 });
 let selectedCategory = null;
@@ -6623,6 +6626,37 @@ function trajectoryFromMarker(points = trajectoryPoints) {
   return trajectoryFromMarkerFor(points);
 }
 
+function addTrajectoryPoint(x, y) {
+  const points = activeTrajectoryPoints();
+  const extra = activeExtraAbility();
+  if (extra && points.length === 0) {
+    points.push({ x, y });
+    setActiveTrajectoryPoints(points);
+    setMarkerPosition(x, y);
+    updateMarkerIcon();
+  } else {
+    if (!extra && markerX !== null && points.length === 0) {
+      points.push({ x: markerX, y: markerY });
+    }
+    points.push({ x, y });
+    setActiveTrajectoryPoints(points);
+  }
+  renderExtraAbilityPanel();
+  renderTrajectory();
+  validateForm();
+  _saveDraft();
+}
+
+document.getElementById('map-wrap')?.addEventListener('contextmenu', event => {
+  if (mapMode !== 'trajectory') return;
+  event.preventDefault();
+  event.stopPropagation();
+  const img = document.getElementById('map-img');
+  if (!img || img.style.display === 'none') return;
+  const { x, y } = eventToMapPoint(event);
+  addTrajectoryPoint(x, y);
+});
+
 document.getElementById('map-wrap').addEventListener('click', e => {
   if (mapViewPanSuppressClick) {
     e.preventDefault();
@@ -6665,25 +6699,8 @@ document.getElementById('map-wrap').addEventListener('click', e => {
   } else if (mapMode === 'zoom') {
     return;
   } else {
-    const points = activeTrajectoryPoints();
-    const extra = activeExtraAbility();
-    if (extra && points.length === 0) {
-      points.push({ x, y });
-      setActiveTrajectoryPoints(points);
-      setMarkerPosition(x, y);
-      updateMarkerIcon();
-      renderExtraAbilityPanel();
-      renderTrajectory();
-      validateForm(); _saveDraft();
-      return;
-    }
-    if (!extra && markerX !== null && points.length === 0) {
-      points.push({ x: markerX, y: markerY });
-    }
-    points.push({ x, y });
-    setActiveTrajectoryPoints(points);
-    renderExtraAbilityPanel();
-    renderTrajectory();
+    addTrajectoryPoint(x, y);
+    return;
   }
   validateForm(); _saveDraft();
 });
@@ -7167,7 +7184,7 @@ function _restoreDraft(sourceDraft = null) {
           normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === d.ability
         );
         selectedAbility = normalizeAbilityName(agent.displayName, ability?.displayName || d.ability, ability?.slot || d.ability);
-        sovaCharge = Math.max(1, Math.min(3, Number(d.sovaCharge ?? d.sova_charge) || 3));
+        sovaCharge = Math.max(0, Math.min(3, Number(d.sovaCharge ?? d.sova_charge) || 0));
         sovaBounces = Math.max(0, Math.min(2, Number(d.sovaBounces ?? d.sova_bounces) || 0));
         renderSovaShotPanel();
         const abilBtn = [...document.querySelectorAll('.ability-btn')].find(btn =>

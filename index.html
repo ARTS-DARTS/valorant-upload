@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-19-sova-shot-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-19-sova-shot-v2">
 </head>
 <body>
 
@@ -15,7 +15,7 @@
     <img src="app_icon3.png" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" alt="">
     VALORANT <span style="margin-left:4px;">LINEUPS</span>
   </div>
-  <div class="site-update" id="site-update">Последнее обновление сайта: 17:55 · 19.07.2026</div>
+  <div class="site-update" id="site-update">Последнее обновление сайта: 18:25 · 19.07.2026</div>
   <div class="moderation-lease-timer" id="moderation-lease-timer" hidden aria-live="polite">
     <span>🔒 Бронь</span><strong id="moderation-lease-time">10:00</strong>
   </div>
@@ -290,18 +290,18 @@
         <div class="sova-shot-heading">🏹 ПАРАМЕТРЫ СТРЕЛЫ СОВЫ</div>
         <div class="sova-shot-control">
           <span class="sova-shot-label">Сила натяжения</span>
-          <div class="sova-charge-picker" id="sova-charge-picker">
-            <button type="button" data-sova-charge="1" aria-label="Одно деление"><span></span></button>
-            <button type="button" data-sova-charge="2" aria-label="Два деления"><span></span><span></span></button>
-            <button type="button" data-sova-charge="3" aria-label="Три деления"><span></span><span></span><span></span></button>
+          <div class="sova-charge-slider">
+            <input type="range" id="sova-charge-range" min="0" max="3" step="0.05" value="3" aria-label="Сила натяжения">
+            <div class="sova-charge-ticks" aria-hidden="true"><span></span><span></span></div>
+            <span class="sova-charge-caption">ЗАРЯД</span>
+            <output id="sova-charge-value">3.00 / 3</output>
           </div>
         </div>
         <div class="sova-shot-control">
           <span class="sova-shot-label">Отскоки</span>
           <div class="sova-bounce-picker" id="sova-bounce-picker">
-            <button type="button" data-sova-bounces="0">0</button>
-            <button type="button" data-sova-bounces="1"><span class="bounce-glyph">↗</span> 1</button>
-            <button type="button" data-sova-bounces="2"><span class="bounce-glyph">↗</span><span class="bounce-glyph second">↗</span> 2</button>
+            <button type="button" data-sova-bounce-index="1" aria-label="Первый отскок"><span class="bounce-diamond"></span></button>
+            <button type="button" data-sova-bounce-index="2" aria-label="Второй отскок"><span class="bounce-diamond"></span></button>
           </div>
         </div>
       </div>
@@ -633,6 +633,6 @@
 
 <div id="toasts"></div>
 
-<script type="module" src="/app.js?v=2026-07-19-sova-shot-v1"></script>
+<script type="module" src="/app.js?v=2026-07-19-sova-shot-v2"></script>
 </body>
 </html>
