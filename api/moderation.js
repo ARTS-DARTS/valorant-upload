@@ -79,6 +79,22 @@ function timestampMillis(value) {
 
 const MODERATION_LOCK_MS = 10 * 60_000;
 
+function isSovaArrow(data = {}) {
+  return ['sova', 'сова'].includes(clean(data.agent).toLowerCase()) &&
+    /shock|recon|шок|развед|стрел/.test(clean(data.ability).toLowerCase());
+}
+
+function missingMetadata(data = {}) {
+  const missing = [];
+  if (!['easy', 'medium', 'hard'].includes(clean(data.difficulty))) missing.push('difficulty');
+  if (!['attack', 'defense'].includes(clean(data.round_side))) missing.push('round_side');
+  if (isSovaArrow(data)) {
+    if (!(typeof data.sova_charge === 'number' && data.sova_charge >= 0 && data.sova_charge <= 3)) missing.push('sova_charge');
+    if (!(Number.isInteger(data.sova_bounces) && data.sova_bounces >= 0 && data.sova_bounces <= 2)) missing.push('sova_bounces');
+  }
+  return missing;
+}
+
 function safeLineup(doc, viewerUid = '') {
   const d = doc.data() || {};
   const lockExpiresAt = timestampMillis(d.moderation_lock_expires_at);
@@ -92,6 +108,10 @@ function safeLineup(doc, viewerUid = '') {
     ability: clean(d.ability).slice(0, 80),
     difficulty: clean(d.difficulty).slice(0, 20),
     round_side: clean(d.round_side).slice(0, 20),
+    sova_charge: typeof d.sova_charge === 'number' ? d.sova_charge : null,
+    sova_bounces: Number.isInteger(d.sova_bounces) ? d.sova_bounces : null,
+    task_kind: d.status === 'approved' && d.metadata_review_required === true ? 'metadata' : 'full',
+    missing_fields: missingMetadata(d),
     content_type: clean(d.content_type || d.category).slice(0, 20),
     moderator_only: d.moderator_only === true,
     user_id: clean(d.user_id || d.uid || d.author_uid).slice(0, 128),
@@ -234,11 +254,12 @@ async function saveDraft(req, res, moderator) {
 
 async function listQueue(res, moderator) {
   const db = getFirestore();
-  const [pendingSnap, moderatorSnap] = await Promise.all([
+  const [pendingSnap, moderatorSnap, metadataSnap] = await Promise.all([
     // Admin-created pending lineups can have created_at without submitted_at.
     // orderBy('submitted_at') silently excludes those documents from the queue.
     db.collection('lineups').where('status', '==', 'pending').limit(100).get(),
     db.collection('lineups').where('moderator_only', '==', true).limit(50).get(),
+    db.collection('lineups').where('metadata_review_required', '==', true).limit(100).get(),
   ]);
   const items = [
     ...pendingSnap.docs.filter(doc => {
@@ -246,6 +267,7 @@ async function listQueue(res, moderator) {
       return data.moderator_template_completed !== true && !data.edited_by_moderator_uid;
     }),
     ...moderatorSnap.docs.filter(doc => doc.data()?.status === 'moderator_draft'),
+    ...metadataSnap.docs.filter(doc => doc.data()?.status === 'approved' && missingMetadata(doc.data()).length),
   ]
     .map(doc => safeLineup(doc, moderator.uid))
     .sort((a, b) => b.submitted_at - a.submitted_at)
@@ -286,7 +308,8 @@ async function claimDraft(req, res, moderator) {
     const snap = await tx.get(ref);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const data = snap.data() || {};
-    if (!['pending', 'moderator_draft'].includes(data.status)) {
+    const metadataTask = data.status === 'approved' && data.metadata_review_required === true && missingMetadata(data).length > 0;
+    if (!['pending', 'moderator_draft'].includes(data.status) && !metadataTask) {
       throw Object.assign(new Error('Лайнап уже обработан'), { status: 409 });
     }
     const lockUid = clean(data.moderation_lock_uid);
@@ -303,11 +326,80 @@ async function claimDraft(req, res, moderator) {
   res.status(200).json({ ok: true, expires_at: expiresAt.getTime() });
 }
 
+async function completeMetadata(req, res, moderator) {
+  const lineupId = clean(req.body?.lineupId);
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
+  const input = req.body?.data || {};
+  const db = getFirestore();
+  const ref = db.collection('lineups').doc(lineupId);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
+    const current = snap.data() || {};
+    if (current.status !== 'approved' || current.metadata_review_required !== true) throw Object.assign(new Error('Задание уже выполнено'), { status: 409 });
+    if (clean(current.moderation_lock_uid) !== moderator.uid) throw Object.assign(new Error('Этот лайнап уже взял другой модератор'), { status: 409 });
+    const update = {};
+    if (!['easy', 'medium', 'hard'].includes(clean(current.difficulty))) {
+      const value = clean(input.difficulty);
+      if (!['easy', 'medium', 'hard'].includes(value)) throw Object.assign(new Error('Укажи сложность'), { status: 400 });
+      update.difficulty = value;
+    }
+    if (!['attack', 'defense'].includes(clean(current.round_side))) {
+      const value = clean(input.round_side);
+      if (!['attack', 'defense'].includes(value)) throw Object.assign(new Error('Укажи сторону раунда'), { status: 400 });
+      update.round_side = value;
+    }
+    if (isSovaArrow(current)) {
+      if (!(typeof current.sova_charge === 'number' && current.sova_charge >= 0 && current.sova_charge <= 3)) {
+        const value = Number(input.sova_charge);
+        if (!Number.isFinite(value) || value < 0 || value > 3) throw Object.assign(new Error('Укажи натяжение стрелы'), { status: 400 });
+        update.sova_charge = value;
+      }
+      if (!(Number.isInteger(current.sova_bounces) && current.sova_bounces >= 0 && current.sova_bounces <= 2)) {
+        const value = Number(input.sova_bounces);
+        if (!Number.isInteger(value) || value < 0 || value > 2) throw Object.assign(new Error('Укажи отскоки'), { status: 400 });
+        update.sova_bounces = value;
+      }
+    }
+    const merged = { ...current, ...update };
+    if (missingMetadata(merged).length) throw Object.assign(new Error('Заполни все недостающие параметры'), { status: 400 });
+    Object.assign(update, {
+      metadata_review_required: false,
+      metadata_review_completed_at: FieldValue.serverTimestamp(),
+      metadata_reviewed_by_uid: moderator.uid,
+      metadata_reviewed_by_name: moderator.name,
+      moderation_lock_uid: FieldValue.delete(), moderation_lock_name: FieldValue.delete(), moderation_lock_expires_at: FieldValue.delete(),
+    });
+    tx.update(ref, update);
+    tx.create(db.collection('moderator_logs').doc(), { lineup_id: lineupId, action: 'complete_metadata', fields: Object.keys(update), moderator_uid: moderator.uid, moderator_role: moderator.role, created_at: FieldValue.serverTimestamp() });
+  });
+  res.status(200).json({ ok: true });
+}
+
+async function seedMetadataQueue(res, moderator) {
+  if (moderator.role !== 'admin') return res.status(403).json({ error: 'Только администратор может сформировать очередь' });
+  const db = getFirestore();
+  const stateRef = db.collection('settings').doc('metadata_review_backfill_v1');
+  const state = await stateRef.get();
+  if (state.data()?.completed === true) return res.status(200).json({ ok: true, already_completed: true, queued: Number(state.data()?.queued || 0) });
+  const snap = await db.collection('lineups').where('status', '==', 'approved').get();
+  const targets = snap.docs.filter(doc => missingMetadata(doc.data()).length > 0);
+  for (let offset = 0; offset < targets.length; offset += 400) {
+    const batch = db.batch();
+    targets.slice(offset, offset + 400).forEach(doc => batch.update(doc.ref, { metadata_review_required: true }));
+    await batch.commit();
+  }
+  await stateRef.set({ completed: true, queued: targets.length, scanned: snap.size, completed_at: FieldValue.serverTimestamp() });
+  res.status(200).json({ ok: true, queued: targets.length, scanned: snap.size });
+}
+
 async function moderate(req, res, moderator) {
   checkActionRate(moderator.uid);
   const lineupId = clean(req.body?.lineupId);
   const action = clean(req.body?.action);
   if (action === 'save_draft') return saveDraft(req, res, moderator);
+  if (action === 'seed_metadata_queue') return seedMetadataQueue(res, moderator);
+  if (action === 'complete_metadata') return completeMetadata(req, res, moderator);
   if (action === 'claim' || action === 'renew_claim') return claimDraft(req, res, moderator);
   const reason = clean(req.body?.reason);
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });

@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-19T18:50:00+03:00';
+const SITE_VERSION = '2026-07-19T18:55:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -2411,13 +2411,14 @@ document.getElementById('moderator-author-search')?.addEventListener('input', ev
 async function loadModerationWorkspace() {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19T17-30');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19-metadata-review-v1');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({
         getToken: () => currentUser.getIdToken(),
         toast,
         openDraft: openModeratorDraft,
+        getRole: () => String(currentUserProfile?.role || '').toLowerCase(),
       });
     }
     await moderationController.load();

@@ -28,6 +28,25 @@ function sideLabel(value) {
   return value === 'attack' ? 'Атака' : value === 'defense' ? 'Защита' : 'Сторона не указана';
 }
 
+function metadataFields(item) {
+  const missing = new Set(item.missing_fields || []);
+  return `<div class="moderation-metadata-form">
+    ${missing.has('difficulty') ? `<fieldset><legend>💪 Сложность</legend><div class="moderation-choice-row">
+      <label><input type="radio" name="difficulty-${esc(item.id)}" value="easy"> Легко</label>
+      <label><input type="radio" name="difficulty-${esc(item.id)}" value="medium"> Средне</label>
+      <label><input type="radio" name="difficulty-${esc(item.id)}" value="hard"> Сложно</label>
+    </div></fieldset>` : ''}
+    ${missing.has('round_side') ? `<fieldset><legend>⚔ Сторона раунда</legend><div class="moderation-choice-row">
+      <label><input type="radio" name="round-side-${esc(item.id)}" value="attack"> Атака</label>
+      <label><input type="radio" name="round-side-${esc(item.id)}" value="defense"> Защита</label>
+    </div></fieldset>` : ''}
+    ${missing.has('sova_charge') || missing.has('sova_bounces') ? `<fieldset><legend>🏹 Стрела Совы</legend>
+      ${missing.has('sova_charge') ? `<label class="moderation-charge"><span>Натяжение</span><input type="range" min="0" max="3" step="0.05" value="1.5" data-metadata-charge><output>1.50 / 3</output></label>` : ''}
+      ${missing.has('sova_bounces') ? `<div class="moderation-choice-row"><label><input type="radio" name="bounces-${esc(item.id)}" value="0"> 0 отскоков</label><label><input type="radio" name="bounces-${esc(item.id)}" value="1"> 1 отскок</label><label><input type="radio" name="bounces-${esc(item.id)}" value="2"> 2 отскока</label></div>` : ''}
+    </fieldset>` : ''}
+  </div>`;
+}
+
 async function api(path = '', options = {}) {
   const token = await context.getToken();
   const response = await fetch(`/api/moderation${path}`, {
@@ -51,21 +70,21 @@ function render(items) {
   }
   list.innerHTML = items.map(item => {
     const video = safeMediaUrl(item.video_url);
+    const metadataTask = item.task_kind === 'metadata';
     const meta = [item.moderator_only ? 'ЗАГОТОВКА ДЛЯ МОДЕРАЦИИ' : '', item.map, item.agent, item.agent ? item.ability : 'Выбери агента', sideLabel(item.round_side)].filter(Boolean);
     return `<article class="moderation-card" data-moderation-id="${esc(item.id)}">
       <div class="moderation-card-main">
         ${video ? `<video class="moderation-video" src="${esc(video)}" controls preload="metadata"></video>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
         <div class="moderation-info">
           <div class="moderation-meta">${meta.map(value => `<span class="moderation-chip">${esc(value)}</span>`).join('')}</div>
-          <h3 class="moderation-title">${esc(item.title || 'Без названия')}</h3>
-          <p class="moderation-description">${esc(item.description || 'Описание отсутствует')}</p>
-          <div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>
+          <h3 class="moderation-title">${metadataTask ? 'Доработать лайнап' : esc(item.title || 'Без названия')}</h3>
+          ${metadataTask ? metadataFields(item) : `<p class="moderation-description">${esc(item.description || 'Описание отсутствует')}</p><div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>`}
         </div>
       </div>
       <div class="moderation-lock-status" data-moderation-lock-status></div>
       <div class="moderation-actions">
-        <button class="moderation-action moderation-complete" data-moderation-action="complete" type="button">✏️ Доработать</button>
-        <button class="moderation-action moderation-reject" data-moderation-action="reject" type="button">Отклонить с причиной</button>
+        <button class="moderation-action moderation-complete" data-moderation-action="${metadataTask ? 'complete-metadata' : 'complete'}" type="button">${metadataTask ? '✅ Сохранить параметры' : '✏️ Доработать'}</button>
+        ${metadataTask ? '' : '<button class="moderation-action moderation-reject" data-moderation-action="reject" type="button">Отклонить с причиной</button>'}
       </div>
     </article>`;
   }).join('');
@@ -155,6 +174,10 @@ async function load() {
   const status = document.getElementById('moderation-status');
   status.textContent = 'Загрузка очереди…';
   try {
+    if (context.getRole?.() === 'admin' && !sessionStorage.getItem('metadata-review-seeded-v1')) {
+      await api('', { method: 'POST', body: JSON.stringify({ action: 'seed_metadata_queue' }) });
+      sessionStorage.setItem('metadata-review-seeded-v1', '1');
+    }
     const body = await api();
     render(Array.isArray(body.items) ? body.items : []);
   } catch (error) {
@@ -166,6 +189,24 @@ async function load() {
 }
 
 async function act(card, action) {
+  if (action === 'complete-metadata') {
+    const item = loadedItems.find(entry => entry.id === card.dataset.moderationId);
+    if (!item) return;
+    const missing = new Set(item.missing_fields || []);
+    const data = {};
+    if (missing.has('difficulty')) data.difficulty = card.querySelector(`input[name="difficulty-${CSS.escape(item.id)}"]:checked`)?.value || '';
+    if (missing.has('round_side')) data.round_side = card.querySelector(`input[name="round-side-${CSS.escape(item.id)}"]:checked`)?.value || '';
+    if (missing.has('sova_charge')) data.sova_charge = Number(card.querySelector('[data-metadata-charge]')?.value);
+    if (missing.has('sova_bounces')) data.sova_bounces = Number(card.querySelector(`input[name="bounces-${CSS.escape(item.id)}"]:checked`)?.value);
+    const buttons = card.querySelectorAll('button'); buttons.forEach(button => { button.disabled = true; });
+    try {
+      await api('', { method: 'POST', body: JSON.stringify({ lineupId: item.id, action: 'claim' }) });
+      await api('', { method: 'POST', body: JSON.stringify({ lineupId: item.id, action: 'complete_metadata', data }) });
+      card.remove(); context.toast('Параметры лайнапа сохранены', 's');
+      if (!document.querySelector('.moderation-card')) load();
+    } catch (error) { context.toast(error.message, 'e'); buttons.forEach(button => { button.disabled = false; }); }
+    return;
+  }
   if (action === 'complete') {
     const item = loadedItems.find(entry => entry.id === card.dataset.moderationId);
     if (!item || !context.openDraft) return;
@@ -213,6 +254,11 @@ export function initModeration(nextContext) {
     const button = event.target.closest('[data-moderation-action]');
     const card = button?.closest('[data-moderation-id]');
     if (button && card) act(card, button.dataset.moderationAction);
+  });
+  document.getElementById('moderation-list')?.addEventListener('input', event => {
+    if (!event.target.matches('[data-metadata-charge]')) return;
+    const output = event.target.parentElement?.querySelector('output');
+    if (output) output.textContent = `${Number(event.target.value).toFixed(2)} / 3`;
   });
   clearInterval(lockPollTimer);
   lockPollTimer = setInterval(refreshLocks, 10_000);
