@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-19T20:17:00+03:00';
+const SITE_VERSION = '2026-07-19T20:19:00+03:00';
 const SITE_VERSION_POLL_MS = 60 * 1000;
 const EDITOR_MAX_ZOOM = 2.2;
 
@@ -1830,12 +1830,10 @@ function renderSovaShotPanel() {
   if (!panel) return;
   panel.hidden = !isSovaArrowSelection();
   const range = document.getElementById('sova-charge-range');
-  const value = document.getElementById('sova-charge-value');
   if (range) {
     range.value = String(sovaCharge);
     range.style.setProperty('--sova-charge-pct', `${Math.max(0, Math.min(100, sovaCharge / 3 * 100))}%`);
   }
-  if (value) value.textContent = `${sovaCharge.toFixed(2)} / 3`;
   panel.querySelectorAll('[data-sova-bounce-index]').forEach(button => {
     button.classList.toggle('active', Number(button.dataset.sovaBounceIndex) <= sovaBounces);
   });
@@ -2566,7 +2564,7 @@ document.getElementById('moderator-author-search')?.addEventListener('input', ev
 async function loadModerationWorkspace() {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19-moderation-workflow-v2');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19-sova-charge-clean-v1');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({

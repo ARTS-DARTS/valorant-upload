@@ -41,7 +41,7 @@ function metadataFields(item) {
       <label><input type="radio" name="round-side-${esc(item.id)}" value="defense"> Защита</label>
     </div></fieldset>` : ''}
     ${missing.has('sova_charge') || missing.has('sova_bounces') ? `<fieldset><legend>🏹 Стрела Совы</legend>
-      ${missing.has('sova_charge') ? `<div class="moderation-sova-charge" style="--sova-charge-pct:50%"><input type="range" min="0" max="3" step="0.05" value="1.5" data-metadata-charge><div class="moderation-sova-ticks"><span></span><span></span></div><span class="moderation-sova-caption">ЗАРЯД</span><output>1.50 / 3</output></div>` : ''}
+      ${missing.has('sova_charge') ? `<div class="moderation-sova-charge" style="--sova-charge-pct:50%"><input type="range" min="0" max="3" step="0.05" value="1.5" data-metadata-charge><div class="moderation-sova-ticks"><span></span><span></span></div><span class="moderation-sova-caption">ЗАРЯД</span></div>` : ''}
       ${missing.has('sova_bounces') ? `<div class="moderation-sova-bounces" data-metadata-bounces data-value=""><span>ОТСКОКИ</span><div><button type="button" data-metadata-bounce="1" aria-label="Первый отскок"><i></i></button><button type="button" data-metadata-bounce="2" aria-label="Второй отскок"><i></i></button></div><small>Нажми ромбы и выставь 0, 1 или 2</small></div>` : ''}
     </fieldset>` : ''}
   </div>`;
@@ -265,8 +265,6 @@ export function initModeration(nextContext) {
     if (!event.target.matches('[data-metadata-charge]')) return;
     const wrapper = event.target.parentElement;
     wrapper?.style.setProperty('--sova-charge-pct', `${Number(event.target.value) / 3 * 100}%`);
-    const output = wrapper?.querySelector('output');
-    if (output) output.textContent = `${Number(event.target.value).toFixed(2)} / 3`;
   });
   document.getElementById('moderation-list')?.addEventListener('click', event => {
     const button = event.target.closest('[data-metadata-bounce]');
