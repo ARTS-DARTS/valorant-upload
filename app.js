@@ -3840,6 +3840,8 @@ let footageStageDrag = null;
 let timelineSmoothRaf = null;
 const freezeFrameImages = new Map();
 const editorEls = {
+  editor: document.getElementById('video-editor'),
+  toggle: document.getElementById('video-editor-toggle'),
   scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
   stage: document.getElementById('vid-stage'),
@@ -3886,6 +3888,20 @@ const editorEls = {
   zoomPanel: document.getElementById('zoom-panel'),
   effectsPanel: document.getElementById('effects-panel'),
 };
+
+const VIDEO_EDITOR_COLLAPSED_KEY = 'valorant_upload_video_editor_collapsed_v1';
+function setVideoEditorCollapsed(collapsed, persist = true) {
+  if (!editorEls.editor || !editorEls.toggle) return;
+  editorEls.editor.hidden = collapsed;
+  editorEls.toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  editorEls.toggle.textContent = collapsed ? '▸ Показать монтаж' : '▾ Скрыть монтаж';
+  if (persist) {
+    try { localStorage.setItem(VIDEO_EDITOR_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (_) {}
+  }
+  if (!collapsed) requestAnimationFrame(renderVideoEditor);
+}
+try { setVideoEditorCollapsed(localStorage.getItem(VIDEO_EDITOR_COLLAPSED_KEY) === '1', false); } catch (_) {}
+editorEls.toggle?.addEventListener('click', () => setVideoEditorCollapsed(!editorEls.editor.hidden));
 
 function createDefaultVideoEdit() {
   return {
