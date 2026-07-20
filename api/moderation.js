@@ -79,9 +79,17 @@ function timestampMillis(value) {
 
 const MODERATION_LOCK_MS = 10 * 60_000;
 
-function isSovaArrow(data = {}) {
-  return ['sova', 'сова'].includes(clean(data.agent).toLowerCase()) &&
-    /shock|recon|шок|развед|стрел/.test(clean(data.ability).toLowerCase());
+function isSovaBowAbility(value) {
+  return /shock|recon|hunter|шок|развед|стрел|гнев охотника/.test(clean(value).toLowerCase());
+}
+
+function sovaShotAbilities(data = {}) {
+  if (!['sova', 'сова'].includes(clean(data.agent).toLowerCase())) return [];
+  const extras = Array.isArray(data.extra_abilities) ? data.extra_abilities : [];
+  return [data.ability, ...extras.map(item => item?.ability)]
+    .map(value => clean(value).slice(0, 80))
+    .filter(value => value && isSovaBowAbility(value))
+    .slice(0, 3);
 }
 
 function normalizedSovaBounces(value) {
@@ -90,14 +98,28 @@ function normalizedSovaBounces(value) {
   return Number.isInteger(number) && number >= 0 && number <= 2 ? number : null;
 }
 
+function normalizedSovaShots(data = {}) {
+  const abilities = sovaShotAbilities(data);
+  const raw = Array.isArray(data.sova_shots) ? data.sova_shots : [];
+  const shots = raw.slice(0, 3).map((item, index) => ({
+    order: index + 1,
+    ability: clean(item?.ability || abilities[index]).slice(0, 80),
+    charge: Number(item?.charge),
+    bounces: normalizedSovaBounces(item?.bounces),
+  })).filter(item => Number.isFinite(item.charge) && item.charge >= 0 && item.charge <= 3 && item.bounces !== null);
+  if (!shots.length && abilities.length && typeof data.sova_charge === 'number' && data.sova_charge >= 0 && data.sova_charge <= 3) {
+    const bounces = normalizedSovaBounces(data.sova_bounces);
+    if (bounces !== null) shots.push({ order: 1, ability: abilities[0], charge: data.sova_charge, bounces });
+  }
+  return shots;
+}
+
 function missingMetadata(data = {}) {
   const missing = [];
   if (!['easy', 'medium', 'hard'].includes(clean(data.difficulty))) missing.push('difficulty');
   if (!['attack', 'defense', 'any'].includes(clean(data.round_side))) missing.push('round_side');
-  if (isSovaArrow(data)) {
-    if (!(typeof data.sova_charge === 'number' && data.sova_charge >= 0 && data.sova_charge <= 3)) missing.push('sova_charge');
-    if (normalizedSovaBounces(data.sova_bounces) === null) missing.push('sova_bounces');
-  }
+  const shotAbilities = sovaShotAbilities(data);
+  if (shotAbilities.length && normalizedSovaShots(data).length < shotAbilities.length) missing.push('sova_shots');
   return missing;
 }
 
@@ -126,6 +148,8 @@ function safeLineup(doc, viewerUid = '') {
     round_side: clean(d.round_side).slice(0, 20),
     sova_charge: typeof d.sova_charge === 'number' ? d.sova_charge : null,
     sova_bounces: normalizedSovaBounces(d.sova_bounces),
+    sova_shots: normalizedSovaShots(d),
+    sova_shot_abilities: sovaShotAbilities(d),
     task_kind: d.status === 'approved' && d.metadata_review_required === true ? 'metadata' : 'full',
     missing_fields: missingMetadata(d),
     content_type: clean(d.content_type || d.category).slice(0, 20),
@@ -426,17 +450,21 @@ async function completeMetadata(req, res, moderator) {
       if (!['attack', 'defense', 'any'].includes(value)) throw Object.assign(new Error('Укажи сторону раунда'), { status: 400 });
       update.round_side = value;
     }
-    if (isSovaArrow(current)) {
-      if (!(typeof current.sova_charge === 'number' && current.sova_charge >= 0 && current.sova_charge <= 3)) {
-        const value = Number(input.sova_charge);
-        if (!Number.isFinite(value) || value < 0 || value > 3) throw Object.assign(new Error('Укажи натяжение стрелы'), { status: 400 });
-        update.sova_charge = value;
-      }
-      if (normalizedSovaBounces(current.sova_bounces) === null) {
-        const value = input.sova_bounces ?? 0;
-        if (!Number.isInteger(value) || value < 0 || value > 2) throw Object.assign(new Error('Укажи отскоки'), { status: 400 });
-        update.sova_bounces = value;
-      }
+    const shotAbilities = sovaShotAbilities(current);
+    if (shotAbilities.length && normalizedSovaShots(current).length < shotAbilities.length) {
+      const rawShots = Array.isArray(input.sova_shots) ? input.sova_shots : [];
+      if (rawShots.length !== shotAbilities.length) throw Object.assign(new Error('Настрой все стрелы по порядку'), { status: 400 });
+      const shots = rawShots.map((item, index) => {
+        const charge = Number(item?.charge);
+        const bounces = normalizedSovaBounces(item?.bounces ?? 0);
+        if (!Number.isFinite(charge) || charge < 0 || charge > 3 || bounces === null) {
+          throw Object.assign(new Error(`Проверь параметры ${index + 1}-й стрелы`), { status: 400 });
+        }
+        return { order: index + 1, ability: shotAbilities[index], charge, bounces };
+      });
+      update.sova_shots = shots;
+      update.sova_charge = shots[0].charge;
+      update.sova_bounces = shots[0].bounces;
     }
     const merged = { ...current, ...update };
     if (missingMetadata(merged).length) throw Object.assign(new Error('Заполни все недостающие параметры'), { status: 400 });
@@ -457,7 +485,7 @@ async function completeMetadata(req, res, moderator) {
 async function seedMetadataQueue(res, moderator) {
   if (moderator.role !== 'admin') return res.status(403).json({ error: 'Только администратор может сформировать очередь' });
   const db = getFirestore();
-  const stateRef = db.collection('settings').doc('metadata_review_backfill_v1');
+  const stateRef = db.collection('settings').doc('metadata_review_backfill_v2');
   const state = await stateRef.get();
   if (state.data()?.completed === true) return res.status(200).json({ ok: true, already_completed: true, queued: Number(state.data()?.queued || 0) });
   const snap = await db.collection('lineups').where('status', '==', 'approved').get();

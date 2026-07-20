@@ -31,6 +31,21 @@ function sideLabel(value) {
   return value === 'attack' ? 'Атака' : value === 'defense' ? 'Защита' : value === 'any' ? 'Любая сторона' : 'Сторона не указана';
 }
 
+function sovaShotFields(item) {
+  const abilities = Array.isArray(item.sova_shot_abilities) ? item.sova_shot_abilities : [];
+  const existing = Array.isArray(item.sova_shots) ? item.sova_shots : [];
+  return abilities.map((ability, index) => {
+    const shot = existing[index] || {};
+    const charge = Number.isFinite(Number(shot.charge)) ? Number(shot.charge) : 1.5;
+    const bounces = Number.isInteger(Number(shot.bounces)) ? Number(shot.bounces) : 0;
+    const noBounces = /hunter|гнев охотника/i.test(ability);
+    return `<fieldset data-sova-shot="${index}"><legend>🏹 ${index + 1}-я стрела · ${esc(ability)}</legend>
+      <div class="moderation-sova-charge${charge >= 3 ? ' is-max' : ''}" style="--sova-charge-pct:${charge / 3 * 100}%"><input type="range" min="0" max="3" step="0.05" value="${charge}" data-metadata-charge data-shot-index="${index}"><div class="moderation-sova-ticks"><span></span><span></span></div><span class="moderation-sova-caption">ЗАРЯД · ${index + 1}-Я СТРЕЛА</span></div>
+      <div class="moderation-sova-bounces" data-metadata-bounces data-shot-index="${index}" data-value="${noBounces ? 0 : bounces}"><span>${noBounces ? 'БЕЗ ОТСКОКОВ' : `ОТСКОКИ · ${index + 1}-Я СТРЕЛА`}</span>${noBounces ? '' : `<div><button type="button" data-metadata-bounce="1" aria-label="Первый отскок"><i></i></button><button type="button" data-metadata-bounce="2" aria-label="Второй отскок"><i></i></button></div><small>Не выбирай ромбы, если отскоков нет</small>`}</div>
+    </fieldset>`;
+  }).join('');
+}
+
 function metadataFields(item) {
   const missing = new Set(item.missing_fields || []);
   return `<div class="moderation-metadata-form">
@@ -44,10 +59,7 @@ function metadataFields(item) {
       <label><input type="radio" name="round-side-${esc(item.id)}" value="defense"> Защита</label>
       <label><input type="radio" name="round-side-${esc(item.id)}" value="any"> Любая</label>
     </div></fieldset>` : ''}
-    ${missing.has('sova_charge') || missing.has('sova_bounces') ? `<fieldset><legend>🏹 Стрела Совы</legend>
-      ${missing.has('sova_charge') ? `<div class="moderation-sova-charge" style="--sova-charge-pct:50%"><input type="range" min="0" max="3" step="0.05" value="1.5" data-metadata-charge><div class="moderation-sova-ticks"><span></span><span></span></div><span class="moderation-sova-caption">ЗАРЯД</span></div>` : ''}
-      ${missing.has('sova_bounces') ? `<div class="moderation-sova-bounces" data-metadata-bounces data-value=""><span>ОТСКОКИ</span><div><button type="button" data-metadata-bounce="1" aria-label="Первый отскок"><i></i></button><button type="button" data-metadata-bounce="2" aria-label="Второй отскок"><i></i></button></div><small>Не выбирай ромбы, если отскоков нет</small></div>` : ''}
-    </fieldset>` : ''}
+    ${missing.has('sova_shots') ? sovaShotFields(item) : ''}
   </div>`;
 }
 
@@ -105,13 +117,13 @@ function captureMetadataFormState() {
   const state = new Map();
   document.querySelectorAll('[data-moderation-id]').forEach(card => {
     const id = card.dataset.moderationId;
-    const charge = card.querySelector('[data-metadata-charge]');
-    const bounces = card.querySelector('[data-metadata-bounces]');
+    const charges = [...card.querySelectorAll('[data-metadata-charge]')];
+    const bounces = [...card.querySelectorAll('[data-metadata-bounces]')];
     state.set(id, {
       difficulty: card.querySelector(`input[name="difficulty-${CSS.escape(id)}"]:checked`)?.value || '',
       roundSide: card.querySelector(`input[name="round-side-${CSS.escape(id)}"]:checked`)?.value || '',
-      charge: charge?.value ?? '',
-      bounces: bounces?.dataset.value ?? '',
+      charges: charges.map(input => input.value),
+      bounces: bounces.map(picker => picker.dataset.value ?? ''),
     });
   });
   return state;
@@ -129,23 +141,25 @@ function restoreMetadataFormState(state) {
       const input = card.querySelector(`input[name="round-side-${CSS.escape(id)}"][value="${CSS.escape(values.roundSide)}"]`);
       if (input) input.checked = true;
     }
-    const charge = card.querySelector('[data-metadata-charge]');
-    if (charge && values.charge !== '') {
-      charge.value = values.charge;
-      const value = Number(values.charge);
+    card.querySelectorAll('[data-metadata-charge]').forEach((charge, index) => {
+      const stored = values.charges?.[index];
+      if (stored === undefined || stored === '') return;
+      charge.value = stored;
+      const value = Number(stored);
       charge.parentElement?.style.setProperty('--sova-charge-pct', `${value / 3 * 100}%`);
       charge.parentElement?.classList.toggle('is-max', value >= 3);
-    }
-    const bounces = card.querySelector('[data-metadata-bounces]');
-    if (bounces && values.bounces !== '') {
-      const selected = Number(values.bounces);
-      bounces.dataset.value = values.bounces;
+    });
+    card.querySelectorAll('[data-metadata-bounces]').forEach((bounces, index) => {
+      const stored = values.bounces?.[index];
+      if (stored === undefined || stored === '') return;
+      const selected = Number(stored);
+      bounces.dataset.value = stored;
       bounces.classList.add('selected');
       bounces.querySelectorAll('[data-metadata-bounce]').forEach(item => {
         const value = Number(item.dataset.metadataBounce);
         item.classList.toggle('active', value === 0 ? selected === 0 : value <= selected);
       });
-    }
+    });
   });
 }
 
@@ -291,9 +305,9 @@ async function load({ silent = false } = {}) {
   const status = document.getElementById('moderation-status');
   if (!silent) status.textContent = 'Загрузка очереди…';
   try {
-    if (context.getRole?.() === 'admin' && !sessionStorage.getItem('metadata-review-seeded-v1')) {
+    if (context.getRole?.() === 'admin' && !sessionStorage.getItem('metadata-review-seeded-v2')) {
       await api('', { method: 'POST', body: JSON.stringify({ action: 'seed_metadata_queue' }) });
-      sessionStorage.setItem('metadata-review-seeded-v1', '1');
+      sessionStorage.setItem('metadata-review-seeded-v2', '1');
     }
     const body = await api();
     const items = Array.isArray(body.items) ? body.items : [];
@@ -363,11 +377,10 @@ async function act(card, action) {
     const data = {};
     if (missing.has('difficulty')) data.difficulty = card.querySelector(`input[name="difficulty-${CSS.escape(item.id)}"]:checked`)?.value || '';
     if (missing.has('round_side')) data.round_side = card.querySelector(`input[name="round-side-${CSS.escape(item.id)}"]:checked`)?.value || '';
-    if (missing.has('sova_charge')) data.sova_charge = Number(card.querySelector('[data-metadata-charge]')?.value);
-    if (missing.has('sova_bounces')) {
-      const raw = card.querySelector('[data-metadata-bounces]')?.dataset.value ?? '';
-      data.sova_bounces = raw === '' ? 0 : Number(raw);
-    }
+    if (missing.has('sova_shots')) data.sova_shots = [...card.querySelectorAll('[data-sova-shot]')].map(shot => ({
+      charge: Number(shot.querySelector('[data-metadata-charge]')?.value),
+      bounces: Number(shot.querySelector('[data-metadata-bounces]')?.dataset.value || 0),
+    }));
     const buttons = card.querySelectorAll('button'); buttons.forEach(button => { button.disabled = true; });
     try {
       await api('', { method: 'POST', body: JSON.stringify({ lineupId: item.id, action: 'complete_metadata', data }) });
