@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-19-round-side-any-v2">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-20-compact-map-editor-v1">
 </head>
 <body>
 
@@ -339,14 +339,6 @@
     <div class="card">
       <div class="abilities-row" id="abilities-row"><span style="color:var(--text2);font-size:13px;">Сначала выбери агента</span></div>
     </div>
-    <div class="section-title">💪 СЛОЖНОСТЬ</div>
-    <div class="card"><div class="pill-row" id="diff-row">
-      <button class="pill-btn" data-val="easy">🟢 Легко</button><button class="pill-btn" data-val="medium">🟡 Средне</button><button class="pill-btn" data-val="hard">🔴 Сложно</button>
-    </div></div>
-    <div class="section-title">⚔️ СТОРОНА РАУНДА</div>
-    <div class="card"><div class="pill-row" id="side-row">
-      <button class="pill-btn" data-val="attack">🔴 Атака</button><button class="pill-btn" data-val="defense">🔵 Защита</button><button class="pill-btn" data-val="any">⚪ Любая</button>
-    </div><div class="extra-status" style="margin-top:8px;">Выбери сторону, за которую используется этот лайнап.</div></div>
     <div id="moderator-author-section" hidden>
       <div class="section-title">👤 АВТОР ЛАЙНАПА</div>
       <div class="card">
@@ -355,9 +347,20 @@
         <div class="extra-status" id="moderator-author-status">Выбери пользователя из найденных вариантов.</div>
       </div>
     </div>
-    <div class="section-title" id="map-section-title">📍 МЕТКА НА КАРТЕ</div>
-    <div class="card">
-      <div id="map-container">
+    <div class="map-editor-shell">
+      <aside class="map-editor-sidebar" aria-label="Параметры лайнапа">
+        <div class="map-editor-setting">
+          <div class="section-title">💪 СЛОЖНОСТЬ</div>
+          <div class="card"><div class="pill-row" id="diff-row">
+            <button class="pill-btn" data-val="easy">🟢 Легко</button><button class="pill-btn" data-val="medium">🟡 Средне</button><button class="pill-btn" data-val="hard">🔴 Сложно</button>
+          </div></div>
+        </div>
+        <div class="map-editor-setting">
+          <div class="section-title">⚔️ СТОРОНА РАУНДА</div>
+          <div class="card"><div class="pill-row" id="side-row">
+            <button class="pill-btn" data-val="attack">🔴 Атака</button><button class="pill-btn" data-val="defense">🔵 Защита</button><button class="pill-btn" data-val="any">⚪ Любая</button>
+          </div><div class="extra-status map-side-help">Выбери сторону, за которую используется этот лайнап.</div></div>
+        </div>
         <aside class="lineup-toolbox" id="lineup-toolbox" hidden>
           <div class="category-extra-panel" id="extra-abilities-panel" hidden>
             <div class="section-title">➕ ДОП. ТРАЕКТОРИИ</div>
@@ -397,6 +400,11 @@
             </div>
           </div>
         </aside>
+      </aside>
+      <section class="map-editor-canvas">
+        <div class="section-title" id="map-section-title">📍 МЕТКА НА КАРТЕ</div>
+        <div class="card map-editor-card">
+      <div id="map-container">
         <div class="map-tools" style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
           <button id="mode-position"   class="pill-btn selected-mode" onclick="setMapMode('position')">📍 Позиция броска</button>
           <button id="mode-trajectory" class="pill-btn"               onclick="setMapMode('trajectory')">➡ Траектория</button>
@@ -429,6 +437,8 @@
         </div>
         <div class="map-hint" id="map-hint">Выбери режим и кликни на карту</div>
       </div>
+        </div>
+      </section>
     </div>
 
     <div class="upload-gate" id="upload-gate" style="display:none;"></div>
