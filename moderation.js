@@ -538,5 +538,15 @@ export function initModeration(nextContext) {
     clearClaim();
     await load();
   }
-  return { load, clearClaim, releaseClaim };
+  async function resumeDraft(lineupId) {
+    if (!lineupId) return false;
+    const claim = await api('', { method:'POST', body:JSON.stringify({ lineupId, action:'claim' }) });
+    startClaimHeartbeat(lineupId, claim.expires_at);
+    await load({ silent:true });
+    const item = loadedItems.find(entry => entry.id === lineupId);
+    if (!item) return false;
+    context.openDraft(item);
+    return true;
+  }
+  return { load, clearClaim, releaseClaim, resumeDraft };
 }

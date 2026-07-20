@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-20-editor-hotkeys-audio-v1';
+const SITE_VERSION = '2026-07-20-main-mode-moderator-autosave-v1';
 const SITE_VERSION_POLL_MS = 10 * 1000;
 let loadedDeploymentVersion = new URL(import.meta.url).searchParams.get('v') || SITE_VERSION;
 const EDITOR_MAX_ZOOM = 2.2;
@@ -1581,7 +1581,11 @@ async function checkSiteVersion() {
 }
 
 function initSiteVersionWatcher() {
-  document.getElementById('btn-reload-site')?.addEventListener('click', () => {
+  document.getElementById('btn-reload-site')?.addEventListener('click', async () => {
+    if (moderatorDraftSourceId) {
+      const saved = await flushModeratorAutosave({ reportError:true });
+      if (!saved) return;
+    }
     hideSiteUpdateBanner();
     const url = new URL(window.location.href);
     url.searchParams.set('site_refresh', `${window.__vlLiveVersion || SITE_VERSION}_${Date.now()}`);
@@ -1591,6 +1595,12 @@ function initSiteVersionWatcher() {
   checkSiteVersion();
   setInterval(checkSiteVersion, SITE_VERSION_POLL_MS);
 }
+
+window.addEventListener('pagehide', () => {
+  if (moderatorDraftSourceId && moderatorAutosaveDirty) {
+    flushModeratorAutosave({ keepalive:true }).catch(() => {});
+  }
+});
 
 function renderDescriptionSamples() {
   const list = document.getElementById('description-samples-list');
@@ -2026,6 +2036,8 @@ let myLineupsStatusFilter = 'all';
 let myLineupsSearch = '';
 let resubmissionSourceId = '';
 let moderatorDraftSourceId = '';
+const MODERATOR_EDIT_SESSION_KEY = 'vl_active_moderator_edit_id';
+let moderatorResumeAttempted = false;
 let moderatorSelectedAuthor = null;
 let moderatorAuthorMatches = [];
 let moderatorAuthorTimer = null;
@@ -2687,6 +2699,7 @@ function openModeratorDraft(item) {
   draft.resubmissionSourceId = '';
   draft.moderatorDraftSourceId = item.id || '';
   draft.moderatorAuthor = { uid: item.user_id || '', name: item.submitted_by || '' };
+  try { sessionStorage.setItem(MODERATOR_EDIT_SESSION_KEY, draft.moderatorDraftSourceId); } catch (_) {}
   moderatorVideoRemovalRequested = false;
   resetUploadForm({ keepDraft: true });
   _restoreDraft(draft);
@@ -2736,7 +2749,7 @@ document.getElementById('moderator-author-search')?.addEventListener('input', ev
 async function loadModerationWorkspace() {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-19-moderation-dedup-v1');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-20-moderator-autosave-v1');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({
@@ -2747,6 +2760,20 @@ async function loadModerationWorkspace() {
       });
     }
     await moderationController.load();
+    if (!moderatorDraftSourceId && !moderatorResumeAttempted) {
+      moderatorResumeAttempted = true;
+      let resumeId = '';
+      try { resumeId = sessionStorage.getItem(MODERATOR_EDIT_SESSION_KEY) || ''; } catch (_) {}
+      if (resumeId) {
+        try {
+          const resumed = await moderationController.resumeDraft?.(resumeId);
+          if (!resumed) sessionStorage.removeItem(MODERATOR_EDIT_SESSION_KEY);
+        } catch (error) {
+          try { sessionStorage.removeItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
+          toast('Не удалось восстановить проверку: ' + (error.message || error), 'e');
+        }
+      }
+    }
   } catch (error) {
     toast('Не удалось открыть модерацию: ' + (error.message || error), 'e');
   }
@@ -3095,6 +3122,10 @@ async function cancelResubmissionDraft({ skipConfirm = false, resetOnly = false 
   }
   resubmissionSourceId = '';
   moderatorDraftSourceId = '';
+  clearTimeout(moderatorAutosaveTimer);
+  moderatorAutosaveTimer = null;
+  moderatorAutosaveDirty = false;
+  try { sessionStorage.removeItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
   moderatorSelectedAuthor = null;
   deleteActiveSavedDraft();
   resetUploadForm();
@@ -3528,7 +3559,6 @@ onAuthStateChanged(auth, async user => {
     await loadCurrentUserProfile(user);
     await loadUploadCategoryConfig();
     updateAdminOnlyWorkspace();
-    if (canCurrentUserModerate() && moderatorDraftSourceId) loadModerationWorkspace();
     document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
     updateUploadGate();
     _subscribeUserProfile(user.uid);
@@ -3536,8 +3566,14 @@ onAuthStateChanged(auth, async user => {
     _updateCooldown(user.uid);
     const av = document.getElementById('user-avatar');
     if (user.photoURL) { av.src = user.photoURL; av.style.display = ''; }
-    if (!agentsList.length) loadAgents();
+    const agentsReady = !agentsList.length ? loadAgents() : Promise.resolve();
     loadMaps();
+    let resumableModeratorEdit = false;
+    try { resumableModeratorEdit = !!sessionStorage.getItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
+    if (canCurrentUserModerate() && (moderatorDraftSourceId || resumableModeratorEdit)) {
+      await agentsReady;
+      await loadModerationWorkspace();
+    }
     openAdminChat();
     startSiteNotifications(user.uid);
     startSitePresence();
@@ -3709,7 +3745,6 @@ async function loadAgents() {
     renderAgentsGrid();
     await loadMapAnnotations();
     _restoreDraft();
-    if (canCurrentUserModerate() && moderatorDraftSourceId) loadModerationWorkspace();
   } catch (e) {
     toast('Не удалось загрузить агентов', 'e');
   }
@@ -3815,7 +3850,7 @@ function currentMapQuarterTurns() {
   return selectedRoundSide === 'defense' ? (attackTurns + 2) % 4 : attackTurns;
 }
 
-function annotationModeFor(map) { return currentAnnotationMode || mapAnnotationModesConfig[map] || 'full'; }
+function annotationModeFor() { return currentAnnotationMode || 'main'; }
 function renderAnnotationModeButtons(map) {
   const mode = annotationModeFor(map);
   document.querySelectorAll('.map-annotation-mode').forEach(button => button.classList.toggle('selected-mode', button.dataset.mapAnnotationMode === mode));
@@ -7399,6 +7434,10 @@ const _DRAFT_KEY = 'vl_lineup_draft';
 const _DRAFTS_KEY = 'vl_lineup_drafts';
 const _ACTIVE_DRAFT_ID_KEY = 'vl_active_lineup_draft_id';
 const _DRAFT_MIGRATED_KEY = 'vl_lineup_draft_migrated_v2';
+let moderatorAutosaveTimer = null;
+let moderatorAutosaveDirty = false;
+let moderatorAutosaveRequest = null;
+let moderatorAutosaveToken = '';
 
 function collectDraftData() {
   return {
@@ -7430,6 +7469,91 @@ function collectDraftData() {
     moderatorDraftSourceId,
     moderatorAuthor: moderatorSelectedAuthor,
   };
+}
+
+function moderatorAutosavePayload() {
+  const contentType = normalizeContentCategory(selectedCategory || 'lineup');
+  const ability = categoryNeedsAbility(contentType)
+    ? normalizeAbilityName(selectedAgent, selectedAbility)
+    : '';
+  const data = {
+    map: document.getElementById('sel-map')?.value || '',
+    agent: contentType === 'wallbang' ? '' : selectedAgent,
+    ability,
+    title: document.getElementById('inp-title')?.value || '',
+    description: document.getElementById('inp-desc')?.value || '',
+    difficulty: selectedDifficulty || '',
+    round_side: selectedRoundSide || '',
+    position_x: contentType === 'defense' ? 0 : markerX,
+    position_y: contentType === 'defense' ? 0 : markerY,
+    trajectory: contentType === 'defense' ? [] : trajectoryFromMarker(),
+    extra_abilities: contentType === 'lineup' ? extraAbilityTrajectories.map((item, index) => ({
+      ability: item.ability || '', icon: item.icon || '', order:index + 1,
+      trajectory: trajectoryForSave(item), range_radius:Number(item.range_radius) || 0,
+      effect_shape: item.effect_shape || 'circle',
+    })) : [],
+    category: contentType,
+    content_type: contentType,
+    screenshots: screenshots.filter(item => item.cloudUrl).map(item => item.cloudUrl),
+    video_url: videoUrl || '',
+    video_remove_requested: moderatorVideoRemovalRequested,
+    user_id: moderatorSelectedAuthor?.uid || '',
+    submitted_by: moderatorSelectedAuthor?.name || '',
+    ...(contentType === 'wallbang' ? {
+      weapons:selectedWallbangWeapons(), target_x:wallbangTargetX, target_y:wallbangTargetY,
+    } : {}),
+    ...(contentType === 'defense' ? defenseSubmissionPayload() : {}),
+  };
+  if (isSovaArrowSelection(selectedAgent, ability)) {
+    data.sova_charge = sovaCharge;
+    data.sova_bounces = sovaBounces;
+  }
+  return data;
+}
+
+function scheduleModeratorAutosave() {
+  if (!moderatorDraftSourceId || !currentUser) return;
+  moderatorAutosaveDirty = true;
+  clearTimeout(moderatorAutosaveTimer);
+  moderatorAutosaveTimer = setTimeout(() => { flushModeratorAutosave().catch(() => {}); }, 900);
+}
+
+async function flushModeratorAutosave({ keepalive = false, reportError = false } = {}) {
+  clearTimeout(moderatorAutosaveTimer);
+  moderatorAutosaveTimer = null;
+  if (!moderatorDraftSourceId || !currentUser || !moderatorAutosaveDirty) return true;
+  if (moderatorAutosaveRequest) {
+    await moderatorAutosaveRequest.catch(() => {});
+    if (!moderatorAutosaveDirty) return true;
+  }
+  const lineupId = moderatorDraftSourceId;
+  const payload = moderatorAutosavePayload();
+  moderatorAutosaveDirty = false;
+  moderatorAutosaveRequest = (async () => {
+    const token = keepalive && moderatorAutosaveToken
+      ? moderatorAutosaveToken
+      : await currentUser.getIdToken();
+    moderatorAutosaveToken = token;
+    const response = await fetch('/api/moderation', {
+      method:'POST', keepalive,
+      headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body:JSON.stringify({ lineupId, action:'autosave_draft', data:payload }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Ошибка ${response.status}`);
+    return true;
+  })();
+  try {
+    await moderatorAutosaveRequest;
+    return true;
+  } catch (error) {
+    moderatorAutosaveDirty = true;
+    logUploadError(error, { action:'moderator_autosave_failed', lineup_id:lineupId, keepalive });
+    if (reportError) toast('Не удалось сохранить правки модератора: ' + (error.message || error), 'e');
+    return false;
+  } finally {
+    moderatorAutosaveRequest = null;
+  }
 }
 
 function hasDraftContent(draft) {
@@ -7609,7 +7733,10 @@ function updateActiveSavedDraft(draft) {
 }
 
 function _saveDraft() {
-  if (moderatorDraftSourceId) return;
+  if (moderatorDraftSourceId) {
+    scheduleModeratorAutosave();
+    return;
+  }
   try {
     const draft = collectDraftData();
     localStorage.setItem(_DRAFT_KEY, JSON.stringify(draft));
@@ -8031,6 +8158,10 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     }
     if (moderatorDraftSourceId) {
       submitStage = 'moderator_draft_save';
+      clearTimeout(moderatorAutosaveTimer);
+      moderatorAutosaveTimer = null;
+      if (moderatorAutosaveRequest) await moderatorAutosaveRequest.catch(() => {});
+      moderatorAutosaveDirty = false;
       const token = await currentUser.getIdToken();
       const response = await fetch('/api/moderation', {
         method: 'POST',
@@ -8058,6 +8189,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       if (!response.ok) throw new Error(result.error || `Ошибка ${response.status}`);
       moderationController?.clearClaim?.();
       moderatorDraftSourceId = '';
+      try { sessionStorage.removeItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
       moderatorSelectedAuthor = null;
       showModeratorAuthorPicker();
       showSuccess();

@@ -258,7 +258,7 @@
     .sticky-title-editor { position: sticky; top: 62px; z-index: 45; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:12px; margin:0 0 14px; padding:9px 12px; border:1px solid rgba(79,195,247,.68); border-radius:calc(var(--r) + 2px); background:#0d1525; box-shadow:0 0 0 1px rgba(79,195,247,.08),0 12px 28px rgba(3,7,16,.42); }
     .sticky-title-editor .section-title { margin:0; white-space:nowrap; }
     .sticky-title-editor .card { min-width:0; margin:0; padding:0; border:0; background:transparent; }
-    .sticky-title-editor .title-suggestions:not([hidden]) { margin-top:8px; }
+    .title-suggestions-flow { margin:-6px 0 14px; }
     .map-tools kbd { display:inline-grid; place-items:center; min-width:18px; height:18px; margin-right:2px; padding:0 4px; border:1px solid rgba(79,195,247,.42); border-radius:5px; background:rgba(79,195,247,.12); color:var(--primary); font:800 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace; box-shadow:none; }
     .category-extra-panel[hidden] { display: none !important; }
     .category-extra-card { display: grid; gap: 12px; }

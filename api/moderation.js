@@ -14,6 +14,7 @@ const ALLOWED_ORIGINS = new Set([
 const ACTION_WINDOW_MS = 60_000;
 const ACTION_LIMIT = 20;
 const actionWindows = new Map();
+const autosaveWindows = new Map();
 
 function clean(value) {
   return String(value ?? '').replace(/п»ї/g, '').trim();
@@ -71,6 +72,17 @@ function checkActionRate(uid) {
   }
   current.count += 1;
   if (current.count > ACTION_LIMIT) throw Object.assign(new Error('Too many moderation actions'), { status: 429 });
+}
+
+function checkAutosaveRate(uid) {
+  const now = Date.now();
+  const current = autosaveWindows.get(uid);
+  if (!current || now - current.startedAt >= ACTION_WINDOW_MS) {
+    autosaveWindows.set(uid, { startedAt:now, count:1 });
+    return;
+  }
+  current.count += 1;
+  if (current.count > 90) throw Object.assign(new Error('Too many autosave requests'), { status:429 });
 }
 
 function timestampMillis(value) {
@@ -138,9 +150,14 @@ function isQueuedForModeration(data = {}) {
 }
 
 function safeLineup(doc, viewerUid = '') {
-  const d = doc.data() || {};
-  const lockExpiresAt = timestampMillis(d.moderation_lock_expires_at);
-  const lockActive = !!d.moderation_lock_uid && lockExpiresAt > Date.now();
+  const stored = doc.data() || {};
+  const lockExpiresAt = timestampMillis(stored.moderation_lock_expires_at);
+  const lockActive = !!stored.moderation_lock_uid && lockExpiresAt > Date.now();
+  const ownsLock = lockActive && clean(stored.moderation_lock_uid) === viewerUid;
+  const autosave = ownsLock && stored.moderator_autosave && typeof stored.moderator_autosave === 'object'
+    ? stored.moderator_autosave
+    : {};
+  const d = { ...stored, ...autosave };
   return {
     id: doc.id,
     title: clean(d.title).slice(0, 100),
@@ -170,9 +187,16 @@ function safeLineup(doc, viewerUid = '') {
     position_y: Number(d.position_y ?? 0.5),
     trajectory: Array.isArray(d.trajectory) ? d.trajectory.slice(0, 30) : [],
     extra_abilities: Array.isArray(d.extra_abilities) ? d.extra_abilities.slice(0, 2) : [],
+    target_x: Number(d.target_x ?? 0.5),
+    target_y: Number(d.target_y ?? 0.5),
+    weapons: Array.isArray(d.weapons) ? d.weapons.slice(0, 20).map(value => clean(value).slice(0, 80)) : [],
+    site: clean(d.site).slice(0, 10),
+    number: Math.max(1, Math.min(999, Math.trunc(Number(d.number) || 1))),
+    zoom_area: d.zoom_area && typeof d.zoom_area === 'object' ? d.zoom_area : null,
+    abilities: Array.isArray(d.abilities) ? d.abilities.slice(0, 8) : [],
     submitted_at: timestampMillis(d.submitted_at || d.created_at || d.createdAt),
     moderation_lock_active: lockActive,
-    moderation_lock_owned: lockActive && clean(d.moderation_lock_uid) === viewerUid,
+    moderation_lock_owned: ownsLock,
     moderation_lock_name: lockActive ? clean(d.moderation_lock_name).slice(0, 80) : '',
     moderation_lock_expires_at: lockActive ? lockExpiresAt : 0,
   };
@@ -278,6 +302,7 @@ async function saveDraft(req, res, moderator) {
       moderator_changes_saved: true,
       moderator_change_note: `Изменения сохранены модератором ${moderator.name}`.slice(0, 160),
       moderator_template_completed: true,
+      moderator_autosave: FieldValue.delete(), moderator_autosaved_at: FieldValue.delete(),
       moderation_lock_uid: FieldValue.delete(), moderation_lock_name: FieldValue.delete(),
         moderation_lock_expires_at: FieldValue.delete(),
       };
@@ -305,6 +330,79 @@ async function saveDraft(req, res, moderator) {
     if (claimSnap.exists && clean(claimSnap.data()?.lineup_id) === lineupId) tx.delete(claimRef);
   });
   res.status(200).json({ ok: true, id: lineupId, status: 'pending' });
+}
+
+async function autosaveDraft(req, res, moderator) {
+  const lineupId = clean(req.body?.lineupId);
+  const data = req.body?.data || {};
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
+  const db = getFirestore();
+  const ref = db.collection('lineups').doc(lineupId);
+  const claimRef = db.collection('moderation_claims').doc(moderator.uid);
+  const expiresAt = new Date(Date.now() + MODERATION_LOCK_MS);
+  await db.runTransaction(async tx => {
+    const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
+    if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
+    const current = snap.data() || {};
+    if (!['pending', 'moderator_draft'].includes(current.status)) throw Object.assign(new Error('Лайнап уже обработан'), { status: 409 });
+    if (clean(current.moderation_lock_uid) !== moderator.uid) {
+      throw Object.assign(new Error('Бронь лайнапа потеряна. Обнови очередь.'), { status: 409 });
+    }
+    const contentType = ['lineup', 'combo', 'wallbang', 'defense'].includes(clean(data.content_type || data.category))
+      ? clean(data.content_type || data.category)
+      : clean(current.content_type || current.category || 'lineup');
+    const autosave = {
+      map: clean(data.map).slice(0, 40), agent: clean(data.agent).slice(0, 40), ability: clean(data.ability).slice(0, 80),
+      title: clean(data.title).slice(0, 100), description: clean(data.description).slice(0, 1000),
+      difficulty: clean(data.difficulty).slice(0, 20), round_side: clean(data.round_side).slice(0, 20),
+      position_x: finite01(data.position_x), position_y: finite01(data.position_y), trajectory: safePoints(data.trajectory),
+      extra_abilities: Array.isArray(data.extra_abilities) ? data.extra_abilities.slice(0, 2).map((item, index) => ({
+        ability: clean(item?.ability).slice(0, 80), icon: clean(item?.icon).slice(0, 1000), order: index + 1,
+        trajectory: safePoints(item?.trajectory), range_radius: Math.max(0, Math.min(.5, Number(item?.range_radius) || 0)),
+        effect_shape: clean(item?.effect_shape || 'circle').slice(0, 30),
+      })) : [],
+      screenshots: Array.isArray(data.screenshots) ? data.screenshots.slice(0, 8).map(value => clean(value).slice(0, 1000)) : [],
+      video_url: data.video_remove_requested === true ? '' : clean(data.video_url || current.video_url).slice(0, 1000),
+      user_id: clean(data.user_id || current.user_id || current.uid || current.author_uid).slice(0, 128),
+      submitted_by: clean(data.submitted_by || current.submitted_by || current.author).slice(0, 80),
+      category: contentType, content_type: contentType,
+    };
+    if (['sova', 'сова'].includes(autosave.agent.toLowerCase()) && /shock|recon|шок|развед|стрел/.test(autosave.ability.toLowerCase())) {
+      autosave.sova_charge = Math.max(0, Math.min(3, Number(data.sova_charge ?? 3)));
+      autosave.sova_bounces = Math.max(0, Math.min(2, Math.trunc(Number(data.sova_bounces) || 0)));
+    }
+    if (contentType === 'defense') {
+      const zoom = data.zoom_area || {};
+      autosave.site = clean(data.site).slice(0, 10);
+      autosave.number = Math.max(1, Math.min(999, Math.trunc(Number(data.number) || 1)));
+      autosave.zoom_area = {
+        x: finite01(zoom.x), y: finite01(zoom.y),
+        width: Math.max(.01, Math.min(1, Number(zoom.width) || .25)),
+        height: Math.max(.01, Math.min(1, Number(zoom.height) || .25)),
+      };
+      autosave.abilities = safeDefenseAbilities(data.abilities);
+      autosave.position_x = 0;
+      autosave.position_y = 0;
+      autosave.trajectory = [];
+    }
+    if (contentType === 'wallbang') {
+      autosave.weapons = Array.isArray(data.weapons) ? data.weapons.slice(0, 20).map(value => clean(value).slice(0, 80)) : [];
+      autosave.target_x = finite01(data.target_x);
+      autosave.target_y = finite01(data.target_y);
+    }
+    tx.update(ref, {
+      moderator_autosave: autosave,
+      moderator_autosaved_at: FieldValue.serverTimestamp(),
+      moderation_lock_expires_at: expiresAt,
+    });
+    tx.set(claimRef, {
+      lineup_id: lineupId,
+      moderator_name: moderator.name,
+      expires_at: expiresAt,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+  });
+  res.status(200).json({ ok: true, id: lineupId, expires_at: expiresAt.getTime() });
 }
 
 async function listQueue(res, moderator) {
@@ -429,6 +527,8 @@ async function releaseClaim(req, res, moderator) {
       moderation_lock_uid: FieldValue.delete(),
       moderation_lock_name: FieldValue.delete(),
       moderation_lock_expires_at: FieldValue.delete(),
+      moderator_autosave: FieldValue.delete(),
+      moderator_autosaved_at: FieldValue.delete(),
     });
     if (claimSnap.exists && clean(claimSnap.data()?.lineup_id) === lineupId) tx.delete(claimRef);
   });
@@ -509,9 +609,13 @@ async function seedMetadataQueue(res, moderator) {
 }
 
 async function moderate(req, res, moderator) {
-  checkActionRate(moderator.uid);
   const lineupId = clean(req.body?.lineupId);
   const action = clean(req.body?.action);
+  if (action === 'autosave_draft') {
+    checkAutosaveRate(moderator.uid);
+    return autosaveDraft(req, res, moderator);
+  }
+  checkActionRate(moderator.uid);
   if (action === 'save_draft') return saveDraft(req, res, moderator);
   if (action === 'seed_metadata_queue') return seedMetadataQueue(res, moderator);
   if (action === 'complete_metadata') return completeMetadata(req, res, moderator);
