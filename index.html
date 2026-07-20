@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-20-compact-map-editor-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-20-compact-map-editor-v2">
 </head>
 <body>
 
@@ -122,13 +122,15 @@
       </div>
     </div>
 
-    <div class="section-title">📝 НАЗВАНИЕ</div>
-    <div class="card">
-      <div class="input-wrap">
-        <input class="finput" type="text" id="inp-title" placeholder="Example: A Screens from A Lobby" maxlength="100">
-        <span class="char-counter"><span id="title-count">0</span>/100</span>
+    <div class="sticky-title-editor">
+      <div class="section-title">📝 НАЗВАНИЕ</div>
+      <div class="card">
+        <div class="input-wrap">
+          <input class="finput" type="text" id="inp-title" placeholder="Example: A Screens from A Lobby" maxlength="100">
+          <span class="char-counter"><span id="title-count">0</span>/100</span>
+        </div>
+        <div class="title-suggestions" id="title-suggestions" hidden></div>
       </div>
-      <div class="title-suggestions" id="title-suggestions" hidden></div>
     </div>
 
     <div class="section-title">📄 ОПИСАНИЕ</div>
