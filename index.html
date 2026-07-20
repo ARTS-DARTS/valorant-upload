@@ -128,6 +128,7 @@
         <input class="finput" type="text" id="inp-title" placeholder="Example: A Screens from A Lobby" maxlength="100">
         <span class="char-counter"><span id="title-count">0</span>/100</span>
       </div>
+      <div class="title-suggestions" id="title-suggestions" hidden></div>
     </div>
 
     <div class="section-title">📄 ОПИСАНИЕ</div>
@@ -137,7 +138,11 @@
         <span class="char-counter"><span id="desc-count">0</span>/1000</span>
       </div>
       <div class="description-tools">
-        <button class="copy-id-btn" type="button" id="btn-description-samples">Образцы</button>
+        <button class="description-samples-btn" type="button" id="btn-description-samples">
+          <span class="description-samples-icon" aria-hidden="true">✦</span>
+          <span><b>Примеры описания</b><small>Готовые шаблоны по кадрам</small></span>
+          <span class="description-samples-arrow" aria-hidden="true">→</span>
+        </button>
       </div>
     </div>
 

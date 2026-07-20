@@ -1705,6 +1705,85 @@ function uploadToCloudinary(blob, onProgress) {
   return promise;
 }
 
+const nearbyTitleCache = new Map();
+let titleSuggestionTimer = null;
+let titleSuggestionGeneration = 0;
+let autoSuggestedTitle = '';
+
+function lineupDestinationPoints(data) {
+  const paths = [data?.trajectory, ...(Array.isArray(data?.extra_abilities) ? data.extra_abilities.map(item => item?.trajectory) : [])];
+  return paths.map(normalizeTrajectoryPoints).filter(points => points.length).map(points => points[points.length - 1]);
+}
+
+function currentLineupDestination() {
+  const extraPaths = extraAbilityTrajectories.map(item => normalizeTrajectoryPoints(item?.trajectory)).filter(points => points.length);
+  const points = extraPaths.length ? extraPaths[extraPaths.length - 1] : normalizeTrajectoryPoints(trajectoryPoints);
+  return points.length ? points[points.length - 1] : null;
+}
+
+async function loadNearbyTitleCandidates(mapName) {
+  if (nearbyTitleCache.has(mapName)) return nearbyTitleCache.get(mapName);
+  const promise = getDocs(query(collection(db, 'lineups'), where('map', '==', mapName), limit(160)))
+    .then(snap => snap.docs.map(item => item.data()).filter(data => {
+      const status = String(data?.status || '').toLowerCase();
+      return String(data?.title || '').trim() && ['approved', 'hot', 'pending'].includes(status);
+    }))
+    .catch(error => {
+      logUploadError(error, { action: 'nearby_title_suggestions_load', map: mapName });
+      return [];
+    });
+  nearbyTitleCache.set(mapName, promise);
+  return promise;
+}
+
+function applySuggestedTitle(title) {
+  const input = document.getElementById('inp-title');
+  if (!input || !title) return;
+  input.value = title;
+  autoSuggestedTitle = title;
+  document.getElementById('title-count').textContent = title.length;
+  validateForm();
+  _saveDraft();
+}
+
+function renderTitleSuggestions(titles) {
+  const host = document.getElementById('title-suggestions');
+  if (!host) return;
+  if (!titles.length) {
+    host.hidden = true;
+    host.innerHTML = '';
+    return;
+  }
+  host.hidden = false;
+  host.innerHTML = `<span class="title-suggestions-label">Похожие точки:</span>${titles.map(title => `<button class="title-suggestion" type="button" data-title-suggestion="${esc(title)}">${esc(title)}</button>`).join('')}`;
+  host.querySelectorAll('[data-title-suggestion]').forEach(button => button.addEventListener('click', () => applySuggestedTitle(button.dataset.titleSuggestion || '')));
+}
+
+async function updateNearbyTitleSuggestions() {
+  const generation = ++titleSuggestionGeneration;
+  const mapName = document.getElementById('sel-map')?.value || '';
+  const destination = currentLineupDestination();
+  if (!mapName || !destination) {
+    renderTitleSuggestions([]);
+    return;
+  }
+  const candidates = await loadNearbyTitleCandidates(mapName);
+  if (generation !== titleSuggestionGeneration) return;
+  const ranked = candidates.map(data => {
+    const distances = lineupDestinationPoints(data).map(point => Math.hypot(point.x - destination.x, point.y - destination.y));
+    return { title: String(data.title || '').trim(), distance: distances.length ? Math.min(...distances) : Infinity };
+  }).filter(item => item.distance <= 0.09).sort((a, b) => a.distance - b.distance);
+  const titles = [...new Set(ranked.map(item => item.title))].slice(0, 3);
+  renderTitleSuggestions(titles);
+  const input = document.getElementById('inp-title');
+  if (titles[0] && input && (!input.value.trim() || input.value.trim() === autoSuggestedTitle)) applySuggestedTitle(titles[0]);
+}
+
+function scheduleNearbyTitleSuggestions() {
+  clearTimeout(titleSuggestionTimer);
+  titleSuggestionTimer = setTimeout(updateNearbyTitleSuggestions, 320);
+}
+
 function uploadCompatibleLineupVideo(file, onProgress) {
   const fd = new FormData();
   fd.append('file', file, file.name || 'lineup-video.mp4');
@@ -3788,6 +3867,7 @@ document.getElementById('defense-zoom-clear')?.addEventListener('click', () => {
 
 // ── Char counters ─────────────────────────────────────────────────────────────
 document.getElementById('inp-title').addEventListener('input', e => {
+  if (e.target.value.trim() !== autoSuggestedTitle) autoSuggestedTitle = '';
   document.getElementById('title-count').textContent = e.target.value.length;
   validateForm(); _saveDraft();
 });
@@ -7106,6 +7186,7 @@ function renderTrajectory() {
   });
 
   if (drew) container.appendChild(svg);
+  scheduleNearbyTitleSuggestions();
 }
 
 function updateMarkerIcon() {

@@ -316,6 +316,17 @@
     .char-counter { position: absolute; bottom: 8px; right: 10px; font-size: 11px; color: var(--text2); pointer-events: none; }
     textarea.finput { resize: vertical; min-height: 80px; padding-bottom: 24px; }
     .description-tools { display: flex; justify-content: flex-start; margin-top: 10px; }
+    .description-samples-btn { display:flex; align-items:center; gap:10px; width:min(360px,100%); padding:10px 12px; border:1px solid rgba(79,195,247,.55); border-radius:var(--r); background:linear-gradient(135deg,rgba(79,195,247,.16),rgba(79,195,247,.06)); color:var(--text1); text-align:left; cursor:pointer; box-shadow:0 0 0 1px rgba(79,195,247,.05) inset; transition:border-color .15s,background .15s,transform .15s; }
+    .description-samples-btn:hover { border-color:var(--primary); background:linear-gradient(135deg,rgba(79,195,247,.24),rgba(79,195,247,.09)); transform:translateY(-1px); }
+    .description-samples-icon { display:grid; place-items:center; width:30px; height:30px; flex:0 0 30px; border-radius:9px; background:var(--primary); color:#06111d; font-size:16px; font-weight:900; }
+    .description-samples-btn b,.description-samples-btn small { display:block; }
+    .description-samples-btn b { color:var(--primary); font-size:12px; }
+    .description-samples-btn small { margin-top:2px; color:var(--text2); font-size:10px; }
+    .description-samples-arrow { margin-left:auto; color:var(--primary); font-size:18px; font-weight:900; }
+    .title-suggestions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:10px; padding:9px 10px; border:1px solid rgba(79,195,247,.28); border-radius:var(--r); background:rgba(79,195,247,.06); }
+    .title-suggestions-label { color:var(--text2); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.55px; }
+    .title-suggestion { border:1px solid rgba(79,195,247,.42); border-radius:999px; background:var(--surface2); color:var(--primary); padding:5px 9px; font-size:11px; font-weight:700; cursor:pointer; }
+    .title-suggestion:hover { border-color:var(--primary); background:rgba(79,195,247,.12); }
     .samples-drawer { position: fixed; inset: 0; z-index: 900; background: rgba(3,7,18,.54); opacity: 0; pointer-events: none; transition: opacity .18s; }
     .samples-drawer.show { opacity: 1; pointer-events: auto; }
     .samples-drawer-panel { width: min(430px, calc(100vw - 32px)); height: 100%; background: var(--surface); border-right: 1px solid rgba(79,195,247,.28); box-shadow: 22px 0 56px rgba(0,0,0,.52); transform: translateX(-100%); transition: transform .2s ease; overflow: auto; padding: 18px; }
