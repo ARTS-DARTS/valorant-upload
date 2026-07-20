@@ -162,6 +162,37 @@ function restoreMetadataFormState(state) {
   });
 }
 
+const moderationPreviewObserver = 'IntersectionObserver' in window
+  ? new IntersectionObserver(entries => entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      moderationPreviewObserver.unobserve(entry.target);
+      loadVideoPreviewFrame(entry.target);
+    }), { rootMargin: '180px 0px' })
+  : null;
+
+function loadVideoPreviewFrame(video) {
+  if (!(video instanceof HTMLVideoElement) || video.dataset.previewFrame !== 'pending') return;
+  video.dataset.previewFrame = 'loading';
+  const seekPreview = () => {
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    try { video.currentTime = duration > 0 ? Math.min(0.1, duration / 2) : 0.01; } catch (_) {}
+  };
+  video.addEventListener('loadedmetadata', seekPreview, { once: true });
+  video.addEventListener('seeked', () => { video.dataset.previewFrame = 'ready'; }, { once: true });
+  video.addEventListener('play', () => {
+    if (video.dataset.previewFrame === 'ready' && video.currentTime <= 0.11) video.currentTime = 0;
+  }, { once: true });
+  if (video.readyState >= 1) seekPreview();
+  video.load();
+}
+
+function hydrateVideoPreviews() {
+  document.querySelectorAll('video[data-preview-frame="pending"]').forEach(video => {
+    if (moderationPreviewObserver) moderationPreviewObserver.observe(video);
+    else loadVideoPreviewFrame(video);
+  });
+}
+
 function render(items, total = totalQueueItems) {
   // Defensive client-side deduplication in case an older/cached API response
   // contains the same Firestore document through overlapping queue queries.
@@ -193,7 +224,7 @@ function render(items, total = totalQueueItems) {
     const meta = [item.moderator_only ? 'ЗАГОТОВКА ДЛЯ МОДЕРАЦИИ' : '', item.map, item.agent, item.agent ? item.ability : 'Выбери агента', sideLabel(item.round_side)].filter(Boolean);
     return `<article class="moderation-card" data-moderation-id="${esc(item.id)}">
       <div class="moderation-card-main">
-        ${video ? `<video class="moderation-video" src="${esc(video)}"${poster ? ` poster="${esc(poster)}"` : ''} controls preload="none"></video>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
+        ${video ? `<video class="moderation-video" src="${esc(video)}"${poster ? ` poster="${esc(poster)}" preload="none"` : ' preload="metadata" data-preview-frame="pending"'} controls playsinline></video>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
         <div class="moderation-info">
           <div class="moderation-meta">${meta.map(value => `<span class="moderation-chip">${esc(value)}</span>`).join('')}</div>
           <h3 class="moderation-title">${metadataTask ? 'Проверить параметры лайнапа' : esc(item.title || 'Без названия')}</h3>
@@ -214,6 +245,7 @@ function render(items, total = totalQueueItems) {
     const replacement = document.querySelector(`[data-moderation-id="${CSS.escape(id)}"] video`);
     if (replacement && replacement.src === video.src) replacement.replaceWith(video);
   });
+  hydrateVideoPreviews();
   restoreMetadataFormState(metadataFormState);
   items.forEach(item => applyLockToCard(item));
 }
