@@ -6133,7 +6133,7 @@ function videoEditorSourceUrl(url) {
       'valorant-lineups-video.s3.ru-3.storage.selcloud.ru',
     ]);
     return proxyHosts.has(parsed.hostname)
-      ? `/api/media-proxy?url=${encodeURIComponent(parsed.href)}`
+      ? `/api/valorant-proxy?url=${encodeURIComponent(parsed.href)}`
       : raw;
   } catch (_) {
     return raw;
