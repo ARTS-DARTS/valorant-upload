@@ -3606,6 +3606,7 @@ const DEFAULT_MAP_ORIENTATIONS = { Haven: 1 };
 let mapOrientationsConfig = { ...DEFAULT_MAP_ORIENTATIONS };
 let currentAnnotationMode = null;
 let mapAnnotationsPromise = null;
+let mapAnnotationsReady = false;
 function loadMapAnnotations() {
   if (mapAnnotationsPromise) return mapAnnotationsPromise;
   mapAnnotationsPromise = Promise.all([
@@ -3623,7 +3624,14 @@ function loadMapAnnotations() {
     }
     applyMapViewTransform();
     renderMapSiteLabels();
-  }).catch(error => console.warn('map annotations', error));
+    mapAnnotationsReady = true;
+    return true;
+  }).catch(error => {
+    mapAnnotationsReady = true;
+    logUploadError(error, { action: 'map_annotations_load_failed' });
+    console.warn('map annotations', error);
+    return false;
+  });
   return mapAnnotationsPromise;
 }
 
@@ -6578,11 +6586,17 @@ window.addEventListener('pointercancel', e => {
   renderDefenseAbilityMarkers();
 });
 
-function loadMapMinimap() {
+let mapLoadGeneration = 0;
+let mapInteractionReady = false;
+const mapClickDiagnosticKeys = new Set();
+
+async function loadMapMinimap() {
+  const generation = ++mapLoadGeneration;
   const mapName = document.getElementById('sel-map').value;
   const img     = document.getElementById('map-img');
   const ph      = document.getElementById('map-placeholder');
   const marker  = document.getElementById('map-marker');
+  mapInteractionReady = false;
   img.onload = null;
   img.onerror = null;
   if (!mapName) {
@@ -6598,6 +6612,12 @@ function loadMapMinimap() {
     renderCategoryMapExtras();
     return;
   }
+  ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Загружаем карту…</div>`;
+  ph.style.display = '';
+  img.style.display = 'none';
+  await loadMapAnnotations();
+  if (generation !== mapLoadGeneration || document.getElementById('sel-map').value !== mapName) return;
+  applyMapViewTransform();
   const apiUrl = mapsData.find(m => m.displayName === mapName)?.displayIcon;
   const fallbackUrl = MAP_FALLBACK_URLS[mapName];
   const candidates = [...new Set([
@@ -6607,30 +6627,52 @@ function loadMapMinimap() {
   ].filter(Boolean))];
   if (candidates.length) {
     let attempt = 0;
-    const fail = () => {
-      attempt += 1;
-      if (attempt < candidates.length) {
-        img.src = candidates[attempt];
-        return;
-      }
-      img.style.display = 'none';
-      ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Карта недоступна. Обнови страницу или выбери карту ещё раз.</div>`;
-      ph.style.display = '';
+    let timeoutId = null;
+    let finished = false;
+    const armTimeout = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => fail('timeout'), 12000);
     };
-    img.crossOrigin = 'anonymous';
-    img.onerror = fail;
-    img.onload = () => {
+    const finish = () => {
+      if (generation !== mapLoadGeneration || document.getElementById('sel-map').value !== mapName) return;
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeoutId);
+      mapInteractionReady = true;
       img.style.display = 'block';
       ph.style.display = 'none';
+      applyMapViewTransform();
       if (markerX != null && markerY != null) setMarkerPosition(markerX, markerY);
       renderTrajectory();
       renderMapSiteLabels();
       renderCategoryMapExtras();
     };
-    img.style.display = 'none';
-    ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Загружаем карту…</div>`;
-    ph.style.display = '';
+    const fail = reason => {
+      if (generation !== mapLoadGeneration || document.getElementById('sel-map').value !== mapName) return;
+      if (finished) return;
+      clearTimeout(timeoutId);
+      attempt += 1;
+      if (attempt < candidates.length) {
+        img.src = candidates[attempt];
+        armTimeout();
+        if (img.complete && img.naturalWidth > 0) queueMicrotask(finish);
+        return;
+      }
+      mapInteractionReady = false;
+      img.style.display = 'none';
+      ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Карта недоступна. Обнови страницу или выбери карту ещё раз.</div>`;
+      ph.style.display = '';
+      logUploadError(new Error('Map image failed to load'), {
+        action: 'map_image_load_failed', map: mapName, reason, attempts: candidates.length,
+        orientation_ready: mapAnnotationsReady, quarter_turns: currentMapQuarterTurns(),
+      });
+    };
+    img.crossOrigin = 'anonymous';
+    img.onerror = () => fail('image_error');
+    img.onload = finish;
     img.src = candidates[0];
+    armTimeout();
+    if (img.complete && img.naturalWidth > 0) queueMicrotask(finish);
     marker.style.display = 'none';
     markerX = markerY = null; trajectoryPoints = [];
     extraAbilityTrajectories = [];
@@ -6642,9 +6684,11 @@ function loadMapMinimap() {
     renderMapSiteLabels();
     renderCategoryMapExtras();
   } else {
+    mapInteractionReady = false;
     img.style.display = 'none';
     ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Миникарта не найдена</div>`;
     ph.style.display = '';
+    logUploadError(new Error('Map image URL is missing'), { action: 'map_image_url_missing', map: mapName });
   }
   validateForm();
 }
@@ -6839,6 +6883,35 @@ function trajectoryFromMarker(points = trajectoryPoints) {
   return trajectoryFromMarkerFor(points);
 }
 
+function logMapClickDiagnostic(event, point) {
+  const map = document.getElementById('sel-map')?.value || '';
+  const key = `${map}|${selectedRoundSide || 'none'}|${currentMapQuarterTurns()}`;
+  if (mapClickDiagnosticKeys.has(key)) return;
+  mapClickDiagnosticKeys.add(key);
+  const img = document.getElementById('map-img');
+  const content = mapContentRect();
+  logUploadError(new Error('Map coordinate diagnostic'), {
+    action: 'map_coordinate_diagnostic', map, side: selectedRoundSide || '',
+    quarter_turns: currentMapQuarterTurns(), orientation_ready: mapAnnotationsReady,
+    interaction_ready: mapInteractionReady, image_complete: !!img?.complete,
+    image_natural_width: img?.naturalWidth || 0, image_natural_height: img?.naturalHeight || 0,
+    view_scale: mapViewScale, view_pan_x: mapViewPanX, view_pan_y: mapViewPanY,
+    content_left: content.left, content_top: content.top, content_width: content.width, content_height: content.height,
+    client_x: event.clientX, client_y: event.clientY, result_x: point.x, result_y: point.y,
+  });
+}
+
+function rejectMapInteractionWhileLoading() {
+  if (mapInteractionReady) return false;
+  logUploadError(new Error('Map interaction attempted before ready'), {
+    action: 'map_interaction_before_ready', map: document.getElementById('sel-map')?.value || '',
+    side: selectedRoundSide || '', orientation_ready: mapAnnotationsReady,
+    image_complete: !!document.getElementById('map-img')?.complete,
+  });
+  toast('Карта ещё загружается. Подожди секунду.', 'i');
+  return true;
+}
+
 function addTrajectoryPoint(x, y) {
   const points = activeTrajectoryPoints();
   const extra = activeExtraAbility();
@@ -6864,6 +6937,7 @@ document.getElementById('map-wrap')?.addEventListener('contextmenu', event => {
   if (mapMode !== 'trajectory') return;
   event.preventDefault();
   event.stopPropagation();
+  if (rejectMapInteractionWhileLoading()) return;
   const img = document.getElementById('map-img');
   if (!img || img.style.display === 'none') return;
   const { x, y } = eventToMapPoint(event);
@@ -6877,11 +6951,13 @@ document.getElementById('map-wrap').addEventListener('click', e => {
     return;
   }
   e.preventDefault();
+  if (rejectMapInteractionWhileLoading()) return;
   if (defenseZoomJustSelected) return;
   if (defenseLineJustCreated) return;
   const img = document.getElementById('map-img');
   if (img.style.display === 'none') return;
   const { x, y } = eventToMapPoint(e);
+  logMapClickDiagnostic(e, { x, y });
 
   if (mapMode === 'position') {
     if (normalizeContentCategory(selectedCategory) === 'defense') return;
@@ -7321,9 +7397,12 @@ function _restoreDraft(sourceDraft = null) {
     const apiUrl = mapsData.find(m => m.displayName === d.map)?.displayIcon;
     const url    = apiUrl || MAP_FALLBACK_URLS[d.map];
     if (url && img) {
-      img.crossOrigin = 'anonymous'; img.src = url; img.style.display = 'block';
+      mapInteractionReady = false;
+      img.crossOrigin = 'anonymous'; img.style.display = 'block';
       if (ph) ph.style.display = 'none';
       const afterLoad = () => {
+        mapInteractionReady = true;
+        applyMapViewTransform();
         if (d.mapMode) setMapMode(d.mapMode);
         if (d.trajectory?.length) { trajectoryPoints = d.trajectory; renderTrajectory(); }
         if (d.wallbangTargetX != null) {
@@ -7378,8 +7457,16 @@ function _restoreDraft(sourceDraft = null) {
         syncConfiguredDefenseAbilityShapes();
         validateForm();
       };
-      if (img.complete && img.naturalWidth) afterLoad();
-      else img.addEventListener('load', afterLoad, { once: true });
+      img.addEventListener('load', afterLoad, { once: true });
+      img.addEventListener('error', () => {
+        mapInteractionReady = false;
+        logUploadError(new Error('Draft map image failed to load'), {
+          action: 'draft_map_image_load_failed', map: d.map, url_host: (() => { try { return new URL(url).host; } catch (_) { return ''; } })(),
+        });
+        loadMapMinimap();
+      }, { once: true });
+      img.src = url;
+      if (img.complete && img.naturalWidth) queueMicrotask(afterLoad);
     }
   }
 
