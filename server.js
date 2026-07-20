@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import sendPushHandler from './api/send-push.js';
 import notifyAgentSubscribersHandler from './api/notify-agent-subscribers.js';
 import valorantProxyHandler from './api/valorant-proxy.js';
+import mediaProxyHandler from './api/media-proxy.js';
 import yandexCallbackHandler from './api/yandex-callback.js';
 import yandexStartHandler from './api/yandex-start.js';
 import yandexUnlinkHandler from './api/yandex-unlink.js';
@@ -56,6 +57,7 @@ app.use(
 app.all('/api/send-push', sendPushHandler);
 app.all('/api/notify-agent-subscribers', notifyAgentSubscribersHandler);
 app.all('/api/valorant-proxy', valorantProxyHandler);
+app.all('/api/media-proxy', mediaProxyHandler);
 app.all('/api/yandex-start', yandexStartHandler);
 app.all('/api/yandex-unlink', yandexUnlinkHandler);
 app.all('/api/yandex-callback', yandexCallbackHandler);

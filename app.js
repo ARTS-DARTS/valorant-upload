@@ -1953,6 +1953,7 @@ let defenseLineJustCreated = false;
 let selectedDefenseMarkerIndex = null;
 let mapMode = 'position';
 let videoUrl = null;
+let moderatorVideoRemovalRequested = false;
 let videoXhr = null;
 let videoEdit = createDefaultVideoEdit();
 let screenshots = [];
@@ -2207,6 +2208,10 @@ function initWorkspaceTabs() {
   });
   document.getElementById('btn-save-draft')?.addEventListener('click', event => {
     event.preventDefault();
+    if (moderatorDraftSourceId) {
+      document.getElementById('btn-submit')?.click();
+      return;
+    }
     saveCurrentDraftSnapshot();
   });
   document.getElementById('btn-cancel-moderation')?.addEventListener('click', event => {
@@ -2215,6 +2220,12 @@ function initWorkspaceTabs() {
   });
   document.getElementById('btn-reset-upload')?.addEventListener('click', event => {
     event.preventDefault();
+    if (moderatorDraftSourceId) {
+      if (!confirm('Сбросить все изменения формы? Исходное видео останется на месте.')) return;
+      resetUploadForm({ keepDraft: true, keepVideo: true });
+      toast('Поля сброшены, видео сохранено', 's');
+      return;
+    }
     if (!confirm('Полностью очистить форму и удалить несохранённые изменения?')) return;
     cancelResubmissionDraft({ skipConfirm: true, resetOnly: true });
   });
@@ -2598,9 +2609,9 @@ function openModeratorDraft(item) {
   draft.resubmissionSourceId = '';
   draft.moderatorDraftSourceId = item.id || '';
   draft.moderatorAuthor = { uid: item.user_id || '', name: item.submitted_by || '' };
-  try { localStorage.setItem(_DRAFT_KEY, JSON.stringify(draft)); } catch (_) {}
+  moderatorVideoRemovalRequested = false;
   resetUploadForm({ keepDraft: true });
-  _restoreDraft();
+  _restoreDraft(draft);
   showModeratorAuthorPicker(draft.moderatorAuthor);
   switchWorkspaceTab('upload');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2963,11 +2974,13 @@ function renderResubmissionBanner() {
   const banner = document.getElementById('resubmit-banner');
   const cancelButton = document.getElementById('btn-cancel-moderation');
   const submitButton = document.getElementById('btn-submit');
+  const saveDraftButton = document.getElementById('btn-save-draft');
   if (cancelButton) {
     cancelButton.hidden = !moderatorDraftSourceId && !resubmissionSourceId;
     cancelButton.textContent = moderatorDraftSourceId ? '✕ Отменить проверку' : '✕ Отменить редактирование';
   }
   if (submitButton && !submitButton.disabled) submitButton.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
+  if (saveDraftButton) saveDraftButton.textContent = moderatorDraftSourceId ? '💾 Сохранить изменения в очередь' : '💾 Сохранить черновик';
   if (!banner) return;
   if (!resubmissionSourceId && !moderatorDraftSourceId) {
     banner.style.display = 'none';
@@ -2983,7 +2996,7 @@ function renderResubmissionBanner() {
       <strong>${moderatorDraftSourceId ? 'Проверка и доработка лайнапа' : 'Редактирование отклонённого лайнапа'}</strong>
       <span>${esc(title)}${reason ? ` · ${esc(reason)}` : ''}</span>
     </div>
-    <button class="copy-id-btn danger-soft" type="button" data-cancel-resubmission>${moderatorDraftSourceId ? 'Отменить проверку' : 'Отменить редактирование'}</button>
+    ${moderatorDraftSourceId ? '' : '<button class="copy-id-btn danger-soft" type="button" data-cancel-resubmission>Отменить редактирование</button>'}
   `;
   banner.style.display = '';
 }
@@ -4273,7 +4286,7 @@ function reviveEditorVideo(reason = 'resume') {
   setFreezeOverlay('');
   if (vidPlayer.dataset.corsFallback === '1') vidPlayer.removeAttribute('crossorigin');
   else vidPlayer.crossOrigin = 'anonymous';
-  vidPlayer.src = videoUrl;
+  vidPlayer.src = vidPlayer.dataset.corsFallback === '1' ? videoUrl : videoEditorSourceUrl(videoUrl);
   vidPlayer.load();
   const restoreTime = () => {
     if (Number.isFinite(current) && current > 0 && vidPlayer.duration) {
@@ -5690,7 +5703,17 @@ function toggleFreezeAt(time) {
   const at = Math.round(clampTime(time) * 10) / 10;
   const freeze = { id: `freeze_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, at, duration: 2 };
   const frame = captureCurrentVideoFrame();
-  if (frame) freezeFrameImages.set(freeze.id, frame);
+  if (!frame) {
+    toast('Не удалось прочитать кадр видео. Перезагрузи страницу и попробуй ещё раз.', 'e');
+    logUploadError(new Error('Video frame capture unavailable'), {
+      action: 'video_freeze_frame_capture',
+      video_host: (() => { try { return new URL(videoUrl).hostname; } catch (_) { return ''; } })(),
+      cors_fallback: vidPlayer.dataset.corsFallback || '0',
+      ready_state: vidPlayer.readyState,
+    });
+    return;
+  }
+  freezeFrameImages.set(freeze.id, frame);
   videoEdit.freezeFrames = [...(videoEdit.freezeFrames || []), freeze];
   selectedEditorItem = { type: 'freeze', id: freeze.id };
   toast('Стоп-кадр +2 сек добавлен', 's');
@@ -5999,11 +6022,12 @@ async function handleVideoFile(file) {
     const url = await upload;
     if (_cancelled) return;
     videoUrl = url;
+    moderatorVideoRemovalRequested = false;
     videoXhr = null;
     prog.style.display = 'none';
     vidPlayer.dataset.corsFallback = '0';
     vidPlayer.crossOrigin = 'anonymous';
-    vidPlayer.src = url;
+    vidPlayer.src = videoEditorSourceUrl(url);
     document.getElementById('vid-player-wrap').style.display = '';
     videoEdit = createDefaultVideoEdit();
     videoEditUndoStack = [];
@@ -6099,6 +6123,23 @@ function seekFromScrubberValue() {
   updateTimelinePlaybackUi();
 }
 
+function videoEditorSourceUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw, window.location.href);
+    const proxyHosts = new Set([
+      'd5adab93-7400-49ad-b1f9-66966c03d203.selstorage.ru',
+      'valorant-lineups-video.s3.ru-3.storage.selcloud.ru',
+    ]);
+    return proxyHosts.has(parsed.hostname)
+      ? `/api/media-proxy?url=${encodeURIComponent(parsed.href)}`
+      : raw;
+  } catch (_) {
+    return raw;
+  }
+}
+
 function seekScrubberAtClientX(clientX) {
   const rect = vidScrubber.getBoundingClientRect();
   if (!rect.width) return;
@@ -6152,6 +6193,7 @@ document.getElementById('vid-remove-btn').addEventListener('click', () => {
   setFreezeOverlay('');
   vidPlayer.src = '';
   videoUrl = null;
+  if (moderatorDraftSourceId) moderatorVideoRemovalRequested = true;
   videoEdit = createDefaultVideoEdit();
   rememberCommittedVideoEdit();
   document.getElementById('vid-player-wrap').style.display = 'none';
@@ -7285,7 +7327,9 @@ function getSavedDrafts() {
       localStorage.setItem(_DRAFT_MIGRATED_KEY, '1');
     }
   } catch (_) {}
-  return drafts.filter(hasDraftContent).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+  const safeDrafts = drafts.filter(draft => !draft?.moderatorDraftSourceId);
+  if (safeDrafts.length !== drafts.length) writeSavedDrafts(safeDrafts);
+  return safeDrafts.filter(hasDraftContent).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
 }
 
 function writeSavedDrafts(drafts) {
@@ -7297,6 +7341,10 @@ function writeSavedDrafts(drafts) {
 }
 
 function saveCurrentDraftSnapshot() {
+  if (moderatorDraftSourceId) {
+    toast('Модераторская проверка сохраняется только обратно в очередь', 'w');
+    return;
+  }
   const draft = collectDraftData();
   if (!hasDraftContent(draft)) {
     toast('Черновик пустой', 'w');
@@ -7317,6 +7365,7 @@ function saveCurrentDraftSnapshot() {
 }
 
 function saveCurrentDraftCopy(message = 'Черновик сохранён') {
+  if (moderatorDraftSourceId) return false;
   const draft = collectDraftData();
   if (!hasDraftContent(draft)) return false;
   const now = Date.now();
@@ -7419,6 +7468,7 @@ function updateActiveSavedDraft(draft) {
 }
 
 function _saveDraft() {
+  if (moderatorDraftSourceId) return;
   try {
     const draft = collectDraftData();
     localStorage.setItem(_DRAFT_KEY, JSON.stringify(draft));
@@ -7438,6 +7488,11 @@ function _restoreDraft(sourceDraft = null) {
   let d = sourceDraft;
   try { if (!d) d = JSON.parse(localStorage.getItem(_DRAFT_KEY)); } catch(_) {}
   if (!d) return;
+  if (!sourceDraft && d.moderatorDraftSourceId) {
+    try { localStorage.removeItem(_DRAFT_KEY); } catch (_) {}
+    try { localStorage.removeItem(_ACTIVE_DRAFT_ID_KEY); } catch (_) {}
+    return;
+  }
   resubmissionSourceId = d.resubmissionSourceId || '';
   moderatorDraftSourceId = d.moderatorDraftSourceId || '';
   moderatorSelectedAuthor = d.moderatorAuthor?.uid ? d.moderatorAuthor : null;
@@ -7621,7 +7676,7 @@ function _restoreDraft(sourceDraft = null) {
     const vid   = document.getElementById('vid-player');
     if (dropZ) dropZ.style.display = 'none';
     if (wrap)  wrap.style.display = '';
-    if (vid)   { vid.dataset.corsFallback = '0'; vid.crossOrigin = 'anonymous'; vid.src = d.videoUrl; }
+    if (vid)   { vid.dataset.corsFallback = '0'; vid.crossOrigin = 'anonymous'; vid.src = videoEditorSourceUrl(d.videoUrl); }
     renderVideoEditor();
   } else {
     videoEdit = createDefaultVideoEdit();
@@ -7853,6 +7908,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
             category: contentType, content_type: contentType,
             ...(contentType === 'defense' ? defenseSubmissionPayload() : {}),
             screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl), video_url: videoUrl || '',
+            video_remove_requested: moderatorVideoRemovalRequested,
             user_id: submittedUid, submitted_by: submittedBy,
           },
         }),
@@ -7970,7 +8026,9 @@ function showSuccess() {
   if (currentUser) _updateCooldown(currentUser.uid);
 }
 
-function resetUploadForm({ keepDraft = false } = {}) {
+function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
+  const retainedVideoUrl = keepVideo ? videoUrl : null;
+  const retainedVideoEdit = keepVideo ? normalizedVideoEdit() : null;
   if (!keepDraft) _clearDraft();
   selectedAgent = null; selectedAbility = null;
   sovaCharge = 3; sovaBounces = 0;
@@ -7987,14 +8045,15 @@ function resetUploadForm({ keepDraft = false } = {}) {
   defenseLineDraft = null;
   defenseLineJustCreated = false;
   mapMode = 'position';
-  videoUrl = null; videoEdit = createDefaultVideoEdit(); screenshots = [];
+  videoUrl = retainedVideoUrl; videoEdit = retainedVideoEdit || createDefaultVideoEdit(); screenshots = [];
+  if (!keepVideo) moderatorVideoRemovalRequested = false;
   rememberCommittedVideoEdit();
   videoEditUndoStack = [];
   writeVideoEditUndoStack();
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   setFreezeOverlay('');
-  if (vidPlayer) {
+  if (vidPlayer && !keepVideo) {
     vidPlayer.pause();
     vidPlayer.removeAttribute('src');
     vidPlayer.load();
@@ -8014,10 +8073,11 @@ function resetUploadForm({ keepDraft = false } = {}) {
   document.querySelectorAll('#wallbang-weapons input[type="checkbox"]').forEach(input => { input.checked = false; });
   document.getElementById('title-count').textContent = '0';
   document.getElementById('desc-count').textContent = '0';
-  document.getElementById('drop-zone').style.display = '';
-  document.getElementById('vid-player-wrap').style.display = 'none';
+  document.getElementById('drop-zone').style.display = keepVideo && videoUrl ? 'none' : '';
+  document.getElementById('vid-player-wrap').style.display = keepVideo && videoUrl ? '' : 'none';
   document.getElementById('vid-upload-progress').style.display = 'none';
   renderSovaShotPanel();
+  if (keepVideo && videoUrl) renderVideoEditor();
   document.getElementById('map-img').style.display = 'none';
   document.getElementById('map-placeholder').style.display = '';
   document.getElementById('map-marker').style.display = 'none';
