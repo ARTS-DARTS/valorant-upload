@@ -80,7 +80,7 @@ function timestampMillis(value) {
 const MODERATION_LOCK_MS = 10 * 60_000;
 
 function isSovaBowAbility(value) {
-  return /shock|recon|hunter|шок|развед|стрел|гнев охотника/.test(clean(value).toLowerCase());
+  return /shock|recon|шок|развед|стрел/.test(clean(value).toLowerCase());
 }
 
 function sovaShotAbilities(data = {}) {
@@ -101,13 +101,17 @@ function normalizedSovaBounces(value) {
 function normalizedSovaShots(data = {}) {
   const abilities = sovaShotAbilities(data);
   const raw = Array.isArray(data.sova_shots) ? data.sova_shots : [];
-  const shots = raw.slice(0, 3).map((item, index) => ({
-    order: index + 1,
-    ability: clean(item?.ability || abilities[index]).slice(0, 80),
-    charge: Number(item?.charge),
-    bounces: normalizedSovaBounces(item?.bounces),
-  })).filter(item => Number.isFinite(item.charge) && item.charge >= 0 && item.charge <= 3 && item.bounces !== null);
-  if (!shots.length && abilities.length && typeof data.sova_charge === 'number' && data.sova_charge >= 0 && data.sova_charge <= 3) {
+  const usableRaw = raw.filter(item => isSovaBowAbility(item?.ability));
+  const shots = abilities.map((ability, index) => {
+    const item = usableRaw.find(candidate => clean(candidate?.ability).toLowerCase() === ability.toLowerCase()) || usableRaw[index];
+    return {
+      order: index + 1,
+      ability,
+      charge: Number(item?.charge),
+      bounces: normalizedSovaBounces(item?.bounces),
+    };
+  }).filter(item => Number.isFinite(item.charge) && item.charge >= 0 && item.charge <= 3 && item.bounces !== null);
+  if (!shots.length && abilities.length && isSovaBowAbility(data.ability) && typeof data.sova_charge === 'number' && data.sova_charge >= 0 && data.sova_charge <= 3) {
     const bounces = normalizedSovaBounces(data.sova_bounces);
     if (bounces !== null) shots.push({ order: 1, ability: abilities[0], charge: data.sova_charge, bounces });
   }

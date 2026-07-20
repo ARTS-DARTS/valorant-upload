@@ -38,10 +38,9 @@ function sovaShotFields(item) {
     const shot = existing[index] || {};
     const charge = Number.isFinite(Number(shot.charge)) ? Number(shot.charge) : 1.5;
     const bounces = Number.isInteger(Number(shot.bounces)) ? Number(shot.bounces) : 0;
-    const noBounces = /hunter|гнев охотника/i.test(ability);
     return `<fieldset data-sova-shot="${index}"><legend>🏹 ${index + 1}-я стрела · ${esc(ability)}</legend>
       <div class="moderation-sova-charge${charge >= 3 ? ' is-max' : ''}" style="--sova-charge-pct:${charge / 3 * 100}%"><input type="range" min="0" max="3" step="0.05" value="${charge}" data-metadata-charge data-shot-index="${index}"><div class="moderation-sova-ticks"><span></span><span></span></div><span class="moderation-sova-caption">ЗАРЯД · ${index + 1}-Я СТРЕЛА</span></div>
-      <div class="moderation-sova-bounces" data-metadata-bounces data-shot-index="${index}" data-value="${noBounces ? 0 : bounces}"><span>${noBounces ? 'БЕЗ ОТСКОКОВ' : `ОТСКОКИ · ${index + 1}-Я СТРЕЛА`}</span>${noBounces ? '' : `<div><button type="button" data-metadata-bounce="1" aria-label="Первый отскок"><i></i></button><button type="button" data-metadata-bounce="2" aria-label="Второй отскок"><i></i></button></div><small>Не выбирай ромбы, если отскоков нет</small>`}</div>
+      <div class="moderation-sova-bounces" data-metadata-bounces data-shot-index="${index}" data-value="${bounces}"><span>ОТСКОКИ · ${index + 1}-Я СТРЕЛА</span><div><button type="button" data-metadata-bounce="1" aria-label="Первый отскок"><i></i></button><button type="button" data-metadata-bounce="2" aria-label="Второй отскок"><i></i></button></div><small>Не выбирай ромбы, если отскоков нет</small></div>
     </fieldset>`;
   }).join('');
 }
