@@ -96,10 +96,7 @@ function missingMetadata(data = {}) {
   if (!['attack', 'defense', 'any'].includes(clean(data.round_side))) missing.push('round_side');
   if (isSovaArrow(data)) {
     if (!(typeof data.sova_charge === 'number' && data.sova_charge >= 0 && data.sova_charge <= 3)) missing.push('sova_charge');
-    const rawBounces = data.sova_bounces;
-    if (rawBounces !== '' && rawBounces !== null && rawBounces !== undefined && normalizedSovaBounces(rawBounces) === null) {
-      missing.push('sova_bounces');
-    }
+    if (normalizedSovaBounces(data.sova_bounces) === null) missing.push('sova_bounces');
   }
   return missing;
 }
