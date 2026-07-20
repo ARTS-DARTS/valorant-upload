@@ -1975,6 +1975,19 @@ let moderatorAuthorMatches = [];
 let moderatorAuthorTimer = null;
 let moderationController = null;
 let moderationModulePromise = null;
+let pendingLineupDeepLink = new URLSearchParams(window.location.search).get('lineup') || '';
+
+function openPendingLineupDeepLink() {
+  if (!pendingLineupDeepLink) return;
+  const lineup = findOwnLineup(pendingLineupDeepLink);
+  if (!lineup) return;
+  switchWorkspaceTab(lineup.status === 'rejected' ? 'rejected' : 'mine');
+  openLineupDetail(lineup.id);
+  pendingLineupDeepLink = '';
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete('lineup');
+  window.history.replaceState({}, '', cleanUrl);
+}
 
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
@@ -2076,6 +2089,7 @@ function _subscribeStats(uid) {
     document.getElementById('stat-rejected').textContent = rejected;
     _updateLevelDisplay(effectiveApprovedLineups(approved));
     renderAuthorWorkspace();
+    openPendingLineupDeepLink();
     document.getElementById('stats-loader').style.display = 'none';
     document.getElementById('stats-cards').style.display  = 'flex';
   }, () => {
@@ -2361,6 +2375,7 @@ let siteNotificationsUnsub = null;
 let siteNotifications = [];
 let siteNotificationsReady = false;
 let knownSiteNotificationIds = new Set();
+let expandedSiteNotificationId = '';
 
 function notificationTimestamp(value) {
   if (typeof value?.toDate === 'function') return value.toDate();
@@ -2394,12 +2409,29 @@ function renderSiteNotifications() {
     list.innerHTML = '<div class="notifications-empty"><strong>Пока тихо</strong><br>Когда модератор примет решение по лайнапу, оно появится здесь.</div>';
     return;
   }
-  list.innerHTML = siteNotifications.map(item => `
-    <article class="notification-card ${item.is_read === true ? '' : 'unread'}" data-site-notification="${esc(item.id)}" tabindex="0">
+  list.innerHTML = siteNotifications.map(item => {
+    const lineup = findOwnLineup(item.lineup_id || '') || {};
+    const expanded = expandedSiteNotificationId === item.id;
+    const reason = firstText(item.reason, lineup.rejection_reason, lineup.reject_reason, lineup.moderation_reason, item.body);
+    const details = [
+      ['Название', firstText(item.lineup_title, lineup.title)],
+      ['Карта', firstText(item.map, lineup.map)],
+      ['Агент', firstText(item.agent, lineup.agent)],
+      ['Способность', firstText(item.ability, lineup.ability)],
+      ['Сторона', roundSideLabel(firstText(item.round_side, lineup.round_side))],
+    ].filter(([, value]) => value);
+    return `
+    <article class="notification-card ${item.is_read === true ? '' : 'unread'} ${expanded ? 'expanded' : ''}" data-site-notification="${esc(item.id)}" tabindex="0" aria-expanded="${expanded}">
       <div class="notification-card-icon">${notificationIcon(item)}</div>
-      <div><h3>${esc(item.title || 'Уведомление')}</h3><p>${esc(item.body || '')}</p>${item.cooldown_reset ? '<span class="notification-cooldown">✓ КД на отправку сброшено</span>' : ''}</div>
+      <div><h3>${esc(item.title || 'Уведомление')}</h3><p>${esc(item.body || '')}</p><span class="notification-expand-hint">${expanded ? 'Скрыть подробности' : 'Нажми, чтобы прочитать полностью'}</span>${item.cooldown_reset ? '<span class="notification-cooldown">✓ КД на отправку сброшено</span>' : ''}</div>
       <time>${notificationDate(item.created_at)}</time>
-    </article>`).join('');
+      ${expanded ? `<div class="notification-details">
+        ${details.length ? `<div class="notification-details-grid">${details.map(([label, value]) => `<div><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join('')}</div>` : ''}
+        ${reason ? `<div class="notification-reason"><span>Полная причина</span><p>${esc(reason)}</p></div>` : ''}
+        ${lineup.id ? `<button class="copy-id-btn" type="button" data-open-notification-lineup="${esc(lineup.id)}">Открыть карточку лайнапа</button>` : ''}
+      </div>` : ''}
+    </article>`;
+  }).join('');
 }
 
 async function markSiteNotificationRead(id) {
@@ -2464,15 +2496,25 @@ function startSiteNotifications(uid) {
 
 document.getElementById('header-notifications')?.addEventListener('click', () => switchWorkspaceTab('notifications'));
 document.getElementById('notifications-list')?.addEventListener('click', event => {
+  const openLineup = event.target.closest('[data-open-notification-lineup]');
+  if (openLineup) {
+    event.stopPropagation();
+    openLineupDetail(openLineup.dataset.openNotificationLineup || '');
+    return;
+  }
   const card = event.target.closest('[data-site-notification]');
-  if (card) markSiteNotificationRead(card.dataset.siteNotification);
+  if (card) {
+    expandedSiteNotificationId = expandedSiteNotificationId === card.dataset.siteNotification ? '' : card.dataset.siteNotification;
+    markSiteNotificationRead(card.dataset.siteNotification);
+    renderSiteNotifications();
+  }
 });
 document.getElementById('notifications-list')?.addEventListener('keydown', event => {
   if (!['Enter', ' '].includes(event.key)) return;
   const card = event.target.closest('[data-site-notification]');
   if (!card) return;
   event.preventDefault();
-  markSiteNotificationRead(card.dataset.siteNotification);
+  card.click();
 });
 document.getElementById('notifications-mark-all')?.addEventListener('click', async () => {
   if (!currentUser) return;
