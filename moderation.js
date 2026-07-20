@@ -5,6 +5,7 @@ let queuePollTimer = null;
 let claimHeartbeatTimer = null;
 let claimedLineupId = '';
 let claimExpiresAt = 0;
+let claimStartedAt = 0;
 let claimCountdownTimer = null;
 let totalQueueItems = 0;
 let renderedQueueSignature = '';
@@ -308,13 +309,14 @@ function renderClaimTimer() {
     timer.classList.remove('expiring');
     return;
   }
-  const seconds = Math.max(0, Math.ceil((claimExpiresAt - Date.now()) / 1000));
+  const seconds = Math.max(0, Math.floor((Date.now() - claimStartedAt) / 1000));
   value.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   timer.hidden = false;
-  timer.classList.toggle('expiring', seconds <= 60);
+  timer.classList.remove('expiring');
 }
 
 function startClaimHeartbeat(lineupId, expiresAt) {
+  if (claimedLineupId !== lineupId || !claimStartedAt) claimStartedAt = Date.now();
   claimedLineupId = lineupId;
   claimExpiresAt = Number(expiresAt) || (Date.now() + 10 * 60_000);
   clearInterval(claimHeartbeatTimer);
@@ -337,6 +339,7 @@ function startClaimHeartbeat(lineupId, expiresAt) {
 function clearClaim() {
   claimedLineupId = '';
   claimExpiresAt = 0;
+  claimStartedAt = 0;
   clearInterval(claimHeartbeatTimer);
   clearInterval(claimCountdownTimer);
   claimHeartbeatTimer = null;
