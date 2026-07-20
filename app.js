@@ -26,6 +26,58 @@ const SITE_VERSION_POLL_MS = 10 * 1000;
 let loadedDeploymentVersion = '';
 const EDITOR_MAX_ZOOM = 2.2;
 
+const siteSounds = {
+  notification: new Audio('/assets/audio/notification.mp3?v=1'),
+  update: new Audio('/assets/audio/site-update.mp3?v=1'),
+};
+siteSounds.notification.volume = 0.7;
+siteSounds.update.volume = 0.65;
+Object.values(siteSounds).forEach(sound => { sound.preload = 'auto'; });
+let siteAudioUnlocked = false;
+const pendingSiteSounds = new Set();
+
+function playSiteSound(name, queueWhenLocked = true) {
+  const sound = siteSounds[name];
+  if (!sound) return;
+  if (!siteAudioUnlocked) {
+    if (queueWhenLocked) pendingSiteSounds.add(name);
+    return;
+  }
+  sound.currentTime = 0;
+  sound.play().catch(error => {
+    siteAudioUnlocked = false;
+    if (queueWhenLocked) pendingSiteSounds.add(name);
+    console.warn('site sound blocked', name, error?.name || error);
+  });
+}
+
+function unlockSiteAudio() {
+  if (siteAudioUnlocked) return;
+  const attempts = Object.entries(siteSounds).map(([name, sound]) => {
+    const volume = sound.volume;
+    sound.volume = 0;
+    return sound.play().then(() => {
+      sound.pause();
+      sound.currentTime = 0;
+      sound.volume = volume;
+      return name;
+    }).catch(() => {
+      sound.volume = volume;
+      return null;
+    });
+  });
+  Promise.all(attempts).then(results => {
+    siteAudioUnlocked = results.some(Boolean);
+    if (!siteAudioUnlocked) return;
+    const queued = [...pendingSiteSounds];
+    pendingSiteSounds.clear();
+    queued.forEach(name => playSiteSound(name, false));
+  });
+}
+
+document.addEventListener('pointerdown', unlockSiteAudio, { once:true, capture:true });
+document.addEventListener('keydown', unlockSiteAudio, { once:true, capture:true });
+
 const DESCRIPTION_SAMPLES = [
   {
     title: 'Corner + wall',
@@ -1497,7 +1549,11 @@ window.addEventListener('unhandledrejection', event => {
 });
 
 function showSiteUpdateBanner() {
-  document.getElementById('site-update-banner')?.classList.add('show');
+  const banner = document.getElementById('site-update-banner');
+  if (!banner) return;
+  const wasVisible = banner.classList.contains('show');
+  banner.classList.add('show');
+  if (!wasVisible) playSiteSound('update');
 }
 
 function hideSiteUpdateBanner() {
@@ -2331,12 +2387,6 @@ let adminChatUnsub = null;
 let adminChatDoc = null;
 let adminChatSnapshotReady = false;
 let adminChatLastAdminTs = 0;
-const adminChatSound = new Audio('/assets/audio/chat-message.mp3');
-adminChatSound.preload = 'auto';
-adminChatSound.volume = 0.55;
-const siteNotificationSound = new Audio('/assets/audio/chat-message.mp3');
-siteNotificationSound.preload = 'auto';
-siteNotificationSound.volume = 0.7;
 const adminChatId = uid => `moderator_application_${uid}`;
 
 let presenceTimer = null;
@@ -2352,24 +2402,6 @@ function startSitePresence() {
   sendSitePresence();
   presenceTimer = setInterval(sendSitePresence, 45_000);
 }
-
-document.addEventListener('pointerdown', () => {
-  adminChatSound.volume = 0;
-  adminChatSound.play().then(() => {
-    adminChatSound.pause();
-    adminChatSound.currentTime = 0;
-    adminChatSound.volume = 0.55;
-  }).catch(() => { adminChatSound.volume = 0.55; });
-}, { once:true });
-
-document.addEventListener('pointerdown', () => {
-  siteNotificationSound.volume = 0;
-  siteNotificationSound.play().then(() => {
-    siteNotificationSound.pause();
-    siteNotificationSound.currentTime = 0;
-    siteNotificationSound.volume = 0.7;
-  }).catch(() => { siteNotificationSound.volume = 0.7; });
-}, { once:true });
 
 let siteNotificationsUnsub = null;
 let siteNotifications = [];
@@ -2458,8 +2490,7 @@ function showIncomingNotification(item) {
   host.prepend(banner);
   while (host.children.length > 3) host.lastElementChild?.remove();
   setTimeout(() => banner.remove(), 9000);
-  siteNotificationSound.currentTime = 0;
-  siteNotificationSound.play().catch(() => {});
+  playSiteSound('notification');
 }
 
 function showNotificationsIntro(uid) {
@@ -2539,8 +2570,7 @@ function newestAdminMessageTs(data) {
 }
 
 function playIncomingChatSound() {
-  adminChatSound.currentTime = 0;
-  adminChatSound.play().catch(() => {});
+  playSiteSound('notification');
 }
 
 function chatMessageTime(ts) {
@@ -3682,6 +3712,7 @@ async function loadMaps() {
     const res  = await fetch(valorantProxy('https://valorant-api.com/v1/maps'));
     const data = await res.json();
     mapsData = data.data || [];
+    renderMapSiteLabels();
   } catch (_) {}
 }
 
@@ -3789,9 +3820,46 @@ function renderMapSiteLabels() {
   const mode = annotationModeFor(map);
   renderAnnotationModeButtons(map);
   if (mode === 'clean') { layer.innerHTML = ''; return; }
-  const labels = (Array.isArray(mapSiteLabelsConfig[map]) ? mapSiteLabelsConfig[map] : (DEFAULT_MAP_SITE_LABELS[map] || []))
-    .filter(item => item && (item.level === 'site' || (!item.level && /^[ABC]$/i.test(String(item.label || '').trim()))));
-  const zones = mapSpawnZonesConfig[map] || {};
+  const apiMap = mapsData.find(item => item.displayName === map);
+  const apiLabels = (apiMap?.callouts || []).map((callout, index) => {
+    const region = String(callout.regionName || '').trim();
+    const superRegion = String(callout.superRegionName || '').trim();
+    if (!region || region === 'Spawn' || ['Attacker Side', 'Defender Side'].includes(superRegion)) return null;
+    const x = Number(callout.location?.y) * Number(apiMap.xMultiplier) + Number(apiMap.xScalarToAdd);
+    const y = Number(callout.location?.x) * Number(apiMap.yMultiplier) + Number(apiMap.yScalarToAdd);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return null;
+    const isSite = ['A', 'B', 'C'].includes(superRegion) && /site/i.test(region);
+    return { id:`api-${index}`, label:isSite ? superRegion : region, x, y, level:isSite ? 'site' : 'full' };
+  }).filter(Boolean);
+  const configuredLabels = Array.isArray(mapSiteLabelsConfig[map]) ? mapSiteLabelsConfig[map] : [];
+  const sourceLabels = configuredLabels.length ? [...configuredLabels, ...apiLabels] : [...(DEFAULT_MAP_SITE_LABELS[map] || []), ...apiLabels];
+  const seenLabels = new Set();
+  const labels = sourceLabels.filter(item => {
+    if (!item) return false;
+    const level = item.level || (/^[ABC]$/i.test(String(item.label || '').trim()) ? 'site' : 'full');
+    if (mode === 'main' && !['site', 'main'].includes(level)) return false;
+    const normalizedLabel = String(item.label || '').trim().toUpperCase();
+    const key = level === 'site' && /^[ABC]$/.test(normalizedLabel)
+      ? `site:${normalizedLabel}`
+      : `${normalizedLabel.toLowerCase()}|${Number(item.x).toFixed(3)}|${Number(item.y).toFixed(3)}`;
+    if (seenLabels.has(key)) return false;
+    seenLabels.add(key);
+    return true;
+  });
+  let zones = mapSpawnZonesConfig[map] || {};
+  if (!zones.attack || !zones.defense) {
+    const apiZones = {};
+    for (const [side, superRegion] of Object.entries({ attack:'Attacker Side', defense:'Defender Side' })) {
+      const spawn = (apiMap?.callouts || []).find(item => item.regionName === 'Spawn' && item.superRegionName === superRegion);
+      if (!spawn) continue;
+      const centerX = Number(spawn.location?.y) * Number(apiMap.xMultiplier) + Number(apiMap.xScalarToAdd);
+      const centerY = Number(spawn.location?.x) * Number(apiMap.yMultiplier) + Number(apiMap.yScalarToAdd);
+      if (Number.isFinite(centerX) && Number.isFinite(centerY)) {
+        apiZones[side] = { x:Math.max(0, Math.min(.88, centerX - .06)), y:Math.max(0, Math.min(.90, centerY - .05)), width:.12, height:.10 };
+      }
+    }
+    zones = { ...apiZones, ...zones };
+  }
   const zoneHtml = Object.entries(zones).filter(([,zone]) => zone && typeof zone === 'object').map(([side, zone]) => {
     const color = side === 'attack' ? '255,70,85' : '79,195,247';
     const label = side === 'attack' ? 'T SPAWN' : 'CT SPAWN';

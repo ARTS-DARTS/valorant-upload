@@ -493,11 +493,11 @@
     /* Map */
     .map-wrap { position: relative; width: 100%; max-width: 680px; cursor: crosshair; border-radius: var(--r); overflow: hidden; background: #0a0e1a; border: 1px solid var(--border); user-select: none; -webkit-user-select: none; -webkit-user-drag: none; touch-action: manipulation; aspect-ratio: 1 / 1; }
     .map-stage { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; }
-    .map-orientation-layer { position: absolute; inset: 0; transform-origin: 50% 50%; will-change: transform; }
+    .map-orientation-layer { position: absolute; inset: 0; transform-origin: 50% 50%; will-change: transform; transition: transform .28s cubic-bezier(.2,.8,.2,1); }
     .map-site-labels { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
-    .map-site-label { position: absolute; transform: translate(-50%, -50%) rotate(var(--map-counter-rotation, 0deg)); color: #fff; font-size: 16px; font-weight: 900; line-height: 1; text-shadow: 0 1px 5px #000, 0 0 2px #000; }
+    .map-site-label { position: absolute; transform: translate(-50%, -50%) rotate(var(--map-counter-rotation, 0deg)); color: #fff; font-size: 16px; font-weight: 900; line-height: 1; text-shadow: 0 1px 5px #000, 0 0 2px #000; transition: transform .28s cubic-bezier(.2,.8,.2,1); }
     .map-spawn-zone { position:absolute;display:flex;align-items:center;justify-content:center;border:2px solid;border-radius:5px;box-sizing:border-box;font-size:10px;font-weight:900; }
-    .map-spawn-zone > b { display:block; transform:rotate(var(--map-counter-rotation, 0deg)); white-space:nowrap; }
+    .map-spawn-zone > b { display:block; transform:rotate(var(--map-counter-rotation, 0deg)); white-space:nowrap; transition: transform .28s cubic-bezier(.2,.8,.2,1); }
     .map-wrap.map-panning { cursor: grabbing !important; }
     #map-container.defense-workbench .map-wrap { cursor: default; }
     #map-container.defense-workbench .map-wrap.zoom-picking { cursor: crosshair; }
@@ -670,4 +670,4 @@
 .sova-charge-slider.is-max input::-moz-range-progress,.moderation-sova-charge.is-max input::-moz-range-progress{background:#ff4655}
 @media(max-width:700px){.sova-shot-panel{grid-template-columns:1fr auto;gap:8px 12px}.sova-shot-heading{grid-column:1/-1}.sova-shot-control{min-width:0}.sova-bounce-picker{width:auto}.sova-bounce-picker button{flex:0 0 30px}}
 .header-notifications:focus-visible,.notification-card:focus-visible,.notifications-intro-actions button:focus-visible{outline:2px solid #7dd3fc;outline-offset:3px}
-@media(prefers-reduced-motion:reduce){.notification-banner{animation:none}.header-notifications,.notification-card,.sidebar-action{transition:none}}
+@media(prefers-reduced-motion:reduce){.notification-banner{animation:none}.header-notifications,.notification-card,.sidebar-action,.map-orientation-layer,.map-site-label,.map-spawn-zone>b{transition:none}}
