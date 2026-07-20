@@ -187,6 +187,20 @@ function loadVideoPreviewFrame(video) {
 }
 
 function hydrateVideoPreviews() {
+  document.querySelectorAll('video[poster]:not([data-poster-checked])').forEach(video => {
+    video.dataset.posterChecked = 'loading';
+    const probe = new Image();
+    probe.onload = () => { video.dataset.posterChecked = 'ready'; };
+    probe.onerror = () => {
+      video.removeAttribute('poster');
+      video.preload = 'metadata';
+      video.dataset.posterChecked = 'failed';
+      video.dataset.previewFrame = 'pending';
+      if (moderationPreviewObserver) moderationPreviewObserver.observe(video);
+      else loadVideoPreviewFrame(video);
+    };
+    probe.src = video.poster;
+  });
   document.querySelectorAll('video[data-preview-frame="pending"]').forEach(video => {
     if (moderationPreviewObserver) moderationPreviewObserver.observe(video);
     else loadVideoPreviewFrame(video);
