@@ -21,9 +21,9 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-19T22:06:00+03:00';
+const SITE_VERSION = '2026-07-20-editor-hotkeys-audio-v1';
 const SITE_VERSION_POLL_MS = 10 * 1000;
-let loadedDeploymentVersion = '';
+let loadedDeploymentVersion = new URL(import.meta.url).searchParams.get('v') || SITE_VERSION;
 const EDITOR_MAX_ZOOM = 2.2;
 
 const siteSounds = {
@@ -34,6 +34,7 @@ siteSounds.notification.volume = 0.7;
 siteSounds.update.volume = 0.65;
 Object.values(siteSounds).forEach(sound => { sound.preload = 'auto'; });
 let siteAudioUnlocked = false;
+let siteAudioUnlockPromise = null;
 const pendingSiteSounds = new Set();
 
 function playSiteSound(name, queueWhenLocked = true) {
@@ -47,12 +48,13 @@ function playSiteSound(name, queueWhenLocked = true) {
   sound.play().catch(error => {
     siteAudioUnlocked = false;
     if (queueWhenLocked) pendingSiteSounds.add(name);
+    logUploadError(error, { action:'site_sound_play_failed', sound:name, ready_state:sound.readyState, network_state:sound.networkState });
     console.warn('site sound blocked', name, error?.name || error);
   });
 }
 
 function unlockSiteAudio() {
-  if (siteAudioUnlocked) return;
+  if (siteAudioUnlocked || siteAudioUnlockPromise) return siteAudioUnlockPromise;
   const attempts = Object.entries(siteSounds).map(([name, sound]) => {
     const volume = sound.volume;
     sound.volume = 0;
@@ -61,18 +63,20 @@ function unlockSiteAudio() {
       sound.currentTime = 0;
       sound.volume = volume;
       return name;
-    }).catch(() => {
+    }).catch(error => {
       sound.volume = volume;
+      logUploadError(error, { action:'site_sound_unlock_failed', sound:name, ready_state:sound.readyState, network_state:sound.networkState });
       return null;
     });
   });
-  Promise.all(attempts).then(results => {
+  siteAudioUnlockPromise = Promise.all(attempts).then(results => {
     siteAudioUnlocked = results.some(Boolean);
     if (!siteAudioUnlocked) return;
     const queued = [...pendingSiteSounds];
     pendingSiteSounds.clear();
     queued.forEach(name => playSiteSound(name, false));
-  });
+  }).finally(() => { siteAudioUnlockPromise = null; });
+  return siteAudioUnlockPromise;
 }
 
 document.addEventListener('pointerdown', unlockSiteAudio, { once:true, capture:true });
@@ -1562,19 +1566,15 @@ function hideSiteUpdateBanner() {
 
 async function checkSiteVersion() {
   try {
-    const res = await fetch(`/api/site-version?v=${Date.now()}`, {
+    const res = await fetch(`/index.html?site_version=${Date.now()}`, {
       cache: 'no-store',
       headers: { 'Cache-Control': 'no-cache' },
     });
     if (!res.ok) return;
-    const data = await res.json();
-    const liveVersion = String(data.version || '').trim();
+    const html = await res.text();
+    const liveVersion = decodeURIComponent(html.match(/\/app\.js\?v=([^"']+)/)?.[1] || '').trim();
+    if (!liveVersion) return;
     window.__vlLiveVersion = liveVersion;
-    if (!loadedDeploymentVersion) {
-      loadedDeploymentVersion = liveVersion;
-      hideSiteUpdateBanner();
-      return;
-    }
     if (liveVersion && liveVersion !== loadedDeploymentVersion) showSiteUpdateBanner();
     else hideSiteUpdateBanner();
   } catch (_) {}
@@ -2526,6 +2526,12 @@ function startSiteNotifications(uid) {
 }
 
 document.getElementById('header-notifications')?.addEventListener('click', () => switchWorkspaceTab('notifications'));
+document.getElementById('header-sound-test')?.addEventListener('click', () => {
+  playSiteSound('notification');
+  Promise.resolve(unlockSiteAudio()).then(() => {
+    toast(siteAudioUnlocked ? 'Звук уведомлений включён' : 'Браузер заблокировал звук. Разреши звук для vlineups.ru.', siteAudioUnlocked ? 's' : 'e');
+  });
+});
 document.getElementById('notifications-list')?.addEventListener('click', event => {
   const openLineup = event.target.closest('[data-open-notification-lineup]');
   if (openLineup) {
@@ -3518,6 +3524,7 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'flex';
     document.getElementById('header-notifications').hidden = false;
+    document.getElementById('header-sound-test').hidden = false;
     await loadCurrentUserProfile(user);
     await loadUploadCategoryConfig();
     updateAdminOnlyWorkspace();
@@ -3555,6 +3562,7 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'none';
     document.getElementById('header-notifications').hidden = true;
+    document.getElementById('header-sound-test').hidden = true;
     const loginButton = document.getElementById('btn-email-login');
     loginButton.disabled = false;
     loginButton.textContent = 'Войти';
@@ -6397,6 +6405,29 @@ document.addEventListener('keydown', e => {
   const insideEditor = !!(wrap && wrap.contains(target));
   const mapWrap = document.getElementById('map-wrap');
   const mapVisible = !!(mapWrap && mapWrap.offsetParent !== null);
+  const mapRect = mapVisible ? mapWrap.getBoundingClientRect() : null;
+  const mapInViewport = !!(mapRect && mapRect.bottom > 60 && mapRect.top < window.innerHeight);
+  const noCommandModifiers = !e.ctrlKey && !e.metaKey && !e.altKey;
+  if (!isTextTypingTarget(target) && !insideEditor && mapInViewport && noCommandModifiers) {
+    if (e.code === 'Digit1' || e.code === 'Numpad1') {
+      const positionButton = document.getElementById('mode-position');
+      if (positionButton && positionButton.style.display !== 'none' && !positionButton.disabled) {
+        e.preventDefault();
+        e.stopPropagation();
+        setMapMode('position');
+        return;
+      }
+    }
+    if (e.code === 'Digit2' || e.code === 'Numpad2') {
+      const trajectoryButton = document.getElementById('mode-trajectory');
+      if (trajectoryButton && trajectoryButton.style.display !== 'none' && !trajectoryButton.disabled) {
+        e.preventDefault();
+        e.stopPropagation();
+        setMapMode('trajectory');
+        return;
+      }
+    }
+  }
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.code === 'KeyZ' &&
       !isTextTypingTarget(target) && !insideEditor && mapVisible && mapMode === 'trajectory') {
     const points = activeTrajectoryPoints();
