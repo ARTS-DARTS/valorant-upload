@@ -4037,7 +4037,7 @@ function setVideoEditorCollapsed(collapsed, persist = true) {
   if (!editorEls.editor || !editorEls.toggle) return;
   editorEls.editor.hidden = collapsed;
   editorEls.toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-  editorEls.toggle.textContent = collapsed ? '▸ Показать монтаж' : '▾ Скрыть монтаж';
+  editorEls.toggle.textContent = collapsed ? '▸ Показать панель монтажа' : '▾ Скрыть панель монтажа';
   if (persist) {
     try { localStorage.setItem(VIDEO_EDITOR_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (_) {}
   }
