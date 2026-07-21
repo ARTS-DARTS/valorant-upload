@@ -6600,10 +6600,83 @@ document.getElementById('shot-file-input').addEventListener('change', e => {
   });
 });
 
+let screenshotDrag = null;
+let suppressScreenshotPreviewUntil = 0;
+
+function syncScreenshotOrderDom(row) {
+  row.querySelectorAll('.shot-item').forEach((item, index) => {
+    item.dataset.shotIndex = String(index);
+    const image = item.querySelector('[data-shot-preview]');
+    const remove = item.querySelector('.rm');
+    if (image) {
+      image.dataset.shotPreview = String(index);
+      image.alt = `Скриншот ${index + 1}`;
+    }
+    if (remove) remove.dataset.idx = String(index);
+  });
+}
+
+function bindScreenshotSorting(row) {
+  row.querySelectorAll('.shot-item').forEach(item => {
+    const image = item.querySelector('[data-shot-preview]');
+    if (!image) return;
+    image.draggable = false;
+    image.addEventListener('dragstart', event => event.preventDefault());
+    image.addEventListener('pointerdown', event => {
+      if (event.button !== 0) return;
+      screenshotDrag = {
+        pointerId: event.pointerId,
+        item,
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
+      };
+      image.setPointerCapture?.(event.pointerId);
+    });
+    image.addEventListener('pointermove', event => {
+      if (!screenshotDrag || screenshotDrag.pointerId !== event.pointerId || screenshotDrag.item !== item) return;
+      if (!screenshotDrag.moved && Math.hypot(event.clientX - screenshotDrag.startX, event.clientY - screenshotDrag.startY) < 6) return;
+      screenshotDrag.moved = true;
+      item.classList.add('dragging');
+      row.classList.add('sorting');
+      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.shot-item');
+      if (!target || target === item || target.parentElement !== row) {
+        event.preventDefault();
+        return;
+      }
+      const items = [...row.querySelectorAll('.shot-item')];
+      const from = items.indexOf(item);
+      const to = items.indexOf(target);
+      if (from < 0 || to < 0 || from === to) return;
+      const [entry] = screenshots.splice(from, 1);
+      screenshots.splice(to, 0, entry);
+      if (from < to) target.after(item);
+      else target.before(item);
+      syncScreenshotOrderDom(row);
+      event.preventDefault();
+    });
+    const finishDrag = event => {
+      if (!screenshotDrag || screenshotDrag.pointerId !== event.pointerId || screenshotDrag.item !== item) return;
+      image.releasePointerCapture?.(event.pointerId);
+      const moved = screenshotDrag.moved;
+      screenshotDrag = null;
+      item.classList.remove('dragging');
+      row.classList.remove('sorting');
+      if (moved) {
+        suppressScreenshotPreviewUntil = performance.now() + 350;
+        _saveDraft();
+        event.preventDefault();
+      }
+    };
+    image.addEventListener('pointerup', finishDrag);
+    image.addEventListener('pointercancel', finishDrag);
+  });
+}
+
 function renderScreenshots() {
   const row = document.getElementById('shots-row');
   row.innerHTML = screenshots.map((s, i) => `
-    <div class="shot-item">
+    <div class="shot-item" data-shot-index="${i}">
       <img src="${esc(s.localUrl)}" alt="Скриншот ${i + 1}" data-shot-preview="${i}" style="opacity:${s.uploading ? 0.5 : 1};cursor:zoom-in;">
       <button class="rm" data-idx="${i}">✕</button>
     </div>`).join('');
@@ -6625,10 +6698,12 @@ function renderScreenshots() {
   });
   row.querySelectorAll('[data-shot-preview]').forEach(img => {
     img.addEventListener('click', () => {
+      if (performance.now() < suppressScreenshotPreviewUntil) return;
       const shot = screenshots[Number(img.dataset.shotPreview)];
       if (shot?.localUrl) openScreenshotPreview(shot.localUrl, img.alt);
     });
   });
+  bindScreenshotSorting(row);
 }
 
 function openScreenshotPreview(src, alt = 'Предпросмотр скриншота') {
