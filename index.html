@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-20-main-mode-moderator-autosave-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-21-sound-toggle-batch-notices-v1">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
   <button class="header-notifications" id="header-notifications" type="button" aria-label="Уведомления" title="Уведомления" hidden>
     <span aria-hidden="true">🔔</span><b id="header-notifications-badge" hidden>0</b>
   </button>
-  <button class="header-sound-test" id="header-sound-test" type="button" aria-label="Проверить звук" title="Проверить звук уведомлений" hidden>🔊</button>
+  <button class="header-sound-test" id="header-sound-test" type="button" aria-label="Выключить звуки сайта" title="Выключить звуки сайта" aria-pressed="true" hidden>🔊</button>
   <a class="header-telegram" href="https://t.me/Vlineups" target="_blank" rel="noopener noreferrer" aria-label="Telegram-сообщество Vlineups">
     <span class="header-telegram-icon">➤</span>
     <span class="header-telegram-label">@Vlineups</span>
@@ -123,7 +123,8 @@
       </div>
     </div>
 
-    <div class="sticky-title-editor">
+    <div class="sticky-title-sentinel" id="sticky-title-sentinel" aria-hidden="true"></div>
+    <div class="sticky-title-editor" id="sticky-title-editor">
       <div class="section-title">📝 НАЗВАНИЕ</div>
       <div class="card">
         <div class="input-wrap">
@@ -678,6 +679,6 @@
   </div>
 </div>
 
-<script type="module" src="/app.js?v=2026-07-20-main-mode-moderator-autosave-v1"></script>
+<script type="module" src="/app.js?v=2026-07-21-sound-toggle-batch-notices-v1"></script>
 </body>
 </html>

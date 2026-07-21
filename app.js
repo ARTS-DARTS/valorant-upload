@@ -21,7 +21,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-20-main-mode-moderator-autosave-v1';
+const SITE_VERSION = '2026-07-21-sound-toggle-batch-notices-v1';
 const SITE_VERSION_POLL_MS = 10 * 1000;
 let loadedDeploymentVersion = new URL(import.meta.url).searchParams.get('v') || SITE_VERSION;
 const EDITOR_MAX_ZOOM = 2.2;
@@ -36,8 +36,34 @@ Object.values(siteSounds).forEach(sound => { sound.preload = 'auto'; });
 let siteAudioUnlocked = false;
 let siteAudioUnlockPromise = null;
 const pendingSiteSounds = new Set();
+const SITE_SOUNDS_ENABLED_KEY = 'vl_site_sounds_enabled';
+let siteSoundsEnabled = localStorage.getItem(SITE_SOUNDS_ENABLED_KEY) !== '0';
+
+function updateSiteSoundButton() {
+  const button = document.getElementById('header-sound-test');
+  if (!button) return;
+  button.textContent = siteSoundsEnabled ? '🔊' : '🔇';
+  button.classList.toggle('is-muted', !siteSoundsEnabled);
+  button.setAttribute('aria-pressed', String(siteSoundsEnabled));
+  button.setAttribute('aria-label', siteSoundsEnabled ? 'Выключить звуки сайта' : 'Включить звуки сайта');
+  button.title = siteSoundsEnabled ? 'Выключить звуки сайта' : 'Включить звуки сайта';
+}
+
+function setSiteSoundsEnabled(enabled) {
+  siteSoundsEnabled = !!enabled;
+  localStorage.setItem(SITE_SOUNDS_ENABLED_KEY, siteSoundsEnabled ? '1' : '0');
+  if (!siteSoundsEnabled) {
+    pendingSiteSounds.clear();
+    Object.values(siteSounds).forEach(sound => {
+      sound.pause();
+      sound.currentTime = 0;
+    });
+  }
+  updateSiteSoundButton();
+}
 
 function playSiteSound(name, queueWhenLocked = true) {
+  if (!siteSoundsEnabled) return;
   const sound = siteSounds[name];
   if (!sound) return;
   if (!siteAudioUnlocked) {
@@ -54,6 +80,7 @@ function playSiteSound(name, queueWhenLocked = true) {
 }
 
 function unlockSiteAudio() {
+  if (!siteSoundsEnabled) return Promise.resolve(false);
   if (siteAudioUnlocked || siteAudioUnlockPromise) return siteAudioUnlockPromise;
   const attempts = Object.entries(siteSounds).map(([name, sound]) => {
     const volume = sound.volume;
@@ -81,6 +108,15 @@ function unlockSiteAudio() {
 
 document.addEventListener('pointerdown', unlockSiteAudio, { once:true, capture:true });
 document.addEventListener('keydown', unlockSiteAudio, { once:true, capture:true });
+updateSiteSoundButton();
+
+const stickyTitleEditor = document.getElementById('sticky-title-editor');
+const stickyTitleSentinel = document.getElementById('sticky-title-sentinel');
+if (stickyTitleEditor && stickyTitleSentinel && 'IntersectionObserver' in window) {
+  new IntersectionObserver(([entry]) => {
+    stickyTitleEditor.classList.toggle('is-stuck', !entry.isIntersecting);
+  }, { rootMargin:'-62px 0px 0px 0px', threshold:0 }).observe(stickyTitleSentinel);
+}
 
 const DESCRIPTION_SAMPLES = [
   {
@@ -2427,7 +2463,7 @@ function notificationTimestamp(value) {
 }
 
 function notificationIcon(item) {
-  if (item.type === 'lineup_hot') return '🔥';
+  if (item.type === 'lineup_hot' || item.type === 'lineups_hot_batch') return '🔥';
   if (item.type === 'lineup_approved') return '✅';
   if (item.type === 'lineup_rejected') return '↩';
   if (item.type === 'duel_win') return '🏆';
@@ -2538,11 +2574,20 @@ function startSiteNotifications(uid) {
 }
 
 document.getElementById('header-notifications')?.addEventListener('click', () => switchWorkspaceTab('notifications'));
-document.getElementById('header-sound-test')?.addEventListener('click', () => {
-  playSiteSound('notification');
-  Promise.resolve(unlockSiteAudio()).then(() => {
-    toast(siteAudioUnlocked ? 'Звук уведомлений включён' : 'Браузер заблокировал звук. Разреши звук для vlineups.ru.', siteAudioUnlocked ? 's' : 'e');
-  });
+document.getElementById('header-sound-test')?.addEventListener('click', async () => {
+  const nextEnabled = !siteSoundsEnabled;
+  setSiteSoundsEnabled(nextEnabled);
+  if (!nextEnabled) {
+    toast('Звуки сайта выключены', 's');
+    return;
+  }
+  await unlockSiteAudio();
+  if (!siteAudioUnlocked) {
+    toast('Браузер заблокировал звук. Разреши звук для vlineups.ru.', 'e');
+    return;
+  }
+  playSiteSound('notification', false);
+  toast('Звуки сайта включены', 's');
 });
 document.getElementById('notifications-list')?.addEventListener('click', event => {
   const openLineup = event.target.closest('[data-open-notification-lineup]');
