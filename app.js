@@ -2775,6 +2775,7 @@ function showModeratorAuthorPicker(author = null) {
   if (status) status.textContent = moderatorSelectedAuthor
     ? `Выбран автор: ${moderatorSelectedAuthor.name}`
     : 'Начни вводить ник и выбери автора из списка.';
+  renderModeratorScreenshotRail();
 }
 
 async function searchModeratorAuthors(queryText) {
@@ -6729,7 +6730,49 @@ function renderScreenshots() {
     });
   });
   bindScreenshotSorting(row);
+  renderModeratorScreenshotRail();
 }
+
+let moderatorShotRailFrame = 0;
+function updateModeratorScreenshotRailVisibility() {
+  cancelAnimationFrame(moderatorShotRailFrame);
+  moderatorShotRailFrame = requestAnimationFrame(() => {
+    moderatorShotRailFrame = 0;
+    const rail = document.getElementById('moderator-shot-rail');
+    const copy = document.querySelector('.lineup-copy-editor');
+    const uploadPanel = document.getElementById('workspace-upload');
+    if (!rail || !copy) return;
+    const rect = copy.getBoundingClientRect();
+    const visible = !!moderatorDraftSourceId && screenshots.length > 0 && window.innerWidth >= 1680 &&
+      uploadPanel?.classList.contains('active') && rect.top < window.innerHeight * .58 && rect.bottom > 82;
+    rail.hidden = !visible;
+  });
+}
+
+function renderModeratorScreenshotRail() {
+  const rail = document.getElementById('moderator-shot-rail');
+  if (!rail) return;
+  if (!moderatorDraftSourceId || !screenshots.length) {
+    rail.innerHTML = '';
+    rail.hidden = true;
+    return;
+  }
+  rail.innerHTML = `<div class="moderator-shot-rail-head">Кадры лайнапа <span>${screenshots.length}</span></div><div class="moderator-shot-rail-list">${screenshots.map((shot, index) => `
+    <button class="moderator-shot-rail-item" type="button" data-moderator-shot="${index}" aria-label="Открыть скриншот ${index + 1}">
+      <img src="${esc(shot.localUrl || shot.cloudUrl || '')}" alt="Скриншот ${index + 1}">
+      <b class="moderator-shot-rail-index">${index + 1}</b>
+    </button>`).join('')}</div>`;
+  rail.querySelectorAll('[data-moderator-shot]').forEach(button => button.addEventListener('click', () => {
+    const index = Number(button.dataset.moderatorShot);
+    const shot = screenshots[index];
+    const src = shot?.localUrl || shot?.cloudUrl || '';
+    if (src) openScreenshotPreview(src, `Скриншот ${index + 1}`);
+  }));
+  updateModeratorScreenshotRailVisibility();
+}
+
+window.addEventListener('scroll', updateModeratorScreenshotRailVisibility, { passive:true });
+window.addEventListener('resize', updateModeratorScreenshotRailVisibility);
 
 function openScreenshotPreview(src, alt = 'Предпросмотр скриншота') {
   document.getElementById('shot-preview-overlay')?.remove();
