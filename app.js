@@ -2493,6 +2493,27 @@ function updateNotificationBadges() {
   if (tabBadge) { tabBadge.hidden = unread === 0; tabBadge.textContent = unread > 99 ? '99+' : String(unread); }
 }
 
+function notificationBatchDetails(item) {
+  const ids = [...new Set([
+    ...(Array.isArray(item.lineup_ids) ? item.lineup_ids : []),
+    item.lineup_id,
+  ].filter(Boolean))];
+  const count = Number(item.lineup_count) || ids.length;
+  if (!ids.length) return '';
+  return `<div class="notification-batch">
+    <div class="notification-batch-heading"><b>Лайнапы в пачке</b><span>${count}</span></div>
+    <div class="notification-batch-list">${ids.map((id, index) => {
+      const lineup = findOwnLineup(id) || {};
+      const title = firstText(lineup.title, ids.length === 1 ? item.lineup_title : '', `Лайнап ${index + 1}`);
+      const meta = [firstText(lineup.map, ids.length === 1 ? item.map : ''), firstText(lineup.agent, ids.length === 1 ? item.agent : ''), firstText(lineup.ability, ids.length === 1 ? item.ability : '')].filter(Boolean);
+      return `<div class="notification-batch-item">
+        <div><b>${esc(title)}</b>${meta.length ? `<span>${meta.map(esc).join(' · ')}</span>` : ''}</div>
+        <button class="copy-id-btn" type="button" data-open-notification-lineup="${esc(id)}">Открыть</button>
+      </div>`;
+    }).join('')}</div>
+  </div>`;
+}
+
 function renderSiteNotifications() {
   const list = document.getElementById('notifications-list');
   if (!list) return;
@@ -2503,7 +2524,8 @@ function renderSiteNotifications() {
   list.innerHTML = siteNotifications.map(item => {
     const lineup = findOwnLineup(item.lineup_id || '') || {};
     const expanded = expandedSiteNotificationId === item.id;
-    const reason = firstText(item.reason, lineup.rejection_reason, lineup.reject_reason, lineup.moderation_reason, item.body);
+    const isBatch = item.type === 'lineups_hot_batch' || item.type === 'lineups_approved_batch' || (Array.isArray(item.lineup_ids) && item.lineup_ids.length > 1);
+    const reason = item.type === 'lineup_rejected' ? firstText(item.reason, lineup.rejection_reason, lineup.reject_reason, lineup.moderation_reason, item.body) : '';
     const details = [
       ['Название', firstText(item.lineup_title, lineup.title)],
       ['Карта', firstText(item.map, lineup.map)],
@@ -2517,9 +2539,9 @@ function renderSiteNotifications() {
       <div><h3>${esc(item.title || 'Уведомление')}</h3><p>${esc(item.body || '')}</p><span class="notification-expand-hint">${expanded ? 'Скрыть подробности' : 'Нажми, чтобы прочитать полностью'}</span>${item.cooldown_reset ? '<span class="notification-cooldown">✓ КД на отправку сброшено</span>' : ''}</div>
       <time>${notificationDate(item.created_at)}</time>
       ${expanded ? `<div class="notification-details">
-        ${details.length ? `<div class="notification-details-grid">${details.map(([label, value]) => `<div><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join('')}</div>` : ''}
+        ${isBatch ? notificationBatchDetails(item) : (details.length ? `<div class="notification-details-grid">${details.map(([label, value]) => `<div><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join('')}</div>` : '')}
         ${reason ? `<div class="notification-reason"><span>Полная причина</span><p>${esc(reason)}</p></div>` : ''}
-        ${lineup.id ? `<button class="copy-id-btn" type="button" data-open-notification-lineup="${esc(lineup.id)}">Открыть карточку лайнапа</button>` : ''}
+        ${!isBatch && lineup.id ? `<button class="copy-id-btn" type="button" data-open-notification-lineup="${esc(lineup.id)}">Открыть карточку лайнапа</button>` : ''}
       </div>` : ''}
     </article>`;
   }).join('');
