@@ -6998,6 +6998,7 @@ async function loadMapMinimap() {
       renderTrajectory();
       renderMapSiteLabels();
       renderCategoryMapExtras();
+      refreshMapGeometryAfterLayout();
     };
     const fail = reason => {
       if (generation !== mapLoadGeneration || document.getElementById('sel-map').value !== mapName) return;
@@ -7110,6 +7111,29 @@ function mapContentRect() {
     wrapHeight: wh,
   };
 }
+
+let mapGeometryRefreshFrame = 0;
+function refreshMapGeometryAfterLayout() {
+  cancelAnimationFrame(mapGeometryRefreshFrame);
+  mapGeometryRefreshFrame = requestAnimationFrame(() => {
+    mapGeometryRefreshFrame = requestAnimationFrame(() => {
+      mapGeometryRefreshFrame = 0;
+      applyMapViewTransform();
+      if (markerX !== null && markerY !== null) setMarkerPosition(markerX, markerY);
+      renderTrajectory();
+      renderMapSiteLabels();
+      renderCategoryMapExtras();
+      renderDefenseAbilityMarkers();
+    });
+  });
+}
+
+const mapWrapResizeObserver = typeof ResizeObserver === 'function'
+  ? new ResizeObserver(() => refreshMapGeometryAfterLayout())
+  : null;
+const observedMapWrap = document.getElementById('map-wrap');
+if (observedMapWrap) mapWrapResizeObserver?.observe(observedMapWrap);
+window.addEventListener('resize', refreshMapGeometryAfterLayout);
 
 let mapViewScale = 1;
 let mapViewPanX = 0;
@@ -7912,6 +7936,7 @@ function _restoreDraft(sourceDraft = null) {
         }
         renderCategoryMapExtras();
         renderDefenseAbilityMarkers();
+        refreshMapGeometryAfterLayout();
         syncConfiguredDefenseAbilityShapes();
         validateForm();
       };
