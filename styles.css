@@ -260,6 +260,11 @@
     .lineup-copy-head .section-title { margin:0 0 4px; }
     .lineup-copy-head p { margin:0; color:var(--text2); font-size:12px; line-height:1.45; }
     .lineup-copy-head > span { flex:0 0 auto; padding:5px 8px; border:1px solid rgba(79,195,247,.32); border-radius:999px; color:var(--primary); font-size:10px; font-weight:900; letter-spacing:.45px; text-transform:uppercase; }
+    .map-tools { display:grid; gap:7px; margin-bottom:8px; }
+    .map-tools-primary { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; min-width:0; }
+    .map-mode-switches,.map-annotation-switches,.map-tools-context { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .map-annotation-switches { flex:0 0 auto; justify-content:flex-end; }
+    .map-tools-context { min-height:30px; }
     .map-tools kbd { display:inline-grid; place-items:center; min-width:18px; height:18px; margin-right:2px; padding:0 4px; border:1px solid rgba(79,195,247,.42); border-radius:5px; background:rgba(79,195,247,.12); color:var(--primary); font:800 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace; box-shadow:none; }
     .category-extra-panel[hidden] { display: none !important; }
     .category-extra-card { display: grid; gap: 12px; }
@@ -667,6 +672,8 @@
       .lineup-copy-head { display:block; }
       .lineup-copy-head > span { display:inline-block; margin-top:9px; }
       .point-suggestions-label { align-items:flex-start; flex-direction:column; gap:2px; }
+      .map-tools-primary { align-items:stretch; flex-direction:column; }
+      .map-annotation-switches { justify-content:flex-start; }
       .site-update-banner { top: 64px; align-items: stretch; flex-direction: column; }
       .site-update-banner button { width: 100%; }
       .footage-library-list { grid-template-columns: 1fr; }

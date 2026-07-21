@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-21-map-text-suggestions-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-21-stable-map-toolbar-v2">
 </head>
 <body>
 
@@ -382,17 +382,24 @@
         <div class="section-title" id="map-section-title">📍 МЕТКА НА КАРТЕ</div>
         <div class="card map-editor-card">
       <div id="map-container">
-        <div class="map-tools" style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-          <button id="mode-position"   class="pill-btn selected-mode" onclick="setMapMode('position')"><kbd>1</kbd> 📍 Позиция броска</button>
-          <button id="mode-trajectory" class="pill-btn"               onclick="setMapMode('trajectory')"><kbd>2</kbd> ➡ Траектория</button>
-          <button id="mode-wallbang-target" class="pill-btn" type="button" style="display:none;">🎯 Точка попадания</button>
-          <button id="wallbang-target-clear" class="pill-btn" type="button" style="display:none;">✕ Сбросить</button>
-          <button id="traj-undo"  class="pill-btn" style="display:none;" onclick="undoTraj()">↩ Отмена точки</button>
-          <button id="traj-clear" class="pill-btn" style="display:none;" onclick="clearTraj()">✕ Очистить</button>
-          <span style="flex:1"></span>
-          <button class="pill-btn map-annotation-mode" data-map-annotation-mode="full" type="button">Full</button>
-          <button class="pill-btn map-annotation-mode" data-map-annotation-mode="main" type="button">Main</button>
-          <button class="pill-btn map-annotation-mode" data-map-annotation-mode="clean" type="button">Clean</button>
+        <div class="map-tools">
+          <div class="map-tools-primary">
+            <div class="map-mode-switches">
+              <button id="mode-position" class="pill-btn selected-mode" onclick="setMapMode('position')"><kbd>1</kbd> 📍 Позиция броска</button>
+              <button id="mode-trajectory" class="pill-btn" onclick="setMapMode('trajectory')"><kbd>2</kbd> ➡ Траектория</button>
+              <button id="mode-wallbang-target" class="pill-btn" type="button" style="display:none;">🎯 Точка попадания</button>
+            </div>
+            <div class="map-annotation-switches">
+              <button class="pill-btn map-annotation-mode" data-map-annotation-mode="full" type="button">Full</button>
+              <button class="pill-btn map-annotation-mode" data-map-annotation-mode="main" type="button">Main</button>
+              <button class="pill-btn map-annotation-mode" data-map-annotation-mode="clean" type="button">Clean</button>
+            </div>
+          </div>
+          <div class="map-tools-context" aria-label="Действия выбранного режима">
+            <button id="wallbang-target-clear" class="pill-btn" type="button" style="display:none;">✕ Сбросить</button>
+            <button id="traj-undo" class="pill-btn" style="display:none;" onclick="undoTraj()">↩ Отмена точки</button>
+            <button id="traj-clear" class="pill-btn" style="display:none;" onclick="clearTraj()">✕ Очистить</button>
+          </div>
         </div>
         <div class="map-wrap" id="map-wrap">
           <div id="map-placeholder" style="padding:32px;text-align:center;color:var(--text2);font-size:13px;">Сначала выбери карту</div>
