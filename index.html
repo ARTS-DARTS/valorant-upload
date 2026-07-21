@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-21-sound-toggle-batch-notices-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-21-map-text-suggestions-v1">
 </head>
 <body>
 
@@ -120,33 +120,6 @@
     <div class="card">
       <div id="agents-grid" class="agents-grid">
         <span style="color:var(--text2);font-size:13px;grid-column:1/-1;">Загрузка агентов…</span>
-      </div>
-    </div>
-
-    <div class="sticky-title-sentinel" id="sticky-title-sentinel" aria-hidden="true"></div>
-    <div class="sticky-title-editor" id="sticky-title-editor">
-      <div class="section-title">📝 НАЗВАНИЕ</div>
-      <div class="card">
-        <div class="input-wrap">
-          <input class="finput" type="text" id="inp-title" placeholder="Example: A Screens from A Lobby" maxlength="100">
-          <span class="char-counter"><span id="title-count">0</span>/100</span>
-        </div>
-      </div>
-    </div>
-    <div class="title-suggestions title-suggestions-flow" id="title-suggestions" hidden></div>
-
-    <div class="section-title">📄 ОПИСАНИЕ</div>
-    <div class="card">
-      <div class="input-wrap">
-        <textarea class="finput" id="inp-desc" placeholder="Подходим в угол ящика и стены, целимся прицелом, нажимаем ЛКМ и получаем результат." maxlength="1000" rows="4"></textarea>
-        <span class="char-counter"><span id="desc-count">0</span>/1000</span>
-      </div>
-      <div class="description-tools">
-        <button class="description-samples-btn" type="button" id="btn-description-samples">
-          <span class="description-samples-icon" aria-hidden="true">✦</span>
-          <span><b>Примеры описания</b><small>Готовые шаблоны по кадрам</small></span>
-          <span class="description-samples-arrow" aria-hidden="true">→</span>
-        </button>
       </div>
     </div>
 
@@ -445,6 +418,41 @@
       </section>
     </div>
 
+    <section class="lineup-copy-editor" aria-labelledby="lineup-copy-title">
+      <div class="lineup-copy-head">
+        <div>
+          <div class="section-title" id="lineup-copy-title">✍️ НАЗВАНИЕ И ОПИСАНИЕ</div>
+          <p>Сначала отметь точки на карте, затем выбери подходящую подсказку или напиши свой вариант.</p>
+        </div>
+        <span>После карты</span>
+      </div>
+
+      <div class="section-title">📝 НАЗВАНИЕ</div>
+      <div class="card">
+        <div class="input-wrap">
+          <input class="finput" type="text" id="inp-title" placeholder="Example: A Screens from A Lobby" maxlength="100">
+          <span class="char-counter"><span id="title-count">0</span>/100</span>
+        </div>
+        <div class="point-suggestions" id="title-suggestions" hidden></div>
+      </div>
+
+      <div class="section-title">📄 ОПИСАНИЕ</div>
+      <div class="card">
+        <div class="input-wrap">
+          <textarea class="finput" id="inp-desc" placeholder="Подходим в угол ящика и стены, целимся прицелом, нажимаем ЛКМ и получаем результат." maxlength="1000" rows="4"></textarea>
+          <span class="char-counter"><span id="desc-count">0</span>/1000</span>
+        </div>
+        <div class="point-suggestions point-description-suggestions" id="description-suggestions" hidden></div>
+        <div class="description-tools">
+          <button class="description-samples-btn" type="button" id="btn-description-samples">
+            <span class="description-samples-icon" aria-hidden="true">✦</span>
+            <span><b>Другие примеры описания</b><small>Готовые шаблоны по кадрам</small></span>
+            <span class="description-samples-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <div class="upload-gate" id="upload-gate" style="display:none;"></div>
   </div><!-- /.main -->
   <aside class="stats-sidebar" id="stats-sidebar">
@@ -679,6 +687,6 @@
   </div>
 </div>
 
-<script type="module" src="/app.js?v=2026-07-21-sound-toggle-batch-notices-v1"></script>
+<script type="module" src="/app.js?v=2026-07-21-map-text-suggestions-v1"></script>
 </body>
 </html>

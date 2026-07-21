@@ -110,14 +110,6 @@ document.addEventListener('pointerdown', unlockSiteAudio, { once:true, capture:t
 document.addEventListener('keydown', unlockSiteAudio, { once:true, capture:true });
 updateSiteSoundButton();
 
-const stickyTitleEditor = document.getElementById('sticky-title-editor');
-const stickyTitleSentinel = document.getElementById('sticky-title-sentinel');
-if (stickyTitleEditor && stickyTitleSentinel && 'IntersectionObserver' in window) {
-  new IntersectionObserver(([entry]) => {
-    stickyTitleEditor.classList.toggle('is-stuck', !entry.isIntersecting);
-  }, { rootMargin:'-62px 0px 0px 0px', threshold:0 }).observe(stickyTitleSentinel);
-}
-
 const DESCRIPTION_SAMPLES = [
   {
     title: 'Corner + wall',
@@ -1810,7 +1802,6 @@ function uploadToCloudinary(blob, onProgress) {
 const nearbyTitleCache = new Map();
 let titleSuggestionTimer = null;
 let titleSuggestionGeneration = 0;
-let autoSuggestedTitle = '';
 
 function lineupDestinationPoints(data) {
   const paths = [data?.trajectory, ...(Array.isArray(data?.extra_abilities) ? data.extra_abilities.map(item => item?.trajectory) : [])];
@@ -1842,23 +1833,41 @@ function applySuggestedTitle(title) {
   const input = document.getElementById('inp-title');
   if (!input || !title) return;
   input.value = title;
-  autoSuggestedTitle = title;
   document.getElementById('title-count').textContent = title.length;
   validateForm();
   _saveDraft();
 }
 
-function renderTitleSuggestions(titles) {
-  const host = document.getElementById('title-suggestions');
+function applySuggestedDescription(description) {
+  if (!description) return;
+  setDescriptionValue(description);
+  validateForm();
+  _saveDraft();
+}
+
+function renderPointSuggestions(hostId, values, { label, kind }) {
+  const host = document.getElementById(hostId);
   if (!host) return;
-  if (!titles.length) {
+  if (!values.length) {
     host.hidden = true;
     host.innerHTML = '';
     return;
   }
   host.hidden = false;
-  host.innerHTML = `<span class="title-suggestions-label">Похожие точки:</span>${titles.map(title => `<button class="title-suggestion" type="button" data-title-suggestion="${esc(title)}">${esc(title)}</button>`).join('')}`;
-  host.querySelectorAll('[data-title-suggestion]').forEach(button => button.addEventListener('click', () => applySuggestedTitle(button.dataset.titleSuggestion || '')));
+  const dataAttr = kind === 'description' ? 'data-description-suggestion' : 'data-title-suggestion';
+  host.innerHTML = `<div class="point-suggestions-label"><b>✦ ${esc(label)}</b><span>Ничего не подставляется автоматически</span></div><div class="point-suggestions-list">${values.map(value => `<button class="point-suggestion" type="button" ${dataAttr}="${esc(value)}">${esc(value)}</button>`).join('')}</div>`;
+  host.querySelectorAll(`[${dataAttr}]`).forEach(button => button.addEventListener('click', () => {
+    const value = button.getAttribute(dataAttr) || '';
+    if (kind === 'description') applySuggestedDescription(value);
+    else applySuggestedTitle(value);
+  }));
+}
+
+function renderNearbyCopySuggestions(items) {
+  const titles = [...new Set(items.map(item => item.title).filter(Boolean))].slice(0, 3);
+  const descriptions = [...new Set(items.map(item => item.description).filter(Boolean))].slice(0, 3);
+  renderPointSuggestions('title-suggestions', titles, { label: 'Предложенные названия по точке', kind: 'title' });
+  renderPointSuggestions('description-suggestions', descriptions, { label: 'Предложенные описания по точке', kind: 'description' });
 }
 
 async function updateNearbyTitleSuggestions() {
@@ -1866,19 +1875,20 @@ async function updateNearbyTitleSuggestions() {
   const mapName = document.getElementById('sel-map')?.value || '';
   const destination = currentLineupDestination();
   if (!mapName || !destination) {
-    renderTitleSuggestions([]);
+    renderNearbyCopySuggestions([]);
     return;
   }
   const candidates = await loadNearbyTitleCandidates(mapName);
   if (generation !== titleSuggestionGeneration) return;
   const ranked = candidates.map(data => {
     const distances = lineupDestinationPoints(data).map(point => Math.hypot(point.x - destination.x, point.y - destination.y));
-    return { title: String(data.title || '').trim(), distance: distances.length ? Math.min(...distances) : Infinity };
+    return {
+      title: String(data.title || '').trim(),
+      description: String(data.description || '').trim(),
+      distance: distances.length ? Math.min(...distances) : Infinity,
+    };
   }).filter(item => item.distance <= 0.09).sort((a, b) => a.distance - b.distance);
-  const titles = [...new Set(ranked.map(item => item.title))].slice(0, 3);
-  renderTitleSuggestions(titles);
-  const input = document.getElementById('inp-title');
-  if (titles[0] && input && (!input.value.trim() || input.value.trim() === autoSuggestedTitle)) applySuggestedTitle(titles[0]);
+  renderNearbyCopySuggestions(ranked);
 }
 
 function scheduleNearbyTitleSuggestions() {
@@ -4078,7 +4088,6 @@ document.getElementById('defense-zoom-clear')?.addEventListener('click', () => {
 
 // ── Char counters ─────────────────────────────────────────────────────────────
 document.getElementById('inp-title').addEventListener('input', e => {
-  if (e.target.value.trim() !== autoSuggestedTitle) autoSuggestedTitle = '';
   document.getElementById('title-count').textContent = e.target.value.length;
   validateForm(); _saveDraft();
 });
