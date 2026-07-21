@@ -149,6 +149,18 @@ function isQueuedForModeration(data = {}) {
     !clean(data.edited_by_moderator_uid);
 }
 
+function moderatorTemplateKey(data = {}) {
+  if (data.status !== 'moderator_draft' || data.moderator_only !== true) return '';
+  return [
+    data.user_id || data.uid || data.author_uid || data.submitted_by || data.author,
+    data.map || data.mapName,
+    data.agent,
+    data.ability,
+    data.round_side,
+    data.content_type || data.category || 'lineup',
+  ].map(value => clean(value).toLocaleLowerCase('ru-RU')).join('|');
+}
+
 function safeLineup(doc, viewerUid = '') {
   const stored = doc.data() || {};
   const lockExpiresAt = timestampMillis(stored.moderation_lock_expires_at);
@@ -264,7 +276,8 @@ async function saveDraft(req, res, moderator) {
   const ref = db.collection('lineups').doc(lineupId);
   const claimRef = db.collection('moderation_claims').doc(moderator.uid);
   await db.runTransaction(async tx => {
-    const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
+    const templatesQuery = db.collection('lineups').where('moderator_only', '==', true);
+    const [snap, claimSnap, templatesSnap] = await Promise.all([tx.get(ref), tx.get(claimRef), tx.get(templatesQuery)]);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const currentData = snap.data() || {};
     if (!['pending', 'moderator_draft'].includes(currentData.status)) throw Object.assign(new Error('Лайнап уже обработан'), { status: 409 });
@@ -327,6 +340,21 @@ async function saveDraft(req, res, moderator) {
       update.trajectory = [];
     }
     tx.update(ref, update);
+    const completedTemplateKey = moderatorTemplateKey(currentData);
+    if (completedTemplateKey) {
+      templatesSnap.docs.forEach(templateDoc => {
+        if (templateDoc.id === lineupId) return;
+        const template = templateDoc.data() || {};
+        if (moderatorTemplateKey(template) !== completedTemplateKey) return;
+        tx.update(templateDoc.ref, {
+          status: 'duplicate',
+          moderator_only: false,
+          moderator_template_completed: true,
+          duplicate_of: lineupId,
+          duplicate_marked_at: FieldValue.serverTimestamp(),
+        });
+      });
+    }
     if (claimSnap.exists && clean(claimSnap.data()?.lineup_id) === lineupId) tx.delete(claimRef);
   });
   res.status(200).json({ ok: true, id: lineupId, status: 'pending' });
@@ -425,7 +453,16 @@ async function listQueue(res, moderator) {
   // Queries intentionally cover overlapping moderation states. A lineup may
   // match more than one query, but it must only appear once in the queue.
   const uniqueQueueDocs = [...new Map(queueDocs.map(doc => [doc.id, doc])).values()];
+  const seenTemplateKeys = new Set();
   const queue = uniqueQueueDocs
+    .sort((a, b) => timestampMillis(a.data()?.submitted_at || a.data()?.created_at) - timestampMillis(b.data()?.submitted_at || b.data()?.created_at))
+    .filter(doc => {
+      const key = moderatorTemplateKey(doc.data() || {});
+      if (!key) return true;
+      if (seenTemplateKeys.has(key)) return false;
+      seenTemplateKeys.add(key);
+      return true;
+    })
     .map(doc => safeLineup(doc, moderator.uid))
     .sort((a, b) => a.submitted_at - b.submitted_at);
   const total = queue.length;
