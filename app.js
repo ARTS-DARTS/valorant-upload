@@ -1267,8 +1267,9 @@ function setElementMapBox(el, area) {
 function renderCategoryMapExtras() {
   const target = document.getElementById('wallbang-target-marker');
   const zoom = document.getElementById('defense-zoom-box');
+  const isWallbang = normalizeContentCategory(selectedCategory) === 'wallbang';
   if (target) {
-    if (wallbangTargetX !== null && wallbangTargetY !== null) {
+    if (isWallbang && wallbangTargetX !== null && wallbangTargetY !== null) {
       const content = mapContentRect();
       target.style.display = '';
       target.style.left = ((content.left + wallbangTargetX * content.width) / content.wrapWidth * 100) + '%';
@@ -7986,7 +7987,7 @@ function _restoreDraft(sourceDraft = null) {
         applyMapViewTransform();
         if (d.mapMode) setMapMode(d.mapMode);
         if (d.trajectory?.length) { trajectoryPoints = d.trajectory; renderTrajectory(); }
-        if (d.wallbangTargetX != null) {
+        if (normalizeContentCategory(d.category) === 'wallbang' && d.wallbangTargetX != null) {
           wallbangTargetX = Number(d.wallbangTargetX);
           wallbangTargetY = Number(d.wallbangTargetY);
         }
