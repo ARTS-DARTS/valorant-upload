@@ -151,14 +151,14 @@ function isQueuedForModeration(data = {}) {
 
 function moderatorTemplateKey(data = {}) {
   if (data.status !== 'moderator_draft' || data.moderator_only !== true) return '';
-  return [
-    data.user_id || data.uid || data.author_uid || data.submitted_by || data.author,
-    data.map || data.mapName,
-    data.agent,
-    data.ability,
-    data.round_side,
-    data.content_type || data.category || 'lineup',
-  ].map(value => clean(value).toLocaleLowerCase('ru-RU')).join('|');
+  const rawVideoUrl = clean(data.video_url);
+  if (!rawVideoUrl) return '';
+  try {
+    const url = new URL(rawVideoUrl);
+    return `${url.hostname.toLowerCase()}${decodeURIComponent(url.pathname)}`;
+  } catch (_) {
+    return rawVideoUrl.split('?')[0].toLocaleLowerCase('ru-RU');
+  }
 }
 
 function safeLineup(doc, viewerUid = '') {
