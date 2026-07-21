@@ -2805,7 +2805,7 @@ document.getElementById('moderator-author-search')?.addEventListener('input', ev
 async function loadModerationWorkspace() {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-21-video-dedupe-v2');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-21-conflict-stop-v1');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({
@@ -7718,13 +7718,26 @@ async function flushModeratorAutosave({ keepalive = false, reportError = false }
       body:JSON.stringify({ lineupId, action:'autosave_draft', data:payload }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || `Ошибка ${response.status}`);
+    if (!response.ok) throw Object.assign(new Error(result.error || `Ошибка ${response.status}`), { status: response.status });
     return true;
   })();
   try {
     await moderatorAutosaveRequest;
     return true;
   } catch (error) {
+    if (error?.status === 404 || error?.status === 409) {
+      moderatorAutosaveDirty = false;
+      if (moderatorDraftSourceId === lineupId) {
+        moderatorDraftSourceId = '';
+        moderatorSelectedAuthor = null;
+        moderationController?.clearClaim?.();
+        try { sessionStorage.removeItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
+        showModeratorAuthorPicker();
+        toast('Это задание уже обработано или закрыто как дубль. Очередь обновлена.', 'i');
+        switchWorkspaceTab('moderation');
+      }
+      return false;
+    }
     moderatorAutosaveDirty = true;
     logUploadError(error, { action:'moderator_autosave_failed', lineup_id:lineupId, keepalive });
     if (reportError) toast('Не удалось сохранить правки модератора: ' + (error.message || error), 'e');
