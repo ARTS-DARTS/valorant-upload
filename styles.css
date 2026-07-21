@@ -500,6 +500,8 @@
     .shot-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; cursor: grab !important; touch-action: none; -webkit-user-drag: none; }
     .shot-item.dragging { z-index: 2; opacity: .72; transform: scale(.96); }
     .shot-item.dragging img { cursor: grabbing !important; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,195,247,.18); }
+    .shot-drag-ghost { position: fixed; z-index: 10000; margin: 0; pointer-events: none; opacity: .92; transform: rotate(2deg) scale(1.04); filter: drop-shadow(0 12px 18px rgba(0,0,0,.48)); }
+    .shot-drag-ghost img { width: 100%; height: 100%; cursor: grabbing !important; border-color: var(--primary); }
     .shot-item .rm { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 50%; background: var(--red); border: none; color: #fff; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
     .btn-add-shot { width: 80px; height: 80px; border: 2px dashed var(--border); border-radius: 6px; background: var(--surface2); color: var(--text2); font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: border-color .15s; }
     .btn-add-shot:hover { border-color: var(--primary); }

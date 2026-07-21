@@ -6629,6 +6629,13 @@ function bindScreenshotSorting(row) {
         item,
         startX: event.clientX,
         startY: event.clientY,
+        offsetX: event.clientX - item.getBoundingClientRect().left,
+        offsetY: event.clientY - item.getBoundingClientRect().top,
+        slotCenters: [...row.querySelectorAll('.shot-item')].map(slot => {
+          const rect = slot.getBoundingClientRect();
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        }),
+        ghost: null,
         moved: false,
       };
       image.setPointerCapture?.(event.pointerId);
@@ -6636,22 +6643,37 @@ function bindScreenshotSorting(row) {
     image.addEventListener('pointermove', event => {
       if (!screenshotDrag || screenshotDrag.pointerId !== event.pointerId || screenshotDrag.item !== item) return;
       if (!screenshotDrag.moved && Math.hypot(event.clientX - screenshotDrag.startX, event.clientY - screenshotDrag.startY) < 6) return;
-      screenshotDrag.moved = true;
-      item.classList.add('dragging');
-      row.classList.add('sorting');
-      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.shot-item');
-      if (!target || target === item || target.parentElement !== row) {
-        event.preventDefault();
-        return;
+      if (!screenshotDrag.moved) {
+        screenshotDrag.moved = true;
+        const rect = item.getBoundingClientRect();
+        const ghost = item.cloneNode(true);
+        ghost.classList.add('shot-drag-ghost');
+        ghost.querySelector('.rm')?.remove();
+        ghost.style.width = `${rect.width}px`;
+        ghost.style.height = `${rect.height}px`;
+        document.body.appendChild(ghost);
+        screenshotDrag.ghost = ghost;
+        item.style.visibility = 'hidden';
+        item.classList.add('dragging');
+        row.classList.add('sorting');
       }
+      const ghost = screenshotDrag.ghost;
+      if (ghost) {
+        ghost.style.left = `${event.clientX - screenshotDrag.offsetX}px`;
+        ghost.style.top = `${event.clientY - screenshotDrag.offsetY}px`;
+      }
+      const to = screenshotDrag.slotCenters.reduce((best, center, index) => {
+        const distance = Math.hypot(event.clientX - center.x, event.clientY - center.y);
+        return distance < best.distance ? { index, distance } : best;
+      }, { index: 0, distance: Infinity }).index;
       const items = [...row.querySelectorAll('.shot-item')];
       const from = items.indexOf(item);
-      const to = items.indexOf(target);
       if (from < 0 || to < 0 || from === to) return;
       const [entry] = screenshots.splice(from, 1);
       screenshots.splice(to, 0, entry);
-      if (from < to) target.after(item);
-      else target.before(item);
+      const remaining = [...row.querySelectorAll('.shot-item')].filter(candidate => candidate !== item);
+      if (to >= remaining.length) row.insertBefore(item, row.querySelector('.btn-add-shot'));
+      else row.insertBefore(item, remaining[to]);
       syncScreenshotOrderDom(row);
       event.preventDefault();
     });
@@ -6659,7 +6681,9 @@ function bindScreenshotSorting(row) {
       if (!screenshotDrag || screenshotDrag.pointerId !== event.pointerId || screenshotDrag.item !== item) return;
       image.releasePointerCapture?.(event.pointerId);
       const moved = screenshotDrag.moved;
+      screenshotDrag.ghost?.remove();
       screenshotDrag = null;
+      item.style.visibility = '';
       item.classList.remove('dragging');
       row.classList.remove('sorting');
       if (moved) {
