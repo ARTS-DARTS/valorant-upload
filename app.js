@@ -43,6 +43,13 @@ const pendingSiteSounds = new Set();
 const SITE_SOUNDS_ENABLED_KEY = 'vl_site_sounds_enabled';
 let siteSoundsEnabled = localStorage.getItem(SITE_SOUNDS_ENABLED_KEY) !== '0';
 
+function isExpectedAudioBlock(error) {
+  const name = String(error?.name || '');
+  const message = String(error?.message || error || '');
+  return name === 'NotAllowedError'
+    || /didn['’]t interact with the document|user gesture|notallowederror/i.test(message);
+}
+
 function updateSiteSoundButton() {
   const button = document.getElementById('header-sound-test');
   if (!button) return;
@@ -78,7 +85,9 @@ function playSiteSound(name, queueWhenLocked = true) {
   sound.play().catch(error => {
     siteAudioUnlocked = false;
     if (queueWhenLocked) pendingSiteSounds.add(name);
-    logUploadError(error, { action:'site_sound_play_failed', sound:name, ready_state:sound.readyState, network_state:sound.networkState });
+    if (!isExpectedAudioBlock(error)) {
+      logUploadError(error, { action:'site_sound_play_failed', sound:name, ready_state:sound.readyState, network_state:sound.networkState });
+    }
     console.warn('site sound blocked', name, error?.name || error);
   });
 }
@@ -96,7 +105,9 @@ function unlockSiteAudio() {
       return name;
     }).catch(error => {
       sound.volume = volume;
-      logUploadError(error, { action:'site_sound_unlock_failed', sound:name, ready_state:sound.readyState, network_state:sound.networkState });
+      if (!isExpectedAudioBlock(error)) {
+        logUploadError(error, { action:'site_sound_unlock_failed', sound:name, ready_state:sound.readyState, network_state:sound.networkState });
+      }
       return null;
     });
   });
@@ -4233,7 +4244,8 @@ function videoDuration() {
 
 function clampTime(value) {
   const duration = videoDuration();
-  const n = Number(value || 0);
+  const raw = Number(value);
+  const n = Number.isFinite(raw) ? raw : 0;
   if (!duration) return Math.max(0, n);
   return Math.max(0, Math.min(duration, n));
 }
@@ -4244,7 +4256,9 @@ function frameStep() {
 
 function snapFrameTime(time) {
   const step = frameStep();
-  return clampTime(Math.round(Number(time || 0) / step) * step);
+  const raw = Number(time);
+  const value = Number.isFinite(raw) ? raw : 0;
+  return clampTime(Math.round(value / step) * step);
 }
 
 function clampOutputTime(value) {
@@ -6335,12 +6349,22 @@ function seekFromScrubberValue() {
   }
   pendingVideoSeekRatio = null;
   if ((videoEdit.freezeFrames || []).length) {
-    const outputTime = ratio * editedOutputDuration();
+    const editedDuration = editedOutputDuration();
+    if (!Number.isFinite(editedDuration) || editedDuration <= 0) {
+      pendingVideoSeekRatio = ratio;
+      return;
+    }
+    const outputTime = ratio * editedDuration;
     applyTimelineTool(snapFrameTime(outputToSourceTime(outputTime)), outputTime);
   } else {
     timelinePreviewOutputTime = null;
     setFreezeOverlay('');
-    vidPlayer.currentTime = snapFrameTime(ratio * duration);
+    const targetTime = snapFrameTime(ratio * duration);
+    if (!Number.isFinite(targetTime)) {
+      pendingVideoSeekRatio = ratio;
+      return;
+    }
+    vidPlayer.currentTime = targetTime;
   }
   updateTimelinePlaybackUi();
 }
