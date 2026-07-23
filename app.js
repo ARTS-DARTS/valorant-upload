@@ -6,6 +6,8 @@ import { getAuth,
 import { getFirestore, doc, collection, getDoc, setDoc, deleteDoc, writeBatch,
           serverTimestamp, onSnapshot, updateDoc, arrayUnion,
           query, where, getDocs, limit }      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFunctions, httpsCallable }
+                                             from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -19,9 +21,11 @@ const cfg = {
 const app  = initializeApp(cfg);
 const auth = getAuth(app);
 const db   = getFirestore(app);
+const functions = getFunctions(app, 'us-central1');
+const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-21-sound-toggle-batch-notices-v1';
+const SITE_VERSION = '2026-07-23-server-signed-selectel-v1';
 const SITE_VERSION_POLL_MS = 10 * 1000;
 let loadedDeploymentVersion = new URL(import.meta.url).searchParams.get('v') || SITE_VERSION;
 const EDITOR_MAX_ZOOM = 2.2;
@@ -156,12 +160,6 @@ const DESCRIPTION_SAMPLES = [
     text: 'Подходим к трубе (1 фото), ставим прицел на окно (2 фото), используем способность с приближением (3 фото), получаем попадание в нужную точку (4 фото).',
   },
 ];
-
-const SEL_ACCESS_KEY = '6eac43cff0e4498c864fc36fdcd27a64';
-const SEL_SECRET_KEY = 'e2ffe93a51ba4c05abadc810d9c0edfc';
-const SEL_S3_HOST    = 'valorant-lineups-video.s3.ru-3.storage.selcloud.ru';
-const SEL_REGION     = 'ru-3';
-const SEL_CDN_URL    = 'https://d5adab93-7400-49ad-b1f9-66966c03d203.selstorage.ru';
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 function rangeConfigId(map, agent, ability) {
@@ -1933,69 +1931,38 @@ function uploadCompatibleLineupVideo(file, onProgress) {
   return promise;
 }
 
-// ── AWS4 helpers (SubtleCrypto) ───────────────────────────────────────────────
-async function _sha256Hex(data) {
-  const buf = await crypto.subtle.digest('SHA-256', typeof data === 'string' ? new TextEncoder().encode(data) : data);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-async function _hmacSha256(key, data) {
-  const k = typeof key === 'string' ? new TextEncoder().encode(key) : key;
-  const d = typeof data === 'string' ? new TextEncoder().encode(data) : data;
-  const kObj = await crypto.subtle.importKey('raw', k, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  return new Uint8Array(await crypto.subtle.sign('HMAC', kObj, d));
-}
-function _selPadZ(n) { return String(n).padStart(2, '0'); }
-function _selAwsDate(d) { return `${d.getUTCFullYear()}${_selPadZ(d.getUTCMonth()+1)}${_selPadZ(d.getUTCDate())}`; }
-function _selAwsDateTime(d) { return `${_selAwsDate(d)}T${_selPadZ(d.getUTCHours())}${_selPadZ(d.getUTCMinutes())}${_selPadZ(d.getUTCSeconds())}Z`; }
-async function _selSigningKey(dateStamp) {
-  let k = await _hmacSha256('AWS4' + SEL_SECRET_KEY, dateStamp);
-  k = await _hmacSha256(k, SEL_REGION);
-  k = await _hmacSha256(k, 's3');
-  k = await _hmacSha256(k, 'aws4_request');
-  return k;
-}
-
 function uploadVideoToSelectel(file, onProgress) {
   const fileName  = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-  const objectKey = `lineups_videos/${fileName}`;
   let xhr = null;
   let aborted = false;
 
   const promise = new Promise(async (resolve, reject) => {
     try {
-      const now        = new Date();
-      const dateStamp  = _selAwsDate(now);
-      const amzDate    = _selAwsDateTime(now);
-      const buffer     = await file.arrayBuffer();
-      if (aborted) { reject(new Error('canceled')); return; }
-
-      const contentType   = videoContentType(file);
-      const payloadHash   = await _sha256Hex(buffer);
-      const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
-      const canonHeaders  = `content-type:${contentType}\nhost:${SEL_S3_HOST}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
-      const canonRequest  = ['PUT', `/${objectKey}`, '', canonHeaders, signedHeaders, payloadHash].join('\n');
-      const credScope     = `${dateStamp}/${SEL_REGION}/s3/aws4_request`;
-      const strToSign     = ['AWS4-HMAC-SHA256', amzDate, credScope, await _sha256Hex(canonRequest)].join('\n');
-      const signingKey    = await _selSigningKey(dateStamp);
-      const signature     = (await _hmacSha256(signingKey, strToSign)).reduce((s, b) => s + b.toString(16).padStart(2, '0'), '');
-      const auth          = `AWS4-HMAC-SHA256 Credential=${SEL_ACCESS_KEY}/${credScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+      const contentType = videoContentType(file);
+      const signed = await createSelectelVideoUpload({
+        fileName,
+        contentType,
+        sizeBytes: file.size,
+      });
+      const uploadUrl = signed.data?.uploadUrl;
+      const publicUrl = signed.data?.publicUrl;
+      if (!uploadUrl || !publicUrl) {
+        throw new Error('Сервер не вернул ссылку загрузки');
+      }
 
       if (aborted) { reject(new Error('canceled')); return; }
 
       xhr = new XMLHttpRequest();
-      xhr.open('PUT', `https://${SEL_S3_HOST}/${objectKey}`);
-      xhr.setRequestHeader('Authorization', auth);
+      xhr.open('PUT', uploadUrl);
       xhr.setRequestHeader('Content-Type', contentType);
-      xhr.setRequestHeader('x-amz-content-sha256', payloadHash);
-      xhr.setRequestHeader('x-amz-date', amzDate);
       xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
       xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) resolve(`${SEL_CDN_URL}/${objectKey}`);
+        if (xhr.status >= 200 && xhr.status < 300) resolve(publicUrl);
         else reject(new Error('Selectel upload error: ' + xhr.status + ' ' + xhr.responseText));
       };
       xhr.onerror = () => reject(new Error('Сетевая ошибка'));
       xhr.onabort = () => reject(new Error('canceled'));
-      xhr.send(buffer);
+      xhr.send(file);
     } catch (e) { reject(e); }
   });
 
@@ -4136,6 +4103,7 @@ const vidPlayBtn  = document.getElementById('vid-play-btn');
 let activeEditorMode = 'trim';
 let timelineDrag = null;
 let scrubberDragging = false;
+let pendingVideoSeekRatio = null;
 let suppressTimelineClick = false;
 let selectedEditorItem = null;
 let freezeHoldTimer = null;
@@ -5481,14 +5449,20 @@ editorEls.shell?.addEventListener('pointerdown', event => {
   timelineDrag = { kind: handle?.dataset.trimHandle || 'playhead', moved: false };
   safeSetPointerCapture(editorEls.shell, event.pointerId);
   editorEls.shell.classList.add('dragging');
+  if (timelineDrag.kind === 'playhead') {
+    const { outputTime, sourceTime } = timelineTimesFromEvent(event, { magnet: false });
+    applyTimelineTool(sourceTime, outputTime);
+  }
   event.preventDefault();
 });
-editorEls.shell?.addEventListener('pointermove', event => {
+function moveTimelinePointer(event) {
   if (!timelineDrag) return;
   timelineDrag.moved = true;
   autoScrollTimelineWhileDragging(event);
   const rawTime = clampTime(timeFromTimelineEvent(event));
-  const { outputTime, sourceTime } = timelineTimesFromEvent(event);
+  const { outputTime, sourceTime } = timelineTimesFromEvent(event, {
+    magnet: timelineDrag.kind !== 'playhead',
+  });
   const time = sourceTime;
   if (timelineDrag.kind === 'start') {
     const end = videoEdit.trimEnd || videoDuration();
@@ -5573,8 +5547,8 @@ editorEls.shell?.addEventListener('pointermove', event => {
     vidPlayer.currentTime = snapFrameTime(time);
   }
   renderVideoEditor();
-});
-editorEls.shell?.addEventListener('pointerup', event => {
+}
+function finishTimelinePointer(event) {
   if (!timelineDrag) return;
   const wasTrim = timelineDrag.kind === 'start' || timelineDrag.kind === 'end';
   const wasFreeze = timelineDrag.kind === 'freeze' || timelineDrag.kind === 'freeze-resize';
@@ -5586,11 +5560,14 @@ editorEls.shell?.addEventListener('pointerup', event => {
   timelineDrag = null;
   suppressTimelineClick = moved || wasFreeze || wasZoom || wasFootage;
   if ((wasTrim || wasFreeze || wasZoom || wasFootage) && moved) saveVideoEdit();
-});
-editorEls.shell?.addEventListener('pointercancel', () => {
+}
+function cancelTimelinePointer() {
   timelineDrag = null;
-  editorEls.shell.classList.remove('dragging');
-});
+  editorEls.shell?.classList.remove('dragging');
+}
+window.addEventListener('pointermove', moveTimelinePointer);
+window.addEventListener('pointerup', finishTimelinePointer);
+window.addEventListener('pointercancel', cancelTimelinePointer);
 editorEls.trimStart?.addEventListener('change', event => {
   videoEdit.trimStart = clampTime(event.target.value);
   const duration = videoDuration();
@@ -6221,6 +6198,7 @@ function isVideoFile(file) {
 async function handleVideoFile(file) {
   if (!isVideoFile(file)) { toast('Выбери видеофайл', 'e'); return; }
   if (file.size > 50 * 1024 * 1024) { toast('Видео превышает 50 МБ', 'e'); return; }
+  pendingVideoSeekRatio = null;
   if (videoXhr) { videoXhr.abort(); videoXhr = null; }
   videoUrl = null;
   dropZone.style.display = 'none';
@@ -6291,6 +6269,12 @@ vidPlayer.addEventListener('timeupdate', () => {
 });
 vidPlayer.addEventListener('loadedmetadata', () => {
   if (!videoEdit.trimEnd) videoEdit.trimEnd = videoDuration();
+  if (pendingVideoSeekRatio !== null && videoDuration() > 0) {
+    vidScrubber.value = String(pendingVideoSeekRatio * 100);
+    pendingVideoSeekRatio = null;
+    seekFromScrubberValue();
+    return;
+  }
   renderVideoEditor();
 });
 vidPlayer.addEventListener('error', () => {
@@ -6342,14 +6326,21 @@ function seekFromScrubberValue() {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   playedFreezeHolds.clear();
-  const ratio = Number(vidScrubber.value || 0) / 100;
+  const rawRatio = Number(vidScrubber.value || 0) / 100;
+  const ratio = Number.isFinite(rawRatio) ? Math.max(0, Math.min(1, rawRatio)) : 0;
+  const duration = videoDuration();
+  if (!duration) {
+    pendingVideoSeekRatio = ratio;
+    return;
+  }
+  pendingVideoSeekRatio = null;
   if ((videoEdit.freezeFrames || []).length) {
     const outputTime = ratio * editedOutputDuration();
     applyTimelineTool(snapFrameTime(outputToSourceTime(outputTime)), outputTime);
   } else {
     timelinePreviewOutputTime = null;
     setFreezeOverlay('');
-    vidPlayer.currentTime = snapFrameTime(ratio * vidPlayer.duration);
+    vidPlayer.currentTime = snapFrameTime(ratio * duration);
   }
   updateTimelinePlaybackUi();
 }
@@ -7105,7 +7096,6 @@ window.addEventListener('pointercancel', e => {
 
 let mapLoadGeneration = 0;
 let mapInteractionReady = false;
-const mapClickDiagnosticKeys = new Set();
 
 async function loadMapMinimap() {
   const generation = ++mapLoadGeneration;
@@ -7424,24 +7414,6 @@ function trajectoryFromMarker(points = trajectoryPoints) {
   return trajectoryFromMarkerFor(points);
 }
 
-function logMapClickDiagnostic(event, point) {
-  const map = document.getElementById('sel-map')?.value || '';
-  const key = `${map}|${selectedRoundSide || 'none'}|${currentMapQuarterTurns()}`;
-  if (mapClickDiagnosticKeys.has(key)) return;
-  mapClickDiagnosticKeys.add(key);
-  const img = document.getElementById('map-img');
-  const content = mapContentRect();
-  logUploadError(new Error('Map coordinate diagnostic'), {
-    action: 'map_coordinate_diagnostic', map, side: selectedRoundSide || '',
-    quarter_turns: currentMapQuarterTurns(), orientation_ready: mapAnnotationsReady,
-    interaction_ready: mapInteractionReady, image_complete: !!img?.complete,
-    image_natural_width: img?.naturalWidth || 0, image_natural_height: img?.naturalHeight || 0,
-    view_scale: mapViewScale, view_pan_x: mapViewPanX, view_pan_y: mapViewPanY,
-    content_left: content.left, content_top: content.top, content_width: content.width, content_height: content.height,
-    client_x: event.clientX, client_y: event.clientY, result_x: point.x, result_y: point.y,
-  });
-}
-
 function rejectMapInteractionWhileLoading() {
   if (mapInteractionReady) return false;
   logUploadError(new Error('Map interaction attempted before ready'), {
@@ -7498,8 +7470,6 @@ document.getElementById('map-wrap').addEventListener('click', e => {
   const img = document.getElementById('map-img');
   if (img.style.display === 'none') return;
   const { x, y } = eventToMapPoint(e);
-  logMapClickDiagnostic(e, { x, y });
-
   if (mapMode === 'position') {
     if (normalizeContentCategory(selectedCategory) === 'defense') return;
     const extra = activeExtraAbility();

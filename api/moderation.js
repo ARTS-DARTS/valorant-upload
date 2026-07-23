@@ -89,6 +89,16 @@ function timestampMillis(value) {
   return typeof value?.toMillis === 'function' ? value.toMillis() : 0;
 }
 
+function lineupAuthorUid(data = {}) {
+  return clean(data.user_id || data.uid || data.author_uid);
+}
+
+function assertCanModerateLineup(moderator, data = {}) {
+  if (moderator.role !== 'admin' && lineupAuthorUid(data) === moderator.uid) {
+    throw Object.assign(new Error('Модератор не может брать в работу или проверять собственный лайнап'), { status: 403 });
+  }
+}
+
 const MODERATION_LOCK_MS = 10 * 60_000;
 
 function isSovaBowAbility(value) {
@@ -280,6 +290,7 @@ async function saveDraft(req, res, moderator) {
     const [snap, claimSnap, templatesSnap] = await Promise.all([tx.get(ref), tx.get(claimRef), tx.get(templatesQuery)]);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const currentData = snap.data() || {};
+    assertCanModerateLineup(moderator, currentData);
     if (!['pending', 'moderator_draft'].includes(currentData.status)) throw Object.assign(new Error('Лайнап уже обработан'), { status: 409 });
     // An expired lease may be reclaimed by another moderator, but expiration
     // alone must not destroy completed work. The original editor may still
@@ -372,6 +383,7 @@ async function autosaveDraft(req, res, moderator) {
     const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const current = snap.data() || {};
+    assertCanModerateLineup(moderator, current);
     if (!['pending', 'moderator_draft'].includes(current.status)) throw Object.assign(new Error('Лайнап уже обработан'), { status: 409 });
     if (clean(current.moderation_lock_uid) !== moderator.uid) {
       throw Object.assign(new Error('Бронь лайнапа потеряна. Обнови очередь.'), { status: 409 });
@@ -455,6 +467,7 @@ async function listQueue(res, moderator) {
   const uniqueQueueDocs = [...new Map(queueDocs.map(doc => [doc.id, doc])).values()];
   const seenTemplateKeys = new Set();
   const queue = uniqueQueueDocs
+    .filter(doc => moderator.role === 'admin' || lineupAuthorUid(doc.data() || {}) !== moderator.uid)
     .sort((a, b) => timestampMillis(a.data()?.submitted_at || a.data()?.created_at) - timestampMillis(b.data()?.submitted_at || b.data()?.created_at))
     .filter(doc => {
       const key = moderatorTemplateKey(doc.data() || {});
@@ -519,6 +532,7 @@ async function claimDraft(req, res, moderator) {
     const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const data = snap.data() || {};
+    assertCanModerateLineup(moderator, data);
     const metadataTask = data.status === 'approved' && data.metadata_review_required === true && missingMetadata(data).length > 0;
     if (!['pending', 'moderator_draft'].includes(data.status) && !metadataTask) {
       throw Object.assign(new Error('Лайнап уже обработан'), { status: 409 });
@@ -583,6 +597,7 @@ async function completeMetadata(req, res, moderator) {
     const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const current = snap.data() || {};
+    assertCanModerateLineup(moderator, current);
     if (current.status !== 'approved' || current.metadata_review_required !== true) throw Object.assign(new Error('Задание уже выполнено'), { status: 409 });
     if (clean(current.moderation_lock_uid) !== moderator.uid) throw Object.assign(new Error('Этот лайнап уже взял другой модератор'), { status: 409 });
     const update = {};
@@ -672,6 +687,7 @@ async function moderate(req, res, moderator) {
     const snap = await tx.get(ref);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const data = snap.data() || {};
+    assertCanModerateLineup(moderator, data);
     if (!['pending', 'moderator_draft'].includes(data.status)) throw Object.assign(new Error('Лайнап уже обработан другим модератором'), { status: 409 });
     const lockUid = clean(data.moderation_lock_uid);
     if (lockUid && lockUid !== moderator.uid && timestampMillis(data.moderation_lock_expires_at) > Date.now()) {

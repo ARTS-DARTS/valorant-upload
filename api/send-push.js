@@ -25,6 +25,7 @@ export default async function handler(req, res) {
     translations,
     type,
     targetUid,
+    requiredTag,
     maxAndroidVersionCode,
     data: extraData = {},
   } = req.body || {};
@@ -46,6 +47,13 @@ export default async function handler(req, res) {
   if (targetUid) {
     payload.include_aliases = { external_id: [targetUid] };
     payload.target_channel  = 'push';
+  } else if (requiredTag || type === 'duel') {
+    const allowedTags = new Set(['duel_notifications']);
+    const tag = clean(requiredTag || 'duel_notifications');
+    if (!allowedTags.has(tag)) return res.status(400).json({ error: 'Unsupported notification audience' });
+    payload.filters = [
+      { field: 'tag', key: tag, relation: '=', value: '1' },
+    ];
   } else if (maxAndroidVersionCode) {
     payload.filters = [
       { field: 'app_version', relation: '<', value: clean(maxAndroidVersionCode) },

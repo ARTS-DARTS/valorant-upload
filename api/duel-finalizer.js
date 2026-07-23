@@ -74,9 +74,41 @@ export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
     const winnerSnap = await tx.get(winnerRef), loserSnap = await tx.get(loserRef);
     if (!winnerSnap.exists || !loserSnap.exists) throw new Error('lineup_not_found');
     const winner = winnerSnap.data();
+    const loser = loserSnap.data();
     const uid = authorUid(winner);
+    const loserUid = loser.status === 'approved' ? authorUid(loser) : '';
+    let loserUserSnap = null;
+    let loserStatsSnap = null;
+    if (loserUid) {
+      [loserUserSnap, loserStatsSnap] = await Promise.all([
+        tx.get(db.collection('users').doc(loserUid)),
+        tx.get(db.collection('user_stats').doc(loserUid)),
+      ]);
+    }
     tx.update(winnerRef, { status: 'approved', likes_count: FieldValue.increment(likesAwarded), votes_actual: FieldValue.increment(5), duel_wins: FieldValue.increment(1), last_duel_id: duelId, updated_at: FieldValue.serverTimestamp() });
     tx.update(loserRef, { status: 'archived', archived_reason: 'duel_loss', lost_duel_id: duelId, updated_at: FieldValue.serverTimestamp() });
+    if (loserUid && loserUserSnap?.exists) {
+      const loserUser = loserUserSnap.data() || {};
+      tx.update(loserUserSnap.ref, {
+        approved_lineups: Math.max(0, Number(loserUser.approved_lineups || 0) - 1),
+        approved_lineups_count: Math.max(0, Number(loserUser.approved_lineups_count ?? loserUser.approved_lineups ?? 0) - 1),
+        progress_points: Math.max(0, Number(loserUser.progress_points ?? 0) - 1),
+        approved_lineups_updated_at: FieldValue.serverTimestamp(),
+        approved_lineups_update_reason: 'lineup_archived_duel_loss',
+        approved_lineups_last_lineup_id: loserId,
+      });
+      const loserStats = loserStatsSnap?.data() || {};
+      tx.set(db.collection('user_stats').doc(loserUid), {
+        uid: loserUid,
+        approved_lineups: Math.max(0, Number(loserStats.approved_lineups ?? loserUser.approved_lineups ?? 0) - 1),
+        approved_lineups_count: Math.max(0, Number(loserStats.approved_lineups_count ?? loserUser.approved_lineups_count ?? loserUser.approved_lineups ?? 0) - 1),
+        progress_points: Math.max(0, Number(loserStats.progress_points ?? loserUser.progress_points ?? 0) - 1),
+        updated_at: FieldValue.serverTimestamp(),
+        update_reason: 'lineup_archived_duel_loss',
+        last_lineup_id: loserId,
+        schema_version: 2,
+      }, { merge: true });
+    }
     if (uid) {
       tx.set(db.collection('users').doc(uid), {
         bonus_lineups: FieldValue.increment(5), progress_points: FieldValue.increment(5),
