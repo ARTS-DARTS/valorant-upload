@@ -2,7 +2,7 @@
 // Env vars required: ONESIGNAL_APP_ID, ONESIGNAL_REST_KEY, ADMIN_SECRET
 
 function clean(value) {
-  return (value ?? '').replace(/﻿/g, '').trim();
+  return String(value ?? '').replace(/﻿/g, '').trim();
 }
 
 export default async function handler(req, res) {
