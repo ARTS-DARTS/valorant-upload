@@ -26,6 +26,7 @@ export default async function handler(req, res) {
     type,
     targetUid,
     requiredTag,
+    minAndroidVersionCode,
     maxAndroidVersionCode,
     data: extraData = {},
   } = req.body || {};
@@ -54,9 +55,17 @@ export default async function handler(req, res) {
     payload.filters = [
       { field: 'tag', key: tag, relation: '=', value: '1' },
     ];
-  } else if (maxAndroidVersionCode) {
+  } else if (minAndroidVersionCode || maxAndroidVersionCode) {
     payload.filters = [
-      { field: 'app_version', relation: '<', value: clean(maxAndroidVersionCode) },
+      ...(minAndroidVersionCode
+        ? [{ field: 'app_version', relation: '>', value: clean(minAndroidVersionCode) }]
+        : []),
+      ...(minAndroidVersionCode && maxAndroidVersionCode
+        ? [{ operator: 'AND' }]
+        : []),
+      ...(maxAndroidVersionCode
+        ? [{ field: 'app_version', relation: '<', value: clean(maxAndroidVersionCode) }]
+        : []),
     ];
   } else {
     payload.included_segments = ['All'];
