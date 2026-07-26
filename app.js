@@ -27,7 +27,7 @@ const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
 const SITE_VERSION = '2026-07-23-error-report-fixes-v1';
 const SITE_VERSION_POLL_MS = 10 * 1000;
-let loadedDeploymentVersion = new URL(import.meta.url).searchParams.get('v') || SITE_VERSION;
+let loadedServerDeploymentVersion = '';
 const EDITOR_MAX_ZOOM = 2.2;
 
 const siteSounds = {
@@ -1608,16 +1608,21 @@ function hideSiteUpdateBanner() {
 
 async function checkSiteVersion() {
   try {
-    const res = await fetch(`/index.html?site_version=${Date.now()}`, {
+    const res = await fetch(`/api/site-version?site_version=${Date.now()}`, {
       cache: 'no-store',
       headers: { 'Cache-Control': 'no-cache' },
     });
     if (!res.ok) return;
-    const html = await res.text();
-    const liveVersion = decodeURIComponent(html.match(/\/app\.js\?v=([^"']+)/)?.[1] || '').trim();
+    const data = await res.json();
+    const liveVersion = String(data?.version || '').trim();
     if (!liveVersion) return;
     window.__vlLiveVersion = liveVersion;
-    if (liveVersion && liveVersion !== loadedDeploymentVersion) showSiteUpdateBanner();
+    if (!loadedServerDeploymentVersion) {
+      loadedServerDeploymentVersion = liveVersion;
+      hideSiteUpdateBanner();
+      return;
+    }
+    if (liveVersion !== loadedServerDeploymentVersion) showSiteUpdateBanner();
     else hideSiteUpdateBanner();
   } catch (_) {}
 }
