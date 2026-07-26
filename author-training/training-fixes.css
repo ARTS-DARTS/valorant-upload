@@ -60,6 +60,10 @@
   display: none;
 }
 
+.screenshot-plan {
+  display: none;
+}
+
 .scenario .agent {
   overflow: hidden;
   border: 0;
@@ -220,13 +224,13 @@
 }
 
 .training-site-a {
-  top: 18%;
-  left: 34%;
+  top: 15%;
+  left: 31%;
 }
 
 .training-site-b {
-  top: 82%;
-  left: 28%;
+  top: 76%;
+  left: 27.5%;
   border-color: var(--green);
   color: #baffd3;
 }

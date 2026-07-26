@@ -20,6 +20,7 @@
 
 .workspace-redesign .workspace-tabs {
   height: 46px;
+  padding: 0;
   align-items: end;
 }
 
