@@ -1,0 +1,120 @@
+.workspace-redesign .workspace-head {
+  height: 42px;
+  margin: 0;
+  align-items: center;
+  border-bottom: 1px solid #1d2d43;
+}
+
+.workspace-redesign .workspace-kicker {
+  font-size: 10px;
+}
+
+.workspace-redesign .workspace-head h1 {
+  font-size: 14px;
+}
+
+.workspace-redesign .workspace-tabs {
+  height: 46px;
+  align-items: end;
+}
+
+.workspace-redesign .workspace-tab {
+  height: 40px;
+  padding: 10px 14px;
+  font-size: 11px;
+}
+
+.workspace-redesign .production-flow {
+  min-height: 0;
+  height: max-content;
+  padding: 20px 16px;
+  position: sticky;
+  top: 14px;
+  align-self: start;
+}
+
+.production-flow-head {
+  margin-bottom: 9px;
+  color: #8498b3;
+  font-size: 9px;
+  letter-spacing: .7px;
+}
+
+.production-progress {
+  height: 4px;
+  margin: 0 7px 14px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #1d2d43;
+}
+
+.production-progress i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--workspace-cyan), #51dfa0);
+  transition: width .25s;
+}
+
+.production-flow button b {
+  font-size: 12px;
+}
+
+.production-flow button small {
+  margin-top: 3px;
+  font-size: 9px;
+}
+
+.production-flow button.done > i {
+  border-color: #2ba969;
+  background: #102b20;
+  color: #52df91;
+}
+
+.production-flow button.done b {
+  color: #e8fff2;
+}
+
+.production-flow > a {
+  position: static;
+  display: block;
+  margin: 22px 8px 2px;
+  color: var(--workspace-cyan);
+  font-size: 10px;
+}
+
+.production-shot-help b {
+  font-size: 11px;
+}
+
+.production-shot-help span {
+  color: #9fb1c8;
+  font-size: 10px;
+}
+
+.workspace-redesign .map-editor-shell {
+  max-width: none;
+  grid-template-columns: minmax(250px, 290px) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.workspace-redesign .map-editor-sidebar {
+  width: auto;
+  min-width: 0;
+}
+
+.workspace-redesign .map-editor-canvas {
+  min-width: 0;
+}
+
+.workspace-redesign .extra-status,
+.workspace-redesign .map-side-help {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1200px) {
+  .workspace-redesign .map-editor-shell {
+    grid-template-columns: 1fr;
+  }
+}

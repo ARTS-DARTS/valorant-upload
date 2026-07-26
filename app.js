@@ -6279,7 +6279,9 @@ vidPlayer.addEventListener('timeupdate', () => {
   if (vidPlayer.currentTime > end) {
     if (outputPlaybackActive) stopOutputPlayback({ keepPreview: true });
     else vidPlayer.pause();
-    vidPlayer.currentTime = videoEdit.trimStart;
+    // Keep the playhead at the end. Rewinding here made short clips appear to
+    // "jump back" a second after playback started and prevented frame capture.
+    vidPlayer.currentTime = Math.max(videoEdit.trimStart, Math.min(end, vidPlayer.duration || end));
     playedFreezeHolds.clear();
   }
   updateTimelinePlaybackUi();

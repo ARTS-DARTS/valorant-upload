@@ -29,7 +29,8 @@ function createUploadRail() {
   const rail = document.createElement('aside');
   rail.className = 'production-flow';
   rail.innerHTML = `
-    <div class="production-flow-head"><span>НОВЫЙ МАТЕРИАЛ</span><b>РАБОЧИЙ ПРОЦЕСС</b></div>
+    <div class="production-flow-head"><span>НОВЫЙ МАТЕРИАЛ</span><b id="production-progress-label">0 ИЗ 5</b></div>
+    <div class="production-progress"><i id="production-progress-bar"></i></div>
     <button class="active" data-production-step="КАРТА"><i>1</i><span><b>Основа</b><small>Карта, категория и агент</small></span></button>
     <button data-production-step="ВИДЕО"><i>2</i><span><b>Монтаж</b><small>Видео и захват кадров</small></span></button>
     <button data-production-step="СКРИНШОТЫ"><i>3</i><span><b>Редактор</b><small>Кадры, абилки и карта</small></span></button>
@@ -47,6 +48,47 @@ function createUploadRail() {
     }
     scrollToUploadSection(button.dataset.productionStep);
   });
+  refreshProductionProgress();
+}
+
+function isVisible(element) {
+  return !!element && getComputedStyle(element).display !== 'none';
+}
+
+function refreshProductionProgress() {
+  const rail = document.querySelector('.production-flow');
+  if (!rail) return;
+  const mapReady = Boolean(document.getElementById('sel-map')?.value);
+  const categoryReady = Boolean(document.querySelector('#cat-row .pill-btn.selected'));
+  const agentReady = Boolean(document.querySelector('#agents-grid .agent-card.selected'));
+  const video = document.getElementById('vid-player');
+  const videoReady = isVisible(document.getElementById('vid-player-wrap')) && Boolean(video?.currentSrc || video?.src);
+  const screenshotsReady = Boolean(document.querySelector('#shots-row .shot-item'));
+  const abilityReady = Boolean(document.querySelector('#abilities-row .ability-btn.selected'));
+  const positionReady = isVisible(document.getElementById('map-marker'));
+  const titleReady = (document.getElementById('inp-title')?.value.trim().length || 0) >= 8;
+  const descriptionReady = (document.getElementById('inp-desc')?.value.trim().length || 0) >= 20;
+  const submitReady = !document.getElementById('btn-submit')?.disabled;
+  const ready = [
+    mapReady && categoryReady && agentReady,
+    videoReady,
+    screenshotsReady && abilityReady && positionReady,
+    titleReady && descriptionReady,
+    submitReady,
+  ];
+  const count = ready.filter(Boolean).length;
+  rail.querySelectorAll('[data-production-step]').forEach((button, index) => {
+    button.classList.toggle('done', ready[index]);
+    const icon = button.querySelector('i');
+    const iconText = ready[index] ? '✓' : String(index + 1);
+    if (icon && icon.textContent !== iconText) icon.textContent = iconText;
+  });
+  const label = document.getElementById('production-progress-label');
+  const bar = document.getElementById('production-progress-bar');
+  const labelText = `${count} ИЗ 5 ГОТОВО`;
+  const barWidth = `${count / 5 * 100}%`;
+  if (label && label.textContent !== labelText) label.textContent = labelText;
+  if (bar && bar.style.width !== barWidth) bar.style.width = barWidth;
 }
 
 function createMapGallery() {
@@ -119,4 +161,14 @@ window.addEventListener('DOMContentLoaded', () => {
   createMapGallery();
   improveFrameCapture();
   observeWorkspaceTabs();
+  document.getElementById('form-screen')?.addEventListener('input', refreshProductionProgress);
+  document.getElementById('form-screen')?.addEventListener('change', refreshProductionProgress);
+  document.getElementById('form-screen')?.addEventListener('click', () => setTimeout(refreshProductionProgress, 80));
+  new MutationObserver(refreshProductionProgress).observe(document.getElementById('workspace-upload'), {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'disabled', 'src'],
+  });
+  setInterval(refreshProductionProgress, 1500);
 });
