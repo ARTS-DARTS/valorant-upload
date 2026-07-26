@@ -7256,7 +7256,7 @@ document.getElementById('map-wrap')?.addEventListener('pointerdown', e => {
     const img = document.getElementById('map-img');
     if (img?.style.display === 'none') return;
     e.preventDefault();
-    e.stopPropagation();
+    e.stopImmediatePropagation();
     const start = eventToMapPoint(e);
     defenseLineDraft = {
       ability: selectedDefenseAbility.ability,
@@ -7594,6 +7594,11 @@ document.getElementById('map-wrap')?.addEventListener('wheel', event => {
 document.getElementById('map-wrap')?.addEventListener('pointerdown', event => {
   if (event.button !== 0 && event.button !== 1) return;
   if (mapMode === 'zoom' || defenseZoomDrag) return;
+  if (
+    normalizeContentCategory(selectedCategory) === 'defense' &&
+    mapMode === 'defenseAbility' &&
+    selectedDefenseAbility?.shape?.kind === 'line_segment'
+  ) return;
   if (mapViewScale <= 1 || event.target.closest('.defense-ability-marker,.map-marker')) return;
   mapViewPanDrag = {
     pointerId: event.pointerId,

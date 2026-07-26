@@ -66,13 +66,19 @@ function refreshProductionProgress() {
   const screenshotsReady = Boolean(document.querySelector('#shots-row .shot-item'));
   const abilityReady = Boolean(document.querySelector('#abilities-row .ability-btn.selected'));
   const positionReady = isVisible(document.getElementById('map-marker'));
+  const category = typeof normalizeContentCategory === 'function'
+    ? normalizeContentCategory(selectedCategory)
+    : selectedCategory;
+  const editorReady = category === 'defense'
+    ? screenshotsReady && typeof categoryExtrasValid === 'function' && categoryExtrasValid(category)
+    : screenshotsReady && abilityReady && positionReady;
   const titleReady = (document.getElementById('inp-title')?.value.trim().length || 0) >= 8;
   const descriptionReady = (document.getElementById('inp-desc')?.value.trim().length || 0) >= 20;
   const submitReady = !document.getElementById('btn-submit')?.disabled;
   const ready = [
     mapReady && categoryReady && agentReady,
     videoReady,
-    screenshotsReady && abilityReady && positionReady,
+    editorReady,
     titleReady && descriptionReady,
     submitReady,
   ];
