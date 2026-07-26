@@ -1,5 +1,6 @@
 const CYPHER_ICON =
   'https://media.valorant-api.com/agents/117ed9e3-49f3-6512-3ccf-0cada7e3823b/displayicon.png';
+const TRAINING_VIDEO = '/author-training/training-control-example.mp4?v=2026-07-26-v1';
 
 function setReactInputValue(input, value) {
   const setter = Object.getOwnPropertyDescriptor(
@@ -26,6 +27,17 @@ function enhanceTraining() {
   if (title && !title.dataset.automaticTitle) {
     title.dataset.automaticTitle = 'true';
     setReactInputValue(title, 'B Site Camera and Trapwires');
+  }
+
+  const badExample = document.querySelector('.bad-video');
+  if (badExample && !badExample.querySelector('video')) {
+    const video = document.createElement('video');
+    video.src = TRAINING_VIDEO;
+    video.controls = true;
+    video.preload = 'metadata';
+    video.playsInline = true;
+    video.setAttribute('aria-label', 'Учебный плохой пример');
+    badExample.prepend(video);
   }
 
   document.querySelectorAll('.quality p').forEach(paragraph => {
