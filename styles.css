@@ -565,6 +565,12 @@
     .btn-submit { width: 100%; background: var(--primary); color: #fff; border: none; padding: 13px 12px; border-radius: var(--r); font-size: 14px; font-weight: 800; cursor: pointer; letter-spacing: .4px; transition: opacity .15s; margin: 0; }
     .btn-submit:hover { opacity: .88; }
     .btn-submit:disabled { opacity: .4; cursor: default; }
+    .form-validation-summary { margin-bottom: 10px; padding: 11px 12px; border: 1px solid #ff4655; background: rgba(255,70,85,.1); color: #ffd9dd; font-size: 12px; line-height: 1.45; }
+    .form-validation-summary strong { display: block; margin-bottom: 5px; color: #fff; font-size: 13px; }
+    .form-validation-summary ul { margin: 0; padding-left: 17px; }
+    .form-validation-error { border-color: #ff4655 !important; box-shadow: 0 0 0 1px rgba(255,70,85,.36), 0 0 18px rgba(255,70,85,.1); }
+    .field-validation-message { margin-top: 9px; color: #ff7b85; font-size: 12px; font-weight: 700; line-height: 1.4; }
+    .finput[aria-invalid="true"] { border-color: #ff4655 !important; box-shadow: 0 0 0 1px rgba(255,70,85,.28); }
 
     /* Success modal */
     .success-overlay { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); background: rgba(10,14,26,.55); animation: fadeIn .22s ease; }

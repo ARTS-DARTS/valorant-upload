@@ -337,8 +337,8 @@ function defenseSiteValue() {
 }
 
 function defenseNumberValue() {
-  const raw = Number(document.getElementById('defense-number')?.value || 0);
-  return Number.isFinite(raw) ? Math.max(1, Math.min(99, Math.round(raw))) : 1;
+  // Internal sequence value retained only for backwards-compatible payloads.
+  return 1;
 }
 
 function hasValidDefenseZoom() {
@@ -4289,7 +4289,7 @@ document.getElementById('defense-zoom-clear')?.addEventListener('click', () => {
   renderCategoryMapExtras();
   validateForm(); _saveDraft();
 });
-['defense-site', 'defense-number'].forEach(id => {
+['defense-site'].forEach(id => {
   document.getElementById(id)?.addEventListener('input', () => {
     validateForm(); _saveDraft();
   });
@@ -8409,21 +8409,84 @@ function _restoreDraft(sourceDraft = null) {
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
-function validateForm() {
+let formValidationAttempted = false;
+
+function validationCard(id) {
+  return document.getElementById(id)?.closest('.card, .category-extra-card, .map-editor-card') || null;
+}
+
+function collectFormValidationErrors() {
   const category = normalizeContentCategory(selectedCategory || '');
-  const ok =
-    !categoryTrainingGateActive &&
-    document.getElementById('sel-map').value &&
-    (!categoryNeedsAgent(category) || selectedAgent) &&
-    (!categoryNeedsAbility(category) || selectedAbility) &&
-    selectedCategory &&
-    canSubmitContentCategory(selectedCategory) &&
-    categoryExtrasValid(category) &&
-    selectedDifficulty &&
-    selectedRoundSide &&
-    document.getElementById('inp-title').value.trim().length > 0 &&
-    (category === 'defense' || markerX !== null);
-  document.getElementById('btn-submit').disabled = !ok;
+  const errors = [];
+  const add = (message, target, input = null) => errors.push({ message, target, input });
+  const mapCard = validationCard('sel-map');
+
+  if (!document.getElementById('sel-map').value) add('Выбери карту.', mapCard, document.getElementById('sel-map'));
+  if (!selectedCategory) add('Выбери категорию материала.', validationCard('cat-row'));
+  if (selectedCategory && !canSubmitContentCategory(selectedCategory)) add('Выбранная категория закрыта для отправки.', validationCard('cat-row'));
+  if (category && categoryNeedsAgent(category) && !selectedAgent) add('Выбери агента.', validationCard('agents-grid'));
+  if (categoryNeedsAbility(category) && !selectedAbility) add('Выбери способность агента.', validationCard('abilities-row'));
+  if (!selectedDifficulty) add('Укажи сложность.', validationCard('diff-row'));
+  if (!selectedRoundSide) add('Выбери сторону раунда.', validationCard('side-row'));
+  if (!document.getElementById('inp-title').value.trim()) add('Напиши название материала.', validationCard('inp-title'), document.getElementById('inp-title'));
+
+  if (category === 'lineup' && markerX === null) add('Поставь позицию броска на карте.', mapCard);
+  if (category === 'wallbang') {
+    if (!selectedWallbangWeapons().length) add('Выбери оружие для прострела.', validationCard('wallbang-weapons'));
+    if (markerX === null) add('Поставь позицию выстрела на карте.', mapCard);
+    if (wallbangTargetX === null) add('Поставь точку попадания на карте.', mapCard);
+  }
+  if (category === 'defense') {
+    if (!defenseSiteValue()) add('Укажи зону или плент: A, B, C или Mid.', validationCard('defense-site'), document.getElementById('defense-site'));
+    if (!hasValidDefenseZoom()) add('Нажми Zoom и выдели область сетапа на карте.', validationCard('mode-defense-zoom'));
+    if (!defenseAbilities.length) add('Расставь хотя бы одну способность на карте.', validationCard('defense-ability-row'));
+  }
+  return errors;
+}
+
+function renderFormValidation(errors, { focusFirst = false } = {}) {
+  document.querySelectorAll('.form-validation-error').forEach(element => element.classList.remove('form-validation-error'));
+  document.querySelectorAll('.field-validation-message').forEach(element => element.remove());
+  document.querySelectorAll('[aria-invalid="true"]').forEach(element => element.removeAttribute('aria-invalid'));
+
+  const grouped = new Map();
+  errors.forEach(error => {
+    if (!error.target) return;
+    if (!grouped.has(error.target)) grouped.set(error.target, []);
+    grouped.get(error.target).push(error.message);
+    error.input?.setAttribute('aria-invalid', 'true');
+  });
+  grouped.forEach((messages, target) => {
+    target.classList.add('form-validation-error');
+    const message = document.createElement('div');
+    message.className = 'field-validation-message';
+    message.textContent = messages.join(' ');
+    target.appendChild(message);
+  });
+
+  const summary = document.getElementById('form-validation-summary');
+  if (summary) {
+    summary.hidden = errors.length === 0;
+    summary.innerHTML = errors.length
+      ? `<strong>Нужно заполнить ещё ${errors.length}</strong><ul>${errors.map(error => `<li>${esc(error.message)}</li>`).join('')}</ul>`
+      : '';
+  }
+  if (focusFirst && errors[0]?.target) {
+    errors[0].target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    errors[0].input?.focus({ preventScroll: true });
+  }
+}
+
+function validateForm(options = {}) {
+  const errors = collectFormValidationErrors();
+  const ok = !categoryTrainingGateActive && errors.length === 0;
+  const button = document.getElementById('btn-submit');
+  // Keep the action clickable so it can explain what is missing. Training is
+  // the only state that intentionally locks the whole category.
+  button.disabled = categoryTrainingGateActive;
+  button.dataset.ready = ok ? 'true' : 'false';
+  if (formValidationAttempted) renderFormValidation(errors, options);
+  return ok;
 }
 
 function selectedAbilityAliases() {
@@ -8490,6 +8553,11 @@ async function buildExtraAbilitiesPayload(map, agentName) {
 
 // ── Submit ────────────────────────────────────────────────────────────────────
 document.getElementById('btn-submit').addEventListener('click', async () => {
+  formValidationAttempted = true;
+  if (!validateForm({ focusFirst: true })) {
+    toast('Исправь пункты, выделенные красным', 'e');
+    return;
+  }
   if (!currentUser) { toast('Войди в аккаунт', 'e'); return; }
   await loadCurrentUserProfile(currentUser);
   updateUploadGate();
@@ -8791,7 +8859,6 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   document.getElementById('inp-title').value = '';
   document.getElementById('inp-desc').value = '';
   document.getElementById('defense-site').value = '';
-  document.getElementById('defense-number').value = '1';
   document.querySelectorAll('#wallbang-weapons input[type="checkbox"]').forEach(input => { input.checked = false; });
   document.getElementById('title-count').textContent = '0';
   document.getElementById('desc-count').textContent = '0';
@@ -8811,7 +8878,9 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   renderExtraAbilityPanel();
   renderScreenshots();
   document.getElementById('success-screen').style.display = 'none';
-  document.getElementById('btn-submit').disabled = true;
+  formValidationAttempted = false;
+  renderFormValidation([]);
+  document.getElementById('btn-submit').disabled = false;
   document.getElementById('btn-submit').textContent = '⬆ Отправить лайнап';
   renderResubmissionBanner();
   window.scrollTo(0, 0);
