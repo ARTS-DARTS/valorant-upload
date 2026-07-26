@@ -4226,10 +4226,27 @@ document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => {
       return;
     }
     const nextCategory = normalizeContentCategory(b.dataset.val);
+    const categoryChanged = Boolean(
+      selectedCategory &&
+      nextCategory &&
+      nextCategory !== normalizeContentCategory(selectedCategory)
+    );
     if (selectedCategory && nextCategory && nextCategory !== selectedCategory && categoryHasPlacedData(selectedCategory)) {
       const saveFirst = window.confirm('Вы собираетесь переключить категорию. Нажмите OK, чтобы сохранить текущий вариант как черновик и переключиться. Нажмите Отмена, чтобы переключиться со сбросом данных текущей категории.');
       if (saveFirst) saveCurrentDraftCopy('Текущий вариант сохранён в черновики');
       resetCategorySpecificData();
+    }
+    // Agent and ability choices belong to a category. Carrying them over can
+    // briefly expose abilities that are disabled for the newly selected type
+    // while its Firestore availability config is still loading.
+    if (categoryChanged) {
+      selectedAgent = null;
+      selectedAbility = null;
+      selectedDefenseAbility = null;
+      selectedDefenseMarkerIndex = null;
+      defenseAbilities = [];
+      const abilitiesRow = document.getElementById('abilities-row');
+      if (abilitiesRow) abilitiesRow.innerHTML = '<span class="ability-empty-hint">Сначала выбери агента</span>';
     }
     document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
     b.classList.add('selected');
