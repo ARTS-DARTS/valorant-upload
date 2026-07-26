@@ -2,6 +2,8 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { deploymentTime, deploymentVersion } from './site-version.js';
 
+const PUBLIC_ONESIGNAL_APP_ID = '1703b1a2-73e6-42b5-b788-9437233799ca';
+
 function clean(value) {
   return String(value ?? '').replace(/\uFEFF/g, '').trim();
 }
@@ -14,7 +16,7 @@ function initFirebase() {
 }
 
 async function sendUpdatePush() {
-  const appId = clean(process.env.ONESIGNAL_APP_ID);
+  const appId = clean(process.env.ONESIGNAL_APP_ID) || PUBLIC_ONESIGNAL_APP_ID;
   const restKey = clean(process.env.ONESIGNAL_REST_KEY);
   if (!appId || !restKey) return { skipped: 'onesignal_not_configured' };
 
