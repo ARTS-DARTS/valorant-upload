@@ -70,11 +70,8 @@ app.get(['/author-training', '/author-training/'], (req, res) => {
 });
 
 app.get(['/upload-redesign-preview', '/upload-redesign-preview/'], (req, res) => {
-  // The preview used to be a separate static mock with duplicated category,
-  // video, screenshot and map behavior. Keep one functional source of truth:
-  // the production uploader and its real editor.
-  res.setHeader('Cache-Control', 'no-store');
-  res.redirect(302, '/?uploadPreview=1');
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.sendFile(path.join(__dirname, 'upload-redesign-preview', 'index.html'));
 });
 
 app.get('*', (req, res) => {
