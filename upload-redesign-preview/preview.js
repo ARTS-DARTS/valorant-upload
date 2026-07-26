@@ -83,11 +83,16 @@ function renderVideo() {
 }
 
 function renderEditor() {
-  const items = [['01', 'Общий вид', currentMap().splash], ['02', 'Камера', currentAgent().fullPortrait], ['03', 'Растяжки', currentAgent().displayIcon], ['04', 'Результат', currentMap().splash]];
+  const items = [
+    ['01', 'Общий вид', 'Покажи исходную позицию'],
+    ['02', 'Установка', 'Покажи размещение способности'],
+    ['03', 'Ориентир', 'Покажи точку прицела или установки'],
+    ['04', 'Результат', 'Покажи, что получилось'],
+  ];
   const abilityButtons = (currentAgent().abilities || []).filter((item) => item.displayIcon).map((ability, index) => `<button class="${selectedAbility === ability.displayName || (!selectedAbility && index === 0) ? 'active' : ''}" data-ability-map="${esc(ability.displayName)}"><img src="${esc(ability.displayIcon)}" alt="" title="${esc(ability.displayName)}"></button>`).join('');
   canvas.innerHTML = `${stageHeader('03', 'Собери материал в редакторе', 'Добавь скриншоты и сразу разметь позицию на карте.')}
-    <div class="template-banner"><div><small>ВЫБРАННЫЙ ШАБЛОН</small><h2>Защитный сетап</h2></div><span>Общий вид → камера → растяжки → результат</span></div>
-    <div class="screenshot-grid">${items.map(([number, title, image], index) => `<button class="screenshot-card ${index < 2 ? 'filled' : ''}" style="--image:url('${esc(image)}')"><i>${number}</i><b>${title}</b><small>${index < 2 ? 'ЗАГРУЖЕНО' : '+ ДОБАВИТЬ СКРИНШОТ'}</small></button>`).join('')}</div>
+    <div class="template-banner"><div><small>СКРИНШОТЫ</small><h2>Добавь четыре ключевых кадра</h2></div><span>Нажми на карточку и выбери изображение</span></div>
+    <div class="screenshot-grid">${items.map(([number, title, hint]) => `<button class="screenshot-card"><i>${number}</i><span class="screenshot-add">＋</span><b>${title}</b><small>${hint}</small></button>`).join('')}</div>
     <div class="editor-divider"><span>РАЗМЕТКА КАРТЫ</span><b>Позиция и траектория</b></div>
     <div class="map-editor-preview"><div class="map-tools"><button class="active">1 · ПОЗИЦИЯ</button><button>2 · ТРАЕКТОРИЯ</button><button>ОЧИСТИТЬ</button></div><div class="minimap"><img src="${esc(currentMap().displayIcon)}" alt=""><span class="throw-point"></span><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M32 72 C39 55, 52 47, 69 28"/><circle cx="69" cy="28" r="2"/></svg></div>
     <aside class="ability-settings"><div class="settings-agent"><img src="${esc(currentAgent().displayIcon)}" alt=""><div><b>${esc(selectedAgent)}</b><small>${esc(selectedAbility || 'Выбери способность')}</small></div></div>
