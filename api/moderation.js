@@ -200,6 +200,7 @@ function safeLineup(doc, viewerUid = '') {
     user_id: clean(d.user_id || d.uid || d.author_uid).slice(0, 128),
     submitted_by: clean(d.submitted_by || d.author).slice(0, 80),
     video_url: clean(d.video_url).slice(0, 1000),
+    video_edit: d.video_edit && typeof d.video_edit === 'object' ? d.video_edit : null,
     video_thumbnail_url: clean(
       d.video_thumbnail_url || d.thumbnail_url || d.poster_url ||
       (Array.isArray(d.screenshots) ? d.screenshots[0] : ''),
@@ -319,6 +320,9 @@ async function saveDraft(req, res, moderator) {
       video_url: data.video_remove_requested === true
         ? ''
         : clean(data.video_url || currentData.video_url).slice(0, 1000),
+      video_edit: data.video_edit && typeof data.video_edit === 'object'
+        ? data.video_edit
+        : (currentData.video_edit && typeof currentData.video_edit === 'object' ? currentData.video_edit : null),
       user_id: authorUid, submitted_by: authorName,
       category: contentType, content_type: contentType, status: 'pending', moderator_only: false,
       edited_by_moderator_uid: moderator.uid, edited_at: FieldValue.serverTimestamp(), submitted_at: FieldValue.serverTimestamp(),
@@ -378,7 +382,7 @@ async function autosaveDraft(req, res, moderator) {
   const db = getFirestore();
   const ref = db.collection('lineups').doc(lineupId);
   const claimRef = db.collection('moderation_claims').doc(moderator.uid);
-  const expiresAt = new Date(Date.now() + MODERATION_LOCK_MS);
+  let expiresAt = null;
   await db.runTransaction(async tx => {
     const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
@@ -388,6 +392,11 @@ async function autosaveDraft(req, res, moderator) {
     if (clean(current.moderation_lock_uid) !== moderator.uid) {
       throw Object.assign(new Error('Бронь лайнапа потеряна. Обнови очередь.'), { status: 409 });
     }
+    const currentExpiry = timestampMillis(current.moderation_lock_expires_at);
+    if (currentExpiry <= Date.now()) {
+      throw Object.assign(new Error('Время на проверку истекло. Возьми лайнап в работу заново.'), { status: 409 });
+    }
+    expiresAt = new Date(currentExpiry);
     const contentType = ['lineup', 'combo', 'wallbang', 'defense'].includes(clean(data.content_type || data.category))
       ? clean(data.content_type || data.category)
       : clean(current.content_type || current.category || 'lineup');
@@ -403,6 +412,9 @@ async function autosaveDraft(req, res, moderator) {
       })) : [],
       screenshots: Array.isArray(data.screenshots) ? data.screenshots.slice(0, 8).map(value => clean(value).slice(0, 1000)) : [],
       video_url: data.video_remove_requested === true ? '' : clean(data.video_url || current.video_url).slice(0, 1000),
+      video_edit: data.video_edit && typeof data.video_edit === 'object'
+        ? data.video_edit
+        : (current.video_edit && typeof current.video_edit === 'object' ? current.video_edit : null),
       user_id: clean(data.user_id || current.user_id || current.uid || current.author_uid).slice(0, 128),
       submitted_by: clean(data.submitted_by || current.submitted_by || current.author).slice(0, 80),
       category: contentType, content_type: contentType,

@@ -5,7 +5,6 @@ let queuePollTimer = null;
 let claimHeartbeatTimer = null;
 let claimedLineupId = '';
 let claimExpiresAt = 0;
-let claimStartedAt = 0;
 let claimCountdownTimer = null;
 let totalQueueItems = 0;
 let renderedQueueSignature = '';
@@ -309,37 +308,25 @@ function renderClaimTimer() {
     timer.classList.remove('expiring');
     return;
   }
-  const seconds = Math.max(0, Math.floor((Date.now() - claimStartedAt) / 1000));
+  const seconds = Math.max(0, Math.ceil((claimExpiresAt - Date.now()) / 1000));
   value.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   timer.hidden = false;
-  timer.classList.remove('expiring');
+  timer.classList.toggle('expiring', seconds <= 60);
+  if (seconds === 0) clearClaim();
 }
 
 function startClaimHeartbeat(lineupId, expiresAt) {
-  if (claimedLineupId !== lineupId || !claimStartedAt) claimStartedAt = Date.now();
   claimedLineupId = lineupId;
   claimExpiresAt = Number(expiresAt) || (Date.now() + 10 * 60_000);
   clearInterval(claimHeartbeatTimer);
   clearInterval(claimCountdownTimer);
   claimCountdownTimer = setInterval(renderClaimTimer, 1000);
   renderClaimTimer();
-  claimHeartbeatTimer = setInterval(async () => {
-    if (!claimedLineupId || document.hidden) return;
-    try {
-      const result = await api('', { method: 'POST', body: JSON.stringify({ lineupId: claimedLineupId, action: 'renew_claim' }) });
-      claimExpiresAt = Number(result.expires_at) || claimExpiresAt;
-      renderClaimTimer();
-    } catch (error) {
-      clearClaim();
-      context.toast('Бронь лайнапа потеряна: ' + error.message, 'e');
-    }
-  }, 30_000);
 }
 
 function clearClaim() {
   claimedLineupId = '';
   claimExpiresAt = 0;
-  claimStartedAt = 0;
   clearInterval(claimHeartbeatTimer);
   clearInterval(claimCountdownTimer);
   claimHeartbeatTimer = null;
@@ -520,16 +507,7 @@ export function initModeration(nextContext) {
   }, 5_000);
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden) return;
-    if (claimedLineupId) {
-      try {
-        const result = await api('', { method: 'POST', body: JSON.stringify({ lineupId: claimedLineupId, action: 'renew_claim' }) });
-        claimExpiresAt = Number(result.expires_at) || claimExpiresAt;
-        renderClaimTimer();
-      } catch (error) {
-        clearClaim();
-        context.toast('Бронь лайнапа потеряна: ' + error.message, 'e');
-      }
-    }
+    renderClaimTimer();
     refreshLocks();
   });
   async function releaseClaim(lineupId) {
@@ -540,10 +518,15 @@ export function initModeration(nextContext) {
   }
   async function resumeDraft(lineupId) {
     if (!lineupId) return false;
-    const claim = await api('', { method:'POST', body:JSON.stringify({ lineupId, action:'claim' }) });
-    startClaimHeartbeat(lineupId, claim.expires_at);
-    await load({ silent:true });
-    const item = loadedItems.find(entry => entry.id === lineupId);
+    let item = loadedItems.find(entry => entry.id === lineupId);
+    if (item?.moderation_lock_owned && item.moderation_lock_expires_at > Date.now()) {
+      startClaimHeartbeat(lineupId, item.moderation_lock_expires_at);
+    } else {
+      const claim = await api('', { method:'POST', body:JSON.stringify({ lineupId, action:'claim' }) });
+      startClaimHeartbeat(lineupId, claim.expires_at);
+      await load({ silent:true });
+      item = loadedItems.find(entry => entry.id === lineupId);
+    }
     if (!item) return false;
     context.openDraft(item);
     return true;

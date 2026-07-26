@@ -4825,6 +4825,17 @@ function activeZoomClipAtOutput(outputTime) {
     }) || null;
 }
 
+function zoomPreviewStateAtOutput(outputTime) {
+  const clip = activeZoomClipAtOutput(outputTime);
+  if (!clip) return { clip: null, mix: 0 };
+  const start = effectOutputStart(clip);
+  const duration = Math.max(0.2, Number(clip.duration || 2));
+  const local = Math.max(0, Math.min(duration, outputTime - start));
+  const ramp = Math.max(0.08, Math.min(0.4, duration / 2));
+  const linear = Math.max(0, Math.min(1, local / ramp, (duration - local) / ramp));
+  return { clip, mix: linear * linear * (3 - 2 * linear) };
+}
+
 function activeFootageClipAtOutput(outputTime) {
   return (videoEdit.footageOverlays || [])
     .slice()
@@ -5172,9 +5183,11 @@ function stepEditorFrame(direction) {
 
 function renderVideoTransport() {
   if (scrubberDragging) return;
-  const sourceDuration = videoDuration();
-  if (vidScrubber && sourceDuration) vidScrubber.value = String((vidPlayer.currentTime / sourceDuration) * 100);
-  if (vidTimeEl) vidTimeEl.textContent = fmtTime(vidPlayer.currentTime) + ' / ' + fmtTime(sourceDuration);
+  const editorExpanded = editorEls.toggle?.getAttribute('aria-expanded') !== 'false';
+  const duration = editorExpanded ? editedOutputDuration() : videoDuration();
+  const current = editorExpanded ? currentOutputTime() : vidPlayer.currentTime;
+  if (vidScrubber && duration) vidScrubber.value = String((current / duration) * 100);
+  if (vidTimeEl) vidTimeEl.textContent = fmtTime(current) + ' / ' + fmtTime(duration);
 }
 
 function updateTimelinePlaybackUi({ keepVisible = false } = {}) {
@@ -5322,15 +5335,17 @@ function setEditorMode(mode) {
 }
 
 function applyVideoEditPreview() {
-  const activeZoom = activeZoomClipAtOutput(currentOutputTime());
-  const scaleX = activeZoom ? Number(activeZoom.scaleX ?? activeZoom.scale ?? 1) : 1;
-  const scaleY = activeZoom ? Number(activeZoom.scaleY ?? activeZoom.scale ?? 1) : 1;
+  const { clip: activeZoom, mix: zoomMix } = zoomPreviewStateAtOutput(currentOutputTime());
+  const targetScaleX = activeZoom ? Number(activeZoom.scaleX ?? activeZoom.scale ?? 1) : 1;
+  const targetScaleY = activeZoom ? Number(activeZoom.scaleY ?? activeZoom.scale ?? 1) : 1;
+  const scaleX = 1 + (targetScaleX - 1) * zoomMix;
+  const scaleY = 1 + (targetScaleY - 1) * zoomMix;
   const scale = Math.max(scaleX, scaleY, 1);
-  const posX = activeZoom ? Number(activeZoom.posX || 0) : 0;
-  const posY = activeZoom ? Number(activeZoom.posY || 0) : 0;
-  const rotation = activeZoom ? Number(activeZoom.rotation || 0) : 0;
-  const anchorX = activeZoom ? Number(activeZoom.anchorX ?? 50) : 50;
-  const anchorY = activeZoom ? Number(activeZoom.anchorY ?? 50) : 50;
+  const posX = activeZoom ? Number(activeZoom.posX || 0) * zoomMix : 0;
+  const posY = activeZoom ? Number(activeZoom.posY || 0) * zoomMix : 0;
+  const rotation = activeZoom ? Number(activeZoom.rotation || 0) * zoomMix : 0;
+  const anchorX = activeZoom ? 50 + (Number(activeZoom.anchorX ?? 50) - 50) * zoomMix : 50;
+  const anchorY = activeZoom ? 50 + (Number(activeZoom.anchorY ?? 50) - 50) * zoomMix : 50;
   const pan = zoomPanForAnchor(anchorX, anchorY, scale);
   const transformOrigin = '50% 50%';
   const transform = `scale(${scale}) translate(${pan.x + posX}px, ${pan.y + posY}px) rotate(${rotation}deg)`;
@@ -6617,25 +6632,31 @@ vidPlayer.addEventListener('seeking', () => {
   updateTimelinePlaybackUi({ keepVisible: true });
 });
 function seekFromScrubberValue() {
+  const editorExpanded = editorEls.toggle?.getAttribute('aria-expanded') !== 'false';
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   playedFreezeHolds.clear();
   const rawRatio = Number(vidScrubber.value || 0) / 100;
   const ratio = Number.isFinite(rawRatio) ? Math.max(0, Math.min(1, rawRatio)) : 0;
-  const duration = videoDuration();
+  const duration = editorExpanded ? editedOutputDuration() : videoDuration();
   if (!duration) {
     pendingVideoSeekRatio = ratio;
     return;
   }
   pendingVideoSeekRatio = null;
-  timelinePreviewOutputTime = null;
   setFreezeOverlay('');
   const targetTime = ratio * duration;
   if (!Number.isFinite(targetTime)) {
     pendingVideoSeekRatio = ratio;
     return;
   }
-  vidPlayer.currentTime = targetTime;
+  if (editorExpanded) {
+    showOutputFrame(targetTime);
+    timelinePreviewOutputTime = targetTime;
+  } else {
+    timelinePreviewOutputTime = null;
+    vidPlayer.currentTime = targetTime;
+  }
   updateTimelinePlaybackUi();
 }
 
@@ -6659,14 +6680,15 @@ function videoEditorSourceUrl(url) {
 vidScrubber.addEventListener('input', seekFromScrubberValue);
 vidScrubber.addEventListener('pointerdown', event => {
   scrubberDragging = true;
-  scrubberResumePlayback = !vidPlayer.paused;
-  if (scrubberResumePlayback) vidPlayer.pause();
+  scrubberResumePlayback = outputPlaybackActive || !vidPlayer.paused;
+  if (outputPlaybackActive) stopOutputPlayback({ keepPreview: true });
+  else if (scrubberResumePlayback) vidPlayer.pause();
 });
 const finishScrubberDrag = () => {
   if (!scrubberDragging) return;
   scrubberDragging = false;
   updateTimelinePlaybackUi();
-  if (scrubberResumePlayback) safePlay(vidPlayer);
+  if (scrubberResumePlayback) startOutputPlayback(currentOutputTime());
   scrubberResumePlayback = false;
 };
 vidScrubber.addEventListener('pointerup', finishScrubberDrag);
@@ -8019,6 +8041,7 @@ function moderatorAutosavePayload() {
     content_type: contentType,
     screenshots: screenshots.filter(item => item.cloudUrl).map(item => item.cloudUrl),
     video_url: videoUrl || '',
+    video_edit: videoUrl ? normalizedVideoEdit() : null,
     video_remove_requested: moderatorVideoRemovalRequested,
     user_id: moderatorSelectedAuthor?.uid || '',
     submitted_by: moderatorSelectedAuthor?.name || '',
@@ -8474,7 +8497,7 @@ function _restoreDraft(sourceDraft = null) {
   // Video
   if (d.videoUrl) {
     videoUrl = d.videoUrl;
-    videoEdit = { ...createDefaultVideoEdit(), ...(d.videoEdit || {}) };
+    videoEdit = { ...createDefaultVideoEdit(), ...(d.videoEdit || d.video_edit || {}) };
     rememberCommittedVideoEdit();
     const dropZ = document.getElementById('drop-zone');
     const wrap  = document.getElementById('vid-player-wrap');
