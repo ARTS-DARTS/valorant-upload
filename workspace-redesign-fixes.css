@@ -163,6 +163,21 @@
   align-items: start;
 }
 
+.workspace-redesign .production-map-gallery {
+  scroll-snap-type: none;
+  scroll-behavior: auto;
+}
+
+.workspace-redesign .production-map-gallery button {
+  scroll-snap-align: none;
+}
+
+.workspace-redesign .site-update {
+  font-size: 11px;
+  line-height: 1.2;
+  letter-spacing: .2px;
+}
+
 .workspace-redesign .shot-item {
   width: 72px;
   height: 72px;

@@ -143,9 +143,10 @@ function createMapGallery() {
     sync();
   });
   track.addEventListener('wheel', (event) => {
-    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    if (!delta) return;
     event.preventDefault();
-    moveTrack(event.deltaY * 1.15);
+    moveTrack(delta * 1.15);
   }, { passive: false });
   track.addEventListener('scroll', () => {
     if (!scrollFrame) scrollTarget = track.scrollLeft;

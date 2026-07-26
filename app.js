@@ -1616,6 +1616,15 @@ async function checkSiteVersion() {
     const data = await res.json();
     const liveVersion = String(data?.version || '').trim();
     if (!liveVersion) return;
+    const versionLabel = document.getElementById('site-update');
+    if (versionLabel) {
+      const deployedAt = data?.deployedAt ? new Date(data.deployedAt) : null;
+      const validDate = deployedAt && !Number.isNaN(deployedAt.getTime());
+      versionLabel.textContent = validDate
+        ? `Обновлено: ${deployedAt.toLocaleDateString('ru-RU')} в ${deployedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
+        : `Версия: ${liveVersion.slice(0, 7)}`;
+      versionLabel.title = `Версия ${liveVersion.slice(0, 7)}`;
+    }
     window.__vlLiveVersion = liveVersion;
     if (!loadedServerDeploymentVersion) {
       loadedServerDeploymentVersion = liveVersion;
@@ -6669,6 +6678,13 @@ function syncScreenshotOrderDom(row) {
 }
 
 function bindScreenshotSorting(row) {
+  document.querySelectorAll('.shot-drag-ghost').forEach(ghost => ghost.remove());
+  row.classList.remove('sorting');
+  row.querySelectorAll('.shot-item').forEach(slot => {
+    slot.style.visibility = '';
+    slot.classList.remove('dragging');
+  });
+
   row.querySelectorAll('.shot-item').forEach(item => {
     const image = item.querySelector('[data-shot-preview]');
     if (!image) return;
@@ -6676,6 +6692,7 @@ function bindScreenshotSorting(row) {
     image.addEventListener('dragstart', event => event.preventDefault());
     image.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
+      if (screenshotDrag) return;
       screenshotDrag = {
         pointerId: event.pointerId,
         item,
@@ -6690,62 +6707,75 @@ function bindScreenshotSorting(row) {
         ghost: null,
         moved: false,
       };
-      image.setPointerCapture?.(event.pointerId);
+
+      const moveDrag = moveEvent => {
+        if (!screenshotDrag || screenshotDrag.pointerId !== moveEvent.pointerId || screenshotDrag.item !== item) return;
+        if (!screenshotDrag.moved && Math.hypot(moveEvent.clientX - screenshotDrag.startX, moveEvent.clientY - screenshotDrag.startY) < 8) return;
+        if (!screenshotDrag.moved) {
+          screenshotDrag.moved = true;
+          const rect = item.getBoundingClientRect();
+          const ghost = item.cloneNode(true);
+          ghost.classList.add('shot-drag-ghost');
+          ghost.querySelector('.rm')?.remove();
+          ghost.style.width = `${rect.width}px`;
+          ghost.style.height = `${rect.height}px`;
+          document.body.appendChild(ghost);
+          screenshotDrag.ghost = ghost;
+          item.style.visibility = 'hidden';
+          item.classList.add('dragging');
+          row.classList.add('sorting');
+        }
+        const ghost = screenshotDrag.ghost;
+        if (ghost) {
+          ghost.style.left = `${moveEvent.clientX - screenshotDrag.offsetX}px`;
+          ghost.style.top = `${moveEvent.clientY - screenshotDrag.offsetY}px`;
+        }
+        const to = screenshotDrag.slotCenters.reduce((best, center, index) => {
+          const distance = Math.hypot(moveEvent.clientX - center.x, moveEvent.clientY - center.y);
+          return distance < best.distance ? { index, distance } : best;
+        }, { index: 0, distance: Infinity }).index;
+        const items = [...row.querySelectorAll('.shot-item')];
+        const from = items.indexOf(item);
+        if (from >= 0 && to >= 0 && from !== to) {
+          const [entry] = screenshots.splice(from, 1);
+          screenshots.splice(to, 0, entry);
+          const remaining = [...row.querySelectorAll('.shot-item')].filter(candidate => candidate !== item);
+          if (to >= remaining.length) row.insertBefore(item, row.querySelector('.btn-add-shot'));
+          else row.insertBefore(item, remaining[to]);
+          syncScreenshotOrderDom(row);
+        }
+        moveEvent.preventDefault();
+      };
+
+      const finishDrag = finishEvent => {
+        if (!screenshotDrag || screenshotDrag.pointerId !== event.pointerId || screenshotDrag.item !== item) return;
+        const moved = screenshotDrag.moved;
+        screenshotDrag.ghost?.remove();
+        screenshotDrag = null;
+        item.style.visibility = '';
+        item.classList.remove('dragging');
+        row.classList.remove('sorting');
+        window.removeEventListener('pointermove', moveDrag, true);
+        window.removeEventListener('pointerup', finishDrag, true);
+        window.removeEventListener('pointercancel', finishDrag, true);
+        window.removeEventListener('blur', cancelDrag);
+        if (moved) {
+          suppressScreenshotPreviewUntil = performance.now() + 350;
+          _saveDraft();
+          finishEvent?.preventDefault?.();
+        }
+      };
+
+      const cancelDrag = () => finishDrag({ preventDefault() {} });
+      window.addEventListener('pointermove', moveDrag, true);
+      window.addEventListener('pointerup', finishDrag, true);
+      window.addEventListener('pointercancel', finishDrag, true);
+      window.addEventListener('blur', cancelDrag);
     });
     image.addEventListener('pointermove', event => {
       if (!screenshotDrag || screenshotDrag.pointerId !== event.pointerId || screenshotDrag.item !== item) return;
-      if (!screenshotDrag.moved && Math.hypot(event.clientX - screenshotDrag.startX, event.clientY - screenshotDrag.startY) < 6) return;
-      if (!screenshotDrag.moved) {
-        screenshotDrag.moved = true;
-        const rect = item.getBoundingClientRect();
-        const ghost = item.cloneNode(true);
-        ghost.classList.add('shot-drag-ghost');
-        ghost.querySelector('.rm')?.remove();
-        ghost.style.width = `${rect.width}px`;
-        ghost.style.height = `${rect.height}px`;
-        document.body.appendChild(ghost);
-        screenshotDrag.ghost = ghost;
-        item.style.visibility = 'hidden';
-        item.classList.add('dragging');
-        row.classList.add('sorting');
-      }
-      const ghost = screenshotDrag.ghost;
-      if (ghost) {
-        ghost.style.left = `${event.clientX - screenshotDrag.offsetX}px`;
-        ghost.style.top = `${event.clientY - screenshotDrag.offsetY}px`;
-      }
-      const to = screenshotDrag.slotCenters.reduce((best, center, index) => {
-        const distance = Math.hypot(event.clientX - center.x, event.clientY - center.y);
-        return distance < best.distance ? { index, distance } : best;
-      }, { index: 0, distance: Infinity }).index;
-      const items = [...row.querySelectorAll('.shot-item')];
-      const from = items.indexOf(item);
-      if (from < 0 || to < 0 || from === to) return;
-      const [entry] = screenshots.splice(from, 1);
-      screenshots.splice(to, 0, entry);
-      const remaining = [...row.querySelectorAll('.shot-item')].filter(candidate => candidate !== item);
-      if (to >= remaining.length) row.insertBefore(item, row.querySelector('.btn-add-shot'));
-      else row.insertBefore(item, remaining[to]);
-      syncScreenshotOrderDom(row);
       event.preventDefault();
     });
-    const finishDrag = event => {
-      if (!screenshotDrag || screenshotDrag.pointerId !== event.pointerId || screenshotDrag.item !== item) return;
-      image.releasePointerCapture?.(event.pointerId);
-      const moved = screenshotDrag.moved;
-      screenshotDrag.ghost?.remove();
-      screenshotDrag = null;
-      item.style.visibility = '';
-      item.classList.remove('dragging');
-      row.classList.remove('sorting');
-      if (moved) {
-        suppressScreenshotPreviewUntil = performance.now() + 350;
-        _saveDraft();
-        event.preventDefault();
-      }
-    };
-    image.addEventListener('pointerup', finishDrag);
-    image.addEventListener('pointercancel', finishDrag);
   });
 }
 
