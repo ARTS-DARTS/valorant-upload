@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VLineups — предпросмотр кабинета автора</title>
   <link rel="stylesheet" href="/upload-redesign-preview/preview.css">
+  <link rel="stylesheet" href="/upload-redesign-preview/soft.css">
 </head>
 <body>
   <div class="preview-ribbon">ПРЕДПРОСМОТР · РАБОЧИЙ САЙТ НЕ ИЗМЕНЁН</div>
@@ -36,18 +37,18 @@
   <main>
     <section class="workflow">
       <div class="workflow-title"><span>НОВЫЙ МАТЕРИАЛ</span><b id="progress-label">2 ИЗ 6 ГОТОВО</b></div>
-      <button class="flow-step done" data-target="basics"><i>✓</i><span><b>Основа</b><small>Карта и категория</small></span></button>
-      <button class="flow-step active" data-target="video"><i>2</i><span><b>Видео</b><small>Запись материала</small></span></button>
-      <button class="flow-step" data-target="screens"><i>3</i><span><b>Скриншоты</b><small>Шаги по шаблону</small></span></button>
-      <button class="flow-step" data-target="map"><i>4</i><span><b>Разметка</b><small>Точка и траектория</small></span></button>
-      <button class="flow-step" data-target="details"><i>5</i><span><b>Оформление</b><small>Название и параметры</small></span></button>
-      <button class="flow-step" data-target="review"><i>6</i><span><b>Проверка</b><small>Предпросмотр</small></span></button>
+      <button class="flow-step done" data-target="basics" data-step="1"><i>✓</i><span><b>Основа</b><small>Карта и категория</small></span></button>
+      <button class="flow-step active" data-target="video" data-step="2"><i>2</i><span><b>Видео</b><small>Запись материала</small></span></button>
+      <button class="flow-step" data-target="screens" data-step="3"><i>3</i><span><b>Скриншоты</b><small>Шаги по шаблону</small></span></button>
+      <button class="flow-step" data-target="map" data-step="4"><i>4</i><span><b>Разметка</b><small>Точка и траектория</small></span></button>
+      <button class="flow-step" data-target="details" data-step="5"><i>5</i><span><b>Оформление</b><small>Название и параметры</small></span></button>
+      <button class="flow-step" data-target="review" data-step="6"><i>6</i><span><b>Проверка</b><small>Предпросмотр</small></span></button>
       <div class="draft-state"><span></span><div><b>Черновик сохранён</b><small>автоматически · только что</small></div></div>
     </section>
 
     <section class="canvas">
       <div class="canvas-head">
-        <div><p>ШАГ 02</p><h1>Добавь видео</h1><span>Покажи установку, ориентиры и полный результат.</span></div>
+        <div><p id="stage-number">ШАГ 02</p><h1 id="stage-title">Добавь видео</h1><span id="stage-subtitle">Покажи установку, ориентиры и полный результат.</span></div>
         <button class="quiet" id="reset-demo">СБРОСИТЬ ДЕМО</button>
       </div>
 
@@ -92,6 +93,7 @@
       <p class="support">Нужна помощь? <a href="/author-training/">Открыть инструктаж</a></p>
     </aside>
   </main>
+  <div class="prototype-toast" id="prototype-toast" hidden></div>
   <script src="/upload-redesign-preview/preview.js"></script>
 </body>
 </html>

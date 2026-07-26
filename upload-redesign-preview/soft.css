@@ -1,0 +1,65 @@
+.avatar,
+.rank,
+.header-actions button,
+.tabs button,
+.tabs a,
+.flow-step,
+.flow-step > i,
+.quiet,
+.foundation > label,
+.foundation > div,
+.foundation select,
+.chips button,
+.upload-zone,
+.upload-icon,
+.upload-zone > i,
+.next-block,
+.shot-strip span,
+.score > i,
+li > i,
+.inspector-actions button {
+  border-radius: 9px;
+}
+
+.flow-step {
+  margin: 2px 0;
+  border-left-width: 1px;
+}
+
+.flow-step.active {
+  box-shadow: inset 3px 0 0 var(--cyan);
+}
+
+.workflow {
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+.upload-zone {
+  border-radius: 14px;
+}
+
+.next-block,
+.foundation > label,
+.foundation > div {
+  border-radius: 12px;
+}
+
+.prototype-toast {
+  position: fixed;
+  left: 50%;
+  top: 120px;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 13px 18px;
+  border: 1px solid #3f536f;
+  border-radius: 10px;
+  background: #17243a;
+  color: #dce8f8;
+  box-shadow: 0 15px 45px #000b;
+  font-size: 10px;
+}
+
+.prototype-toast[hidden] {
+  display: none;
+}
