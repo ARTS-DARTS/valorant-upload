@@ -51,7 +51,15 @@ function authErrorRedirect(res, webTarget, reason = PUBLIC_AUTH_ERROR) {
 function hasUsableNickname(data = {}) {
   const name = String(data.name || data.username || data.displayName || '').trim();
   const lower = String(data.name_lower || '').trim();
-  return Boolean(name && lower);
+  return Boolean(name && lower && !isLegacyGeneratedYandexNickname(data));
+}
+
+function isLegacyGeneratedYandexNickname(data = {}) {
+  if (data.nickname_set_at) return false;
+  const provider = String(data.auth_provider || data.primary_provider || '').toLowerCase();
+  const hasYandexIdentity = Boolean(String(data.yandex_id || '').trim() || provider === 'yandex');
+  const name = String(data.name || data.username || data.displayName || '').trim();
+  return hasYandexIdentity && /^Игрок\d{4}$/.test(name);
 }
 
 const USER_SCHEMA_VERSION = 2;
@@ -311,11 +319,13 @@ export default async function handler(req, res) {
         await writeYandexLibrary(db, { uid: firebaseUid, yandexId, email, name, isNew: true });
         isNew = true;
       } else {
+        const legacyGeneratedNickname = isLegacyGeneratedYandexNickname(doc.data() || {});
         await ref.set({
           yandex_id: yandexId,
           yandex_email: email,
           auth_provider: 'yandex',
           last_seen: FieldValue.serverTimestamp(),
+          ...(legacyGeneratedNickname ? { needs_nickname: true } : {}),
           schema_version: USER_SCHEMA_VERSION,
         }, { merge: true });
         await writeYandexLibrary(db, { uid: firebaseUid, yandexId, email, name });
