@@ -1,6 +1,12 @@
 const CYPHER_ICON =
   'https://media.valorant-api.com/agents/117ed9e3-49f3-6512-3ccf-0cada7e3823b/displayicon.png';
 const TRAINING_VIDEO = '/author-training/training-control-example.mp4?v=2026-07-26-v1';
+const ASCENT_MAP =
+  'https://media.valorant-api.com/maps/7eaecc1b-4337-bbf6-6ab9-04b8f06b3319/displayicon.png';
+const KILLJOY_ABILITY_ROOT =
+  'https://media.valorant-api.com/agents/1e58de9c-4950-5125-93e9-a0aee9f98746/abilities';
+const selectedControlErrors = new Set();
+let completingControlStep = false;
 
 function setReactInputValue(input, value) {
   const setter = Object.getOwnPropertyDescriptor(
@@ -9,6 +15,81 @@ function setReactInputValue(input, value) {
   )?.set;
   setter?.call(input, value);
   input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function createAbilityMarker(slot, name, x, y) {
+  const marker = document.createElement('span');
+  marker.className = 'training-ability-marker';
+  marker.style.left = `${x}%`;
+  marker.style.top = `${y}%`;
+  marker.title = name;
+  marker.innerHTML = `<img src="${KILLJOY_ABILITY_ROOT}/${slot}/displayicon.png" alt="${name}">`;
+  return marker;
+}
+
+function syncControlReview(panel) {
+  panel.querySelectorAll('[data-training-error]').forEach(button => {
+    const selected = selectedControlErrors.has(button.dataset.trainingError);
+    button.classList.toggle('selected', selected);
+    button.querySelector('i').textContent = selected ? '✓' : '?';
+  });
+  const count = panel.querySelector('[data-training-error-count]');
+  if (count) count.textContent = `${selectedControlErrors.size} из 2 ошибок найдено`;
+}
+
+async function completeOriginalControlStep() {
+  if (completingControlStep || selectedControlErrors.size < 2) return;
+  completingControlStep = true;
+  for (let index = 0; index < 3; index += 1) {
+    const button = document.querySelectorAll('.error-list button')[index];
+    if (button && !button.classList.contains('marked')) button.click();
+    await new Promise(resolve => setTimeout(resolve, 80));
+  }
+  completingControlStep = false;
+}
+
+function createControlReview(badExample) {
+  const panel = document.createElement('section');
+  panel.className = 'training-control-review';
+  panel.innerHTML = `
+    <button type="button" class="training-error-choice" data-training-error="setup">
+      <i>?</i>
+      <span>Не показано, как сделан сетап</span>
+    </button>
+    <div class="training-map-review">
+      <div class="training-map-heading">
+        <span>КАРТА</span>
+        <strong>Ascent · B Site</strong>
+      </div>
+      <div class="training-map-stage">
+        <img class="training-map-image" src="${ASCENT_MAP}" alt="Карта Ascent, плент B">
+        <b class="training-site-label">B SITE</b>
+      </div>
+    </div>
+    <button type="button" class="training-error-choice" data-training-error="abilities">
+      <i>?</i>
+      <span>Неправильно расставлены способности</span>
+    </button>
+    <div class="training-error-count" data-training-error-count>0 из 2 ошибок найдено</div>
+  `;
+
+  const map = panel.querySelector('.training-map-stage');
+  map.append(
+    createAbilityMarker('ability2', 'Турель', 26, 29),
+    createAbilityMarker('ability1', 'Тревогобот', 62, 37),
+    createAbilityMarker('grenade', 'Нанорой', 42, 65),
+    createAbilityMarker('grenade', 'Нанорой', 73, 72),
+  );
+
+  panel.querySelectorAll('[data-training-error]').forEach(button => {
+    button.addEventListener('click', () => {
+      selectedControlErrors.add(button.dataset.trainingError);
+      syncControlReview(panel);
+      completeOriginalControlStep();
+    });
+  });
+  badExample.after(panel);
+  syncControlReview(panel);
 }
 
 function enhanceTraining() {
@@ -39,6 +120,14 @@ function enhanceTraining() {
     video.setAttribute('aria-label', 'Учебный плохой пример');
     badExample.prepend(video);
   }
+  if (badExample && !document.querySelector('.training-control-review')) {
+    createControlReview(badExample);
+  }
+
+  const controlHeading = [...document.querySelectorAll('h1')].find(heading =>
+    heading.textContent?.includes('Найди три причины отклонения'),
+  );
+  if (controlHeading) controlHeading.textContent = 'Найди две причины отклонения';
 
   document.querySelectorAll('.quality p').forEach(paragraph => {
     if (paragraph.textContent?.includes('Название и описание понятны')) {
