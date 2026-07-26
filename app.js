@@ -5112,11 +5112,16 @@ function startOutputPlayback(startOutput = null) {
 
 function toggleEditorPlayback() {
   if (outputPlaybackActive) {
-    stopOutputPlayback({ keepPreview: false });
+    stopOutputPlayback({ keepPreview: true });
+    return;
   }
-  timelinePreviewOutputTime = null;
-  setFreezeOverlay('');
-  vidPlayer.paused ? safePlay(vidPlayer) : vidPlayer.pause();
+  if (!vidPlayer.paused) {
+    vidPlayer.pause();
+    timelinePreviewOutputTime = sourceToOutputTime(vidPlayer.currentTime || 0);
+    updateTimelinePlaybackUi({ keepVisible: true });
+    return;
+  }
+  startOutputPlayback(currentOutputTime());
 }
 
 function stepEditorFrame(direction) {
@@ -6558,10 +6563,11 @@ vidPlayer.addEventListener('error', () => {
   reviveEditorVideo('error');
 });
 vidPlayer.addEventListener('play',  () => {
-  if (outputPlaybackActive) stopOutputPlayback({ keepPreview: false });
-  timelinePreviewOutputTime = null;
-  setFreezeOverlay('');
-  if (!outputPlaybackActive) outputPlaybackTime = null;
+  if (!outputPlaybackActive) {
+    timelinePreviewOutputTime = null;
+    setFreezeOverlay('');
+    outputPlaybackTime = null;
+  }
   vidPlayBtn.textContent = '⏸';
   lastVideoTime = vidPlayer.currentTime;
   startSmoothTimelineUi();
