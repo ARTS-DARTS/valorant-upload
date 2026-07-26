@@ -105,13 +105,35 @@ function createMapGallery() {
     <button class="production-map-arrow next" type="button" aria-label="Следующие карты">›</button>`;
   card.appendChild(gallery);
   const track = gallery.querySelector('.production-map-gallery');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let scrollTarget = track.scrollLeft;
+  let scrollFrame = 0;
+  const animateScroll = () => {
+    const distance = scrollTarget - track.scrollLeft;
+    if (Math.abs(distance) < .5) {
+      track.scrollLeft = scrollTarget;
+      scrollFrame = 0;
+      return;
+    }
+    track.scrollLeft += distance * .16;
+    scrollFrame = requestAnimationFrame(animateScroll);
+  };
+  const moveTrack = (distance) => {
+    const maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
+    scrollTarget = Math.max(0, Math.min(maxScroll, scrollTarget + distance));
+    if (reduceMotion) {
+      track.scrollLeft = scrollTarget;
+      return;
+    }
+    if (!scrollFrame) scrollFrame = requestAnimationFrame(animateScroll);
+  };
   const sync = () => track.querySelectorAll('[data-map-name]').forEach((button) => {
     button.classList.toggle('selected', button.dataset.mapName === select.value);
   });
   gallery.addEventListener('click', (event) => {
     const arrow = event.target.closest('.production-map-arrow');
     if (arrow) {
-      track.scrollBy({ left: (arrow.classList.contains('next') ? 1 : -1) * Math.max(320, track.clientWidth * .82), behavior: 'smooth' });
+      moveTrack((arrow.classList.contains('next') ? 1 : -1) * Math.max(320, track.clientWidth * .82));
       return;
     }
     const button = event.target.closest('[data-map-name]');
@@ -123,8 +145,11 @@ function createMapGallery() {
   track.addEventListener('wheel', (event) => {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
     event.preventDefault();
-    track.scrollBy({ left: event.deltaY, behavior: 'auto' });
+    moveTrack(event.deltaY * 1.15);
   }, { passive: false });
+  track.addEventListener('scroll', () => {
+    if (!scrollFrame) scrollTarget = track.scrollLeft;
+  }, { passive: true });
   select.addEventListener('change', () => {
     sync();
     track.querySelector(`[data-map-name="${CSS.escape(select.value)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });

@@ -5,6 +5,11 @@
   border-bottom: 1px solid #1d2d43;
 }
 
+.workspace-redesign .author-shell {
+  padding-right: max(28px, calc((100vw - 1530px) / 2));
+  padding-left: max(28px, calc((100vw - 1530px) / 2));
+}
+
 .workspace-redesign .workspace-kicker {
   font-size: 10px;
 }
