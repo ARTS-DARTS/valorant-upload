@@ -60,6 +60,21 @@
   display: none;
 }
 
+.form-example {
+  padding: 20px 22px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.form-example > strong {
+  margin-bottom: 10px;
+  font-size: 11px;
+}
+
+.form-example p {
+  margin: 6px 0;
+}
+
 .screenshot-plan {
   display: none;
 }
@@ -115,9 +130,11 @@
 }
 
 .training-question-label {
-  color: #9aa6ba;
-  font-size: 10px;
-  font-weight: 700;
+  color: #f3f6fb;
+  font-family: "Russo One", sans-serif;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.3;
 }
 
 .training-answer-pair {
@@ -131,13 +148,46 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 54px;
-  padding: 13px 16px;
+  min-height: 64px;
+  padding: 15px 18px;
   border: 1px solid var(--line);
   background: #121b29;
   color: #c7d1e0;
+  font-size: 14px;
+  line-height: 1.4;
   text-align: left;
   cursor: pointer;
+}
+
+.quiz {
+  gap: 14px;
+}
+
+.quiz article {
+  grid-template-columns: 50px minmax(0, 1fr);
+  gap: 16px;
+  padding: 20px;
+}
+
+.quiz article > b {
+  font-size: 22px;
+}
+
+.quiz h3 {
+  margin-bottom: 16px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.quiz-options {
+  gap: 9px;
+}
+
+.quiz-options button {
+  min-height: 42px;
+  padding: 11px 14px;
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 .training-error-choice i {
