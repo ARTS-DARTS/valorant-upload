@@ -29,8 +29,12 @@
   height: max-content;
   padding: 20px 16px;
   position: sticky;
-  top: 14px;
+  top: 80px;
   align-self: start;
+}
+
+.workspace-redesign #stats-sidebar {
+  top: 80px;
 }
 
 .production-flow-head {
@@ -111,6 +115,40 @@
 .workspace-redesign .map-side-help {
   font-size: 11px;
   line-height: 1.45;
+}
+
+.workspace-redesign .agents-grid {
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 7px;
+  justify-items: stretch;
+}
+
+.workspace-redesign .agent-card {
+  width: 100%;
+  max-width: none;
+  height: 48px;
+  min-height: 48px;
+  padding: 5px 8px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  aspect-ratio: auto;
+}
+
+.workspace-redesign .agent-card img {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  padding: 2px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: #16263a;
+}
+
+.workspace-redesign .agent-card span {
+  max-width: none;
+  font-size: 11px;
+  text-align: left;
 }
 
 @media (max-width: 1200px) {

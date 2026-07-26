@@ -6279,14 +6279,16 @@ async function handleVideoFile(file) {
 
 vidPlayer.addEventListener('timeupdate', () => {
   if (!vidPlayer.duration) return;
-  const end = videoEdit.trimEnd || vidPlayer.duration;
-  if (vidPlayer.currentTime < videoEdit.trimStart) vidPlayer.currentTime = videoEdit.trimStart;
+  const editorExpanded = editorEls.toggle?.getAttribute('aria-expanded') !== 'false';
+  const start = editorExpanded ? (videoEdit.trimStart || 0) : 0;
+  const end = editorExpanded ? (videoEdit.trimEnd || vidPlayer.duration) : vidPlayer.duration;
+  if (vidPlayer.currentTime < start) vidPlayer.currentTime = start;
   if (vidPlayer.currentTime > end) {
     if (outputPlaybackActive) stopOutputPlayback({ keepPreview: true });
     else vidPlayer.pause();
     // Keep the playhead at the end. Rewinding here made short clips appear to
     // "jump back" a second after playback started and prevented frame capture.
-    vidPlayer.currentTime = Math.max(videoEdit.trimStart, Math.min(end, vidPlayer.duration || end));
+    vidPlayer.currentTime = Math.max(start, Math.min(end, vidPlayer.duration || end));
     playedFreezeHolds.clear();
   }
   updateTimelinePlaybackUi();
