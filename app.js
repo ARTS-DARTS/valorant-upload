@@ -237,6 +237,7 @@ const agentCategoryAbilityConfigs = new Map();
 
 function uploadCategoryFlag(category) {
   const normalized = normalizeContentCategory(category);
+  if (canCurrentUserModerate() && UPLOAD_IMPLEMENTED_CONTENT_TYPES.has(normalized)) return true;
   if (normalized === 'lineup') return uploadCategoryAccess.lineup_enabled !== false;
   if (normalized === 'combo') return uploadCategoryAccess.combo_enabled === true;
   if (normalized === 'wallbang') return uploadCategoryAccess.wallbang_enabled === true;
@@ -2172,6 +2173,7 @@ function hasExistingCategoryMaterial(category) {
 
 function hasCategoryTraining(category) {
   const normalized = normalizeContentCategory(category);
+  if (canCurrentUserModerate()) return true;
   if (!CATEGORY_TRAINING_PATHS[normalized]) return true;
   if (hasExistingCategoryMaterial(normalized)) return true;
   if (currentUserProfile?.author_training_completed?.[normalized]) return true;
@@ -2393,6 +2395,8 @@ function _subscribeUserProfile(uid) {
   const refresh = () => {
     currentUserProfile = mergeUserLibraryParts(_profileParts);
     updateAdminOnlyWorkspace();
+    updateUploadCategoryButtons();
+    updateCategoryTrainingGate();
     const approvedDocs = currentUserLineups.filter(x => x.status === 'approved').length;
     _updateLevelDisplay(effectiveApprovedLineups(approvedDocs));
     updateUploadGate();
@@ -3839,6 +3843,8 @@ async function loadCurrentUserProfile(user) {
       currentUserProfile = null;
     }
   }
+  updateUploadCategoryButtons();
+  updateCategoryTrainingGate();
   return currentUserProfile;
 }
 
