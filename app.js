@@ -2558,6 +2558,18 @@ function switchWorkspaceTab(tab) {
   renderAuthorWorkspace();
 }
 
+function openNotificationsWorkspace({ behavior = 'smooth' } = {}) {
+  switchWorkspaceTab('notifications');
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const list = document.getElementById('notifications-list');
+      const newest = list?.querySelector('.notification-card');
+      const target = newest || document.querySelector('#workspace-notifications .notifications-shell');
+      target?.scrollIntoView({ behavior, block:'start', inline:'nearest' });
+    });
+  });
+}
+
 let adminChatUnsub = null;
 let adminChatDoc = null;
 let adminChatSnapshotReady = false;
@@ -2680,7 +2692,7 @@ function showIncomingNotification(item) {
   banner.innerHTML = `<div class="notification-banner-icon">${notificationIcon(item)}</div><div><strong>${esc(item.title || 'Новое уведомление')}</strong><span>${esc(item.body || '')}</span></div><button type="button" aria-label="Закрыть">×</button>`;
   banner.addEventListener('click', event => {
     if (event.target.closest('button')) { banner.remove(); return; }
-    switchWorkspaceTab('notifications');
+    openNotificationsWorkspace();
     markSiteNotificationRead(item.id);
     banner.remove();
   });
@@ -2801,7 +2813,7 @@ function startSiteNotifications(uid) {
   showNotificationsIntro(uid);
 }
 
-document.getElementById('header-notifications')?.addEventListener('click', () => switchWorkspaceTab('notifications'));
+document.getElementById('header-notifications')?.addEventListener('click', () => openNotificationsWorkspace());
 document.getElementById('browser-push-toggle')?.addEventListener('click', enableBrowserPush);
 document.getElementById('header-sound-test')?.addEventListener('click', async () => {
   const nextEnabled = !siteSoundsEnabled;
@@ -2852,7 +2864,7 @@ document.getElementById('notifications-intro')?.addEventListener('click', event 
   const action = event.target.closest('[data-notifications-intro]')?.dataset.notificationsIntro;
   if (!action) return;
   event.currentTarget.hidden = true;
-  if (action === 'open') switchWorkspaceTab('notifications');
+  if (action === 'open') openNotificationsWorkspace();
 });
 
 function newestAdminMessageTs(data) {
