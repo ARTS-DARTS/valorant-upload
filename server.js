@@ -64,6 +64,11 @@ app.all('/api/moderation', moderationHandler);
 app.all('/api/site-presence', sitePresenceHandler);
 app.all('/api/site-version', siteVersionHandler);
 
+app.get(['/author-training', '/author-training/'], (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.sendFile(path.join(__dirname, 'author-training', 'index.html'));
+});
+
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
   res.sendFile(path.join(__dirname, 'index.html'));
