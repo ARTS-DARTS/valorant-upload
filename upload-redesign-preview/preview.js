@@ -58,31 +58,27 @@ function stageHeader(number, title, subtitle) {
 function renderBasics() {
   const mapCards = maps.map((map) => `<button class="visual-card map-card ${map.displayName === selectedMap ? 'selected' : ''}" data-map="${esc(map.displayName)}" style="--image:url('${esc(map.splash)}')"><span><b>${esc(map.displayName)}</b><small>${map.displayName === selectedMap ? 'ВЫБРАНА' : 'ВЫБРАТЬ КАРТУ'}</small></span></button>`).join('');
   const agentCards = agents.map((agent) => `<button class="agent-card ${agent.displayName === selectedAgent ? 'selected' : ''}" data-agent="${esc(agent.displayName)}"><img src="${esc(agent.displayIcon)}" alt=""><span>${esc(agent.displayName)}</span></button>`).join('');
-  const abilities = (currentAgent().abilities || []).filter((item) => item.displayIcon).map((ability, index) => `<button class="ability-card ${selectedAbility === ability.displayName || (!selectedAbility && index === 0) ? 'selected' : ''}" data-ability="${esc(ability.displayName)}"><img src="${esc(ability.displayIcon)}" alt=""><span><b>${esc(ability.displayName)}</b><small>${esc(ability.description || '').slice(0, 62)}</small></span></button>`).join('');
-  canvas.innerHTML = `${stageHeader('01', 'Собери основу материала', 'Выбор сразу показывает карту, агента и доступные способности.')}
+  canvas.innerHTML = `${stageHeader('01', 'Собери основу материала', 'Выбери карту и персонажа для материала.')}
     <section class="visual-section"><div class="section-line"><span>01 · КАРТА</span><b>${esc(selectedMap)}</b></div><div class="map-gallery">${mapCards}</div></section>
-    <section class="visual-section agent-picker"><div class="section-line"><span>02 · АГЕНТ</span><b>${esc(selectedAgent)}</b></div><div class="agent-layout"><div class="agent-gallery">${agentCards}</div><div class="agent-portrait"><img src="${esc(currentAgent().fullPortrait || currentAgent().displayIcon)}" alt=""><strong>${esc(selectedAgent)}</strong></div><div class="ability-gallery">${abilities || '<div class="visual-empty">Иконки способностей загружаются…</div>'}</div></div></section>
+    <section class="visual-section agent-picker"><div class="section-line"><span>02 · ПЕРСОНАЖ</span><b>${esc(selectedAgent)}</b></div><div class="agent-layout"><div class="agent-gallery">${agentCards}</div></div></section>
     <div class="stage-continue"><span>Основа выбрана — следующий этап уже подготовлен</span><button data-go="video">ПРОДОЛЖИТЬ К ВИДЕО →</button></div>`;
 }
 
 function renderVideo() {
-  canvas.innerHTML = `${stageHeader('02', 'Добавь видео', 'На фоне выбранной карты сразу видно, для чего записывается материал.')}
-    <div class="context-banner" style="--image:url('${esc(currentMap().splash)}')"><img src="${esc(currentAgent().displayIcon)}" alt=""><div><small>${esc(selectedMap)} · ЗАЩИТА</small><h2>${esc(selectedAgent)} · ${esc(selectedAbility || 'Trapwire')}</h2></div></div>
-    <button class="upload-zone colorful" id="visual-upload"><span class="upload-icon">▶</span><strong id="visual-upload-title">ПЕРЕТАЩИ ВИДЕО ИЛИ НАЖМИ ДЛЯ ВЫБОРА</strong><small id="visual-upload-note">16:9 · 20–30 секунд · MP4, MOV или WebM · до 50 МБ</small><i>ВЫБРАТЬ ВИДЕО</i></button>
-    <div class="video-rules"><span>✓ Исходная позиция</span><span>✓ Установка способности</span><span>✓ Полный результат</span></div>`;
+  canvas.innerHTML = `${stageHeader('02', 'Смонтируй видео', 'Загрузи исходную запись, обрежь лишнее и оставь полный показ результата.')}
+    <div class="context-banner" style="--image:url('${esc(currentMap().splash)}')"><img src="${esc(currentAgent().displayIcon)}" alt=""><div><small>${esc(selectedMap)} · ЗАЩИТА</small><h2>${esc(selectedAgent)}</h2></div></div>
+    <button class="upload-zone colorful" id="visual-upload"><span class="upload-icon">✂</span><strong id="visual-upload-title">ДОБАВЬ ИСХОДНУЮ ЗАПИСЬ ДЛЯ МОНТАЖА</strong><small id="visual-upload-note">Обрезка · порядок фрагментов · проверка результата</small><i>ОТКРЫТЬ МОНТАЖ</i></button>
+    <div class="video-rules"><span>✓ Убрать лишнее</span><span>✓ Сохранить порядок действий</span><span>✓ Оставить полный результат</span></div>
+    <div class="stage-continue"><span>После монтажа скриншоты и карта заполняются в одном редакторе</span><button data-go="editor">ПРОДОЛЖИТЬ В РЕДАКТОР →</button></div>`;
 }
 
-function renderScreens() {
+function renderEditor() {
   const items = [['01', 'Общий вид', currentMap().splash], ['02', 'Камера', currentAgent().fullPortrait], ['03', 'Растяжки', currentAgent().displayIcon], ['04', 'Результат', currentMap().splash]];
-  canvas.innerHTML = `${stageHeader('03', 'Разложи объяснение по кадрам', 'Шаблон сам подсказывает, какой скриншот требуется на каждом шаге.')}
+  const abilityButtons = (currentAgent().abilities || []).filter((item) => item.displayIcon).map((ability, index) => `<button class="${selectedAbility === ability.displayName || (!selectedAbility && index === 0) ? 'active' : ''}" data-ability-map="${esc(ability.displayName)}"><img src="${esc(ability.displayIcon)}" alt="" title="${esc(ability.displayName)}"></button>`).join('');
+  canvas.innerHTML = `${stageHeader('03', 'Собери материал в редакторе', 'Добавь скриншоты и сразу разметь позицию на карте.')}
     <div class="template-banner"><div><small>ВЫБРАННЫЙ ШАБЛОН</small><h2>Защитный сетап</h2></div><span>Общий вид → камера → растяжки → результат</span></div>
     <div class="screenshot-grid">${items.map(([number, title, image], index) => `<button class="screenshot-card ${index < 2 ? 'filled' : ''}" style="--image:url('${esc(image)}')"><i>${number}</i><b>${title}</b><small>${index < 2 ? 'ЗАГРУЖЕНО' : '+ ДОБАВИТЬ СКРИНШОТ'}</small></button>`).join('')}</div>
-    <div class="stage-continue"><span>Перетаскивай карточки, чтобы изменить порядок</span><button data-go="map">ПЕРЕЙТИ К РАЗМЕТКЕ →</button></div>`;
-}
-
-function renderMap() {
-  const abilityButtons = (currentAgent().abilities || []).filter((item) => item.displayIcon).map((ability, index) => `<button class="${selectedAbility === ability.displayName || (!selectedAbility && index === 0) ? 'active' : ''}" data-ability-map="${esc(ability.displayName)}"><img src="${esc(ability.displayIcon)}" alt="" title="${esc(ability.displayName)}"></button>`).join('');
-  canvas.innerHTML = `${stageHeader('04', 'Покажи точку и траекторию', 'Разметка строится поверх настоящей мини-карты.')}
+    <div class="editor-divider"><span>РАЗМЕТКА КАРТЫ</span><b>Позиция и траектория</b></div>
     <div class="map-editor-preview"><div class="map-tools"><button class="active">1 · ПОЗИЦИЯ</button><button>2 · ТРАЕКТОРИЯ</button><button>ОЧИСТИТЬ</button></div><div class="minimap"><img src="${esc(currentMap().displayIcon)}" alt=""><span class="throw-point"></span><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M32 72 C39 55, 52 47, 69 28"/><circle cx="69" cy="28" r="2"/></svg></div>
     <aside class="ability-settings"><div class="settings-agent"><img src="${esc(currentAgent().displayIcon)}" alt=""><div><b>${esc(selectedAgent)}</b><small>${esc(selectedAbility || 'Выбери способность')}</small></div></div>
       <div class="settings-group"><label>СПОСОБНОСТЬ</label><div class="settings-abilities">${abilityButtons || '<span>Загрузка…</span>'}</div></div>
@@ -91,18 +87,19 @@ function renderMap() {
       <div class="settings-group"><label>ТИП БРОСКА</label><div class="segmented"><button class="active">ЛКМ</button><button>ПКМ</button></div></div>
       <div class="settings-group"><label>ЗАРЯД / ОТСКОКИ</label><div class="charge-row"><button>0</button><button>1</button><button class="active">2</button><button>3</button><span>Отскоки</span><button class="active">1</button></div></div>
       <button class="extra-trajectory">＋ ДОБАВИТЬ ТРАЕКТОРИЮ</button>
-    </aside></div>`;
+    </aside></div>
+    <div class="stage-continue"><span>Скриншоты и карта собраны в одном месте</span><button data-go="details">ПЕРЕЙТИ К ОФОРМЛЕНИЮ →</button></div>`;
 }
 
 function renderDetails() {
   const abilities = (currentAgent().abilities || []).filter((item) => item.displayIcon).slice(0, 4);
-  canvas.innerHTML = `${stageHeader('05', 'Оформи карточку', 'Живой предпросмотр обновляется рядом с полями.')}
+  canvas.innerHTML = `${stageHeader('04', 'Оформи карточку', 'Живой предпросмотр обновляется рядом с полями.')}
     <div class="details-layout"><div class="form-preview"><label>НАЗВАНИЕ НА АНГЛИЙСКОМ<input value="B Site Camera and Trapwires"></label><label>ШАБЛОН ОПИСАНИЯ<select><option>Защитный сетап · 4 скриншота</option></select></label><div class="ability-row">${abilities.map((ability) => `<button><img src="${esc(ability.displayIcon)}" alt="">${esc(ability.displayName)}</button>`).join('')}</div><label>СЛОЖНОСТЬ<div class="difficulty"><button>Легко</button><button class="active">Средне</button><button>Сложно</button></div></label></div>
     <article class="lineup-preview" style="--image:url('${esc(currentMap().splash)}')"><div class="preview-agent"><img src="${esc(currentAgent().displayIcon)}" alt=""></div><span>${esc(selectedMap)} · DEFENSE</span><h2>B Site Camera and Trapwires</h2><p>${esc(selectedAgent)} · Защитный сетап</p><div><b>4</b> скриншота <b>26с</b> видео</div></article></div>`;
 }
 
 function renderReview() {
-  canvas.innerHTML = `${stageHeader('06', 'Посмотри глазами модератора', 'Перед отправкой видны карточка, медиа и все результаты проверки.')}
+  canvas.innerHTML = `${stageHeader('05', 'Посмотри глазами модератора', 'Перед отправкой видны карточка, медиа и все результаты проверки.')}
     <div class="review-hero" style="--image:url('${esc(currentMap().splash)}')"><div class="review-agent"><img src="${esc(currentAgent().fullPortrait || currentAgent().displayIcon)}" alt=""></div><div class="review-copy"><small>${esc(selectedMap)} · ЗАЩИТА · ${esc(selectedAgent)}</small><h1>B Site Camera and Trapwires</h1><div class="review-tags"><span>✓ Видео 26 сек</span><span>✓ 4 скриншота</span><span>✓ Карта размечена</span></div><button>▶ СМОТРЕТЬ ПРЕДПРОСМОТР</button></div></div>
     <div class="review-result"><span>ГОТОВО К ОТПРАВКЕ</span><h2>Ошибок не найдено</h2><button>ОТПРАВИТЬ МАТЕРИАЛ →</button></div>`;
 }
@@ -112,7 +109,7 @@ function renderStage(target) {
   workflow.hidden = false;
   inspector.hidden = false;
   document.querySelectorAll('.flow-step').forEach((item) => item.classList.toggle('active', item.dataset.target === target));
-  ({ basics: renderBasics, video: renderVideo, screens: renderScreens, map: renderMap, details: renderDetails, review: renderReview }[target] || renderBasics)();
+  ({ basics: renderBasics, video: renderVideo, editor: renderEditor, details: renderDetails, review: renderReview }[target] || renderBasics)();
 }
 
 function renderLibrary(kind) {
@@ -153,10 +150,8 @@ document.addEventListener('click', (event) => {
   if (mapButton) { selectedMap = mapButton.dataset.map; renderBasics(); return; }
   const agentButton = event.target.closest('[data-agent]');
   if (agentButton) { selectedAgent = agentButton.dataset.agent; selectedAbility = ''; renderBasics(); return; }
-  const abilityButton = event.target.closest('[data-ability]');
-  if (abilityButton) { selectedAbility = abilityButton.dataset.ability; renderBasics(); return; }
   const mapAbilityButton = event.target.closest('[data-ability-map]');
-  if (mapAbilityButton) { selectedAbility = mapAbilityButton.dataset.abilityMap; renderMap(); return; }
+  if (mapAbilityButton) { selectedAbility = mapAbilityButton.dataset.abilityMap; renderEditor(); return; }
   const stageButton = event.target.closest('.flow-step,[data-go]');
   if (stageButton) { renderStage(stageButton.dataset.target || stageButton.dataset.go); return; }
   if (event.target.closest('[data-reset]')) { location.reload(); return; }
@@ -169,9 +164,9 @@ document.addEventListener('click', (event) => {
     upload.querySelector('i').textContent = 'ЗАМЕНИТЬ ВИДЕО';
     videoCheck.classList.add('done');
     videoCheck.querySelector('i').textContent = '✓';
-    score.textContent = '50%';
-    readyTitle.textContent = 'Видео добавлено';
-    progressLabel.textContent = '3 ИЗ 6 ГОТОВО';
+    score.textContent = '40%';
+    readyTitle.textContent = 'Монтаж готов';
+    progressLabel.textContent = '2 ИЗ 5 ГОТОВО';
   }
   const segmentedButton = event.target.closest('.segmented button,.charge-row button');
   if (segmentedButton) {

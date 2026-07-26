@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/upload-redesign-preview/soft.css">
   <link rel="stylesheet" href="/upload-redesign-preview/visual.css">
   <link rel="stylesheet" href="/upload-redesign-preview/ability-settings.css">
+  <link rel="stylesheet" href="/upload-redesign-preview/workflow-overrides.css">
 </head>
 <body>
   <div class="preview-ribbon">ПРЕДПРОСМОТР · РАБОЧИЙ САЙТ НЕ ИЗМЕНЁН</div>
@@ -38,13 +39,12 @@
 
   <main>
     <section class="workflow">
-      <div class="workflow-title"><span>НОВЫЙ МАТЕРИАЛ</span><b id="progress-label">2 ИЗ 6 ГОТОВО</b></div>
-      <button class="flow-step done" data-target="basics" data-step="1"><i>✓</i><span><b>Основа</b><small>Карта и категория</small></span></button>
-      <button class="flow-step active" data-target="video" data-step="2"><i>2</i><span><b>Видео</b><small>Запись материала</small></span></button>
-      <button class="flow-step" data-target="screens" data-step="3"><i>3</i><span><b>Скриншоты</b><small>Шаги по шаблону</small></span></button>
-      <button class="flow-step" data-target="map" data-step="4"><i>4</i><span><b>Разметка</b><small>Точка и траектория</small></span></button>
-      <button class="flow-step" data-target="details" data-step="5"><i>5</i><span><b>Оформление</b><small>Название и параметры</small></span></button>
-      <button class="flow-step" data-target="review" data-step="6"><i>6</i><span><b>Проверка</b><small>Предпросмотр</small></span></button>
+      <div class="workflow-title"><span>НОВЫЙ МАТЕРИАЛ</span><b id="progress-label">1 ИЗ 5 ГОТОВО</b></div>
+      <button class="flow-step done" data-target="basics" data-step="1"><i>✓</i><span><b>Основа</b><small>Карта и персонаж</small></span></button>
+      <button class="flow-step active" data-target="video" data-step="2"><i>2</i><span><b>Монтаж</b><small>Подготовка видео</small></span></button>
+      <button class="flow-step" data-target="editor" data-step="3"><i>3</i><span><b>Редактор</b><small>Скриншоты и карта</small></span></button>
+      <button class="flow-step" data-target="details" data-step="4"><i>4</i><span><b>Оформление</b><small>Название и параметры</small></span></button>
+      <button class="flow-step" data-target="review" data-step="5"><i>5</i><span><b>Проверка</b><small>Предпросмотр</small></span></button>
       <div class="draft-state"><span></span><div><b>Черновик сохранён</b><small>автоматически · только что</small></div></div>
     </section>
 
@@ -76,17 +76,17 @@
 
     <aside class="inspector">
       <div class="readiness">
-        <div class="score"><span id="score">33%</span><i><b id="score-ring"></b></i></div>
+        <div class="score"><span id="score">20%</span><i><b id="score-ring"></b></i></div>
         <div><small>ГОТОВНОСТЬ</small><h2 id="ready-title">Продолжай заполнение</h2></div>
       </div>
       <div class="check-title">КОНТРОЛЬ МАТЕРИАЛА</div>
       <ul id="checklist">
         <li class="done"><i>✓</i><span><b>Карта выбрана</b><small>Haven</small></span></li>
-        <li class="done"><i>✓</i><span><b>Категория выбрана</b><small>Лайнапы</small></span></li>
-        <li id="video-check"><i>3</i><span><b>Добавь видео</b><small>Обязательный этап</small></span></li>
-        <li><i>4</i><span><b>Добавь скриншоты</b><small>По выбранному шаблону</small></span></li>
-        <li><i>5</i><span><b>Разметь карту</b><small>Позиция и траектория</small></span></li>
-        <li><i>6</i><span><b>Заполни оформление</b><small>Название на английском</small></span></li>
+        <li class="done"><i>✓</i><span><b>Персонаж выбран</b><small>Cypher</small></span></li>
+        <li id="video-check"><i>2</i><span><b>Смонтируй видео</b><small>Обязательный этап</small></span></li>
+        <li><i>3</i><span><b>Заполни редактор</b><small>Скриншоты и разметка карты</small></span></li>
+        <li><i>4</i><span><b>Заполни оформление</b><small>Название на английском</small></span></li>
+        <li><i>5</i><span><b>Проверь материал</b><small>Финальный предпросмотр</small></span></li>
       </ul>
       <div class="inspector-actions">
         <button class="save">СОХРАНИТЬ ЧЕРНОВИК</button>
