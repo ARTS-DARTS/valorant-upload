@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VLineups — предпросмотр кабинета автора</title>
+  <link rel="stylesheet" href="/upload-redesign-preview/preview.css">
+</head>
+<body>
+  <div class="preview-ribbon">ПРЕДПРОСМОТР · РАБОЧИЙ САЙТ НЕ ИЗМЕНЁН</div>
+  <header class="command-bar">
+    <a class="brand" href="/"><span class="brand-mark">V</span><span>VALORANT <b>LINEUPS</b></span></a>
+    <div class="author">
+      <span class="avatar">AD</span>
+      <div><small>КАБИНЕТ АВТОРА</small><strong>ARTS DARTS</strong></div>
+      <span class="rank">◆ ЛЕГЕНДА</span>
+    </div>
+    <div class="header-stats">
+      <span><b>167</b> опубликовано</span>
+      <span><b class="amber">2</b> ожидают</span>
+      <span><b>0</b> отклонено</span>
+    </div>
+    <div class="header-actions"><button aria-label="Уведомления">●</button><button>ВЫЙТИ</button></div>
+  </header>
+
+  <nav class="tabs" aria-label="Разделы кабинета">
+    <button class="active" data-tab="upload">＋ ЗАГРУЗИТЬ</button>
+    <button data-tab="works">МОИ РАБОТЫ <i>167</i></button>
+    <button data-tab="drafts">ЧЕРНОВИКИ <i>3</i></button>
+    <button data-tab="rejected">ОТКЛОНЁННЫЕ</button>
+    <button data-tab="stats">СТАТИСТИКА</button>
+    <button data-tab="more">ЕЩЁ ···</button>
+    <a href="/author-training/">? КАК ПРАВИЛЬНО ЗАПОЛНИТЬ</a>
+  </nav>
+
+  <main>
+    <section class="workflow">
+      <div class="workflow-title"><span>НОВЫЙ МАТЕРИАЛ</span><b id="progress-label">2 ИЗ 6 ГОТОВО</b></div>
+      <button class="flow-step done" data-target="basics"><i>✓</i><span><b>Основа</b><small>Карта и категория</small></span></button>
+      <button class="flow-step active" data-target="video"><i>2</i><span><b>Видео</b><small>Запись материала</small></span></button>
+      <button class="flow-step" data-target="screens"><i>3</i><span><b>Скриншоты</b><small>Шаги по шаблону</small></span></button>
+      <button class="flow-step" data-target="map"><i>4</i><span><b>Разметка</b><small>Точка и траектория</small></span></button>
+      <button class="flow-step" data-target="details"><i>5</i><span><b>Оформление</b><small>Название и параметры</small></span></button>
+      <button class="flow-step" data-target="review"><i>6</i><span><b>Проверка</b><small>Предпросмотр</small></span></button>
+      <div class="draft-state"><span></span><div><b>Черновик сохранён</b><small>автоматически · только что</small></div></div>
+    </section>
+
+    <section class="canvas">
+      <div class="canvas-head">
+        <div><p>ШАГ 02</p><h1>Добавь видео</h1><span>Покажи установку, ориентиры и полный результат.</span></div>
+        <button class="quiet" id="reset-demo">СБРОСИТЬ ДЕМО</button>
+      </div>
+
+      <div class="foundation">
+        <label><span>КАРТА</span><select><option>Haven</option><option>Ascent</option><option>Bind</option></select></label>
+        <div><span>КАТЕГОРИЯ</span><div class="chips"><button class="selected">◎ Лайнапы</button><button>ϟ Комбо</button><button>✦ Прострелы</button><button>◇ Защита</button></div></div>
+      </div>
+
+      <button class="upload-zone" id="upload-zone">
+        <span class="upload-icon">▶</span>
+        <strong id="upload-title">ПЕРЕТАЩИ ВИДЕО ИЛИ НАЖМИ ДЛЯ ВЫБОРА</strong>
+        <small id="upload-note">16:9 · 20–30 секунд · MP4, MOV или WebM · до 50 МБ</small>
+        <i>ВЫБРАТЬ ВИДЕО</i>
+      </button>
+
+      <div class="next-block">
+        <div><p>СЛЕДУЮЩИЙ ШАГ</p><h2>Разложи объяснение по скриншотам</h2></div>
+        <div class="shot-strip">
+          <span><b>01</b>Позиция</span><span><b>02</b>Ориентир</span><span><b>03</b>Действие</span><span><b>04</b>Результат</span>
+        </div>
+      </div>
+    </section>
+
+    <aside class="inspector">
+      <div class="readiness">
+        <div class="score"><span id="score">33%</span><i><b id="score-ring"></b></i></div>
+        <div><small>ГОТОВНОСТЬ</small><h2 id="ready-title">Продолжай заполнение</h2></div>
+      </div>
+      <div class="check-title">КОНТРОЛЬ МАТЕРИАЛА</div>
+      <ul id="checklist">
+        <li class="done"><i>✓</i><span><b>Карта выбрана</b><small>Haven</small></span></li>
+        <li class="done"><i>✓</i><span><b>Категория выбрана</b><small>Лайнапы</small></span></li>
+        <li id="video-check"><i>3</i><span><b>Добавь видео</b><small>Обязательный этап</small></span></li>
+        <li><i>4</i><span><b>Добавь скриншоты</b><small>По выбранному шаблону</small></span></li>
+        <li><i>5</i><span><b>Разметь карту</b><small>Позиция и траектория</small></span></li>
+        <li><i>6</i><span><b>Заполни оформление</b><small>Название на английском</small></span></li>
+      </ul>
+      <div class="inspector-actions">
+        <button class="save">СОХРАНИТЬ ЧЕРНОВИК</button>
+        <button class="submit" disabled>ОТПРАВИТЬ МАТЕРИАЛ →</button>
+      </div>
+      <p class="support">Нужна помощь? <a href="/author-training/">Открыть инструктаж</a></p>
+    </aside>
+  </main>
+  <script src="/upload-redesign-preview/preview.js"></script>
+</body>
+</html>

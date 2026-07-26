@@ -69,6 +69,11 @@ app.get(['/author-training', '/author-training/'], (req, res) => {
   res.sendFile(path.join(__dirname, 'author-training', 'index.html'));
 });
 
+app.get(['/upload-redesign-preview', '/upload-redesign-preview/'], (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.sendFile(path.join(__dirname, 'upload-redesign-preview', 'index.html'));
+});
+
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
   res.sendFile(path.join(__dirname, 'index.html'));
