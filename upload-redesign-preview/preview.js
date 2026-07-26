@@ -11,6 +11,9 @@ let activeStage = 'basics';
 let selectedMap = 'Haven';
 let selectedAgent = 'Cypher';
 let selectedAbility = '';
+let frameCursor = 6.4;
+let selectedFrameRole = 0;
+let capturedFrames = [];
 let maps = [];
 let agents = [];
 
@@ -83,16 +86,21 @@ function renderVideo() {
 }
 
 function renderEditor() {
-  const items = [
-    ['01', 'Общий вид', 'Покажи исходную позицию'],
-    ['02', 'Установка', 'Покажи размещение способности'],
-    ['03', 'Ориентир', 'Покажи точку прицела или установки'],
-    ['04', 'Результат', 'Покажи, что получилось'],
-  ];
+  const roles = ['Позиция', 'Установка', 'Ориентир', 'Результат'];
   const abilityButtons = (currentAgent().abilities || []).filter((item) => item.displayIcon).map((ability, index) => `<button class="${selectedAbility === ability.displayName || (!selectedAbility && index === 0) ? 'active' : ''}" data-ability-map="${esc(ability.displayName)}"><img src="${esc(ability.displayIcon)}" alt="" title="${esc(ability.displayName)}"></button>`).join('');
-  canvas.innerHTML = `${stageHeader('03', 'Собери материал в редакторе', 'Добавь скриншоты и сразу разметь позицию на карте.')}
-    <div class="template-banner"><div><small>СКРИНШОТЫ</small><h2>Добавь четыре ключевых кадра</h2></div><span>Нажми на карточку и выбери изображение</span></div>
-    <div class="screenshot-grid">${items.map(([number, title, hint]) => `<button class="screenshot-card"><i>${number}</i><span class="screenshot-add">＋</span><b>${title}</b><small>${hint}</small></button>`).join('')}</div>
+  canvas.innerHTML = `${stageHeader('03', 'Собери материал в редакторе', 'Останови видео на нужном моменте и сохрани кадр в слот шаблона.')}
+    <div class="frame-editor">
+      <div class="frame-player" style="--image:url('${esc(currentMap().splash)}')"><div class="frame-agent"><img src="${esc(currentAgent().fullPortrait || currentAgent().displayIcon)}" alt=""></div><button class="play-button">▶</button><span class="frame-time">${frameCursor.toFixed(1)} сек</span></div>
+      <div class="timeline-editor"><div class="timeline-labels"><span>00:00</span><b>Поставь ползунок на нужный момент</b><span>00:26</span></div><input data-frame-seek type="range" min="0" max="26" step="0.1" value="${frameCursor}"><div class="timeline-marks">${capturedFrames.map((frame) => `<i style="left:${frame.time / 26 * 100}%" title="${esc(frame.role)} · ${frame.time.toFixed(1)} сек"></i>`).join('')}</div></div>
+      <div class="capture-bar"><div class="role-picker">${roles.map((role, index) => `<button class="${selectedFrameRole === index ? 'active' : ''}" data-frame-role="${index}"><i>0${index + 1}</i>${role}</button>`).join('')}</div><button class="capture-button" data-capture-frame>◉ СДЕЛАТЬ КАДР</button></div>
+      <div class="captured-strip">${roles.map((role, index) => {
+        const frame = capturedFrames.find((item) => item.slot === index);
+        return frame
+          ? `<article class="captured-frame" style="--image:url('${esc(index % 2 ? currentAgent().fullPortrait || currentAgent().displayIcon : currentMap().splash)}')"><span>0${index + 1}</span><b>${role}</b><small>${frame.time.toFixed(1)} сек</small><button data-remove-frame="${index}" aria-label="Удалить кадр">×</button></article>`
+          : `<button class="empty-frame ${selectedFrameRole === index ? 'active' : ''}" data-frame-role="${index}"><span>0${index + 1}</span><b>${role}</b><small>Кадр ещё не сделан</small></button>`;
+      }).join('')}</div>
+      <div class="frame-help"><span>1. Найди момент</span><i>→</i><span>2. Выбери роль</span><i>→</i><span>3. Нажми «Сделать кадр»</span><em>Также можно загрузить готовый скриншот</em></div>
+    </div>
     <div class="editor-divider"><span>РАЗМЕТКА КАРТЫ</span><b>Позиция и траектория</b></div>
     <div class="map-editor-preview"><div class="map-tools"><button class="active">1 · ПОЗИЦИЯ</button><button>2 · ТРАЕКТОРИЯ</button><button>ОЧИСТИТЬ</button></div><div class="minimap"><img src="${esc(currentMap().displayIcon)}" alt=""><span class="throw-point"></span><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M32 72 C39 55, 52 47, 69 28"/><circle cx="69" cy="28" r="2"/></svg></div>
     <aside class="ability-settings"><div class="settings-agent"><img src="${esc(currentAgent().displayIcon)}" alt=""><div><b>${esc(selectedAgent)}</b><small>${esc(selectedAbility || 'Выбери способность')}</small></div></div>
@@ -167,6 +175,17 @@ document.addEventListener('click', (event) => {
   if (agentButton) { selectedAgent = agentButton.dataset.agent; selectedAbility = ''; renderBasics(); return; }
   const mapAbilityButton = event.target.closest('[data-ability-map]');
   if (mapAbilityButton) { selectedAbility = mapAbilityButton.dataset.abilityMap; renderEditor(); return; }
+  const frameRoleButton = event.target.closest('[data-frame-role]');
+  if (frameRoleButton) { selectedFrameRole = Number(frameRoleButton.dataset.frameRole); renderEditor(); return; }
+  const removeFrameButton = event.target.closest('[data-remove-frame]');
+  if (removeFrameButton) { capturedFrames = capturedFrames.filter((item) => item.slot !== Number(removeFrameButton.dataset.removeFrame)); renderEditor(); return; }
+  if (event.target.closest('[data-capture-frame]')) {
+    capturedFrames = capturedFrames.filter((item) => item.slot !== selectedFrameRole);
+    capturedFrames.push({ slot: selectedFrameRole, role: ['Позиция', 'Установка', 'Ориентир', 'Результат'][selectedFrameRole], time: frameCursor });
+    selectedFrameRole = Math.min(3, selectedFrameRole + 1);
+    renderEditor();
+    return;
+  }
   const stageButton = event.target.closest('.flow-step,[data-go]');
   if (stageButton) { renderStage(stageButton.dataset.target || stageButton.dataset.go); return; }
   if (event.target.closest('[data-reset]')) { location.reload(); return; }
@@ -189,6 +208,13 @@ document.addEventListener('click', (event) => {
     group.querySelectorAll('button').forEach((button) => button.classList.remove('active'));
     segmentedButton.classList.add('active');
   }
+});
+
+document.addEventListener('input', (event) => {
+  if (!event.target.matches('[data-frame-seek]')) return;
+  frameCursor = Number(event.target.value);
+  const time = document.querySelector('.frame-time');
+  if (time) time.textContent = `${frameCursor.toFixed(1)} сек`;
 });
 
 document.querySelectorAll('.tabs button').forEach((button) => {
