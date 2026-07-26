@@ -156,6 +156,24 @@
   text-align: left;
 }
 
+.workspace-redesign .shots-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 72px);
+  gap: 10px;
+  align-items: start;
+}
+
+.workspace-redesign .shot-item {
+  width: 72px;
+  height: 72px;
+}
+
+.workspace-redesign .shot-item img,
+.workspace-redesign .btn-add-shot {
+  width: 72px;
+  height: 72px;
+}
+
 @media (max-width: 1200px) {
   .workspace-redesign .map-editor-shell {
     grid-template-columns: 1fr;
