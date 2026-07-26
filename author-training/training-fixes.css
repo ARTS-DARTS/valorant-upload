@@ -1,0 +1,14 @@
+.content {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.lesson {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.quality {
+  min-width: 0;
+}
