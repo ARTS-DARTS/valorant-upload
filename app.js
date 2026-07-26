@@ -4321,6 +4321,7 @@ const vidPlayBtn  = document.getElementById('vid-play-btn');
 let activeEditorMode = 'trim';
 let timelineDrag = null;
 let scrubberDragging = false;
+let scrubberResumePlayback = false;
 let pendingVideoSeekRatio = null;
 let suppressTimelineClick = false;
 let selectedEditorItem = null;
@@ -5066,12 +5067,7 @@ function startOutputPlayback(startOutput = null) {
 
 function toggleEditorPlayback() {
   if (outputPlaybackActive) {
-    stopOutputPlayback({ keepPreview: true });
-    return;
-  }
-  if ((videoEdit.freezeFrames || []).length) {
-    startOutputPlayback(timelinePreviewOutputTime);
-    return;
+    stopOutputPlayback({ keepPreview: false });
   }
   timelinePreviewOutputTime = null;
   setFreezeOverlay('');
@@ -5094,14 +5090,6 @@ function stepEditorFrame(direction) {
 function renderVideoTransport() {
   if (scrubberDragging) return;
   const sourceDuration = videoDuration();
-  const outputDuration = editedOutputDuration() || sourceDuration;
-  const outputTime = currentOutputTime();
-  const displayDuration = outputDuration || sourceDuration || 0;
-  if (outputPlaybackActive || timelinePreviewOutputTime !== null || (videoEdit.freezeFrames || []).length) {
-    if (vidScrubber && displayDuration) vidScrubber.value = String(Math.max(0, Math.min(100, outputTime / displayDuration * 100)));
-    if (vidTimeEl) vidTimeEl.textContent = `${fmtTime(outputTime)} / ${fmtTime(displayDuration)}`;
-    return;
-  }
   if (vidScrubber && sourceDuration) vidScrubber.value = String((vidPlayer.currentTime / sourceDuration) * 100);
   if (vidTimeEl) vidTimeEl.textContent = fmtTime(vidPlayer.currentTime) + ' / ' + fmtTime(sourceDuration);
 }
@@ -6525,12 +6513,9 @@ vidPlayer.addEventListener('error', () => {
   reviveEditorVideo('error');
 });
 vidPlayer.addEventListener('play',  () => {
-  if ((videoEdit.freezeFrames || []).length && !outputPlaybackActive) {
-    vidPlayer.pause();
-    startOutputPlayback(timelinePreviewOutputTime ?? sourceToOutputTime(vidPlayer.currentTime || 0));
-    return;
-  }
+  if (outputPlaybackActive) stopOutputPlayback({ keepPreview: false });
   timelinePreviewOutputTime = null;
+  setFreezeOverlay('');
   if (!outputPlaybackActive) outputPlaybackTime = null;
   vidPlayBtn.textContent = '⏸';
   lastVideoTime = vidPlayer.currentTime;
@@ -6559,24 +6544,14 @@ function seekFromScrubberValue() {
     return;
   }
   pendingVideoSeekRatio = null;
-  if ((videoEdit.freezeFrames || []).length) {
-    const editedDuration = editedOutputDuration();
-    if (!Number.isFinite(editedDuration) || editedDuration <= 0) {
-      pendingVideoSeekRatio = ratio;
-      return;
-    }
-    const outputTime = ratio * editedDuration;
-    applyTimelineTool(snapFrameTime(outputToSourceTime(outputTime)), outputTime);
-  } else {
-    timelinePreviewOutputTime = null;
-    setFreezeOverlay('');
-    const targetTime = snapFrameTime(ratio * duration);
-    if (!Number.isFinite(targetTime)) {
-      pendingVideoSeekRatio = ratio;
-      return;
-    }
-    vidPlayer.currentTime = targetTime;
+  timelinePreviewOutputTime = null;
+  setFreezeOverlay('');
+  const targetTime = ratio * duration;
+  if (!Number.isFinite(targetTime)) {
+    pendingVideoSeekRatio = ratio;
+    return;
   }
+  vidPlayer.currentTime = targetTime;
   updateTimelinePlaybackUi();
 }
 
@@ -6597,39 +6572,28 @@ function videoEditorSourceUrl(url) {
   }
 }
 
-function seekScrubberAtClientX(clientX) {
-  const rect = vidScrubber.getBoundingClientRect();
-  if (!rect.width) return;
-  const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-  vidScrubber.value = String(ratio * 100);
-  seekFromScrubberValue();
-}
-
 vidScrubber.addEventListener('input', seekFromScrubberValue);
 vidScrubber.addEventListener('pointerdown', event => {
   scrubberDragging = true;
-  vidScrubber.setPointerCapture?.(event.pointerId);
-  seekScrubberAtClientX(event.clientX);
-  event.preventDefault();
+  scrubberResumePlayback = !vidPlayer.paused;
+  if (scrubberResumePlayback) vidPlayer.pause();
 });
-vidScrubber.addEventListener('pointermove', event => {
+const finishScrubberDrag = () => {
   if (!scrubberDragging) return;
-  seekScrubberAtClientX(event.clientX);
-  event.preventDefault();
-});
-const finishScrubberDrag = event => {
-  if (!scrubberDragging) return;
-  seekScrubberAtClientX(event.clientX);
   scrubberDragging = false;
-  try { vidScrubber.releasePointerCapture?.(event.pointerId); } catch (_) {}
   updateTimelinePlaybackUi();
+  if (scrubberResumePlayback) safePlay(vidPlayer);
+  scrubberResumePlayback = false;
 };
 vidScrubber.addEventListener('pointerup', finishScrubberDrag);
-vidScrubber.addEventListener('pointercancel', event => {
+const cancelScrubberDrag = () => {
   scrubberDragging = false;
-  try { vidScrubber.releasePointerCapture?.(event.pointerId); } catch (_) {}
+  scrubberResumePlayback = false;
   updateTimelinePlaybackUi();
-});
+};
+vidScrubber.addEventListener('pointercancel', cancelScrubberDrag);
+window.addEventListener('pointerup', finishScrubberDrag);
+window.addEventListener('pointercancel', cancelScrubberDrag);
 vidPlayBtn.addEventListener('click', toggleEditorPlayback);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
@@ -7279,7 +7243,7 @@ document.getElementById('map-wrap')?.addEventListener('pointerdown', e => {
   const img = document.getElementById('map-img');
   if (img?.style.display === 'none') return;
   e.preventDefault();
-  e.stopPropagation();
+  e.stopImmediatePropagation();
   const start = eventToMapPoint(e);
   defenseZoomDrag = { start, pointerId: e.pointerId, moved: false };
   defenseZoomStart = start;
@@ -7596,6 +7560,7 @@ document.getElementById('map-wrap')?.addEventListener('wheel', event => {
 
 document.getElementById('map-wrap')?.addEventListener('pointerdown', event => {
   if (event.button !== 0 && event.button !== 1) return;
+  if (mapMode === 'zoom' || defenseZoomDrag) return;
   if (mapViewScale <= 1 || event.target.closest('.defense-ability-marker,.map-marker')) return;
   mapViewPanDrag = {
     pointerId: event.pointerId,

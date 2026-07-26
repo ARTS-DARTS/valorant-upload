@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-26-category-training-v3">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-27-player-rebuild-v4">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-26-workspace-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-26-workspace-fixes-v3">
 </head>
@@ -165,7 +165,7 @@
         </div>
         <div class="vid-controls">
           <button class="btn-sm" id="vid-play-btn">▶</button>
-          <input type="range" class="scrubber" id="vid-scrubber" min="0" max="100" step="0.1" value="0">
+          <input type="range" class="scrubber" id="vid-scrubber" min="0" max="100" step="0.05" value="0" aria-label="Позиция видео">
           <span class="time-display" id="vid-time">0:00 / 0:00</span>
           <button class="btn-frame" id="vid-frame-btn">📷 Кадр</button>
           <button class="btn-sm" id="vid-remove-btn">✕ Удалить</button>
@@ -709,7 +709,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-07-26-category-agent-v4"></script>
+<script type="module" src="/app.js?v=2026-07-27-player-rebuild-v6"></script>
 <script defer src="/workspace-redesign.js?v=2026-07-26-workspace-v2"></script>
 </body>
 </html>
