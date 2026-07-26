@@ -58,30 +58,21 @@ function isVisible(element) {
 function refreshProductionProgress() {
   const rail = document.querySelector('.production-flow');
   if (!rail) return;
-  const mapReady = Boolean(document.getElementById('sel-map')?.value);
-  const categoryReady = Boolean(document.querySelector('#cat-row .pill-btn.selected'));
-  const agentReady = Boolean(document.querySelector('#agents-grid .agent-card.selected'));
-  const video = document.getElementById('vid-player');
-  const videoReady = isVisible(document.getElementById('vid-player-wrap')) && Boolean(video?.currentSrc || video?.src);
-  const screenshotsReady = Boolean(document.querySelector('#shots-row .shot-item'));
-  const abilityReady = Boolean(document.querySelector('#abilities-row .ability-btn.selected'));
-  const positionReady = isVisible(document.getElementById('map-marker'));
-  const category = typeof normalizeContentCategory === 'function'
-    ? normalizeContentCategory(selectedCategory)
-    : selectedCategory;
-  const editorReady = category === 'defense'
-    ? screenshotsReady && typeof categoryExtrasValid === 'function' && categoryExtrasValid(category)
-    : screenshotsReady && abilityReady && positionReady;
-  const titleReady = (document.getElementById('inp-title')?.value.trim().length || 0) >= 8;
-  const descriptionReady = (document.getElementById('inp-desc')?.value.trim().length || 0) >= 20;
-  const submitReady = !document.getElementById('btn-submit')?.disabled;
-  const ready = [
-    mapReady && categoryReady && agentReady,
-    videoReady,
-    editorReady,
-    titleReady && descriptionReady,
-    submitReady,
-  ];
+  const productionState = window.getUploadProductionProgressState?.();
+  const ready = Array.isArray(productionState?.ready)
+    ? productionState.ready
+    : [
+        Boolean(document.getElementById('sel-map')?.value) &&
+          Boolean(document.querySelector('#cat-row .pill-btn.selected')) &&
+          Boolean(document.querySelector('#agents-grid .agent-card.selected')),
+        isVisible(document.getElementById('vid-player-wrap')) &&
+          Boolean(document.getElementById('vid-player')?.currentSrc ||
+            document.getElementById('vid-player')?.src),
+        Boolean(document.querySelector('#shots-row .shot-item')),
+        (document.getElementById('inp-title')?.value.trim().length || 0) >= 8 &&
+          (document.getElementById('inp-desc')?.value.trim().length || 0) >= 20,
+        !document.getElementById('btn-submit')?.disabled,
+      ];
   const count = ready.filter(Boolean).length;
   rail.querySelectorAll('[data-production-step]').forEach((button, index) => {
     button.classList.toggle('done', ready[index]);

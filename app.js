@@ -399,6 +399,39 @@ function categoryExtrasValid(category = selectedCategory) {
   return true;
 }
 
+window.getUploadProductionProgressState = function() {
+  const category = normalizeContentCategory(selectedCategory || '');
+  const mapReady = !!document.getElementById('sel-map')?.value;
+  const categoryReady = !!category;
+  const agentReady = !categoryNeedsAgent(category) || !!selectedAgent;
+  const videoReady = !!videoUrl;
+  const screenshotsReady = screenshots.length > 0 &&
+    !screenshots.some(item => item.uploading);
+  const abilityReady = !categoryNeedsAbility(category) || !!selectedAbility;
+  const positionReady = category === 'defense' || markerX !== null;
+  const editorReady = screenshotsReady &&
+    abilityReady &&
+    positionReady &&
+    categoryExtrasValid(category);
+  const titleReady =
+    (document.getElementById('inp-title')?.value.trim().length || 0) >= 8;
+  const descriptionReady =
+    (document.getElementById('inp-desc')?.value.trim().length || 0) >= 20;
+  const submitReady = !document.getElementById('btn-submit')?.disabled;
+  const ready = [
+    mapReady && categoryReady && agentReady,
+    videoReady,
+    editorReady,
+    titleReady && descriptionReady,
+    submitReady,
+  ];
+  return {
+    category,
+    ready,
+    count: ready.filter(Boolean).length,
+  };
+};
+
 function renderWallbangWeapons() {
   const grid = document.getElementById('wallbang-weapons');
   if (!grid) return;
