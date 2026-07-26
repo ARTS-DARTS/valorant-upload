@@ -1,15 +1,20 @@
 .content {
   min-width: 0;
+  align-items: start;
   overflow-x: hidden;
   overflow-y: auto;
 }
 
-.workspace,
+.workspace {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
 .lesson {
   min-width: 0;
   max-width: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .quality {
