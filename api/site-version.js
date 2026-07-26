@@ -26,13 +26,13 @@ function gitDeploymentTime() {
   }
 }
 
-const deploymentVersion = String(
+export const deploymentVersion = String(
   process.env.VERCEL_GIT_COMMIT_SHA ||
   process.env.SITE_DEPLOY_VERSION ||
   gitVersion() ||
   'local-development',
 ).trim();
-const deploymentTime = String(
+export const deploymentTime = String(
   process.env.SITE_DEPLOYED_AT ||
   gitDeploymentTime() ||
   '',

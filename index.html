@@ -561,7 +561,10 @@
     <section class="notifications-shell">
       <header class="notifications-head">
         <div><div class="workspace-kicker">Центр уведомлений</div><h2>Что происходит с твоими лайнапами</h2><p>Здесь сохраняются решения модерации и важные события аккаунта.</p></div>
-        <button class="copy-id-btn" id="notifications-mark-all" type="button">Прочитать всё</button>
+        <div class="notifications-head-actions">
+          <button class="copy-id-btn" id="browser-push-toggle" type="button">Включить push</button>
+          <button class="copy-id-btn" id="notifications-mark-all" type="button">Прочитать всё</button>
+        </div>
       </header>
       <div id="notifications-list" class="notifications-list"><div class="notifications-empty">Загрузка уведомлений…</div></div>
     </section>
@@ -705,7 +708,8 @@
   </div>
 </div>
 
-<script type="module" src="/app.js?v=2026-07-26-category-training-v2"></script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script type="module" src="/app.js?v=2026-07-26-web-push-v3"></script>
 <script defer src="/workspace-redesign.js?v=2026-07-26-workspace-v2"></script>
 </body>
 </html>

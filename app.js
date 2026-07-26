@@ -2658,6 +2658,85 @@ function showIncomingNotification(item) {
   playSiteSound('notification');
 }
 
+let browserPushPromise = null;
+
+function updateBrowserPushButton() {
+  const button = document.getElementById('browser-push-toggle');
+  if (!button) return;
+  const permission = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+  button.classList.toggle('enabled', permission === 'granted');
+  button.classList.toggle('blocked', permission === 'denied' || permission === 'unsupported');
+  button.textContent = permission === 'granted'
+    ? '✓ Push включены'
+    : permission === 'denied'
+      ? 'Push заблокированы'
+      : permission === 'unsupported'
+        ? 'Push не поддерживаются'
+        : 'Включить push';
+}
+
+async function initializeBrowserPush(uid = currentUser?.uid) {
+  if (!('serviceWorker' in navigator) || typeof Notification === 'undefined') {
+    updateBrowserPushButton();
+    return null;
+  }
+  if (!browserPushPromise) {
+    browserPushPromise = fetch(`/api/push-config?t=${Date.now()}`, { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : null)
+      .then(config => {
+        if (!config?.enabled || !config?.appId) return null;
+        return new Promise((resolve, reject) => {
+          window.OneSignalDeferred = window.OneSignalDeferred || [];
+          window.OneSignalDeferred.push(async OneSignal => {
+            try {
+              await OneSignal.init({
+                appId: config.appId,
+                serviceWorkerPath: '/OneSignalSDKWorker.js',
+                serviceWorkerParam: { scope: '/' },
+                notifyButton: { enable: false },
+              });
+              resolve(OneSignal);
+            } catch (error) {
+              reject(error);
+            }
+          });
+        });
+      })
+      .catch(error => {
+        console.warn('browser push init', error?.message || error);
+        return null;
+      });
+  }
+  const OneSignal = await browserPushPromise;
+  if (OneSignal && uid) await OneSignal.login(uid).catch(() => {});
+  updateBrowserPushButton();
+  return OneSignal;
+}
+
+async function enableBrowserPush() {
+  const OneSignal = await initializeBrowserPush();
+  if (!OneSignal) {
+    toast('Web Push пока не настроен на сервере.', 'e');
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    toast('Разреши уведомления для vlineups.ru в настройках браузера.', 'e');
+    updateBrowserPushButton();
+    return;
+  }
+  await OneSignal.Notifications.requestPermission();
+  if (Notification.permission !== 'granted') {
+    toast('Без разрешения браузер не сможет показывать push.', 'i');
+    updateBrowserPushButton();
+    return;
+  }
+  await OneSignal.User.PushSubscription.optIn().catch(() => {});
+  await OneSignal.User.addTag('site_update_notifications', '1');
+  if (currentUser?.uid) await OneSignal.login(currentUser.uid).catch(() => {});
+  updateBrowserPushButton();
+  toast('Push об обновлениях сайта включены', 's');
+}
+
 function showNotificationsIntro(uid) {
   const key = `notifications-intro-v1:${uid}`;
   if (localStorage.getItem(key)) return;
@@ -2691,6 +2770,7 @@ function startSiteNotifications(uid) {
 }
 
 document.getElementById('header-notifications')?.addEventListener('click', () => switchWorkspaceTab('notifications'));
+document.getElementById('browser-push-toggle')?.addEventListener('click', enableBrowserPush);
 document.getElementById('header-sound-test')?.addEventListener('click', async () => {
   const nextEnabled = !siteSoundsEnabled;
   setSiteSoundsEnabled(nextEnabled);
@@ -3740,6 +3820,7 @@ onAuthStateChanged(auth, async user => {
     }
     openAdminChat();
     startSiteNotifications(user.uid);
+    initializeBrowserPush(user.uid);
     startSitePresence();
   } else {
     currentUserProfile = null;
@@ -3756,6 +3837,7 @@ onAuthStateChanged(auth, async user => {
     siteNotifications = [];
     siteNotificationsReady = false;
     updateNotificationBadges();
+    updateBrowserPushButton();
     clearInterval(presenceTimer);
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('form-screen').style.display = 'none';

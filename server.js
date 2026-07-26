@@ -13,6 +13,8 @@ import moderatorApplicationHandler from './api/moderator-application.js';
 import moderationHandler from './api/moderation.js';
 import sitePresenceHandler from './api/site-presence.js';
 import siteVersionHandler from './api/site-version.js';
+import pushConfigHandler from './api/push-config.js';
+import { notifySiteUpdateOnce } from './api/site-update-notifier.js';
 import { finalizeExpiredDuels } from './api/duel-finalizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -63,6 +65,7 @@ app.all('/api/moderator-application', moderatorApplicationHandler);
 app.all('/api/moderation', moderationHandler);
 app.all('/api/site-presence', sitePresenceHandler);
 app.all('/api/site-version', siteVersionHandler);
+app.all('/api/push-config', pushConfigHandler);
 
 app.get(['/author-training', '/author-training/'], (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
@@ -96,4 +99,7 @@ app.listen(port, '127.0.0.1', () => {
   }).catch(error => console.error('duel finalizer:', error));
   setTimeout(runDuelFinalizer, 15000);
   setInterval(runDuelFinalizer, 60000);
+  setTimeout(() => notifySiteUpdateOnce()
+    .then(result => console.log('Site update push:', result))
+    .catch(error => console.error('site update push:', error)), 25000);
 });
