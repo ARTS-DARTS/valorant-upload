@@ -2087,6 +2087,93 @@ let moderatorAuthorTimer = null;
 let moderationController = null;
 let moderationModulePromise = null;
 let pendingLineupDeepLink = new URLSearchParams(window.location.search).get('lineup') || '';
+const CATEGORY_TRAINING_PATHS = {
+  defense: '/author-training/',
+};
+let categoryTrainingGateActive = false;
+
+function categoryTrainingStorageKey(category) {
+  return `vl_category_training_${currentUser?.uid || 'guest'}_${normalizeContentCategory(category)}`;
+}
+
+function hasExistingCategoryMaterial(category) {
+  const normalized = normalizeContentCategory(category);
+  return currentUserLineups.some(item =>
+    normalizeContentCategory(item.content_type || item.category || 'lineup') === normalized
+  );
+}
+
+function hasCategoryTraining(category) {
+  const normalized = normalizeContentCategory(category);
+  if (!CATEGORY_TRAINING_PATHS[normalized]) return true;
+  if (hasExistingCategoryMaterial(normalized)) return true;
+  if (currentUserProfile?.author_training_completed?.[normalized]) return true;
+  try {
+    return Boolean(localStorage.getItem(categoryTrainingStorageKey(normalized)));
+  } catch (_) {
+    return false;
+  }
+}
+
+async function syncPendingCategoryTraining() {
+  if (!currentUser) return;
+  const completed = { ...(currentUserProfile?.author_training_completed || {}) };
+  let changed = false;
+  Object.keys(CATEGORY_TRAINING_PATHS).forEach(category => {
+    try {
+      const localValue = localStorage.getItem(categoryTrainingStorageKey(category));
+      if (localValue && !completed[category]) {
+        completed[category] = { completed_at: localValue };
+        changed = true;
+      }
+    } catch (_) {}
+  });
+  if (!changed) return;
+  currentUserProfile = {
+    ...(currentUserProfile || {}),
+    author_training_completed: completed,
+  };
+  try {
+    await setDoc(doc(db, 'user_private', currentUser.uid), {
+      author_training_completed: completed,
+    }, { merge: true });
+  } catch (error) {
+    console.warn('category training profile sync', error?.message || error);
+  }
+}
+
+function updateCategoryTrainingGate() {
+  const category = normalizeContentCategory(selectedCategory || '');
+  const trainingPath = CATEGORY_TRAINING_PATHS[category];
+  categoryTrainingGateActive = Boolean(trainingPath && !hasCategoryTraining(category));
+  const gate = document.getElementById('category-training-gate');
+  const link = document.getElementById('category-training-link');
+  if (gate) gate.hidden = !categoryTrainingGateActive;
+  if (link && trainingPath) {
+    const url = new URL(trainingPath, window.location.origin);
+    url.searchParams.set('category', category);
+    if (currentUser?.uid) url.searchParams.set('uid', currentUser.uid);
+    url.searchParams.set('return', `${window.location.pathname}${window.location.search}`);
+    link.href = url.toString();
+  }
+
+  const main = document.querySelector('#workspace-upload .main');
+  const categoryCard = document.getElementById('cat-row')?.closest('.card');
+  const gateIndex = main && gate ? [...main.children].indexOf(gate) : -1;
+  if (main && categoryCard && gateIndex >= 0) {
+    [...main.children].forEach((child, index) => {
+      const locked = categoryTrainingGateActive && index > gateIndex;
+      child.classList.toggle('training-locked-section', locked);
+      if (locked) child.setAttribute('inert', '');
+      else child.removeAttribute('inert');
+    });
+  }
+  ['btn-save-draft', 'btn-reset-upload'].forEach(id => {
+    const button = document.getElementById(id);
+    if (button) button.disabled = categoryTrainingGateActive;
+  });
+  validateForm();
+}
 
 function openPendingLineupDeepLink() {
   if (!pendingLineupDeepLink) return;
@@ -2200,6 +2287,7 @@ function _subscribeStats(uid) {
     document.getElementById('stat-rejected').textContent = rejected;
     _updateLevelDisplay(effectiveApprovedLineups(approved));
     renderAuthorWorkspace();
+    updateCategoryTrainingGate();
     openPendingLineupDeepLink();
     document.getElementById('stats-loader').style.display = 'none';
     document.getElementById('stats-cards').style.display  = 'flex';
@@ -3632,6 +3720,7 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('header-notifications').hidden = false;
     document.getElementById('header-sound-test').hidden = false;
     await loadCurrentUserProfile(user);
+    await syncPendingCategoryTraining();
     await loadUploadCategoryConfig();
     updateAdminOnlyWorkspace();
     document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
@@ -4071,6 +4160,7 @@ document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => {
       return;
     }
     updateCategoryUi(); _saveDraft();
+    updateCategoryTrainingGate();
   });
 });
 document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => {
@@ -8258,6 +8348,7 @@ function _restoreDraft(sourceDraft = null) {
 function validateForm() {
   const category = normalizeContentCategory(selectedCategory || '');
   const ok =
+    !categoryTrainingGateActive &&
     document.getElementById('sel-map').value &&
     (!categoryNeedsAgent(category) || selectedAgent) &&
     (!categoryNeedsAbility(category) || selectedAbility) &&

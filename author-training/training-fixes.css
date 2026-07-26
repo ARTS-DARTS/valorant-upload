@@ -263,3 +263,11 @@
     grid-template-columns: 1fr;
   }
 }
+
+.training-return-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 12px 6px 0;
+  text-decoration: none;
+}

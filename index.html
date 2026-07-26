@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-21-stable-map-toolbar-v2">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-26-category-training-v3">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-26-workspace-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-26-workspace-fixes-v2">
 </head>
@@ -117,6 +117,14 @@
         <button class="pill-btn locked" data-val="defense" disabled title="Скоро: сначала заполняют админы">🛡 Защита</button>
       </div>
     </div>
+    <section class="category-training-gate" id="category-training-gate" hidden aria-live="polite">
+      <div class="category-training-gate-icon">!</div>
+      <div>
+        <strong>Пройдите обучение чтобы продолжить!</strong>
+        <span>Это требуется только перед первым материалом в выбранной категории.</span>
+      </div>
+      <a id="category-training-link" href="/author-training/">Пройти обучение →</a>
+    </section>
 
     <div class="section-title">🎭 АГЕНТ</div>
     <div class="card">
@@ -697,7 +705,7 @@
   </div>
 </div>
 
-<script type="module" src="/app.js?v=2026-07-26-screenshot-drag-v1"></script>
+<script type="module" src="/app.js?v=2026-07-26-category-training-v2"></script>
 <script defer src="/workspace-redesign.js?v=2026-07-26-workspace-v2"></script>
 </body>
 </html>

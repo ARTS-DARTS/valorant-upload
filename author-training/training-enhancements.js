@@ -7,6 +7,32 @@ const KILLJOY_ABILITY_ROOT =
   'https://media.valorant-api.com/agents/1e58de9c-4950-5125-93e9-a0aee9f98746/abilities';
 const controlAnswers = new Map();
 let completingControlStep = false;
+const trainingParams = new URLSearchParams(window.location.search);
+
+function trainingCompletionKey() {
+  const category = trainingParams.get('category') || 'defense';
+  const uid = trainingParams.get('uid') || 'guest';
+  return `vl_category_training_${uid}_${category}`;
+}
+
+function recordTrainingCompletion() {
+  try {
+    localStorage.setItem(trainingCompletionKey(), new Date().toISOString());
+  } catch (_) {}
+}
+
+function addTrainingReturnAction(completion) {
+  if (completion.querySelector('[data-training-return]')) return;
+  recordTrainingCompletion();
+  const rawReturn = trainingParams.get('return') || '/';
+  const returnPath = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/';
+  const link = document.createElement('a');
+  link.dataset.trainingReturn = 'true';
+  link.className = 'primary training-return-link';
+  link.href = returnPath;
+  link.textContent = 'ВЕРНУТЬСЯ К ЗАГРУЗКЕ →';
+  completion.appendChild(link);
+}
 
 function setReactInputValue(input, value) {
   const setter = Object.getOwnPropertyDescriptor(
@@ -121,6 +147,9 @@ function createControlReview(badExample) {
 }
 
 function enhanceTraining() {
+  const completion = document.querySelector('.completion');
+  if (completion) addTrainingReturnAction(completion);
+
   const agent = document.querySelector('.scenario .agent');
   if (agent && !agent.querySelector('img')) {
     agent.textContent = '';
