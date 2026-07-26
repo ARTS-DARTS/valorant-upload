@@ -1,14 +1,68 @@
 .content {
+  min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
 }
 
+.workspace,
 .lesson {
   min-width: 0;
+  max-width: 100%;
   overflow-x: hidden;
   overflow-y: auto;
 }
 
 .quality {
   min-width: 0;
+}
+
+.lesson > *,
+.form-grid,
+.principles,
+.choices,
+.error-list,
+.quiz {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.principles,
+.choices,
+.error-list {
+  grid-template-columns: repeat(var(--training-columns, 3), minmax(0, 1fr));
+}
+
+.choices {
+  --training-columns: 4;
+}
+
+.form-grid label:nth-of-type(-n + 2) input {
+  width: auto;
+  height: auto;
+  margin-top: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #f3f6fb;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 1;
+  -webkit-text-fill-color: #f3f6fb;
+}
+
+.form-grid label.wide:nth-of-type(3),
+.form-example p:first-of-type {
+  display: none;
+}
+
+.scenario .agent {
+  overflow: hidden;
+  border: 0;
+  background: #172133;
+}
+
+.scenario .agent img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
