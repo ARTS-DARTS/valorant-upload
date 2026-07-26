@@ -9,16 +9,21 @@
 }
 
 .visual-card {
-  height: 92px;
+  height: 46px;
 }
 
 .visual-card span {
   left: 11px;
-  bottom: 9px;
+  bottom: 6px;
 }
 
 .visual-card b {
-  font-size: 14px;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.visual-card small {
+  display: none;
 }
 
 .agent-gallery {
