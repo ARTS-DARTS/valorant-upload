@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-27-defense-sites-v6">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-27-defense-site-buttons-v7">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-26-workspace-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-26-workspace-fixes-v3">
 </head>
@@ -363,11 +363,12 @@
             <div class="section-title">🛡 ДАННЫЕ СЕТАПА</div>
             <div class="card category-extra-card">
               <div class="extra-grid">
-                <label>Зона / плент
-                  <select class="finput" id="defense-site" disabled>
-                    <option value="">Сначала выбери карту</option>
-                  </select>
-                </label>
+                <div class="defense-site-field"><span>Зона / плент</span>
+                  <input id="defense-site" type="hidden" value="">
+                  <div class="pill-row defense-site-picker" id="defense-site-row">
+                    <span class="defense-site-empty">Сначала выбери карту</span>
+                  </div>
+                </div>
               </div>
               <div class="extra-actions">
                 <button class="pill-btn" id="mode-defense-zoom" type="button">🔍 Zoom</button>
@@ -709,7 +710,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-07-27-defense-sites-v8"></script>
+<script type="module" src="/app.js?v=2026-07-27-defense-site-buttons-v9"></script>
 <script defer src="/workspace-redesign.js?v=2026-07-26-workspace-v2"></script>
 </body>
 </html>

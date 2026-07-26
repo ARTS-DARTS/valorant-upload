@@ -344,17 +344,29 @@ function defenseSitesForMap(mapName) {
 }
 
 function renderDefenseSiteOptions(preferredValue = '') {
-  const select = document.getElementById('defense-site');
-  if (!select) return;
+  const input = document.getElementById('defense-site');
+  const picker = document.getElementById('defense-site-row');
+  if (!input || !picker) return;
   const mapName = document.getElementById('sel-map')?.value || '';
   const sites = defenseSitesForMap(mapName);
-  const requested = String(preferredValue || select.value || '').trim().toUpperCase();
-  select.disabled = sites.length === 0;
-  select.innerHTML = sites.length
-    ? `<option value="">— Выбери плент —</option>${sites.map(site => `<option value="${site}">${site} Site</option>`).join('')}`
-    : '<option value="">Сначала выбери карту</option>';
-  select.value = sites.includes(requested) ? requested : '';
+  const requested = String(preferredValue || input.value || '').trim().toUpperCase();
+  input.value = sites.includes(requested) ? requested : '';
+  picker.innerHTML = sites.length
+    ? sites.map(site => `<button class="pill-btn ${input.value === site ? 'selected' : ''}" type="button" data-defense-site="${site}">${site} Site</button>`).join('')
+    : '<span class="defense-site-empty">Сначала выбери карту</span>';
 }
+
+document.getElementById('defense-site-row')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-defense-site]');
+  if (!button) return;
+  const input = document.getElementById('defense-site');
+  input.value = button.dataset.defenseSite || '';
+  event.currentTarget.querySelectorAll('[data-defense-site]').forEach(item => {
+    item.classList.toggle('selected', item === button);
+  });
+  validateForm();
+  _saveDraft();
+});
 
 function defenseNumberValue() {
   // Internal sequence value retained only for backwards-compatible payloads.
