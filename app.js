@@ -336,6 +336,26 @@ function defenseSiteValue() {
   return (document.getElementById('defense-site')?.value || '').trim();
 }
 
+const THREE_SITE_MAPS = new Set(['Haven', 'Lotus']);
+
+function defenseSitesForMap(mapName) {
+  if (!mapName) return [];
+  return THREE_SITE_MAPS.has(mapName) ? ['A', 'B', 'C'] : ['A', 'B'];
+}
+
+function renderDefenseSiteOptions(preferredValue = '') {
+  const select = document.getElementById('defense-site');
+  if (!select) return;
+  const mapName = document.getElementById('sel-map')?.value || '';
+  const sites = defenseSitesForMap(mapName);
+  const requested = String(preferredValue || select.value || '').trim().toUpperCase();
+  select.disabled = sites.length === 0;
+  select.innerHTML = sites.length
+    ? `<option value="">— Выбери плент —</option>${sites.map(site => `<option value="${site}">${site} Site</option>`).join('')}`
+    : '<option value="">Сначала выбери карту</option>';
+  select.value = sites.includes(requested) ? requested : '';
+}
+
 function defenseNumberValue() {
   // Internal sequence value retained only for backwards-compatible payloads.
   return 1;
@@ -4306,6 +4326,7 @@ document.getElementById('inp-desc').addEventListener('input', e => {
 });
 document.getElementById('sel-map').addEventListener('change', async () => {
   resetMapView();
+  renderDefenseSiteOptions();
   await loadMapAnnotations();
   loadMapMinimap();
   validateForm(); _saveDraft();
@@ -8243,6 +8264,7 @@ function _restoreDraft(sourceDraft = null) {
   if (d.map) {
     const sel = document.getElementById('sel-map');
     if (sel) sel.value = d.map;
+    renderDefenseSiteOptions(d.defenseSite || '');
     const img = document.getElementById('map-img');
     const ph  = document.getElementById('map-placeholder');
     const apiUrl = mapsData.find(m => m.displayName === d.map)?.displayIcon;
@@ -8372,8 +8394,7 @@ function _restoreDraft(sourceDraft = null) {
     });
   }
   if (d.defenseSite) {
-    const el = document.getElementById('defense-site');
-    if (el) el.value = d.defenseSite;
+    renderDefenseSiteOptions(d.defenseSite);
   }
   if (d.defenseNumber) {
     const el = document.getElementById('defense-number');
@@ -8437,7 +8458,7 @@ function collectFormValidationErrors() {
     if (wallbangTargetX === null) add('Поставь точку попадания на карте.', mapCard);
   }
   if (category === 'defense') {
-    if (!defenseSiteValue()) add('Укажи зону или плент: A, B, C или Mid.', validationCard('defense-site'), document.getElementById('defense-site'));
+    if (!defenseSiteValue()) add('Выбери плент для защитного сетапа.', validationCard('defense-site'), document.getElementById('defense-site'));
     if (!hasValidDefenseZoom()) add('Нажми Zoom и выдели область сетапа на карте.', validationCard('mode-defense-zoom'));
     if (!defenseAbilities.length) add('Расставь хотя бы одну способность на карте.', validationCard('defense-ability-row'));
   }
@@ -8859,6 +8880,7 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   document.getElementById('inp-title').value = '';
   document.getElementById('inp-desc').value = '';
   document.getElementById('defense-site').value = '';
+  renderDefenseSiteOptions();
   document.querySelectorAll('#wallbang-weapons input[type="checkbox"]').forEach(input => { input.checked = false; });
   document.getElementById('title-count').textContent = '0';
   document.getElementById('desc-count').textContent = '0';

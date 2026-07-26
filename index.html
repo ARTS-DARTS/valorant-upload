@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-27-form-validation-v5">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-27-defense-sites-v6">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-26-workspace-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-26-workspace-fixes-v3">
 </head>
@@ -364,7 +364,9 @@
             <div class="card category-extra-card">
               <div class="extra-grid">
                 <label>Зона / плент
-                  <input class="finput" id="defense-site" maxlength="20" placeholder="A, B, C, Mid">
+                  <select class="finput" id="defense-site" disabled>
+                    <option value="">Сначала выбери карту</option>
+                  </select>
                 </label>
               </div>
               <div class="extra-actions">
@@ -707,7 +709,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-07-27-form-validation-v7"></script>
+<script type="module" src="/app.js?v=2026-07-27-defense-sites-v8"></script>
 <script defer src="/workspace-redesign.js?v=2026-07-26-workspace-v2"></script>
 </body>
 </html>
