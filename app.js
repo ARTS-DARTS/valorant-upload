@@ -3440,6 +3440,7 @@ async function cancelResubmissionDraft({ skipConfirm = false, resetOnly = false 
       return;
     }
   }
+  clearModeratorVideoEditBackup(claimedId);
   resubmissionSourceId = '';
   moderatorDraftSourceId = '';
   clearTimeout(moderatorAutosaveTimer);
@@ -4416,6 +4417,7 @@ const EFFECT_TRACK_HEIGHT = 36;
 const MIN_TRIM_DURATION_SECONDS = 0.2;
 const MIN_TIMELINE_CLIP_WIDTH_PX = 24;
 const VIDEO_EDIT_UNDO_KEY = 'vlineups_video_edit_undo_v2';
+const MODERATOR_VIDEO_EDIT_BACKUP_KEY = 'vlineups_moderator_video_edit_backup_v1';
 const VIDEO_EDIT_UNDO_LIMIT = 12;
 let videoEditUndoStack = [];
 let lastCommittedVideoEditState = null;
@@ -4515,6 +4517,40 @@ function createDefaultVideoEdit() {
   };
 }
 
+function saveModeratorVideoEditBackup() {
+  if (!moderatorDraftSourceId || !videoUrl) return;
+  try {
+    localStorage.setItem(MODERATOR_VIDEO_EDIT_BACKUP_KEY, JSON.stringify({
+      lineupId: moderatorDraftSourceId,
+      videoUrl,
+      videoEdit: normalizedVideoEdit(),
+      updatedAt: Date.now(),
+    }));
+  } catch (_) {}
+}
+
+function moderatorVideoEditBackup(lineupId, expectedVideoUrl = '') {
+  try {
+    const backup = JSON.parse(localStorage.getItem(MODERATOR_VIDEO_EDIT_BACKUP_KEY) || 'null');
+    if (!backup || backup.lineupId !== lineupId || !backup.videoEdit) return null;
+    if (expectedVideoUrl && backup.videoUrl && backup.videoUrl !== expectedVideoUrl) return null;
+    return backup.videoEdit;
+  } catch (_) {
+    return null;
+  }
+}
+
+function clearModeratorVideoEditBackup(lineupId = '') {
+  try {
+    const backup = JSON.parse(localStorage.getItem(MODERATOR_VIDEO_EDIT_BACKUP_KEY) || 'null');
+    if (!lineupId || !backup || backup.lineupId === lineupId) {
+      localStorage.removeItem(MODERATOR_VIDEO_EDIT_BACKUP_KEY);
+    }
+  } catch (_) {
+    try { localStorage.removeItem(MODERATOR_VIDEO_EDIT_BACKUP_KEY); } catch (_) {}
+  }
+}
+
 function normalizeChromaKey(value = {}) {
   const color = /^#[0-9a-f]{6}$/i.test(String(value.color || '')) ? String(value.color).toLowerCase() : '#00ff00';
   return {
@@ -4596,8 +4632,31 @@ function normalizedVideoEdit() {
     ? Math.min(duration, Math.max(rawEnd, trimStart + minTrim))
     : Math.max(rawStart, rawEnd);
   const storedTrackCount = Math.max(1, Math.min(8, Number(videoEdit.effectTracks || 1)));
-  const maxZoomTrack = Math.max(0, ...(videoEdit.zoomKeyframes || []).map(item => Math.max(0, Number(item.track || 0))));
-  const maxFootageTrack = Math.max(0, ...(videoEdit.footageOverlays || []).map(item => Math.max(0, Number(item.track || 0))));
+  const allEffects = [
+    ...(videoEdit.zoomKeyframes || []).map(item => ({ ...item, kind: 'zoom' })),
+    ...(videoEdit.footageOverlays || []).map(item => ({ ...item, kind: 'footage' })),
+  ];
+  const recoveredTracks = new Map();
+  const savedTracksCollapsed = storedTrackCount === 1 && allEffects.length > 1 &&
+    allEffects.every(item => Math.max(0, Number(item.track || 0)) === 0);
+  if (savedTracksCollapsed) {
+    const trackEnds = [];
+    allEffects
+      .slice()
+      .sort((a, b) => effectOutputStart(a) - effectOutputStart(b))
+      .forEach(item => {
+        const startAt = effectOutputStart(item);
+        let track = trackEnds.findIndex(endAt => endAt <= startAt + 0.001);
+        if (track < 0) track = trackEnds.length;
+        recoveredTracks.set(`${item.kind}:${item.id}`, Math.min(7, track));
+        trackEnds[track] = startAt + Math.max(0.2, Number(item.duration || 2));
+      });
+  }
+  const trackFor = (kind, item) => recoveredTracks.has(`${kind}:${item.id}`)
+    ? recoveredTracks.get(`${kind}:${item.id}`)
+    : Math.max(0, Number(item.track || 0));
+  const maxZoomTrack = Math.max(0, ...(videoEdit.zoomKeyframes || []).map(item => trackFor('zoom', item)));
+  const maxFootageTrack = Math.max(0, ...(videoEdit.footageOverlays || []).map(item => trackFor('footage', item)));
   const effectTracks = Math.max(storedTrackCount, maxZoomTrack + 1, maxFootageTrack + 1);
   return {
     ...videoEdit,
@@ -4629,7 +4688,7 @@ function normalizedVideoEdit() {
         anchorX: Math.max(0, Math.min(100, Number(item.anchorX ?? 50))),
         anchorY: Math.max(0, Math.min(100, Number(item.anchorY ?? 50))),
         duration: Math.max(0.2, Math.min(10, Number(item.duration || 2))),
-        track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
+        track: Math.max(0, Math.min(effectTracks - 1, trackFor('zoom', item))),
       };
     }).sort((a, b) => effectOutputStart(a) - effectOutputStart(b)),
     footageOverlays: (videoEdit.footageOverlays || []).map(item => {
@@ -4645,7 +4704,7 @@ function normalizedVideoEdit() {
         at,
         outputAt,
         duration: Math.max(0.2, Math.min(60, Number(item.duration || 2))),
-        track: Math.max(0, Math.min(effectTracks - 1, Number(item.track || 0))),
+        track: Math.max(0, Math.min(effectTracks - 1, trackFor('footage', item))),
         muted: item.muted !== false,
         posX: Math.max(0, Math.min(100, Number(item.posX ?? 50))),
         posY: Math.max(0, Math.min(100, Number(item.posY ?? 50))),
@@ -5600,6 +5659,7 @@ function saveVideoEdit({ skipUndo = false } = {}) {
     }
   }
   videoEdit = normalizedVideoEdit();
+  saveModeratorVideoEditBackup();
   rememberCommittedVideoEdit();
   renderVideoEditor();
   _saveDraft();
@@ -6542,6 +6602,8 @@ async function handleVideoFile(file) {
     videoXhr = null;
     prog.style.display = 'none';
     vidPlayer.dataset.corsFallback = '0';
+    vidPlayer.dataset.proxyRetry = '0';
+    vidPlayer.dataset.videoErrorReported = '0';
     vidPlayer.crossOrigin = 'anonymous';
     vidPlayer.src = videoEditorSourceUrl(url);
     document.getElementById('vid-player-wrap').style.display = '';
@@ -6589,16 +6651,15 @@ vidPlayer.addEventListener('loadedmetadata', () => {
   renderVideoEditor();
 });
 vidPlayer.addEventListener('error', () => {
-  // Some older/external lineup videos are playable by the browser but their
-  // storage does not allow CORS. In that case crossorigin="anonymous" blocks
-  // even metadata and leaves the editor at 0:00 / 0:00. Retry once as a plain
-  // media request; canvas-based frame capture may then be unavailable, while
-  // playback, trimming and the rest of the editor keep working.
-  if (videoUrl && vidPlayer.dataset.corsFallback !== '1') {
+  // Storage itself does not expose CORS. Never switch to its direct URL:
+  // retry the same-origin proxy once so playback and frame capture stay valid.
+  if (videoUrl && vidPlayer.dataset.proxyRetry !== '1') {
     const current = Number.isFinite(vidPlayer.currentTime) ? vidPlayer.currentTime : 0;
-    vidPlayer.dataset.corsFallback = '1';
-    vidPlayer.removeAttribute('crossorigin');
-    vidPlayer.src = videoUrl;
+    vidPlayer.dataset.proxyRetry = '1';
+    vidPlayer.dataset.corsFallback = '0';
+    vidPlayer.crossOrigin = 'anonymous';
+    const proxyUrl = videoEditorSourceUrl(videoUrl);
+    vidPlayer.src = `${proxyUrl}${proxyUrl.includes('?') ? '&' : '?'}retry=${Date.now()}`;
     vidPlayer.load();
     vidPlayer.addEventListener('loadedmetadata', () => {
       if (current > 0 && vidPlayer.duration) {
@@ -6608,7 +6669,10 @@ vidPlayer.addEventListener('error', () => {
     }, { once: true });
     return;
   }
-  reviveEditorVideo('error');
+  if (vidPlayer.dataset.videoErrorReported !== '1') {
+    vidPlayer.dataset.videoErrorReported = '1';
+    toast('Видео не загрузилось через защищённый прокси. Обнови страницу через несколько секунд.', 'e');
+  }
 });
 vidPlayer.addEventListener('play',  () => {
   if (!outputPlaybackActive) {
@@ -8497,14 +8561,21 @@ function _restoreDraft(sourceDraft = null) {
   // Video
   if (d.videoUrl) {
     videoUrl = d.videoUrl;
-    videoEdit = { ...createDefaultVideoEdit(), ...(d.videoEdit || d.video_edit || {}) };
+    const localVideoEdit = moderatorVideoEditBackup(d.moderatorDraftSourceId || '', d.videoUrl);
+    videoEdit = { ...createDefaultVideoEdit(), ...(localVideoEdit || d.videoEdit || d.video_edit || {}) };
     rememberCommittedVideoEdit();
     const dropZ = document.getElementById('drop-zone');
     const wrap  = document.getElementById('vid-player-wrap');
     const vid   = document.getElementById('vid-player');
     if (dropZ) dropZ.style.display = 'none';
     if (wrap)  wrap.style.display = '';
-    if (vid)   { vid.dataset.corsFallback = '0'; vid.crossOrigin = 'anonymous'; vid.src = videoEditorSourceUrl(d.videoUrl); }
+    if (vid)   {
+      vid.dataset.corsFallback = '0';
+      vid.dataset.proxyRetry = '0';
+      vid.dataset.videoErrorReported = '0';
+      vid.crossOrigin = 'anonymous';
+      vid.src = videoEditorSourceUrl(d.videoUrl);
+    }
     renderVideoEditor();
   } else {
     videoEdit = createDefaultVideoEdit();
@@ -8809,6 +8880,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
             category: contentType, content_type: contentType,
             ...(contentType === 'defense' ? defenseSubmissionPayload() : {}),
             screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl), video_url: videoUrl || '',
+            video_edit: videoUrl ? normalizedVideoEdit() : null,
             video_remove_requested: moderatorVideoRemovalRequested,
             user_id: submittedUid, submitted_by: submittedBy,
           },
@@ -8816,6 +8888,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || `Ошибка ${response.status}`);
+      clearModeratorVideoEditBackup(moderatorDraftSourceId);
       moderationController?.clearClaim?.();
       moderatorDraftSourceId = '';
       try { sessionStorage.removeItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
