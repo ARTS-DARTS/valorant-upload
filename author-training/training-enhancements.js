@@ -5,7 +5,7 @@ const ASCENT_MAP =
   'https://media.valorant-api.com/maps/7eaecc1b-4337-bbf6-6ab9-04b8f06b3319/displayicon.png';
 const KILLJOY_ABILITY_ROOT =
   'https://media.valorant-api.com/agents/1e58de9c-4950-5125-93e9-a0aee9f98746/abilities';
-const selectedControlErrors = new Set();
+const controlAnswers = new Map();
 let completingControlStep = false;
 
 function setReactInputValue(input, value) {
@@ -28,17 +28,23 @@ function createAbilityMarker(slot, name, x, y) {
 }
 
 function syncControlReview(panel) {
-  panel.querySelectorAll('[data-training-error]').forEach(button => {
-    const selected = selectedControlErrors.has(button.dataset.trainingError);
+  panel.querySelectorAll('[data-training-answer]').forEach(button => {
+    const answer = controlAnswers.get(button.dataset.trainingGroup);
+    const selected = answer?.id === button.dataset.trainingAnswer;
+    const correct = button.dataset.trainingCorrect === 'true';
     button.classList.toggle('selected', selected);
-    button.querySelector('i').textContent = selected ? '✓' : '?';
+    button.classList.toggle('correct', selected && correct);
+    button.classList.toggle('wrong', selected && !correct);
+    button.querySelector('i').textContent = selected ? (correct ? '✓' : '×') : '?';
   });
   const count = panel.querySelector('[data-training-error-count]');
-  if (count) count.textContent = `${selectedControlErrors.size} из 2 ошибок найдено`;
+  const correctCount = [...controlAnswers.values()].filter(answer => answer.correct).length;
+  if (count) count.textContent = `${correctCount} из 2 правильных ответов`;
 }
 
 async function completeOriginalControlStep() {
-  if (completingControlStep || selectedControlErrors.size < 2) return;
+  const correctCount = [...controlAnswers.values()].filter(answer => answer.correct).length;
+  if (completingControlStep || correctCount < 2) return;
   completingControlStep = true;
   for (let index = 0; index < 3; index += 1) {
     const button = document.querySelectorAll('.error-list button')[index];
@@ -52,10 +58,19 @@ function createControlReview(badExample) {
   const panel = document.createElement('section');
   panel.className = 'training-control-review';
   panel.innerHTML = `
-    <button type="button" class="training-error-choice" data-training-error="setup">
-      <i>?</i>
-      <span>Не показано, как сделан сетап</span>
-    </button>
+    <div class="training-question-label">Что не так с видео?</div>
+    <div class="training-answer-pair">
+      <button type="button" class="training-error-choice"
+        data-training-group="video" data-training-answer="setup-hidden" data-training-correct="true">
+        <i>?</i>
+        <span>Не показано, как сделан сетап</span>
+      </button>
+      <button type="button" class="training-error-choice"
+        data-training-group="video" data-training-answer="setup-shown" data-training-correct="false">
+        <i>?</i>
+        <span>Сетап показан полностью</span>
+      </button>
+    </div>
     <div class="training-map-review">
       <div class="training-map-heading">
         <span>КАРТА</span>
@@ -63,27 +78,40 @@ function createControlReview(badExample) {
       </div>
       <div class="training-map-stage">
         <img class="training-map-image" src="${ASCENT_MAP}" alt="Карта Ascent, плент B">
-        <b class="training-site-label">B SITE</b>
+        <b class="training-site-label training-site-a">A SITE</b>
+        <b class="training-site-label training-site-b">B SITE</b>
       </div>
     </div>
-    <button type="button" class="training-error-choice" data-training-error="abilities">
-      <i>?</i>
-      <span>Неправильно расставлены способности</span>
-    </button>
-    <div class="training-error-count" data-training-error-count>0 из 2 ошибок найдено</div>
+    <div class="training-question-label">Что не так со схемой?</div>
+    <div class="training-answer-pair">
+      <button type="button" class="training-error-choice"
+        data-training-group="map" data-training-answer="abilities-correct" data-training-correct="false">
+        <i>?</i>
+        <span>Способности расставлены правильно</span>
+      </button>
+      <button type="button" class="training-error-choice"
+        data-training-group="map" data-training-answer="abilities-wrong" data-training-correct="true">
+        <i>?</i>
+        <span>Неправильно расставлены способности</span>
+      </button>
+    </div>
+    <div class="training-error-count" data-training-error-count>0 из 2 правильных ответов</div>
   `;
 
   const map = panel.querySelector('.training-map-stage');
   map.append(
-    createAbilityMarker('ability2', 'Турель', 26, 29),
+    createAbilityMarker('ability2', 'Турель', 26, 36),
     createAbilityMarker('ability1', 'Тревогобот', 62, 37),
     createAbilityMarker('grenade', 'Нанорой', 42, 65),
     createAbilityMarker('grenade', 'Нанорой', 73, 72),
   );
 
-  panel.querySelectorAll('[data-training-error]').forEach(button => {
+  panel.querySelectorAll('[data-training-answer]').forEach(button => {
     button.addEventListener('click', () => {
-      selectedControlErrors.add(button.dataset.trainingError);
+      controlAnswers.set(button.dataset.trainingGroup, {
+        id: button.dataset.trainingAnswer,
+        correct: button.dataset.trainingCorrect === 'true',
+      });
       syncControlReview(panel);
       completeOriginalControlStep();
     });
