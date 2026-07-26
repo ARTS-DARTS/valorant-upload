@@ -2,9 +2,16 @@ const mapImages = {
   Haven: 'https://media.valorant-api.com/maps/2bee0dc9-4ffe-519b-1cbd-7fbe763a6047/splash.png',
   Ascent: 'https://media.valorant-api.com/maps/7eaecc1b-4337-bbf6-6ab9-04b8f06b3319/splash.png',
   Bind: 'https://media.valorant-api.com/maps/2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba/splash.png',
+  Split: 'https://media.valorant-api.com/maps/d960549e-485c-e861-8d71-aa9d1aed12a2/splash.png',
+  Breeze: 'https://media.valorant-api.com/maps/2fb9a4fd-47b8-4e7d-a969-74b4046ebd53/splash.png',
+  Fracture: 'https://media.valorant-api.com/maps/b529448b-4d60-346e-e89e-00a4c527a405/splash.png',
+  Pearl: 'https://media.valorant-api.com/maps/fd267378-4d1d-484f-ff52-77821ed10dc2/splash.png',
   Lotus: 'https://media.valorant-api.com/maps/2fe4ed3a-450a-948b-6d6b-e89a78e680a9/splash.png',
   Sunset: 'https://media.valorant-api.com/maps/92584fbe-486a-b1b2-9faa-39b0f486b498/splash.png',
   Icebox: 'https://media.valorant-api.com/maps/e2ad5c54-4114-a870-9641-8ea21279579a/splash.png',
+  Abyss: 'https://media.valorant-api.com/maps/224b0a95-48b9-f703-1bd8-67aca101a61f/splash.png',
+  Corrode: 'https://media.valorant-api.com/maps/1c18ab1f-420d-0d8b-71d0-77ad3c439115/splash.png',
+  Summit: 'https://media.valorant-api.com/maps/756da597-416b-c0f2-f47b-afbdf28670bc/splash.png',
 };
 
 function findSectionByText(text) {
@@ -47,22 +54,39 @@ function createMapGallery() {
   const card = select?.closest('.card');
   if (!select || !card || card.querySelector('.production-map-gallery')) return;
   const gallery = document.createElement('div');
-  gallery.className = 'production-map-gallery';
-  gallery.innerHTML = Object.entries(mapImages).map(([name, image]) =>
-    `<button type="button" data-map-name="${name}" style="--map-image:url('${image}')"><span>${name}</span></button>`
-  ).join('');
+  gallery.className = 'production-map-carousel';
+  const availableMaps = [...select.options].map((option) => option.value.trim()).filter((name) => mapImages[name]);
+  gallery.innerHTML = `<button class="production-map-arrow previous" type="button" aria-label="Предыдущие карты">‹</button>
+    <div class="production-map-gallery">${availableMaps.map((name) =>
+    `<button type="button" data-map-name="${name}" style="--map-image:url('${mapImages[name]}')"><span>${name}</span></button>`
+  ).join('')}</div>
+    <button class="production-map-arrow next" type="button" aria-label="Следующие карты">›</button>`;
   card.appendChild(gallery);
-  const sync = () => gallery.querySelectorAll('button').forEach((button) => {
+  const track = gallery.querySelector('.production-map-gallery');
+  const sync = () => track.querySelectorAll('[data-map-name]').forEach((button) => {
     button.classList.toggle('selected', button.dataset.mapName === select.value);
   });
   gallery.addEventListener('click', (event) => {
+    const arrow = event.target.closest('.production-map-arrow');
+    if (arrow) {
+      track.scrollBy({ left: (arrow.classList.contains('next') ? 1 : -1) * Math.max(320, track.clientWidth * .82), behavior: 'smooth' });
+      return;
+    }
     const button = event.target.closest('[data-map-name]');
     if (!button) return;
     select.value = button.dataset.mapName;
     select.dispatchEvent(new Event('change', { bubbles: true }));
     sync();
   });
-  select.addEventListener('change', sync);
+  track.addEventListener('wheel', (event) => {
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    event.preventDefault();
+    track.scrollBy({ left: event.deltaY, behavior: 'auto' });
+  }, { passive: false });
+  select.addEventListener('change', () => {
+    sync();
+    track.querySelector(`[data-map-name="${CSS.escape(select.value)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  });
   sync();
 }
 
