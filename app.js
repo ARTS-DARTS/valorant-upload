@@ -417,7 +417,9 @@ window.getUploadProductionProgressState = function() {
     (document.getElementById('inp-title')?.value.trim().length || 0) >= 8;
   const descriptionReady =
     (document.getElementById('inp-desc')?.value.trim().length || 0) >= 20;
-  const submitReady = !document.getElementById('btn-submit')?.disabled;
+  // The submit button intentionally stays clickable to show missing fields.
+  // Its data-ready flag is the actual full-form validation result.
+  const submitReady = document.getElementById('btn-submit')?.dataset.ready === 'true';
   const ready = [
     mapReady && categoryReady && agentReady,
     videoReady,
