@@ -1,0 +1,133 @@
+.map-editor-preview {
+  grid-template-columns: 1fr 270px;
+}
+
+.map-editor-preview .ability-settings {
+  padding: 18px;
+}
+
+.settings-agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #273a55;
+}
+
+.settings-agent > img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #172a40;
+}
+
+.settings-agent b,
+.settings-agent small {
+  display: block;
+}
+
+.settings-agent b {
+  margin: 0;
+  font-size: 12px;
+}
+
+.settings-agent small {
+  margin-top: 4px;
+  color: var(--cyan);
+  font-size: 7px;
+}
+
+.settings-group {
+  margin-top: 15px;
+}
+
+.settings-group > label {
+  display: block;
+  margin-bottom: 7px;
+  color: #7187a5;
+  font-size: 7px;
+  letter-spacing: 1px;
+}
+
+.settings-abilities {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.settings-abilities button {
+  height: 43px;
+  padding: 7px;
+  border: 1px solid #304663;
+  border-radius: 9px;
+  background: #142238;
+  cursor: pointer;
+}
+
+.settings-abilities button.active {
+  border-color: var(--red);
+  background: #2a1720;
+}
+
+.settings-abilities img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.segmented.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.segmented button,
+.charge-row button {
+  padding: 8px 4px;
+  border: 1px solid #30445f;
+  border-radius: 8px;
+  background: #142136;
+  color: #8093ad;
+  font-size: 7px;
+  cursor: pointer;
+}
+
+.segmented button.active,
+.charge-row button.active {
+  border-color: var(--cyan);
+  background: #123149;
+  color: var(--cyan);
+}
+
+.charge-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.charge-row button {
+  width: 27px;
+}
+
+.charge-row span {
+  margin-left: 4px;
+  color: #70849f;
+  font-size: 6px;
+}
+
+.extra-trajectory {
+  width: 100%;
+  margin-top: 16px;
+  padding: 11px;
+  border: 1px dashed #3b5575;
+  border-radius: 9px;
+  background: #111e31;
+  color: #9eb2cb;
+  font-size: 7px;
+  cursor: pointer;
+}
