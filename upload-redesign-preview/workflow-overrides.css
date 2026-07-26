@@ -3,6 +3,24 @@
   min-height: 0;
 }
 
+.map-gallery {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.visual-card {
+  height: 92px;
+}
+
+.visual-card span {
+  left: 11px;
+  bottom: 9px;
+}
+
+.visual-card b {
+  font-size: 14px;
+}
+
 .agent-gallery {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -39,6 +57,10 @@
 }
 
 @media (max-width: 1200px) {
+  .map-gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .agent-gallery {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
