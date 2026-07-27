@@ -23,6 +23,7 @@ async function heartbeat(req, res, decoded) {
   const payload = {
     uid:decoded.uid,
     display_name:short(req.body?.display_name || decoded.name || decoded.email?.split('@')[0] || 'Пользователь'),
+    display_name_source:'client_v1',
     page:short(req.body?.page || 'upload', 40),
     activity_day:activityDay,
     ip_hash:ipHash(req),
@@ -61,18 +62,26 @@ async function onlineCount(res, decoded) {
     };
   });
   const todayRows = todaySnap.docs.map(doc => ({ id:doc.id, data:doc.data() || {} }));
-  const missingNames = todayRows.filter(row => !short(row.data.display_name));
-  if (missingNames.length) {
-    const profiles = await db.getAll(...missingNames.map(row => db.collection('users').doc(row.id)));
+  const unresolvedNames = todayRows.filter(row => !short(row.data.display_name_source));
+  if (unresolvedNames.length) {
+    const profiles = await db.getAll(...unresolvedNames.map(row => db.collection('users').doc(row.id)));
     const batch = db.batch();
     profiles.forEach((profile, index) => {
       const data = profile.data() || {};
-      const displayName = short(data.username || data.display_name || data.nickname || data.name || data.email || 'Пользователь');
-      missingNames[index].data.display_name = displayName;
-      batch.set(db.collection('site_presence').doc(missingNames[index].id), { display_name:displayName }, { merge:true });
+      const displayName = short(data.display_name || data.name || data.nickname || data.username || data.email || 'Пользователь');
+      unresolvedNames[index].data.display_name = displayName;
+      unresolvedNames[index].data.display_name_source = 'profile_v1';
+      batch.set(db.collection('site_presence').doc(unresolvedNames[index].id), {
+        display_name:displayName,
+        display_name_source:'profile_v1',
+      }, { merge:true });
     });
     await batch.commit();
   }
+  const todayNameByUid = new Map(todayRows.map(row => [row.id, short(row.data.display_name || 'Пользователь')]));
+  users.forEach(userItem => {
+    userItem.display_name = todayNameByUid.get(userItem.uid) || userItem.display_name;
+  });
   const liveIds = new Set(users.map(item => item.uid));
   const todayUsers = todayRows.map(row => ({
     uid:row.id,
