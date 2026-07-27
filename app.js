@@ -219,7 +219,12 @@ function normalizeContentCategory(value) {
   return raw;
 }
 
-const UPLOAD_IMPLEMENTED_CONTENT_TYPES = new Set(['lineup', 'wallbang', 'defense']);
+const UPLOAD_IMPLEMENTED_CONTENT_TYPES = new Set([
+  'lineup',
+  'combo',
+  'wallbang',
+  'defense',
+]);
 const DEFAULT_WALLBANG_WEAPONS = ['Vandal', 'Phantom', 'Guardian', 'Ares', 'Odin'];
 const DEFENSE_EXCLUDED_AGENTS = new Set(['Iso', 'Jett', 'Neon', 'Phoenix', 'Raze', 'Reyna', 'Waylay', 'Yoru']);
 const UPLOAD_CONFIG_CACHE_KEY = 'vl_upload_reference_config_v1';
