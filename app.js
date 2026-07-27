@@ -23,6 +23,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const functions = getFunctions(app, 'us-central1');
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
+const completeAuthorTraining = httpsCallable(functions, 'completeAuthorTraining');
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
 const SITE_VERSION = '2026-07-27-support-messenger-v1';
@@ -2242,28 +2243,25 @@ function hasCategoryTraining(category) {
 async function syncPendingCategoryTraining() {
   if (!currentUser) return;
   const completed = { ...(currentUserProfile?.author_training_completed || {}) };
-  let changed = false;
+  const pending = [];
   Object.keys(CATEGORY_TRAINING_PATHS).forEach(category => {
     try {
       const localValue = localStorage.getItem(categoryTrainingStorageKey(category));
       if (localValue && !completed[category]) {
-        completed[category] = { completed_at: localValue };
-        changed = true;
+        pending.push({ category, localValue });
       }
     } catch (_) {}
   });
-  if (!changed) return;
-  currentUserProfile = {
-    ...(currentUserProfile || {}),
-    author_training_completed: completed,
-  };
-  try {
-    await setDoc(doc(db, 'user_private', currentUser.uid), {
-      author_training_completed: completed,
-    }, { merge: true });
-  } catch (error) {
-    console.warn('category training profile sync', error?.message || error);
+  if (!pending.length) return;
+  for (const item of pending) {
+    try {
+      await completeAuthorTraining({ category: item.category });
+      completed[item.category] = { completed_at: item.localValue, reward_points: 5 };
+    } catch (error) {
+      console.warn('category training reward sync', item.category, error?.message || error);
+    }
   }
+  currentUserProfile = { ...(currentUserProfile || {}), author_training_completed: completed };
 }
 
 function updateCategoryTrainingGate() {

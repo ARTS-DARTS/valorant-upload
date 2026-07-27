@@ -1,0 +1,40 @@
+.task-progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px 28px;
+  align-items: end;
+  margin: 0 0 24px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  background: #0d1725;
+}
+.task-progress p {
+  margin: 0 0 8px;
+  color: var(--cyan);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+.task-progress b { font: 22px "Russo One"; }
+.task-progress > strong { color: #d9e4f6; font-size: 13px; }
+.task-progress-track {
+  grid-column: 1 / -1;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid #34455f;
+  background: #101b2b;
+}
+.task-progress-track i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #21c8ff, #7a8cff, #ff6685);
+  background-size: 220% 100%;
+  box-shadow: 0 0 16px #32c8ff99;
+  animation: task-flow 3s linear infinite;
+  transition: width .55s cubic-bezier(.22, 1, .36, 1);
+}
+@keyframes task-flow { to { background-position: -220% 0; } }
+@media (max-width: 760px) {
+  .task-progress { grid-template-columns: 1fr; }
+  .task-progress > strong { grid-row: 2; }
+}
