@@ -2436,6 +2436,19 @@ function cooldownMinutesFor(approved) {
   return calculateLevel(approved).cooldownMinutes;
 }
 
+function formatLevelCooldown(minutes) {
+  if (minutes <= 0) return 'Без КД';
+  if (minutes === 60) return 'КД: 1 час';
+  const mod10 = minutes % 10;
+  const mod100 = minutes % 100;
+  const unit = mod10 === 1 && mod100 !== 11
+    ? 'минута'
+    : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+      ? 'минуты'
+      : 'минут';
+  return `КД: ${minutes} ${unit}`;
+}
+
 function _updateLevelDisplay(approved) {
   _approvedLineups = approved;
   const lv = calculateLevel(approved);
@@ -2451,6 +2464,7 @@ function _updateLevelDisplay(approved) {
   const progressName = document.getElementById('profile-level-progress-name');
   const progressValue = document.getElementById('profile-level-progress-value');
   const progressBar = document.getElementById('profile-level-progress-bar');
+  const progressCooldown = document.getElementById('profile-level-cooldown');
   const progressNext = document.getElementById('profile-level-progress-next');
   const progressPanel = progressBar?.closest('.profile-level-progress');
   if (progressPanel) {
@@ -2464,6 +2478,7 @@ function _updateLevelDisplay(approved) {
   }
   if (progressValue) progressValue.textContent = next ? `${approved} / ${next.min}` : `${approved}`;
   if (progressBar) progressBar.style.width = `${progress * 100}%`;
+  if (progressCooldown) progressCooldown.textContent = formatLevelCooldown(lv.cooldownMinutes);
   if (progressNext) {
     progressNext.textContent = next
       ? `До уровня «${next.name}» осталось ${Math.max(0, next.min - approved)}`
