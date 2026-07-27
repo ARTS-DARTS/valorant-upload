@@ -238,6 +238,8 @@ let uploadDefenseAgents = new Set();
 const agentCategoryAvailability = new Map();
 const agentCategoryLoadPromises = new Map();
 const agentCategoryAbilityConfigs = new Map();
+let uploadCategoryAccessUnsub = null;
+let uploadCategoryAccessReady = false;
 
 function uploadCategoryFlag(category) {
   const normalized = normalizeContentCategory(category);
@@ -282,6 +284,58 @@ function agentsForCurrentCategory() {
   return agentsList.filter(agent =>
     agentAllowedForCategory(agent, category) &&
     (!availability || availability.get(agent.displayName) !== false)
+  );
+}
+
+function applyUploadCategoryAccess(data = {}) {
+  const activeCategory = normalizeContentCategory(selectedCategory || '');
+  const activeWasEnabled = activeCategory
+    ? uploadCategoryFlag(activeCategory)
+    : false;
+  uploadCategoryAccess = {
+    lineup_enabled: data.lineup_enabled !== false,
+    lineup_staff_enabled: data.lineup_staff_enabled === true,
+    combo_enabled: data.combo_enabled === true,
+    combo_staff_enabled: data.combo_staff_enabled === true,
+    wallbang_enabled: data.wallbang_enabled === true,
+    wallbang_staff_enabled: data.wallbang_staff_enabled === true,
+    defense_enabled: data.defense_enabled === true,
+    defense_staff_enabled: data.defense_staff_enabled === true,
+  };
+  const activeIsEnabled = activeCategory
+    ? uploadCategoryFlag(activeCategory)
+    : false;
+
+  if (
+    uploadCategoryAccessReady &&
+    activeCategory &&
+    activeWasEnabled &&
+    !activeIsEnabled
+  ) {
+    const saved = saveCurrentDraftCopy(
+      'Доступ к категории закрыт. Работа сохранена в черновики',
+    );
+    resetUploadForm();
+    if (!saved) {
+      toast('Доступ к категории закрыт. Форма очищена', 'w');
+    }
+  }
+  uploadCategoryAccessReady = true;
+  updateUploadCategoryButtons();
+}
+
+function watchUploadCategoryAccess(reference, initialSnapshot) {
+  uploadCategoryAccessUnsub?.();
+  uploadCategoryAccessUnsub = null;
+  if (initialSnapshot?.exists()) {
+    applyUploadCategoryAccess(initialSnapshot.data());
+  }
+  uploadCategoryAccessUnsub = onSnapshot(
+    reference,
+    snapshot => {
+      if (snapshot.exists()) applyUploadCategoryAccess(snapshot.data());
+    },
+    error => console.warn('watchUploadCategoryAccess', error.message),
   );
 }
 
@@ -1474,17 +1528,8 @@ async function loadUploadCategoryConfig() {
       useCachedDefense ? Promise.resolve(null) : getDoc(doc(db, 'settings', 'defense_agents')),
     ]);
     if (accessSnap.exists()) {
-      const data = accessSnap.data();
-      uploadCategoryAccess = {
-        lineup_enabled: data.lineup_enabled !== false,
-        lineup_staff_enabled: data.lineup_staff_enabled === true,
-        combo_enabled: data.combo_enabled === true,
-        combo_staff_enabled: data.combo_staff_enabled === true,
-        wallbang_enabled: data.wallbang_enabled === true,
-        wallbang_staff_enabled: data.wallbang_staff_enabled === true,
-        defense_enabled: data.defense_enabled === true,
-        defense_staff_enabled: data.defense_staff_enabled === true,
-      };
+      const accessReference = accessSnap.ref;
+      watchUploadCategoryAccess(accessReference, accessSnap);
     }
     if (useCachedWeapons) {
       uploadWeaponWhitelist = cached.weapons.filter(Boolean);
