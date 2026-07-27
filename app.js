@@ -2191,6 +2191,8 @@ let defenseLineJustCreated = false;
 let selectedDefenseMarkerIndex = null;
 let mapMode = 'position';
 let videoUrl = null;
+let localVideoPreviewUrl = '';
+let knownVideoDuration = 0;
 let moderatorVideoRemovalRequested = false;
 let videoXhr = null;
 let videoEdit = createDefaultVideoEdit();
@@ -4891,7 +4893,14 @@ function normalizeChromaKey(value = {}) {
 }
 
 function videoDuration() {
-  return Number.isFinite(vidPlayer.duration) ? vidPlayer.duration : 0;
+  const nativeDuration = Number(vidPlayer.duration);
+  if (Number.isFinite(nativeDuration) && nativeDuration > 0) return nativeDuration;
+  return Number.isFinite(knownVideoDuration) && knownVideoDuration > 0 ? knownVideoDuration : 0;
+}
+
+function releaseLocalVideoPreview() {
+  if (localVideoPreviewUrl) URL.revokeObjectURL(localVideoPreviewUrl);
+  localVideoPreviewUrl = '';
 }
 
 function clampTime(value) {
@@ -6707,7 +6716,12 @@ function readVideoMetadata(file) {
   return new Promise(resolve => {
     const video = document.createElement('video');
     const url = URL.createObjectURL(file);
+    let settled = false;
+    let timeout;
     const done = value => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       URL.revokeObjectURL(url);
       resolve(value);
     };
@@ -6716,6 +6730,7 @@ function readVideoMetadata(file) {
       duration: Number.isFinite(video.duration) ? video.duration : 0,
     });
     video.onerror = () => done({ duration: 0 });
+    timeout = setTimeout(() => done({ duration: 0 }), 5000);
     video.src = url;
   });
 }
@@ -6897,6 +6912,13 @@ async function handleVideoFile(file) {
   if (file.size > 50 * 1024 * 1024) { toast('Видео превышает 50 МБ', 'e'); return; }
   pendingVideoSeekRatio = null;
   if (videoXhr) { videoXhr.abort(); videoXhr = null; }
+  releaseLocalVideoPreview();
+  localVideoPreviewUrl = URL.createObjectURL(file);
+  knownVideoDuration = 0;
+  const localMetadataPromise = readVideoMetadata(file).then(meta => {
+    if (Number.isFinite(meta.duration) && meta.duration > 0) knownVideoDuration = meta.duration;
+    return meta;
+  });
   videoUrl = null;
   dropZone.style.display = 'none';
   document.getElementById('vid-player-wrap').style.display = 'none';
@@ -6919,6 +6941,8 @@ async function handleVideoFile(file) {
     prog.style.display = 'none';
     dropZone.style.display = '';
     videoUrl = null; videoXhr = null;
+    releaseLocalVideoPreview();
+    knownVideoDuration = 0;
     videoEdit = createDefaultVideoEdit();
     rememberCommittedVideoEdit();
     validateForm();
@@ -6928,14 +6952,18 @@ async function handleVideoFile(file) {
     const url = await upload;
     if (_cancelled) return;
     videoUrl = url;
+    await localMetadataPromise;
     moderatorVideoRemovalRequested = false;
     videoXhr = null;
     prog.style.display = 'none';
     vidPlayer.dataset.corsFallback = '0';
     vidPlayer.dataset.proxyRetry = '0';
     vidPlayer.dataset.videoErrorReported = '0';
-    vidPlayer.crossOrigin = 'anonymous';
-    vidPlayer.src = videoEditorSourceUrl(url);
+    // Use the original local file during this editing session. A just-created
+    // Cloudinary transformation can start rendering frames before its MP4
+    // duration/index is available, which leaves native controls at 0:00.
+    vidPlayer.removeAttribute('crossorigin');
+    vidPlayer.src = localVideoPreviewUrl || videoEditorSourceUrl(url);
     document.getElementById('vid-player-wrap').style.display = '';
     videoEdit = createDefaultVideoEdit();
     videoEditUndoStack = [];
@@ -6949,6 +6977,8 @@ async function handleVideoFile(file) {
     videoXhr = null;
     prog.style.display = 'none';
     dropZone.style.display = '';
+    releaseLocalVideoPreview();
+    knownVideoDuration = 0;
     toast('Ошибка загрузки: ' + e.message, 'e');
   }
 }
@@ -6971,6 +7001,8 @@ vidPlayer.addEventListener('timeupdate', () => {
   lastVideoTime = vidPlayer.currentTime;
 });
 vidPlayer.addEventListener('loadedmetadata', () => {
+  const nativeDuration = Number(vidPlayer.duration);
+  if (Number.isFinite(nativeDuration) && nativeDuration > 0) knownVideoDuration = nativeDuration;
   if (!videoEdit.trimEnd) videoEdit.trimEnd = videoDuration();
   if (pendingVideoSeekRatio !== null && videoDuration() > 0) {
     vidScrubber.value = String(pendingVideoSeekRatio * 100);
@@ -7113,6 +7145,8 @@ document.getElementById('vid-remove-btn').addEventListener('click', () => {
   freezeFrameImages.clear();
   setFreezeOverlay('');
   vidPlayer.src = '';
+  releaseLocalVideoPreview();
+  knownVideoDuration = 0;
   videoUrl = null;
   if (moderatorDraftSourceId) moderatorVideoRemovalRequested = true;
   videoEdit = createDefaultVideoEdit();
@@ -8893,6 +8927,7 @@ function _restoreDraft(sourceDraft = null) {
     videoUrl = d.videoUrl;
     const localVideoEdit = moderatorVideoEditBackup(d.moderatorDraftSourceId || '', d.videoUrl);
     videoEdit = { ...createDefaultVideoEdit(), ...(localVideoEdit || d.videoEdit || d.video_edit || {}) };
+    knownVideoDuration = Number(videoEdit.trimEnd) || 0;
     rememberCommittedVideoEdit();
     const dropZ = document.getElementById('drop-zone');
     const wrap  = document.getElementById('vid-player-wrap');
@@ -9359,6 +9394,8 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   clearFreezeHold();
   setFreezeOverlay('');
   if (vidPlayer && !keepVideo) {
+    releaseLocalVideoPreview();
+    knownVideoDuration = 0;
     vidPlayer.pause();
     vidPlayer.removeAttribute('src');
     vidPlayer.load();
