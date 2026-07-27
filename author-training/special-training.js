@@ -41,7 +41,7 @@ const steps = [
   ['Запись', 'Покажи всё необходимое'], ['Оформление', 'Заполни карточку'],
   ['Контроль', 'Найди ошибки'], ['Допуск', 'Подтверди знания'],
 ];
-const state = { step: 0, category: '', recording: new Set(), title: '', template: '', issues: new Set(), answers: [], completed: false };
+const state = { step: 0, maxStep: 0, category: '', recording: new Set(), acknowledged: false, template: '', issues: new Set(), answers: [], completed: false };
 
 function save() {
   localStorage.setItem(draftKey, JSON.stringify({ ...state, recording: [...state.recording], issues: [...state.issues] }));
@@ -56,7 +56,7 @@ function ready() {
   if (state.step === 0) return true;
   if (state.step === 1) return state.category === cfg.name;
   if (state.step === 2) return state.recording.size === cfg.recording.length;
-  if (state.step === 3) return state.title.trim().length >= 8 && state.template === 'correct';
+  if (state.step === 3) return state.acknowledged && state.template === 'correct';
   if (state.step === 4) return state.issues.size === cfg.issues.length;
   return state.answers.length === cfg.quiz.length && cfg.quiz.every((q, i) => state.answers[i] === q[2]);
 }
@@ -68,7 +68,7 @@ function lesson() {
     return `<p class="eyebrow">СИТУАЦИЯ 01</p><h1>Выбери правильную категорию</h1><div class="scenario"><span class="agent">${cfg.icon}</span><p>${cfg.scenario}</p></div><div class="choices">${options.map(x => `<button class="choice ${state.category === x ? `selected ${x === cfg.name ? 'correct' : 'wrong'}` : ''}" data-category="${x}">${x}</button>`).join('')}</div>${state.category ? `<div class="feedback ${state.category === cfg.name ? 'success' : ''}">${state.category === cfg.name ? `✓ Верно. Это категория «${cfg.name}».` : '× Посмотри на главное действие и результат материала.'}</div>` : ''}`;
   }
   if (state.step === 2) return `<p class="eyebrow">ЧЕК-ЛИСТ ЗАПИСИ</p><h1>Собери полный показ</h1><p class="lead">Отметь всё, без чего зритель не сможет повторить материал.</p><div class="checklist">${cfg.recording.map(x => `<button class="${state.recording.has(x) ? 'selected' : ''}" data-recording="${x}"><i>${state.recording.has(x) ? '✓' : ''}</i>${x}</button>`).join('')}</div>`;
-  if (state.step === 3) return `<p class="eyebrow">УЧЕБНАЯ КАРТОЧКА</p><h1>Оформи материал без догадок</h1><div class="example"><strong>ПРИМЕР</strong><p><b>Название:</b> ${cfg.title}</p><p><b>Описание:</b> ${cfg.flow}.</p></div><div class="form-grid"><label>Категория<input value="${cfg.name}" disabled></label><label>Карта<input value="Ascent" disabled></label><label class="wide">Название на английском<input id="training-title" value="${state.title.replaceAll('"', '&quot;')}" placeholder="${cfg.title}"></label><div class="wide templates"><span>Шаблон описания</span><button data-template="correct" class="${state.template === 'correct' ? 'correct' : ''}"><b>${cfg.name}</b><br>${cfg.flow}</button><button data-template="wrong"><b>Неподходящий шаблон</b><br>Общий вид → красивый финал</button></div></div>`;
+  if (state.step === 3) return `<p class="eyebrow">УЧЕБНАЯ КАРТОЧКА</p><h1>Прочитай правила оформления</h1><div class="example"><strong>ПРИМЕР</strong><p><b>Название:</b> ${cfg.title}</p><p><b>Важно:</b> название материала заполняется на английском языке.</p><p><b>Описание:</b> ${cfg.flow}.</p></div><button class="acknowledge ${state.acknowledged ? 'selected' : ''}" data-acknowledge><i>${state.acknowledged ? '✓' : ''}</i><span><b>Я прочитал правило</b><small>Название должно быть на английском языке</small></span></button><div class="templates"><span>Выбери подходящий шаблон</span><button data-template="correct" class="${state.template === 'correct' ? 'selected correct' : ''}"><b>${cfg.name}</b><br>${cfg.flow}</button><button data-template="wrong" class="${state.template === 'wrong' ? 'selected wrong' : ''}"><b>Неподходящий шаблон</b><br>Общий вид → красивый финал</button></div>`;
   if (state.step === 4) return `<p class="eyebrow">ПРАКТИКА · ПЛОХОЙ ПРИМЕР</p><h1>Найди три причины отклонения</h1><div class="bad-video">▶</div><div class="issues">${cfg.issues.map(x => `<button class="${state.issues.has(x) ? 'selected correct' : ''}" data-issue="${x}"><i>${state.issues.has(x) ? '!' : '?'}</i>${x}</button>`).join('')}</div>`;
   return `<p class="eyebrow">ФИНАЛЬНАЯ ПРОВЕРКА</p><h1>Подтверди правила категории «${cfg.name}»</h1><div class="quiz">${cfg.quiz.map((q, i) => `<article><b>0${i + 1}</b><div><h3>${q[0]}</h3><div class="quiz-options">${q[1].map((a, ai) => `<button data-answer="${i}:${ai}" class="${state.answers[i] === ai ? `selected ${ai === q[2] ? 'correct' : 'wrong'}` : ''}">${a}</button>`).join('')}</div></div></article>`).join('')}</div>`;
 }
@@ -80,29 +80,51 @@ function completion() {
 function render() {
   const ok = ready();
   document.documentElement.style.setProperty('--cyan', cfg.accent);
-  root.innerHTML = `<div class="mobile-lock"><div><h1>Открой инструктаж на компьютере</h1><p>Для обучения нужен большой экран, мышь и клавиатура.</p></div></div><main class="app"><aside class="sidebar"><div class="brand"><i>V</i>VLINEUPS</div><div class="course-label">ИНСТРУКТАЖ · ${cfg.label}</div><nav class="steps">${steps.map((s, i) => `<button class="step ${i === state.step && !state.completed ? 'active' : ''} ${i < state.step || state.completed ? 'done' : ''}" data-step="${i}" ${i > state.step && !state.completed ? 'disabled' : ''}><span class="num">${i < state.step || state.completed ? '✓' : i + 1}</span><span><strong>${s[0]}</strong><small>${s[1]}</small></span></button>`).join('')}</nav><div class="desktop-note">▣ Загрузка доступна только с компьютера</div></aside><section class="workspace"><header class="top"><div><p class="eyebrow">УЧЕБНЫЙ РЕЖИМ · ДАННЫЕ НЕ ПУБЛИКУЮТСЯ</p><h2>${state.completed ? 'Инструктаж завершён' : steps[state.step][0]}</h2></div><div class="progress-label">${state.completed ? 6 : state.step + 1} из 6<div class="progress"><i style="width:${state.completed ? 100 : (state.step + 1) / 6 * 100}%"></i></div></div></header><div class="content ${state.completed ? 'complete' : ''}"><section class="lesson">${state.completed ? completion() : lesson()}</section>${state.completed ? '' : `<aside class="quality ${ok ? 'ready' : ''}"><b>КОНТРОЛЬ КАЧЕСТВА</b><div class="scan">${ok ? '✓' : '⌁'}</div><h3>${ok ? 'Шаг пройден' : 'Заверши задание'}</h3><p>${ok ? 'Все обязательные условия выполнены.' : 'Выполни задание слева, чтобы продолжить.'}</p></aside>`}</div>${state.completed ? '' : `<footer class="bottom"><button class="ghost" data-prev ${state.step === 0 ? 'disabled' : ''}>НАЗАД</button><span>${ok ? 'Можно продолжать' : 'Выполни задание, чтобы продолжить'}</span><button class="primary" data-next ${ok ? '' : 'disabled'}>${state.step === 5 ? 'ЗАВЕРШИТЬ' : 'ДАЛЬШЕ'} →</button></footer>`}</section></main>`;
+  root.innerHTML = `<div class="mobile-lock"><div><h1>Открой инструктаж на компьютере</h1><p>Для обучения нужен большой экран, мышь и клавиатура.</p></div></div><main class="app"><aside class="sidebar"><div class="brand"><i>V</i>VLINEUPS</div><div class="course-label">ИНСТРУКТАЖ · ${cfg.label}</div><nav class="steps">${steps.map((s, i) => `<button class="step ${i === state.step && !state.completed ? 'active' : ''} ${i < state.maxStep || state.completed ? 'done' : ''}" data-step="${i}" ${i > state.maxStep && !state.completed ? 'disabled' : ''}><span class="num">${i < state.maxStep || state.completed ? '✓' : i + 1}</span><span><strong>${s[0]}</strong><small>${s[1]}</small></span></button>`).join('')}</nav><div class="desktop-note">▣ Загрузка доступна только с компьютера</div></aside><section class="workspace"><header class="top"><div><p class="eyebrow">УЧЕБНЫЙ РЕЖИМ · ДАННЫЕ НЕ ПУБЛИКУЮТСЯ</p><h2>${state.completed ? 'Инструктаж завершён' : steps[state.step][0]}</h2></div><div class="progress-label"><b>${state.completed ? 6 : state.step + 1} из 6</b><div class="progress"><i style="width:${state.completed ? 100 : (state.step + 1) / 6 * 100}%"></i></div></div></header><div class="content ${state.completed ? 'complete' : ''}"><section class="lesson">${state.completed ? completion() : `${lesson()}<div class="lesson-actions"><button class="ghost" data-prev ${state.step === 0 ? 'disabled' : ''}>НАЗАД</button><span>${ok ? 'Можно продолжать' : 'Заверши задание'}</span><button class="primary" data-next ${ok ? '' : 'disabled'}>${state.step === 5 ? 'ЗАВЕРШИТЬ' : 'ДАЛЬШЕ'} →</button></div>`}</section>${state.completed ? '' : `<aside class="quality ${ok ? 'ready' : ''}"><b>КОНТРОЛЬ КАЧЕСТВА</b><div class="scan"><i></i><span>${ok ? '✓' : '⌁'}</span></div><h3>${ok ? 'Шаг пройден' : 'Заверши задание'}</h3><p>${ok ? 'Все обязательные условия выполнены.' : 'Выполни задание слева, чтобы продолжить.'}</p></aside>`}</div></section></main>`;
   bind();
 }
 function bind() {
-  root.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { const n = Number(b.dataset.step); if (n <= state.step) { state.step = n; save(); render(); } });
+  const sidebar = root.querySelector('.sidebar');
+  if (sidebar && !sidebar.querySelector('.training-nav')) {
+    const navigation = document.createElement('div');
+    navigation.className = 'training-nav';
+    navigation.innerHTML = '<a href="/author-training/">← ВСЕ ИНСТРУКТАЖИ</a><a href="/">ВЕРНУТЬСЯ НА САЙТ ↗</a>';
+    sidebar.insertBefore(navigation, sidebar.querySelector('.desktop-note'));
+  }
+  const brand = root.querySelector('.brand');
+  if (brand) {
+    brand.classList.add('brand-link');
+    brand.tabIndex = 0;
+    brand.title = 'Все инструктажи';
+    const openMenu = () => {
+      const menu = new URL('/author-training/', location.origin);
+      for (const key of ['uid', 'return']) {
+        const value = params.get(key);
+        if (value) menu.searchParams.set(key, value);
+      }
+      location.href = menu;
+    };
+    brand.onclick = openMenu;
+    brand.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') openMenu(); };
+  }
+  root.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { const n = Number(b.dataset.step); if (n <= state.maxStep) { state.step = n; save(); render(); } });
   root.querySelectorAll('[data-category]').forEach(b => b.onclick = () => { state.category = b.dataset.category; save(); render(); });
   root.querySelectorAll('[data-recording]').forEach(b => b.onclick = () => toggle(state.recording, b.dataset.recording));
   root.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => toggle(state.issues, b.dataset.issue));
   root.querySelectorAll('[data-template]').forEach(b => b.onclick = () => { state.template = b.dataset.template; save(); render(); });
+  root.querySelector('[data-acknowledge]')?.addEventListener('click', () => { state.acknowledged = !state.acknowledged; save(); render(); });
   root.querySelectorAll('[data-answer]').forEach(b => b.onclick = () => { const [i, a] = b.dataset.answer.split(':').map(Number); state.answers[i] = a; save(); render(); });
-  const title = root.querySelector('#training-title');
-  if (title) title.oninput = e => { state.title = e.target.value; save(); };
   root.querySelector('[data-prev]')?.addEventListener('click', () => { state.step--; save(); render(); });
   root.querySelector('[data-next]')?.addEventListener('click', () => {
     if (!ready()) return;
-    if (state.step < 5) { state.step++; save(); render(); return; }
+    if (state.step < 5) { state.step++; state.maxStep = Math.max(state.maxStep, state.step); save(); render(); return; }
     localStorage.setItem(storageKey, new Date().toISOString());
     localStorage.removeItem(draftKey);
     state.completed = true;
     render();
   });
   root.querySelector('[data-repeat]')?.addEventListener('click', () => {
-    Object.assign(state, { step: 0, category: '', recording: new Set(), title: '', template: '', issues: new Set(), answers: [], completed: false });
+    Object.assign(state, { step: 0, maxStep: 0, category: '', recording: new Set(), acknowledged: false, template: '', issues: new Set(), answers: [], completed: false });
     save(); render();
   });
 }

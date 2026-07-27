@@ -9,6 +9,7 @@ const KILLJOY_ABILITY_ROOT =
 const controlAnswers = new Map();
 let completingControlStep = false;
 const trainingParams = new URLSearchParams(window.location.search);
+let defenseMaxStep = Number(localStorage.getItem('vlineups-training-defense-max-step') || 0);
 
 function trainingCompletionKey() {
   const category = trainingParams.get('category') || 'defense';
@@ -209,7 +210,75 @@ function createControlReview(badExample) {
 }
 
 function enhanceTraining() {
+  document.body.classList.add('training-enhanced');
   createDefenseFormVideoGuide();
+  const sidebar = document.querySelector('.sidebar');
+  const steps = [...document.querySelectorAll('.sidebar .step')];
+  const activeStep = steps.findIndex(step => step.classList.contains('active'));
+  if (activeStep > defenseMaxStep) {
+    defenseMaxStep = activeStep;
+    localStorage.setItem('vlineups-training-defense-max-step', String(defenseMaxStep));
+  }
+  steps.forEach((step, index) => {
+    step.classList.toggle('training-unlocked', index <= defenseMaxStep);
+    if (index > activeStep && index <= defenseMaxStep && !step.dataset.forwardNav) {
+      step.dataset.forwardNav = 'true';
+      step.addEventListener('click', event => {
+        event.stopImmediatePropagation();
+        const advance = () => {
+          const current = [...document.querySelectorAll('.sidebar .step')].findIndex(item => item.classList.contains('active'));
+          if (current >= index) return;
+          const next = document.querySelector('.workspace > footer .primary');
+          if (!next || next.disabled) return;
+          next.click();
+          setTimeout(advance, 70);
+        };
+        advance();
+      }, true);
+    }
+  });
+  if (sidebar && !sidebar.querySelector('.training-nav')) {
+    const navigation = document.createElement('div');
+    navigation.className = 'training-nav';
+    navigation.innerHTML = '<a href="/author-training/">← ВСЕ ИНСТРУКТАЖИ</a><a href="/">ВЕРНУТЬСЯ НА САЙТ ↗</a>';
+    sidebar.insertBefore(navigation, sidebar.querySelector('.desktop-note'));
+  }
+  const brand = sidebar?.querySelector('.brand');
+  if (brand && !brand.dataset.menuLink) {
+    brand.dataset.menuLink = 'true';
+    brand.classList.add('brand-link');
+    brand.tabIndex = 0;
+    brand.title = 'Все инструктажи';
+    const openMenu = () => {
+      const menu = new URL('/author-training/', location.origin);
+      for (const key of ['uid', 'return']) {
+        const value = trainingParams.get(key);
+        if (value) menu.searchParams.set(key, value);
+      }
+      location.href = menu;
+    };
+    brand.addEventListener('click', openMenu);
+    brand.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') openMenu(); });
+  }
+  const lesson = document.querySelector('.lesson');
+  const originalFooter = document.querySelector('.workspace > footer');
+  if (lesson && originalFooter && !lesson.querySelector('.training-lesson-actions')) {
+    const actions = document.createElement('div');
+    actions.className = 'training-lesson-actions lesson-actions';
+    actions.innerHTML = `<button class="ghost" type="button">НАЗАД</button><span></span><button class="primary" type="button"></button>`;
+    const originalBack = originalFooter.querySelector('.ghost');
+    const originalNext = originalFooter.querySelector('.primary');
+    const originalHint = originalFooter.querySelector('span');
+    const back = actions.querySelector('.ghost');
+    const next = actions.querySelector('.primary');
+    back.disabled = Boolean(originalBack?.disabled);
+    next.disabled = Boolean(originalNext?.disabled);
+    next.innerHTML = originalNext?.innerHTML || 'ДАЛЬШЕ →';
+    actions.querySelector('span').textContent = originalHint?.textContent || '';
+    back.addEventListener('click', () => originalBack?.click());
+    next.addEventListener('click', () => originalNext?.click());
+    lesson.appendChild(actions);
+  }
   const completion = document.querySelector('.completion');
   if (completion) {
     addTrainingReturnAction(completion);

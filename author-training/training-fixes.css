@@ -21,6 +21,35 @@
   min-width: 0;
 }
 
+.training-enhanced .workspace > footer {
+  display: none;
+}
+
+.training-enhanced .header-progress {
+  width: min(420px, 38vw);
+  font-size: 12px;
+}
+
+.training-enhanced .header-progress .progress {
+  height: 10px;
+}
+
+.training-enhanced .sidebar .step.training-unlocked {
+  cursor: pointer;
+}
+
+.training-enhanced .desktop-note {
+  left: 18px;
+  right: 18px;
+  width: auto;
+  text-align: center;
+}
+
+.training-enhanced .training-nav {
+  left: 18px;
+  right: 18px;
+}
+
 .content.training-complete-layout {
   grid-template-columns: minmax(0, 1fr);
 }
