@@ -14,6 +14,24 @@ function authorUid(lineup = {}) {
   return String(lineup.user_id || lineup.uid || lineup.author_uid || lineup.submitted_by_uid || '').trim();
 }
 
+export function determineDuelOutcome(votes1, votes2) {
+  const v1 = Math.max(0, Number(votes1) || 0);
+  const v2 = Math.max(0, Number(votes2) || 0);
+  const totalVotes = v1 + v2;
+  const gapPercent = totalVotes > 0 ? Math.abs(v1 - v2) / totalVotes * 100 : 0;
+  const tieThreshold = totalVotes < 20 ? 20 : 5;
+  const tie = gapPercent <= tieThreshold;
+  return {
+    tie,
+    totalVotes,
+    gapPercent,
+    tieThreshold,
+    reason: tie
+      ? (totalVotes < 20 ? 'insufficient_votes' : 'close_result')
+      : '',
+  };
+}
+
 async function sendWinnerPush(outcome) {
   if (!outcome?.uid || outcome.alreadyFinalized || outcome.tie) return;
   const appId = String(process.env.ONESIGNAL_APP_ID || '').trim();
@@ -58,9 +76,24 @@ export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
     const v1 = Number(duel.votes1 || 0), v2 = Number(duel.votes2 || 0);
     let winnerId = forcedWinnerId;
     if (!winnerId) {
-      if (v1 === v2) {
-        tx.update(duelRef, { status: 'tied', tieDetectedAt: FieldValue.serverTimestamp() });
-        outcome = { tie: true, duelId };
+      const decision = determineDuelOutcome(v1, v2);
+      if (decision.tie) {
+        tx.update(duelRef, {
+          status: 'finished',
+          finalized: true,
+          result: 'tie',
+          tie: true,
+          tieReason: decision.reason,
+          totalVotes: decision.totalVotes,
+          voteGapPercent: decision.gapPercent,
+          winnerLineupId: FieldValue.delete(),
+          loserLineupId: FieldValue.delete(),
+          likesAwarded: 0,
+          pointsAwarded: 0,
+          finalizedAt: FieldValue.serverTimestamp(),
+          visible: true,
+        });
+        outcome = { tie: true, duelId, ...decision };
         return;
       }
       winnerId = v1 > v2 ? duel.lineup1Id : duel.lineup2Id;
