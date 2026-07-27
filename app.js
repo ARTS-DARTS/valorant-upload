@@ -225,9 +225,13 @@ const DEFENSE_EXCLUDED_AGENTS = new Set(['Iso', 'Jett', 'Neon', 'Phoenix', 'Raze
 const UPLOAD_CONFIG_CACHE_KEY = 'vl_upload_reference_config_v1';
 let uploadCategoryAccess = {
   lineup_enabled: true,
+  lineup_staff_enabled: false,
   combo_enabled: false,
+  combo_staff_enabled: false,
   wallbang_enabled: false,
+  wallbang_staff_enabled: false,
   defense_enabled: false,
+  defense_staff_enabled: false,
 };
 let uploadWeaponWhitelist = [...DEFAULT_WALLBANG_WEAPONS];
 let uploadDefenseAgents = new Set();
@@ -237,7 +241,10 @@ const agentCategoryAbilityConfigs = new Map();
 
 function uploadCategoryFlag(category) {
   const normalized = normalizeContentCategory(category);
-  if (canCurrentUserModerate() && UPLOAD_IMPLEMENTED_CONTENT_TYPES.has(normalized)) return true;
+  if (
+    canCurrentUserModerate() &&
+    uploadCategoryAccess[`${normalized}_staff_enabled`] === true
+  ) return true;
   if (normalized === 'lineup') return uploadCategoryAccess.lineup_enabled !== false;
   if (normalized === 'combo') return uploadCategoryAccess.combo_enabled === true;
   if (normalized === 'wallbang') return uploadCategoryAccess.wallbang_enabled === true;
@@ -1470,9 +1477,13 @@ async function loadUploadCategoryConfig() {
       const data = accessSnap.data();
       uploadCategoryAccess = {
         lineup_enabled: data.lineup_enabled !== false,
+        lineup_staff_enabled: data.lineup_staff_enabled === true,
         combo_enabled: data.combo_enabled === true,
+        combo_staff_enabled: data.combo_staff_enabled === true,
         wallbang_enabled: data.wallbang_enabled === true,
+        wallbang_staff_enabled: data.wallbang_staff_enabled === true,
         defense_enabled: data.defense_enabled === true,
+        defense_staff_enabled: data.defense_staff_enabled === true,
       };
     }
     if (useCachedWeapons) {
