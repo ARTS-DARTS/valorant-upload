@@ -29,6 +29,10 @@
     { "source": "/author-training/defense/", "destination": "/author-training/defense/index.html" },
     { "source": "/author-training/lineups", "destination": "/author-training/lineups/index.html" },
     { "source": "/author-training/lineups/", "destination": "/author-training/lineups/index.html" },
+    { "source": "/author-training/combo", "destination": "/author-training/combo/index.html" },
+    { "source": "/author-training/combo/", "destination": "/author-training/combo/index.html" },
+    { "source": "/author-training/wallbang", "destination": "/author-training/wallbang/index.html" },
+    { "source": "/author-training/wallbang/", "destination": "/author-training/wallbang/index.html" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

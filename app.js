@@ -2219,6 +2219,8 @@ let pendingLineupDeepLink = new URLSearchParams(window.location.search).get('lin
 const CATEGORY_TRAINING_PATHS = {
   lineup: '/author-training/lineups/',
   defense: '/author-training/defense/',
+  combo: '/author-training/combo/',
+  wallbang: '/author-training/wallbang/',
 };
 let categoryTrainingGateActive = false;
 
