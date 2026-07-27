@@ -2823,15 +2823,30 @@ let adminChatLastAdminTs = 0;
 const adminChatId = uid => `moderator_application_${uid}`;
 
 async function sendSitePresence() {
-  if (!currentUser) return;
+  if (!currentUser || document.visibilityState === 'hidden') return;
   try {
     const token = await currentUser.getIdToken();
-    await fetch('/api/site-presence', { method:'POST', headers:{ Authorization:`Bearer ${token}` }, credentials:'same-origin', keepalive:true });
+    await fetch('/api/site-presence', {
+      method:'POST',
+      headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      credentials:'same-origin',
+      keepalive:true,
+      body:JSON.stringify({
+        display_name:authorDisplayName() || currentUser.displayName || 'Пользователь',
+        page:activeWorkspaceTab || 'upload',
+      }),
+    });
   } catch (_) {}
 }
+let sitePresenceTimer = null;
 function startSitePresence() {
+  clearInterval(sitePresenceTimer);
   sendSitePresence();
+  sitePresenceTimer = setInterval(sendSitePresence, 60 * 1000);
 }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && currentUser) sendSitePresence();
+});
 
 let siteNotificationsUnsub = null;
 let siteNotifications = [];
@@ -4232,6 +4247,8 @@ onAuthStateChanged(auth, async user => {
     initializeBrowserPush(user.uid);
     startSitePresence();
   } else {
+    clearInterval(sitePresenceTimer);
+    sitePresenceTimer = null;
     currentUserProfile = null;
     moderationController = null;
     moderationModulePromise = null;

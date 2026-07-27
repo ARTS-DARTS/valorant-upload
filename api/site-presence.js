@@ -14,6 +14,58 @@ function requestIp(req) { return clean(req.headers['x-vercel-forwarded-for'] || 
 function ipHash(req) { const salt = clean(process.env.PRESENCE_HASH_SALT || process.env.FIREBASE_SERVICE_ACCOUNT).slice(0, 128); return crypto.createHash('sha256').update(`${salt}|${requestIp(req)}`).digest('hex').slice(0, 24); }
 function moscowDayKey(date = new Date()) { const parts = new Intl.DateTimeFormat('en', { timeZone:'Europe/Moscow', year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(date); const value = type => parts.find(part => part.type === type)?.value || ''; return `${value('year')}-${value('month')}-${value('day')}`; }
 async function authorize(req) { const header = clean(req.headers.authorization); if (!header.startsWith('Bearer ')) throw Object.assign(new Error('Authentication required'), { status:401 }); initFirebase(); return getAuth().verifyIdToken(header.slice(7), true); }
-async function heartbeat(req, res, decoded) { const db = getFirestore(); const activityDay = moscowDayKey(); const presenceRef = db.collection('site_presence').doc(decoded.uid); const dailyRef = db.collection('site_activity_daily').doc(activityDay); let changed = false; await db.runTransaction(async tx => { const snap = await tx.get(presenceRef); if (clean(snap.data()?.activity_day) === activityDay) return; changed = true; tx.set(presenceRef, { uid:decoded.uid, ip_hash:ipHash(req), activity_day:activityDay, last_seen:FieldValue.serverTimestamp(), updated_at:FieldValue.serverTimestamp() }, { merge:true }); tx.set(dailyRef, { day:activityDay, unique_users:FieldValue.increment(1), updated_at:FieldValue.serverTimestamp() }, { merge:true }); }); res.status(200).json({ ok:true, changed, activity_day:activityDay }); }
-async function onlineCount(res, decoded) { const db = getFirestore(); const user = await db.collection('users').doc(decoded.uid).get(); if (clean(user.data()?.role).toLowerCase() !== 'admin') return res.status(403).json({ error:'Admin access required' }); const activityDay = moscowDayKey(); const snap = await db.collection('site_activity_daily').doc(activityDay).get(); res.status(200).json({ online:Number(snap.data()?.unique_users || 0), activity_day:activityDay, update_mode:'on_change' }); }
+function short(value, max = 80) { return clean(value).slice(0, max); }
+async function heartbeat(req, res, decoded) {
+  const db = getFirestore();
+  const activityDay = moscowDayKey();
+  const presenceRef = db.collection('site_presence').doc(decoded.uid);
+  const dailyRef = db.collection('site_activity_daily').doc(activityDay);
+  const payload = {
+    uid:decoded.uid,
+    display_name:short(req.body?.display_name || decoded.name || decoded.email?.split('@')[0] || 'Пользователь'),
+    page:short(req.body?.page || 'upload', 40),
+    activity_day:activityDay,
+    ip_hash:ipHash(req),
+    last_seen:FieldValue.serverTimestamp(),
+    updated_at:FieldValue.serverTimestamp(),
+  };
+  let changed = false;
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(presenceRef);
+    changed = clean(snap.data()?.activity_day) !== activityDay;
+    tx.set(presenceRef, payload, { merge:true });
+    if (changed) {
+      tx.set(dailyRef, { day:activityDay, unique_users:FieldValue.increment(1), updated_at:FieldValue.serverTimestamp() }, { merge:true });
+    }
+  });
+  res.status(200).json({ ok:true, changed, activity_day:activityDay });
+}
+async function onlineCount(res, decoded) {
+  const db = getFirestore();
+  const user = await db.collection('users').doc(decoded.uid).get();
+  if (clean(user.data()?.role).toLowerCase() !== 'admin') return res.status(403).json({ error:'Admin access required' });
+  const activityDay = moscowDayKey();
+  const cutoff = new Date(Date.now() - 3 * 60 * 1000);
+  const [dailySnap, liveSnap] = await Promise.all([
+    db.collection('site_activity_daily').doc(activityDay).get(),
+    db.collection('site_presence').where('last_seen', '>=', cutoff).orderBy('last_seen', 'desc').limit(100).get(),
+  ]);
+  const users = liveSnap.docs.map(doc => {
+    const data = doc.data() || {};
+    return {
+      uid:doc.id,
+      display_name:short(data.display_name || 'Пользователь'),
+      page:short(data.page || 'upload', 40),
+      last_seen:data.last_seen?.toMillis?.() || 0,
+    };
+  });
+  res.status(200).json({
+    online:users.length,
+    active_today:Number(dailySnap.data()?.unique_users || 0),
+    users,
+    activity_day:activityDay,
+    presence_window_seconds:180,
+    update_mode:'heartbeat',
+  });
+}
 export default async function handler(req, res) { headers(req, res); if (req.method === 'OPTIONS') return res.status(204).end(); if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error:'Method not allowed' }); try { const decoded = await authorize(req); return req.method === 'POST' ? await heartbeat(req, res, decoded) : await onlineCount(res, decoded); } catch (error) { const status = Number(error.status) || (error.code?.startsWith('auth/') ? 401 : 500); if (status >= 500) console.error('site-presence error:', error); return res.status(status).json({ error:status >= 500 ? 'Internal server error' : error.message }); } }
