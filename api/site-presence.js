@@ -46,9 +46,10 @@ async function onlineCount(res, decoded) {
   if (clean(user.data()?.role).toLowerCase() !== 'admin') return res.status(403).json({ error:'Admin access required' });
   const activityDay = moscowDayKey();
   const cutoff = new Date(Date.now() - 3 * 60 * 1000);
-  const [dailySnap, liveSnap] = await Promise.all([
+  const [dailySnap, liveSnap, todaySnap] = await Promise.all([
     db.collection('site_activity_daily').doc(activityDay).get(),
     db.collection('site_presence').where('last_seen', '>=', cutoff).orderBy('last_seen', 'desc').limit(100).get(),
+    db.collection('site_presence').where('activity_day', '==', activityDay).limit(100).get(),
   ]);
   const users = liveSnap.docs.map(doc => {
     const data = doc.data() || {};
@@ -59,10 +60,32 @@ async function onlineCount(res, decoded) {
       last_seen:data.last_seen?.toMillis?.() || 0,
     };
   });
+  const todayRows = todaySnap.docs.map(doc => ({ id:doc.id, data:doc.data() || {} }));
+  const missingNames = todayRows.filter(row => !short(row.data.display_name));
+  if (missingNames.length) {
+    const profiles = await db.getAll(...missingNames.map(row => db.collection('users').doc(row.id)));
+    const batch = db.batch();
+    profiles.forEach((profile, index) => {
+      const data = profile.data() || {};
+      const displayName = short(data.username || data.display_name || data.nickname || data.name || data.email || 'Пользователь');
+      missingNames[index].data.display_name = displayName;
+      batch.set(db.collection('site_presence').doc(missingNames[index].id), { display_name:displayName }, { merge:true });
+    });
+    await batch.commit();
+  }
+  const liveIds = new Set(users.map(item => item.uid));
+  const todayUsers = todayRows.map(row => ({
+    uid:row.id,
+    display_name:short(row.data.display_name || 'Пользователь'),
+    page:short(row.data.page || 'upload', 40),
+    last_seen:row.data.last_seen?.toMillis?.() || 0,
+    online:liveIds.has(row.id),
+  })).sort((left, right) => right.last_seen - left.last_seen);
   res.status(200).json({
     online:users.length,
     active_today:Number(dailySnap.data()?.unique_users || 0),
     users,
+    today_users:todayUsers,
     activity_day:activityDay,
     presence_window_seconds:180,
     update_mode:'heartbeat',
