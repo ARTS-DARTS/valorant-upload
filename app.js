@@ -2222,7 +2222,107 @@ const CATEGORY_TRAINING_PATHS = {
   combo: '/author-training/combo/',
   wallbang: '/author-training/wallbang/',
 };
+const CATEGORY_FORM_GUIDES = {
+  lineup: {
+    title: 'Как заполнять форму лайнапа',
+    structure: 'Позиция → ориентир → бросок → результат',
+    description: 'Покажи повторяемый бросок без догадок: от исходной позиции до попадания способности.',
+    steps: ['Карта и агент', 'Позиция игрока', 'Ориентир прицела', 'Параметры броска', 'Попадание и результат'],
+    video: '/author-training/lineup-form-guide.mp4',
+    color: '#38bdf8',
+  },
+  defense: {
+    title: 'Как заполнять форму защиты',
+    structure: 'Установка → удержание → активация',
+    description: 'Покажи защитный сетап полностью: размещение способностей, удерживаемую зону и результат активации.',
+    steps: ['Карта и агент', 'Общий вид сетапа', 'Установка способностей', 'Зона удержания', 'Активация и результат'],
+    video: '/author-training/defense-form-guide.mp4',
+    color: '#ff4655',
+  },
+  combo: {
+    title: 'Как заполнять форму комбо',
+    structure: 'Роли → порядок → точный тайминг',
+    description: 'Покажи связку способностей так, чтобы были понятны роли игроков, последовательность и общий результат.',
+    steps: ['Карта и участники', 'Исходные позиции', 'Порядок действий', 'Точный тайминг', 'Общий результат'],
+    video: '/author-training/combo-form-guide.mp4',
+    color: '#ffb23f',
+  },
+  wallbang: {
+    title: 'Как заполнять форму прострела',
+    structure: 'Оружие → точка прицела → урон',
+    description: 'Докажи прострел без монтажных разрывов: покажи оружие, поверхность, точку выстрела и нанесённый урон.',
+    steps: ['Карта и оружие', 'Позиция игрока', 'Поверхность', 'Точка прицела', 'Попадание и урон'],
+    video: '/author-training/wallbang-form-guide.mp4',
+    color: '#ff5e91',
+  },
+};
 let categoryTrainingGateActive = false;
+let activeCategoryFormGuide = null;
+
+function renderCategoryFormGuide() {
+  const category = normalizeContentCategory(selectedCategory || '');
+  const config = CATEGORY_FORM_GUIDES[category];
+  const guide = document.getElementById('category-form-guide');
+  if (!guide) return;
+  guide.hidden = !config;
+  if (!config) return;
+  guide.style.setProperty('--guide-accent', config.color);
+  const title = document.getElementById('category-form-guide-title');
+  const structure = document.getElementById('category-form-guide-structure');
+  if (title) title.textContent = config.title;
+  if (structure) structure.textContent = config.structure;
+}
+
+function closeCategoryFormGuide() {
+  const modal = document.getElementById('category-form-guide-modal');
+  const video = modal?.querySelector('video');
+  if (video) video.pause();
+  if (modal) modal.hidden = true;
+  document.body.classList.remove('category-form-guide-open');
+}
+
+function openCategoryFormGuide() {
+  const category = normalizeContentCategory(selectedCategory || '');
+  const config = CATEGORY_FORM_GUIDES[category];
+  const modal = document.getElementById('category-form-guide-modal');
+  if (!config || !modal) return;
+  activeCategoryFormGuide = category;
+  modal.style.setProperty('--guide-accent', config.color);
+  document.getElementById('category-form-guide-dialog-title').textContent = config.title;
+  document.getElementById('category-form-guide-description').textContent = config.description;
+  document.getElementById('category-form-guide-steps').innerHTML = config.steps
+    .map((step, index) => `<span><b>${String(index + 1).padStart(2, '0')}</b>${esc(step)}</span>`)
+    .join('');
+  const video = modal.querySelector('video');
+  const placeholder = modal.querySelector('.category-form-guide-placeholder');
+  video.hidden = true;
+  placeholder.hidden = false;
+  video.removeAttribute('src');
+  video.load();
+  video.dataset.guideSrc = config.video;
+  video.src = `${config.video}?v=2026-07-27-category-guides-v1`;
+  video.load();
+  modal.hidden = false;
+  document.body.classList.add('category-form-guide-open');
+}
+
+document.getElementById('category-form-guide-launch')?.addEventListener('click', openCategoryFormGuide);
+document.querySelector('#category-form-guide-modal .category-form-guide-close')?.addEventListener('click', closeCategoryFormGuide);
+document.getElementById('category-form-guide-modal')?.addEventListener('click', event => {
+  if (event.target.id === 'category-form-guide-modal') closeCategoryFormGuide();
+});
+document.querySelector('#category-form-guide-modal video')?.addEventListener('loadedmetadata', event => {
+  if (activeCategoryFormGuide !== normalizeContentCategory(selectedCategory || '')) return;
+  event.currentTarget.hidden = false;
+  document.querySelector('#category-form-guide-modal .category-form-guide-placeholder').hidden = true;
+});
+document.querySelector('#category-form-guide-modal video')?.addEventListener('error', event => {
+  event.currentTarget.hidden = true;
+  document.querySelector('#category-form-guide-modal .category-form-guide-placeholder').hidden = false;
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !document.getElementById('category-form-guide-modal')?.hidden) closeCategoryFormGuide();
+});
 
 function hasCategoryTraining(category) {
   const normalized = normalizeContentCategory(category);
@@ -2267,6 +2367,7 @@ function showTrainingReturnFeedback() {
 
 function updateCategoryTrainingGate() {
   const category = normalizeContentCategory(selectedCategory || '');
+  renderCategoryFormGuide();
   const trainingPath = CATEGORY_TRAINING_PATHS[category];
   categoryTrainingGateActive = Boolean(trainingPath && !hasCategoryTraining(category));
   const gate = document.getElementById('category-training-gate');
@@ -2285,7 +2386,7 @@ function updateCategoryTrainingGate() {
   const gateIndex = main && gate ? [...main.children].indexOf(gate) : -1;
   if (main && categoryCard && gateIndex >= 0) {
     [...main.children].forEach((child, index) => {
-      const locked = categoryTrainingGateActive && index > gateIndex;
+      const locked = categoryTrainingGateActive && index > gateIndex && child.id !== 'category-form-guide';
       child.classList.toggle('training-locked-section', locked);
       if (locked) child.setAttribute('inert', '');
       else child.removeAttribute('inert');

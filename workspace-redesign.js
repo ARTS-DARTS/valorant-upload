@@ -38,6 +38,8 @@ function createUploadRail() {
     <button data-production-step="submit"><i>5</i><span><b>Проверка</b><small>Готовность к отправке</small></span></button>
     <a href="/author-training/">? Открыть инструктаж</a>`;
   upload.prepend(rail);
+  const categoryGuide = document.getElementById('category-form-guide');
+  if (categoryGuide) rail.append(categoryGuide);
   rail.addEventListener('click', (event) => {
     const button = event.target.closest('[data-production-step]');
     if (!button) return;

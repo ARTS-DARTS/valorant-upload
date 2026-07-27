@@ -1,7 +1,6 @@
 const CYPHER_ICON =
   'https://media.valorant-api.com/agents/117ed9e3-49f3-6512-3ccf-0cada7e3823b/displayicon.png';
 const TRAINING_VIDEO = '/author-training/training-control-example.mp4?v=2026-07-26-v1';
-const DEFENSE_FORM_VIDEO = '/author-training/defense-form-guide.mp4';
 const ASCENT_MAP =
   'https://media.valorant-api.com/maps/7eaecc1b-4337-bbf6-6ab9-04b8f06b3319/displayicon.png';
 const KILLJOY_ABILITY_ROOT =
@@ -35,67 +34,6 @@ function addTrainingReturnAction(completion) {
   link.href = returnPath;
   link.textContent = 'ВЕРНУТЬСЯ К ЗАГРУЗКЕ →';
   completion.appendChild(link);
-}
-
-function createDefenseFormVideoGuide() {
-  if (document.querySelector('[data-defense-form-guide]')) return;
-  const launch = document.createElement('button');
-  launch.type = 'button';
-  launch.className = 'training-video-launch';
-  launch.dataset.defenseFormGuide = 'launch';
-  launch.innerHTML = '<span>▶</span><b>КАК ЗАПОЛНИТЬ ФОРМУ ЗАЩИТЫ</b><small>Пошаговый видеоразбор</small>';
-
-  const modal = document.createElement('div');
-  modal.className = 'training-video-modal';
-  modal.dataset.defenseFormGuide = 'modal';
-  modal.hidden = true;
-  modal.innerHTML = `
-    <section class="training-video-dialog" role="dialog" aria-modal="true"
-      aria-labelledby="defense-form-video-title">
-      <button class="training-video-close" type="button" aria-label="Закрыть">×</button>
-      <div class="training-video-kicker">ПРАКТИЧЕСКИЙ РАЗБОР</div>
-      <h2 id="defense-form-video-title">Как правильно заполнить форму защиты</h2>
-      <p>На видео будет показан весь путь: карта и агент → запись → кадры и способности → оформление → проверка.</p>
-      <div class="training-video-stage">
-        <video controls preload="metadata" playsinline></video>
-        <div class="training-video-placeholder">
-          <strong>Видео готовится</strong>
-          <span>После записи администратора оно появится здесь — интерфейс уже готов.</span>
-        </div>
-      </div>
-    </section>`;
-
-  const video = modal.querySelector('video');
-  const placeholder = modal.querySelector('.training-video-placeholder');
-  const close = () => {
-    modal.hidden = true;
-    video.pause();
-    document.body.classList.remove('training-video-open');
-  };
-  launch.addEventListener('click', () => {
-    modal.hidden = false;
-    document.body.classList.add('training-video-open');
-    if (!video.dataset.loaded) {
-      video.dataset.loaded = 'true';
-      video.src = `${DEFENSE_FORM_VIDEO}?v=${Date.now()}`;
-      video.load();
-    }
-  });
-  modal.querySelector('.training-video-close').addEventListener('click', close);
-  modal.addEventListener('click', event => { if (event.target === modal) close(); });
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && !modal.hidden) close();
-  });
-  video.addEventListener('loadedmetadata', () => {
-    video.hidden = false;
-    placeholder.hidden = true;
-  });
-  video.addEventListener('error', () => {
-    video.hidden = true;
-    placeholder.hidden = false;
-  });
-
-  document.body.append(launch, modal);
 }
 
 function setReactInputValue(input, value) {
@@ -212,7 +150,6 @@ function createControlReview(badExample) {
 
 function enhanceTraining() {
   document.body.classList.add('training-enhanced');
-  createDefenseFormVideoGuide();
   const sidebar = document.querySelector('.sidebar');
   const steps = [...document.querySelectorAll('.sidebar .step')];
   const activeStep = steps.findIndex(step => step.classList.contains('active'));
