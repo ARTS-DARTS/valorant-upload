@@ -2820,7 +2820,6 @@ let adminChatSnapshotReady = false;
 let adminChatLastAdminTs = 0;
 const adminChatId = uid => `moderator_application_${uid}`;
 
-let presenceTimer = null;
 async function sendSitePresence() {
   if (!currentUser) return;
   try {
@@ -2829,9 +2828,7 @@ async function sendSitePresence() {
   } catch (_) {}
 }
 function startSitePresence() {
-  clearInterval(presenceTimer);
   sendSitePresence();
-  presenceTimer = setInterval(sendSitePresence, 45_000);
 }
 
 let siteNotificationsUnsub = null;
@@ -4250,7 +4247,6 @@ onAuthStateChanged(auth, async user => {
     siteNotificationsReady = false;
     updateNotificationBadges();
     updateBrowserPushButton();
-    clearInterval(presenceTimer);
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('form-screen').style.display = 'none';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
