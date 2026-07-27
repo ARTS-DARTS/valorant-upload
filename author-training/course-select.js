@@ -53,12 +53,21 @@ const db=getFirestore(app);
 const functions=getFunctions(app,'us-central1');
 const getProgress=httpsCallable(functions,'getAuthorTrainingProgress');
 const completeTraining=httpsCallable(functions,'completeAuthorTraining');
-async function applySiteVisibility(){
+let siteVisibilitySettings={};
+async function applySiteVisibility(user=null){
   try{
-    const snapshot=await getDoc(doc(db,'settings','category_access_site'));
-    const settings=snapshot.exists()?snapshot.data():{};
+    const [settingsSnapshot,userSnapshot]=await Promise.all([
+      getDoc(doc(db,'settings','category_access_site')),
+      user?getDoc(doc(db,'users',user.uid)):Promise.resolve(null),
+    ]);
+    siteVisibilitySettings=settingsSnapshot.exists()?settingsSnapshot.data():{};
+    const role=userSnapshot?.exists()?String(userSnapshot.data()?.role||'').toLowerCase():'';
+    const isStaff=role==='admin'||role==='moderator';
     links.forEach(link=>{
-      link.hidden=settings[`${link.dataset.course}_visible`]===false;
+      const category=link.dataset.course;
+      const publicVisible=siteVisibilitySettings[`${category}_visible`]!==false;
+      const staffVisible=isStaff&&siteVisibilitySettings[`${category}_staff_enabled`]===true;
+      link.hidden=!publicVisible&&!staffVisible;
     });
     renderProgress();
   }catch(error){
@@ -72,6 +81,7 @@ applySiteVisibility();
 onAuthStateChanged(getAuth(app),async user=>{
   if(!user)return;
   try{
+    await applySiteVisibility(user);
     links.forEach(link=>{
       const url=new URL(link.href);
       url.searchParams.set('uid',user.uid);
