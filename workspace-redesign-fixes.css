@@ -93,6 +93,23 @@
   font-size: 10px;
 }
 
+.workspace-redesign .production-flow .category-form-guide-launch {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+}
+
+.workspace-redesign .production-flow .category-form-guide-play {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.workspace-redesign .production-flow .category-form-guide-launch::after {
+  display: none;
+}
+
 .production-shot-help b {
   font-size: 11px;
 }
