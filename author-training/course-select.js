@@ -5,7 +5,6 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 const cfg = { apiKey:'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww', authDomain:'valorant-linemaps.firebaseapp.com', projectId:'valorant-linemaps', storageBucket:'valorant-linemaps.firebasestorage.app', messagingSenderId:'288103111419', appId:'1:288103111419:web:daca10a760282d40996e5e' };
 const params = new URLSearchParams(location.search);
 const links = [...document.querySelectorAll('[data-course]')];
-const uid = params.get('uid') || 'guest';
 links.forEach(link => {
   const url = new URL(link.href);
   url.searchParams.set('category', link.dataset.course);
@@ -17,11 +16,14 @@ const progressPanel=document.createElement('section');
 progressPanel.className='task-progress';
 progressPanel.innerHTML='<div><p>ЗАДАНИЯ И ПОЛУЧЕНИЕ ОЧКОВ</p><b data-task-count>0 из 4 заданий</b></div><strong data-task-points>0 / 20 ОЧКОВ</strong><div class="task-progress-track"><i data-task-progress style="width:0%"></i></div>';
 document.querySelector('.select-copy')?.after(progressPanel);
-function renderProgress(categories={}) {
+function renderProgress(categories={}, localUid='') {
   let completed=0;
   links.forEach(link => {
     const category=link.dataset.course;
-    const done=Boolean(categories[category])||Boolean(localStorage.getItem(`vl_category_training_${uid}_${category}`));
+    const localDone=localUid
+      ? Boolean(localStorage.getItem(`vl_category_training_${localUid}_${category}`))
+      : false;
+    const done=Boolean(categories[category])||localDone;
     completed+=done?1:0;
     const status=link.querySelector('.course-status');
     status.className=`course-status ${done?'complete':'pending'}`;
@@ -45,13 +47,24 @@ const completeTraining=httpsCallable(functions,'completeAuthorTraining');
 onAuthStateChanged(getAuth(app),async user=>{
   if(!user)return;
   try{
+    links.forEach(link=>{
+      const url=new URL(link.href);
+      url.searchParams.set('uid',user.uid);
+      link.href=url;
+    });
     for(const link of links){
       const category=link.dataset.course;
-      if(localStorage.getItem(`vl_category_training_${uid}_${category}`)){
+      if(localStorage.getItem(`vl_category_training_${user.uid}_${category}`)){
         await completeTraining({category});
       }
     }
     const result=await getProgress();
-    renderProgress(result.data?.categories||{});
-  }catch(error){console.warn('training task progress',error?.message||error);}
+    renderProgress(result.data?.categories||{},user.uid);
+  }catch(error){
+    console.error('training task progress failed',{
+      uid:user.uid,
+      code:error?.code,
+      message:error?.message||String(error),
+    });
+  }
 });
