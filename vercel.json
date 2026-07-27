@@ -25,6 +25,10 @@
     }
   ],
   "rewrites": [
+    { "source": "/author-training/defense", "destination": "/author-training/defense/index.html" },
+    { "source": "/author-training/defense/", "destination": "/author-training/defense/index.html" },
+    { "source": "/author-training/lineups", "destination": "/author-training/lineups/index.html" },
+    { "source": "/author-training/lineups/", "destination": "/author-training/lineups/index.html" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
