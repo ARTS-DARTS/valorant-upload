@@ -26,10 +26,7 @@ function renderProgress(categories=renderedCategories, localUid=renderedLocalUid
   const visibleLinks=links.filter(link=>!link.hidden);
   visibleLinks.forEach(link => {
     const category=link.dataset.course;
-    const localDone=localUid
-      ? Boolean(localStorage.getItem(`vl_category_training_${localUid}_${category}`))
-      : false;
-    const done=Boolean(categories[category])||localDone;
+    const done=Boolean(categories[category]);
     completed+=done?1:0;
     const status=link.querySelector('.course-status');
     status.className=`course-status ${done?'complete':'pending'}`;
@@ -52,7 +49,6 @@ const app=initializeApp(cfg);
 const db=getFirestore(app);
 const functions=getFunctions(app,'us-central1');
 const getProgress=httpsCallable(functions,'getAuthorTrainingProgress');
-const completeTraining=httpsCallable(functions,'completeAuthorTraining');
 let siteVisibilitySettings={};
 async function applySiteVisibility(user=null){
   try{
@@ -87,12 +83,6 @@ onAuthStateChanged(getAuth(app),async user=>{
       url.searchParams.set('uid',user.uid);
       link.href=url;
     });
-    for(const link of links){
-      const category=link.dataset.course;
-      if(localStorage.getItem(`vl_category_training_${user.uid}_${category}`)){
-        await completeTraining({category});
-      }
-    }
     const result=await getProgress();
     renderProgress(result.data?.categories||{},user.uid);
   }catch(error){

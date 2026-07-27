@@ -51,6 +51,7 @@ function complete() {
   localStorage.setItem(storageKey, new Date().toISOString());
   localStorage.removeItem(draftKey);
   state.completed = true;
+  window.dispatchEvent(new CustomEvent('author-training-completed'));
   render();
 }
 function toggle(set, value) { set.has(value) ? set.delete(value) : set.add(value); saveDraft(); render(); }
@@ -68,7 +69,7 @@ function stepContent() {
 function completionContent() {
   const rawReturn = params.get('return') || '/';
   const returnPath = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/';
-  return `<div class="completion"><div class="seal"><span>✓</span></div><p class="eyebrow">ДОПУСК · ЛАЙНАПЫ</p><h1>Ты готов оформлять лайнапы</h1><p class="lead">Отдельный допуск для категории «Лайнапы» сохранён. Теперь форма загрузки откроет все этапы.</p><div class="actions"><a class="primary" href="${returnPath}">ВЕРНУТЬСЯ К ЗАГРУЗКЕ →</a><button class="ghost" data-repeat>ПРОЙТИ ЕЩЁ РАЗ</button></div></div>`;
+  return `<div class="completion"><div class="seal"><span>✓</span></div><p class="eyebrow">ДОПУСК · ЛАЙНАПЫ</p><h1>Ты готов оформлять лайнапы</h1><p class="lead">Отдельный допуск для категории «Лайнапы» сохранён. Теперь форма загрузки откроет все этапы.</p><div class="actions"><a class="primary" data-training-return href="${returnPath}">ВЕРНУТЬСЯ К ЗАГРУЗКЕ →</a><button class="ghost" data-repeat>ПРОЙТИ ЕЩЁ РАЗ</button></div></div>`;
 }
 function render(animateStep = false) {
   const done = Boolean(state.completed);

@@ -21,6 +21,7 @@ function recordTrainingCompletion() {
   try {
     localStorage.setItem(trainingCompletionKey(), new Date().toISOString());
   } catch (_) {}
+  window.dispatchEvent(new CustomEvent('author-training-completed'));
 }
 
 function addTrainingReturnAction(completion) {

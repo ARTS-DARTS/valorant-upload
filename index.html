@@ -7,7 +7,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
   <link rel="stylesheet" href="/styles.css?v=2026-07-27-support-messenger-v1">
-  <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-27-bright-maps-v2">
+  <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-27-training-progress-v3">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-26-workspace-fixes-v3">
 </head>
 <body>
@@ -502,6 +502,16 @@
           <div class="stat-count" id="stat-rejected">—</div>
         </div>
       </div>
+      <section class="sidebar-training-progress" id="sidebar-training-progress">
+        <div class="sidebar-training-head">
+          <span>ЗАДАНИЯ И ПОЛУЧЕНИЕ ОЧКОВ</span>
+          <b id="sidebar-training-points">0 / 20</b>
+        </div>
+        <div class="sidebar-training-count" id="sidebar-training-count">0 из 4 инструктажей</div>
+        <div class="sidebar-training-track" aria-hidden="true">
+          <i id="sidebar-training-bar" style="width:0%"></i>
+        </div>
+      </section>
       <button class="btn-out" id="btn-become-mod"
         style="width:100%;margin-top:14px;padding:11px;border-radius:var(--r);border:1px solid var(--border);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">
         🛡 Стать модератором
@@ -727,7 +737,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-07-27-training-rewards-v17"></script>
+<script type="module" src="/app.js?v=2026-07-27-training-feedback-v18"></script>
 <script defer src="/workspace-redesign.js?v=2026-07-26-workspace-v2"></script>
 </body>
 </html>

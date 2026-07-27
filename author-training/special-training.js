@@ -75,7 +75,7 @@ function lesson() {
 function completion() {
   const raw = params.get('return') || '/';
   const target = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
-  return `<div class="completion"><div class="seal"><span>✓</span></div><p class="eyebrow">ДОПУСК · ${cfg.label}</p><h1>Доступ к категории открыт</h1><p class="lead">Инструктаж по категории «${cfg.name}» завершён. Теперь она доступна в форме загрузки.</p><div class="actions"><a class="primary" href="${target}">ВЕРНУТЬСЯ К ЗАГРУЗКЕ →</a><button class="ghost" data-repeat>ПРОЙТИ ЕЩЁ РАЗ</button></div></div>`;
+  return `<div class="completion"><div class="seal"><span>✓</span></div><p class="eyebrow">ДОПУСК · ${cfg.label}</p><h1>Доступ к категории открыт</h1><p class="lead">Инструктаж по категории «${cfg.name}» завершён. Теперь она доступна в форме загрузки.</p><div class="actions"><a class="primary" data-training-return href="${target}">ВЕРНУТЬСЯ К ЗАГРУЗКЕ →</a><button class="ghost" data-repeat>ПРОЙТИ ЕЩЁ РАЗ</button></div></div>`;
 }
 function render(animateStep = false) {
   const ok = ready();
@@ -122,6 +122,7 @@ function bind() {
     localStorage.setItem(storageKey, new Date().toISOString());
     localStorage.removeItem(draftKey);
     state.completed = true;
+    window.dispatchEvent(new CustomEvent('author-training-completed'));
     render();
   });
   root.querySelector('[data-repeat]')?.addEventListener('click', () => {

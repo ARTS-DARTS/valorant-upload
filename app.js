@@ -23,7 +23,6 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const functions = getFunctions(app, 'us-central1');
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
-const completeAuthorTraining = httpsCallable(functions, 'completeAuthorTraining');
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
 const SITE_VERSION = '2026-07-27-support-messenger-v1';
@@ -2225,43 +2224,45 @@ const CATEGORY_TRAINING_PATHS = {
 };
 let categoryTrainingGateActive = false;
 
-function categoryTrainingStorageKey(category) {
-  return `vl_category_training_${currentUser?.uid || 'guest'}_${normalizeContentCategory(category)}`;
-}
-
 function hasCategoryTraining(category) {
   const normalized = normalizeContentCategory(category);
   if (!CATEGORY_TRAINING_PATHS[normalized]) return true;
-  if (currentUserProfile?.author_training_completed?.[normalized]) return true;
-  try {
-    return Boolean(localStorage.getItem(categoryTrainingStorageKey(normalized)));
-  } catch (_) {
-    return false;
-  }
+  return Boolean(currentUserProfile?.author_training_completed?.[normalized]);
 }
 
-async function syncPendingCategoryTraining() {
-  if (!currentUser) return;
-  const completed = { ...(currentUserProfile?.author_training_completed || {}) };
-  const pending = [];
-  Object.keys(CATEGORY_TRAINING_PATHS).forEach(category => {
-    try {
-      const localValue = localStorage.getItem(categoryTrainingStorageKey(category));
-      if (localValue && !completed[category]) {
-        pending.push({ category, localValue });
-      }
-    } catch (_) {}
-  });
-  if (!pending.length) return;
-  for (const item of pending) {
-    try {
-      await completeAuthorTraining({ category: item.category });
-      completed[item.category] = { completed_at: item.localValue, reward_points: 5 };
-    } catch (error) {
-      console.warn('category training reward sync', item.category, error?.message || error);
-    }
-  }
-  currentUserProfile = { ...(currentUserProfile || {}), author_training_completed: completed };
+function renderAuthorTrainingProgress() {
+  const completed = currentUserProfile?.author_training_completed || {};
+  const count = Object.keys(CATEGORY_TRAINING_PATHS)
+    .filter(category => Boolean(completed[category]))
+    .length;
+  const countElement = document.getElementById('sidebar-training-count');
+  const pointsElement = document.getElementById('sidebar-training-points');
+  const barElement = document.getElementById('sidebar-training-bar');
+  if (countElement) countElement.textContent = `${count} из 4 инструктажей`;
+  if (pointsElement) pointsElement.textContent = `${count * 5} / 20`;
+  if (barElement) barElement.style.width = `${count / 4 * 100}%`;
+}
+
+function showTrainingReturnFeedback() {
+  const url = new URL(window.location.href);
+  const category = normalizeContentCategory(url.searchParams.get('training_completed') || '');
+  if (!CATEGORY_TRAINING_PATHS[category]) return;
+  const labels = {
+    lineup: 'Лайнапы',
+    defense: 'Защита',
+    combo: 'Комбо',
+    wallbang: 'Прострелы',
+  };
+  const awarded = url.searchParams.get('training_awarded') === '1';
+  toast(
+    awarded
+      ? `Отличная работа! Инструктаж «${labels[category]}» пройден — начислено +5 очков`
+      : `Инструктаж «${labels[category]}» уже пройден. Доступ подтверждён`,
+    's',
+  );
+  url.searchParams.delete('training_completed');
+  url.searchParams.delete('training_awarded');
+  history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 function updateCategoryTrainingGate() {
@@ -2450,6 +2451,7 @@ function _subscribeUserProfile(uid) {
     updateAdminOnlyWorkspace();
     updateUploadCategoryButtons();
     updateCategoryTrainingGate();
+    renderAuthorTrainingProgress();
     const approvedDocs = currentUserLineups.filter(x => x.status === 'approved').length;
     _updateLevelDisplay(effectiveApprovedLineups(approvedDocs));
     updateUploadGate();
@@ -2696,6 +2698,7 @@ function notificationTimestamp(value) {
 }
 
 function notificationIcon(item) {
+  if (item.type === 'author_training_completed') return '🎓';
   if (item.type === 'lineup_hot' || item.type === 'lineups_hot_batch') return '🔥';
   if (item.type === 'lineup_approved') return '✅';
   if (item.type === 'lineup_rejected') return '↩';
@@ -2894,6 +2897,15 @@ function startSiteNotifications(uid) {
       const incoming = next.filter(item => !knownSiteNotificationIds.has(item.id));
       incoming.slice(0, 3).reverse().forEach(showIncomingNotification);
       if (incoming.some(item => item.cooldown_reset === true) && currentUser) _updateCooldown(currentUser.uid);
+    } else {
+      const trainingNotice = next.find(item => item.type === 'author_training_completed' && item.is_read !== true);
+      if (trainingNotice) {
+        const bannerKey = `author-training-banner-v1:${uid}:${trainingNotice.id}`;
+        if (!localStorage.getItem(bannerKey)) {
+          localStorage.setItem(bannerKey, '1');
+          showIncomingNotification(trainingNotice);
+        }
+      }
     }
     siteNotifications = next;
     knownSiteNotificationIds = new Set(next.map(item => item.id));
@@ -4005,6 +4017,7 @@ async function loadCurrentUserProfile(user) {
   }
   updateUploadCategoryButtons();
   updateCategoryTrainingGate();
+  renderAuthorTrainingProgress();
   return currentUserProfile;
 }
 
@@ -4048,7 +4061,7 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('header-notifications').hidden = false;
     document.getElementById('header-sound-test').hidden = false;
     await loadCurrentUserProfile(user);
-    await syncPendingCategoryTraining();
+    showTrainingReturnFeedback();
     await loadUploadCategoryConfig();
     updateAdminOnlyWorkspace();
     document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
