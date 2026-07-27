@@ -329,11 +329,13 @@ function watchUploadCategoryAccess(reference, initialSnapshot) {
   uploadCategoryAccessUnsub = null;
   if (initialSnapshot?.exists()) {
     applyUploadCategoryAccess(initialSnapshot.data());
+  } else {
+    applyUploadCategoryAccess({});
   }
   uploadCategoryAccessUnsub = onSnapshot(
     reference,
     snapshot => {
-      if (snapshot.exists()) applyUploadCategoryAccess(snapshot.data());
+      applyUploadCategoryAccess(snapshot.exists() ? snapshot.data() : {});
     },
     error => console.warn('watchUploadCategoryAccess', error.message),
   );
@@ -1522,15 +1524,13 @@ async function loadUploadCategoryConfig() {
     const defenseVersion = String(versions.defense_agents || '');
     const useCachedWeapons = weaponVersion && cached.weaponVersion === weaponVersion && Array.isArray(cached.weapons);
     const useCachedDefense = defenseVersion && cached.defenseVersion === defenseVersion && Array.isArray(cached.defenseAgents);
+    const siteAccessReference = doc(db, 'settings', 'category_access_site');
     const [accessSnap, weaponsSnap, defenseSnap] = await Promise.all([
-      getDoc(doc(db, 'settings', 'category_access_site')).then(async snap => snap.exists() ? snap : getDoc(doc(db, 'settings', 'category_access'))),
+      getDoc(siteAccessReference),
       useCachedWeapons ? Promise.resolve(null) : getDoc(doc(db, 'settings', 'weapon_whitelist')),
       useCachedDefense ? Promise.resolve(null) : getDoc(doc(db, 'settings', 'defense_agents')),
     ]);
-    if (accessSnap.exists()) {
-      const accessReference = accessSnap.ref;
-      watchUploadCategoryAccess(accessReference, accessSnap);
-    }
+    watchUploadCategoryAccess(siteAccessReference, accessSnap);
     if (useCachedWeapons) {
       uploadWeaponWhitelist = cached.weapons.filter(Boolean);
     } else if (weaponsSnap?.exists() && Array.isArray(weaponsSnap.data().weapons)) {
