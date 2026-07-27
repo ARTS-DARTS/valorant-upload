@@ -2225,7 +2225,6 @@ const CATEGORY_TRAINING_PATHS = {
 const CATEGORY_FORM_GUIDES = {
   lineup: {
     title: 'Как заполнять форму лайнапа',
-    structure: 'Позиция → ориентир → бросок → результат',
     description: 'Покажи повторяемый бросок без догадок: от исходной позиции до попадания способности.',
     steps: ['Карта и агент', 'Позиция игрока', 'Ориентир прицела', 'Параметры броска', 'Попадание и результат'],
     video: '/author-training/lineup-form-guide.mp4',
@@ -2233,7 +2232,6 @@ const CATEGORY_FORM_GUIDES = {
   },
   defense: {
     title: 'Как заполнять форму защиты',
-    structure: 'Установка → удержание → активация',
     description: 'Покажи защитный сетап полностью: размещение способностей, удерживаемую зону и результат активации.',
     steps: ['Карта и агент', 'Общий вид сетапа', 'Установка способностей', 'Зона удержания', 'Активация и результат'],
     video: '/author-training/defense-form-guide.mp4',
@@ -2241,7 +2239,6 @@ const CATEGORY_FORM_GUIDES = {
   },
   combo: {
     title: 'Как заполнять форму комбо',
-    structure: 'Роли → порядок → точный тайминг',
     description: 'Покажи связку способностей так, чтобы были понятны роли игроков, последовательность и общий результат.',
     steps: ['Карта и участники', 'Исходные позиции', 'Порядок действий', 'Точный тайминг', 'Общий результат'],
     video: '/author-training/combo-form-guide.mp4',
@@ -2249,7 +2246,6 @@ const CATEGORY_FORM_GUIDES = {
   },
   wallbang: {
     title: 'Как заполнять форму прострела',
-    structure: 'Оружие → точка прицела → урон',
     description: 'Докажи прострел без монтажных разрывов: покажи оружие, поверхность, точку выстрела и нанесённый урон.',
     steps: ['Карта и оружие', 'Позиция игрока', 'Поверхность', 'Точка прицела', 'Попадание и урон'],
     video: '/author-training/wallbang-form-guide.mp4',
@@ -2268,9 +2264,7 @@ function renderCategoryFormGuide() {
   if (!config) return;
   guide.style.setProperty('--guide-accent', config.color);
   const title = document.getElementById('category-form-guide-title');
-  const structure = document.getElementById('category-form-guide-structure');
   if (title) title.textContent = config.title;
-  if (structure) structure.textContent = config.structure;
 }
 
 function closeCategoryFormGuide() {
