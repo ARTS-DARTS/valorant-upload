@@ -219,6 +219,13 @@ function enhanceTraining() {
     defenseMaxStep = activeStep;
     localStorage.setItem('vlineups-training-defense-max-step', String(defenseMaxStep));
   }
+  const completedView = Boolean(document.querySelector('.completion'));
+  const progressCount = completedView ? 6 : Math.max(0, activeStep);
+  const headerProgress = document.querySelector('.header-progress');
+  const headerProgressLabel = headerProgress?.querySelector('span');
+  const headerProgressBar = headerProgress?.querySelector('.progress i');
+  if (headerProgressLabel) headerProgressLabel.textContent = `${progressCount} из 6`;
+  if (headerProgressBar) headerProgressBar.style.width = `${progressCount / 6 * 100}%`;
   steps.forEach((step, index) => {
     step.classList.toggle('training-unlocked', index <= defenseMaxStep);
     if (index > activeStep && index <= defenseMaxStep && !step.dataset.forwardNav) {
