@@ -2165,18 +2165,9 @@ function categoryTrainingStorageKey(category) {
   return `vl_category_training_${currentUser?.uid || 'guest'}_${normalizeContentCategory(category)}`;
 }
 
-function hasExistingCategoryMaterial(category) {
-  const normalized = normalizeContentCategory(category);
-  return currentUserLineups.some(item =>
-    normalizeContentCategory(item.content_type || item.category || 'lineup') === normalized
-  );
-}
-
 function hasCategoryTraining(category) {
   const normalized = normalizeContentCategory(category);
-  if (canCurrentUserModerate()) return true;
   if (!CATEGORY_TRAINING_PATHS[normalized]) return true;
-  if (hasExistingCategoryMaterial(normalized)) return true;
   if (currentUserProfile?.author_training_completed?.[normalized]) return true;
   try {
     return Boolean(localStorage.getItem(categoryTrainingStorageKey(normalized)));
