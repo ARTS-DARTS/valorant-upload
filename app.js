@@ -25,7 +25,7 @@ const functions = getFunctions(app, 'us-central1');
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-23-error-report-fixes-v1';
+const SITE_VERSION = '2026-07-27-support-messenger-v1';
 const SITE_VERSION_POLL_MS = 10 * 1000;
 let loadedServerDeploymentVersion = '';
 const EDITOR_MAX_ZOOM = 2.2;
@@ -2611,6 +2611,8 @@ function openNotificationsWorkspace({ behavior = 'smooth' } = {}) {
 
 let adminChatUnsub = null;
 let adminChatDoc = null;
+let adminChatItems = [];
+let activeAdminChatId = '';
 let adminChatSnapshotReady = false;
 let adminChatLastAdminTs = 0;
 const adminChatId = uid => `moderator_application_${uid}`;
@@ -2907,9 +2909,13 @@ document.getElementById('notifications-intro')?.addEventListener('click', event 
 });
 
 function newestAdminMessageTs(data) {
-  return (Array.isArray(data?.thread) ? data.thread : [])
+  const threadLatest = (Array.isArray(data?.thread) ? data.thread : [])
     .filter(message => message.from === 'admin')
     .reduce((latest, message) => Math.max(latest, Number(message.ts) || 0), 0);
+  return Math.max(
+    threadLatest,
+    data?.reply ? feedbackTimestamp(data.replied_at || data.updated_at || data.created_at) : 0,
+  );
 }
 
 function playIncomingChatSound() {
@@ -2921,37 +2927,120 @@ function chatMessageTime(ts) {
   return date.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
 }
 
+function feedbackTimestamp(value) {
+  if (typeof value?.toDate === 'function') return value.toDate().getTime();
+  return Number(value) || 0;
+}
+
+function feedbackMessages(data) {
+  const thread = Array.isArray(data?.thread) ? [...data.thread] : [];
+  if (thread.length) return thread;
+  const messages = [];
+  if (data?.text) messages.push({ from:'user', text:data.text, ts:feedbackTimestamp(data.created_at) });
+  if (data?.reply) messages.push({ from:'admin', text:data.reply, ts:feedbackTimestamp(data.replied_at || data.updated_at || data.created_at) });
+  return messages;
+}
+
+function feedbackLastTimestamp(item) {
+  const messages = feedbackMessages(item);
+  return Math.max(
+    feedbackTimestamp(item.updated_at),
+    feedbackTimestamp(item.created_at),
+    ...messages.map(message => feedbackTimestamp(message.ts)),
+  );
+}
+
+function feedbackTitle(item) {
+  if (item.id === adminChatId(currentUser?.uid)) return 'Чат с администрацией';
+  return firstText(item.subject, item.category, 'Обращение');
+}
+
+function feedbackPreview(item) {
+  const messages = feedbackMessages(item);
+  return firstText(messages.at(-1)?.text, item.text, 'Сообщений пока нет');
+}
+
+function isMainAdminChat(itemOrId) {
+  const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.id;
+  return id === adminChatId(currentUser?.uid);
+}
+
+function renderAdminChatList() {
+  const list = document.getElementById('admin-chat-list');
+  if (!list || !currentUser) return;
+  const mainId = adminChatId(currentUser.uid);
+  const main = adminChatItems.find(item => item.id === mainId) || { id:mainId, status:'open' };
+  const regular = adminChatItems
+    .filter(item => item.id !== mainId)
+    .sort((a, b) => feedbackLastTimestamp(b) - feedbackLastTimestamp(a));
+  const open = regular.filter(item => item.status !== 'closed');
+  const closed = regular.filter(item => item.status === 'closed');
+  const dialog = (item, { pinned = false } = {}) => {
+    const unread = item.user_unread === true || (item.reply && item.reply_read !== true);
+    const timestamp = feedbackLastTimestamp(item);
+    const date = timestamp ? new Date(timestamp).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' }) : '';
+    const classes = ['messenger-dialog', pinned ? 'pinned' : '', item.status === 'closed' ? 'closed' : '', item.id === activeAdminChatId ? 'active' : ''].filter(Boolean).join(' ');
+    return `<button type="button" class="${classes}" data-admin-dialog="${esc(item.id)}">
+      <span class="messenger-dialog-icon">${pinned ? '◆' : item.status === 'closed' ? '✓' : '◌'}</span>
+      <span class="messenger-dialog-copy"><b>${esc(feedbackTitle(item))}</b><span>${esc(feedbackPreview(item))}</span></span>
+      <span class="messenger-dialog-meta">${date}${unread ? '<i class="messenger-unread">1</i>' : ''}</span>
+    </button>`;
+  };
+  const group = (title, items) => items.length ? `<section class="messenger-group"><div class="messenger-group-title"><span>${title}</span><span>${items.length}</span></div>${items.map(item => dialog(item)).join('')}</section>` : '';
+  list.innerHTML = `${dialog(main, { pinned:true })}
+    ${group('Открытые обращения', open)}
+    ${group('Закрытые', closed)}
+    ${regular.length ? '' : '<div class="messenger-list-state">Здесь появятся обращения, которые ты отправишь через приложение.</div>'}`;
+}
+
 function renderAdminChat(data) {
   const newestAdminTs = newestAdminMessageTs(data);
   if (adminChatSnapshotReady && newestAdminTs > adminChatLastAdminTs) playIncomingChatSound();
   adminChatLastAdminTs = Math.max(adminChatLastAdminTs, newestAdminTs);
   adminChatSnapshotReady = true;
   adminChatDoc = data || null;
+  const mainChat = isMainAdminChat(activeAdminChatId);
+  const closed = !mainChat && data?.status === 'closed';
   const thread = document.getElementById('admin-chat-thread');
-  const messages = Array.isArray(data?.thread) ? data.thread : [];
+  const messages = feedbackMessages(data);
   if (thread) {
     thread.innerHTML = messages.length ? messages.map(message => {
       const mine = message.from === 'user';
       return `<div class="admin-chat-row ${mine ? 'mine' : 'theirs'}"><div class="admin-chat-bubble"><div>${esc(message.text || '')}</div><time>${chatMessageTime(message.ts)}</time></div></div>`;
-    }).join('') : '<div class="admin-chat-empty">Администратор ещё не начал диалог. Ты можешь написать первым.</div>';
+    }).join('') : `<div class="admin-chat-empty">${mainChat ? 'Это постоянный чат с администрацией. Ты можешь написать первым.' : 'В этом обращении пока нет сообщений.'}</div>`;
     thread.scrollTop = thread.scrollHeight;
   }
   const unread = data?.user_unread === true;
-  const badge = document.getElementById('admin-chat-badge');
-  if (badge) { badge.hidden = !unread; badge.textContent = unread ? '1' : ''; }
-  if (unread && activeWorkspaceTab === 'admin-chat' && currentUser) {
-    updateDoc(doc(db, 'feedback', adminChatId(currentUser.uid)), {
+  if ((unread || (data?.reply && data.reply_read !== true)) && activeWorkspaceTab === 'admin-chat' && currentUser && data?.id) {
+    updateDoc(doc(db, 'feedback', data.id), {
       user_unread:false,
       reply_read:true,
       user_read_at:serverTimestamp(),
     }).catch(() => {});
   }
   const status = document.getElementById('admin-chat-status');
-  if (status) status.textContent = data?.status === 'closed' ? 'Диалог закрыт' : 'Онлайн-переписка';
+  if (status) status.textContent = mainChat ? 'Всегда открыт' : closed ? 'Обращение закрыто' : 'Обращение открыто';
+  const title = document.getElementById('admin-chat-title');
+  if (title) title.textContent = feedbackTitle(data || { id:activeAdminChatId });
+  const kicker = document.getElementById('admin-chat-kicker');
+  if (kicker) kicker.textContent = mainChat ? 'Закреплённый чат' : closed ? 'Архив обращений' : 'Открытое обращение';
   const input = document.getElementById('admin-chat-input');
   const button = document.querySelector('#admin-chat-form button');
-  if (input) input.disabled = data?.status === 'closed';
-  if (button) button.disabled = data?.status === 'closed';
+  if (input) input.disabled = closed;
+  if (button) button.disabled = closed;
+  const closedNote = document.getElementById('admin-chat-closed');
+  if (closedNote) closedNote.hidden = !closed;
+  renderAdminChatList();
+}
+
+function selectAdminChat(id) {
+  if (!id) return;
+  activeAdminChatId = id;
+  adminChatSnapshotReady = false;
+  adminChatLastAdminTs = 0;
+  const item = adminChatItems.find(value => value.id === id) || { id };
+  renderAdminChat(item);
+  document.querySelector('.messenger-shell')?.classList.add('chat-open');
 }
 
 function openAdminChat() {
@@ -2959,28 +3048,46 @@ function openAdminChat() {
   adminChatUnsub?.();
   adminChatSnapshotReady = false;
   adminChatLastAdminTs = 0;
-  adminChatUnsub = onSnapshot(doc(db, 'feedback', adminChatId(currentUser.uid)), snap => {
-    renderAdminChat(snap.exists() ? snap.data() : null);
+  activeAdminChatId ||= adminChatId(currentUser.uid);
+  const inbox = query(collection(db, 'feedback'), where('user_id', '==', currentUser.uid), limit(100));
+  adminChatUnsub = onSnapshot(inbox, snap => {
+    adminChatItems = snap.docs.map(entry => ({ id:entry.id, ...entry.data() }));
+    const active = adminChatItems.find(item => item.id === activeAdminChatId) || { id:activeAdminChatId };
+    renderAdminChat(active);
+    const unreadCount = adminChatItems.filter(item => item.user_unread === true || (item.reply && item.reply_read !== true)).length;
+    const badge = document.getElementById('admin-chat-badge');
+    if (badge) { badge.hidden = unreadCount === 0; badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount); }
   }, error => {
     const status = document.getElementById('admin-chat-status');
     if (status) status.textContent = 'Ошибка: ' + error.message;
+    const list = document.getElementById('admin-chat-list');
+    if (list) list.innerHTML = `<div class="messenger-list-state">Не удалось загрузить обращения.<br>${esc(error.message)}</div>`;
   });
 }
 
+document.getElementById('admin-chat-list')?.addEventListener('click', event => {
+  const dialog = event.target.closest('[data-admin-dialog]');
+  if (dialog) selectAdminChat(dialog.dataset.adminDialog);
+});
+document.getElementById('admin-chat-back')?.addEventListener('click', () => {
+  document.querySelector('.messenger-shell')?.classList.remove('chat-open');
+});
+
 document.getElementById('admin-chat-form')?.addEventListener('submit', async event => {
   event.preventDefault();
-  if (!currentUser) return;
+  if (!currentUser || !activeAdminChatId) return;
   const input = document.getElementById('admin-chat-input');
   const text = input?.value.trim() || '';
   if (!text) return;
-  const ref = doc(db, 'feedback', adminChatId(currentUser.uid));
+  const ref = doc(db, 'feedback', activeAdminChatId);
   const message = { from:'user', text, ts:Date.now() };
   const profileName = currentUserProfile?.name || currentUserProfile?.display_name || currentUser.email || 'Пользователь';
   const existing = await getDoc(ref);
   if (existing.exists()) {
+    if (!isMainAdminChat(activeAdminChatId) && existing.data()?.status === 'closed') return;
     await updateDoc(ref, { thread:arrayUnion(message), admin_unread:true, user_unread:false, last_from:'user', status:'open' });
   } else {
-    await setDoc(ref, { text, category:'заявка модератора', username:profileName, user_id:currentUser.uid, source:'moderator_application', thread:[message], status:'open', admin_unread:true, user_unread:false, last_from:'user', created_at:serverTimestamp() });
+    await setDoc(ref, { text, category:'Чат с администрацией', username:profileName, user_id:currentUser.uid, is_read:false, reply:null, reply_read:null, created_at:serverTimestamp() });
   }
   input.value = '';
 });
@@ -3879,6 +3986,8 @@ function mergeUserLibraryParts(parts) {
 onAuthStateChanged(auth, async user => {
   currentUser = user;
   if (user) {
+    activeAdminChatId = adminChatId(user.uid);
+    adminChatItems = [];
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('form-screen').style.display = '';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
@@ -3918,6 +4027,8 @@ onAuthStateChanged(auth, async user => {
     _unsubscribeStats();
     adminChatUnsub?.();
     adminChatUnsub = null;
+    adminChatItems = [];
+    activeAdminChatId = '';
     siteNotificationsUnsub?.();
     siteNotificationsUnsub = null;
     siteNotifications = [];

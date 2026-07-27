@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-27-defense-site-buttons-v7">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-27-support-messenger-v1">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-26-workspace-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-26-workspace-fixes-v3">
 </head>
@@ -545,16 +545,33 @@
   </div>
 
   <div class="workspace-panel" id="workspace-admin-chat">
-    <div class="admin-chat-shell">
-      <header class="admin-chat-head">
-        <div><div class="workspace-kicker">Связь по заявке</div><h2>Чат с администрацией</h2></div>
-        <span id="admin-chat-status">Подключение…</span>
-      </header>
-      <div id="admin-chat-thread" class="admin-chat-thread"><div class="admin-chat-empty">Сообщений пока нет</div></div>
-      <form id="admin-chat-form" class="admin-chat-compose">
-        <textarea id="admin-chat-input" maxlength="2000" rows="2" placeholder="Напиши сообщение…"></textarea>
-        <button type="submit">Отправить</button>
-      </form>
+    <div class="messenger-shell">
+      <aside class="messenger-sidebar" aria-label="Диалоги с администрацией">
+        <header class="messenger-sidebar-head">
+          <div class="workspace-kicker">Обращения</div>
+          <h2>Сообщения</h2>
+          <p>Все вопросы и ответы в одном месте</p>
+        </header>
+        <div id="admin-chat-list" class="messenger-dialogs">
+          <div class="messenger-list-state">Загружаем диалоги…</div>
+        </div>
+      </aside>
+      <section class="admin-chat-shell">
+        <header class="admin-chat-head">
+          <button id="admin-chat-back" class="messenger-back" type="button" aria-label="Вернуться к списку диалогов">←</button>
+          <div class="admin-chat-heading">
+            <div id="admin-chat-kicker" class="workspace-kicker">Закреплённый чат</div>
+            <h2 id="admin-chat-title">Чат с администрацией</h2>
+          </div>
+          <span id="admin-chat-status">Подключение…</span>
+        </header>
+        <div id="admin-chat-thread" class="admin-chat-thread"><div class="admin-chat-empty">Выбери диалог</div></div>
+        <div id="admin-chat-closed" class="admin-chat-closed" hidden>Обращение закрыто. Переписка сохранена только для чтения.</div>
+        <form id="admin-chat-form" class="admin-chat-compose">
+          <textarea id="admin-chat-input" maxlength="500" rows="2" placeholder="Напиши сообщение…"></textarea>
+          <button type="submit">Отправить</button>
+        </form>
+      </section>
     </div>
   </div>
 
