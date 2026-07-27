@@ -220,13 +220,23 @@ function enhanceTraining() {
     defenseMaxStep = activeStep;
     localStorage.setItem('vlineups-training-defense-max-step', String(defenseMaxStep));
   }
-  const completedView = Boolean(document.querySelector('.completion'));
+  const completedView = Boolean(document.querySelector('.completion'))
+    || document.querySelector('.workspace header h2')?.textContent?.includes('Инструктаж завершён');
+  document.body.classList.toggle('training-completed', completedView);
   const progressCount = completedView ? 6 : Math.max(0, activeStep);
   const headerProgress = document.querySelector('.header-progress');
   const headerProgressLabel = headerProgress?.querySelector('span');
   const headerProgressBar = headerProgress?.querySelector('.progress i');
-  if (headerProgressLabel) headerProgressLabel.textContent = `${progressCount} из 6`;
-  if (headerProgressBar) headerProgressBar.style.width = `${progressCount / 6 * 100}%`;
+  const progressText = `${progressCount} из 6`;
+  if (headerProgressLabel && headerProgressLabel.textContent !== progressText) {
+    headerProgressLabel.textContent = progressText;
+  }
+  if (headerProgressBar) {
+    const progressWidth = `${progressCount / 6 * 100}%`;
+    if (headerProgressBar.style.width !== progressWidth) {
+      headerProgressBar.style.setProperty('width', progressWidth, completedView ? 'important' : '');
+    }
+  }
   steps.forEach((step, index) => {
     step.classList.toggle('training-unlocked', index <= defenseMaxStep);
     if (index > activeStep && index <= defenseMaxStep && !step.dataset.forwardNav) {
@@ -339,9 +349,20 @@ function enhanceTraining() {
   });
 }
 
-const observer = new MutationObserver(enhanceTraining);
-observer.observe(document.getElementById('root'), {
+const root = document.getElementById('root');
+const observerOptions = {
   childList: true,
   subtree: true,
+};
+let enhancementFrame = 0;
+const observer = new MutationObserver(() => {
+  if (enhancementFrame) return;
+  enhancementFrame = requestAnimationFrame(() => {
+    enhancementFrame = 0;
+    observer.disconnect();
+    enhanceTraining();
+    observer.observe(root, observerOptions);
+  });
 });
+observer.observe(root, observerOptions);
 enhanceTraining();

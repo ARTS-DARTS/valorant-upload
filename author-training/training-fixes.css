@@ -34,6 +34,10 @@
   height: 10px;
 }
 
+.training-enhanced.training-completed .header-progress .progress i {
+  width: 100% !important;
+}
+
 .training-enhanced .sidebar .step.training-unlocked {
   cursor: pointer;
 }
