@@ -211,7 +211,10 @@ function createControlReview(badExample) {
 function enhanceTraining() {
   createDefenseFormVideoGuide();
   const completion = document.querySelector('.completion');
-  if (completion) addTrainingReturnAction(completion);
+  if (completion) {
+    addTrainingReturnAction(completion);
+    completion.closest('.content')?.classList.add('training-complete-layout');
+  }
 
   const agent = document.querySelector('.scenario .agent');
   if (agent && !agent.querySelector('img')) {

@@ -21,6 +21,15 @@
   min-width: 0;
 }
 
+.content.training-complete-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.training-complete-layout .lesson {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
 .lesson > *,
 .form-grid,
 .principles,
