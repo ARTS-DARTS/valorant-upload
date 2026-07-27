@@ -2418,13 +2418,13 @@ let _profileUnsubs = [];
 let _profileParts = { public: {}, private: {}, stats: {}, auth: {} };
 
 const LEVELS = [
-  { min: 0,   name: 'Новобранец', icon: '🎯', color: '#808080', cooldownMinutes: 60 },
-  { min: 3,   name: 'Разведчик',  icon: '🔍', color: '#4FC3F7', cooldownMinutes: 45 },
-  { min: 7,   name: 'Агент',      icon: '⚡', color: '#66BB6A', cooldownMinutes: 30 },
-  { min: 15,  name: 'Специалист', icon: '💎', color: '#AB47BC', cooldownMinutes: 15 },
-  { min: 30,  name: 'Ветеран',    icon: '🔥', color: '#FF7043', cooldownMinutes: 5 },
-  { min: 50,  name: 'Элита',      icon: '👑', color: '#FFD700', cooldownMinutes: 2 },
-  { min: 100, name: 'Легенда',    icon: '🏆', color: '#FF4655', cooldownMinutes: 0 },
+  { min: 0,   name: 'Новобранец', icon: '🎯', color: '#94A3B8', gradient: ['#64748B', '#CBD5E1'], cooldownMinutes: 60 },
+  { min: 3,   name: 'Разведчик',  icon: '🔍', color: '#4FC3F7', gradient: ['#0284C7', '#67E8F9'], cooldownMinutes: 45 },
+  { min: 7,   name: 'Агент',      icon: '⚡', color: '#66BB6A', gradient: ['#16A34A', '#86EFAC'], cooldownMinutes: 30 },
+  { min: 15,  name: 'Специалист', icon: '💎', color: '#AB47BC', gradient: ['#7C3AED', '#D8B4FE'], cooldownMinutes: 15 },
+  { min: 30,  name: 'Ветеран',    icon: '🔥', color: '#FF7043', gradient: ['#EA580C', '#FDBA74'], cooldownMinutes: 5 },
+  { min: 50,  name: 'Элита',      icon: '👑', color: '#FFD700', gradient: ['#CA8A04', '#FDE047'], cooldownMinutes: 2 },
+  { min: 100, name: 'Легенда',    icon: '🏆', color: '#FF4655', gradient: ['#E11D48', '#FB7185'], cooldownMinutes: 0 },
 ];
 let _approvedLineups = 0;
 
@@ -2458,6 +2458,12 @@ function _updateLevelDisplay(approved) {
   const progressValue = document.getElementById('profile-level-progress-value');
   const progressBar = document.getElementById('profile-level-progress-bar');
   const progressNext = document.getElementById('profile-level-progress-next');
+  const progressPanel = progressBar?.closest('.profile-level-progress');
+  if (progressPanel) {
+    progressPanel.style.setProperty('--level-color', lv.color);
+    progressPanel.style.setProperty('--level-gradient-start', lv.gradient[0]);
+    progressPanel.style.setProperty('--level-gradient-end', lv.gradient[1]);
+  }
   if (progressName) {
     progressName.textContent = `${lv.icon} ${lv.name}`;
     progressName.style.color = lv.color;
