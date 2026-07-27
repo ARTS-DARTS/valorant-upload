@@ -70,10 +70,11 @@ function completionContent() {
   const returnPath = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/';
   return `<div class="completion"><div class="seal"><span>✓</span></div><p class="eyebrow">ДОПУСК · ЛАЙНАПЫ</p><h1>Ты готов оформлять лайнапы</h1><p class="lead">Отдельный допуск для категории «Лайнапы» сохранён. Теперь форма загрузки откроет все этапы.</p><div class="actions"><a class="primary" href="${returnPath}">ВЕРНУТЬСЯ К ЗАГРУЗКЕ →</a><button class="ghost" data-repeat>ПРОЙТИ ЕЩЁ РАЗ</button></div></div>`;
 }
-function render() {
+function render(animateStep = false) {
   const done = Boolean(state.completed);
   const ready = valid();
   root.innerHTML = `<div class="mobile-lock"><div><h1>Открой инструктаж на компьютере</h1><p>Для обучения нужен большой экран, мышь и клавиатура.</p></div></div><main class="app"><aside class="sidebar"><div class="brand"><i>V</i>VLINEUPS</div><div class="course-label">ИНСТРУКТАЖ · ЛАЙНАПЫ</div><nav class="steps">${steps.map((item, i) => `<button class="step ${i === state.step && !done ? 'active' : ''} ${i < state.maxStep || done ? 'done' : ''}" data-step="${i}" ${i > state.maxStep && !done ? 'disabled' : ''}><span class="num">${i < state.maxStep || done ? '✓' : i + 1}</span><span><strong>${item[0]}</strong><small>${item[1]}</small></span></button>`).join('')}</nav><div class="desktop-note">▣ Загрузка доступна только с компьютера</div></aside><section class="workspace"><header class="top"><div><p class="eyebrow">УЧЕБНЫЙ РЕЖИМ · ДАННЫЕ НЕ ПУБЛИКУЮТСЯ</p><h2>${done ? 'Инструктаж завершён' : steps[state.step][0]}</h2></div><div class="progress-label"><b>${done ? '6 из 6' : `${state.step + 1} из 6`}</b><div class="progress"><i style="width:${done ? 100 : (state.step + 1) / 6 * 100}%"></i></div></div></header><div class="content ${done ? 'complete' : ''}"><section class="lesson">${done ? completionContent() : `${stepContent()}<div class="lesson-actions"><button class="ghost" data-prev ${state.step === 0 ? 'disabled' : ''}>НАЗАД</button><span>${ready ? 'Можно продолжать' : 'Заверши задание'}</span><button class="primary" data-next ${ready ? '' : 'disabled'}>${state.step === 5 ? 'ЗАВЕРШИТЬ' : 'ДАЛЬШЕ'} →</button></div>`}</section>${done ? '' : `<aside class="quality ${ready ? 'ready' : ''}"><b>КОНТРОЛЬ КАЧЕСТВА</b><div class="scan"><i></i><span>${ready ? '✓' : '⌁'}</span></div><h3>${ready ? 'Шаг пройден' : 'Заверши задание'}</h3><p>${ready ? 'Все обязательные условия выполнены.' : 'Выполни задание слева, чтобы продолжить.'}</p></aside>`}</div></section></main>`;
+  root.querySelector('.lesson')?.classList.toggle('entering', animateStep);
   bind();
 }
 function bind() {
@@ -100,17 +101,17 @@ function bind() {
     brand.onclick = openMenu;
     brand.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') openMenu(); };
   }
-  root.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { const n = Number(b.dataset.step); if (n <= state.maxStep) { state.step = n; saveDraft(); render(); } });
+  root.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { const n = Number(b.dataset.step); if (n <= state.maxStep) { state.step = n; saveDraft(); render(true); } });
   root.querySelectorAll('[data-category]').forEach(b => b.onclick = () => { state.category = b.dataset.category; saveDraft(); render(); });
   root.querySelectorAll('[data-recording]').forEach(b => b.onclick = () => toggle(state.recording, b.dataset.recording));
   root.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => toggle(state.issues, b.dataset.issue));
   root.querySelectorAll('[data-template]').forEach(b => b.onclick = () => { state.template = b.dataset.template; saveDraft(); render(); });
   root.querySelector('[data-acknowledge]')?.addEventListener('click', () => { state.acknowledged = !state.acknowledged; saveDraft(); render(); });
   root.querySelectorAll('[data-answer]').forEach(b => b.onclick = () => { const [q, a] = b.dataset.answer.split(':').map(Number); state.answers[q] = a; saveDraft(); render(); });
-  root.querySelector('[data-prev]')?.addEventListener('click', () => { state.step--; saveDraft(); render(); });
-  root.querySelector('[data-next]')?.addEventListener('click', () => { if (!valid()) return; if (state.step === 5) complete(); else { state.step++; state.maxStep = Math.max(state.maxStep, state.step); saveDraft(); render(); } });
+  root.querySelector('[data-prev]')?.addEventListener('click', () => { state.step--; saveDraft(); render(true); });
+  root.querySelector('[data-next]')?.addEventListener('click', () => { if (!valid()) return; if (state.step === 5) complete(); else { state.step++; state.maxStep = Math.max(state.maxStep, state.step); saveDraft(); render(true); } });
   root.querySelector('[data-repeat]')?.addEventListener('click', () => { localStorage.removeItem(storageKey); Object.assign(state, { step: 0, maxStep: 0, category: '', recording: new Set(), acknowledged: false, template: '', issues: new Set(), answers: [], completed: false }); render(); });
 }
 restoreDraft();
 state.completed = Boolean(localStorage.getItem(storageKey));
-render();
+render(true);

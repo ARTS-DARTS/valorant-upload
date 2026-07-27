@@ -77,10 +77,11 @@ function completion() {
   const target = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
   return `<div class="completion"><div class="seal"><span>✓</span></div><p class="eyebrow">ДОПУСК · ${cfg.label}</p><h1>Доступ к категории открыт</h1><p class="lead">Инструктаж по категории «${cfg.name}» завершён. Теперь она доступна в форме загрузки.</p><div class="actions"><a class="primary" href="${target}">ВЕРНУТЬСЯ К ЗАГРУЗКЕ →</a><button class="ghost" data-repeat>ПРОЙТИ ЕЩЁ РАЗ</button></div></div>`;
 }
-function render() {
+function render(animateStep = false) {
   const ok = ready();
   document.documentElement.style.setProperty('--cyan', cfg.accent);
   root.innerHTML = `<div class="mobile-lock"><div><h1>Открой инструктаж на компьютере</h1><p>Для обучения нужен большой экран, мышь и клавиатура.</p></div></div><main class="app"><aside class="sidebar"><div class="brand"><i>V</i>VLINEUPS</div><div class="course-label">ИНСТРУКТАЖ · ${cfg.label}</div><nav class="steps">${steps.map((s, i) => `<button class="step ${i === state.step && !state.completed ? 'active' : ''} ${i < state.maxStep || state.completed ? 'done' : ''}" data-step="${i}" ${i > state.maxStep && !state.completed ? 'disabled' : ''}><span class="num">${i < state.maxStep || state.completed ? '✓' : i + 1}</span><span><strong>${s[0]}</strong><small>${s[1]}</small></span></button>`).join('')}</nav><div class="desktop-note">▣ Загрузка доступна только с компьютера</div></aside><section class="workspace"><header class="top"><div><p class="eyebrow">УЧЕБНЫЙ РЕЖИМ · ДАННЫЕ НЕ ПУБЛИКУЮТСЯ</p><h2>${state.completed ? 'Инструктаж завершён' : steps[state.step][0]}</h2></div><div class="progress-label"><b>${state.completed ? 6 : state.step + 1} из 6</b><div class="progress"><i style="width:${state.completed ? 100 : (state.step + 1) / 6 * 100}%"></i></div></div></header><div class="content ${state.completed ? 'complete' : ''}"><section class="lesson">${state.completed ? completion() : `${lesson()}<div class="lesson-actions"><button class="ghost" data-prev ${state.step === 0 ? 'disabled' : ''}>НАЗАД</button><span>${ok ? 'Можно продолжать' : 'Заверши задание'}</span><button class="primary" data-next ${ok ? '' : 'disabled'}>${state.step === 5 ? 'ЗАВЕРШИТЬ' : 'ДАЛЬШЕ'} →</button></div>`}</section>${state.completed ? '' : `<aside class="quality ${ok ? 'ready' : ''}"><b>КОНТРОЛЬ КАЧЕСТВА</b><div class="scan"><i></i><span>${ok ? '✓' : '⌁'}</span></div><h3>${ok ? 'Шаг пройден' : 'Заверши задание'}</h3><p>${ok ? 'Все обязательные условия выполнены.' : 'Выполни задание слева, чтобы продолжить.'}</p></aside>`}</div></section></main>`;
+  root.querySelector('.lesson')?.classList.toggle('entering', animateStep);
   bind();
 }
 function bind() {
@@ -107,17 +108,17 @@ function bind() {
     brand.onclick = openMenu;
     brand.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') openMenu(); };
   }
-  root.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { const n = Number(b.dataset.step); if (n <= state.maxStep) { state.step = n; save(); render(); } });
+  root.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { const n = Number(b.dataset.step); if (n <= state.maxStep) { state.step = n; save(); render(true); } });
   root.querySelectorAll('[data-category]').forEach(b => b.onclick = () => { state.category = b.dataset.category; save(); render(); });
   root.querySelectorAll('[data-recording]').forEach(b => b.onclick = () => toggle(state.recording, b.dataset.recording));
   root.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => toggle(state.issues, b.dataset.issue));
   root.querySelectorAll('[data-template]').forEach(b => b.onclick = () => { state.template = b.dataset.template; save(); render(); });
   root.querySelector('[data-acknowledge]')?.addEventListener('click', () => { state.acknowledged = !state.acknowledged; save(); render(); });
   root.querySelectorAll('[data-answer]').forEach(b => b.onclick = () => { const [i, a] = b.dataset.answer.split(':').map(Number); state.answers[i] = a; save(); render(); });
-  root.querySelector('[data-prev]')?.addEventListener('click', () => { state.step--; save(); render(); });
+  root.querySelector('[data-prev]')?.addEventListener('click', () => { state.step--; save(); render(true); });
   root.querySelector('[data-next]')?.addEventListener('click', () => {
     if (!ready()) return;
-    if (state.step < 5) { state.step++; state.maxStep = Math.max(state.maxStep, state.step); save(); render(); return; }
+    if (state.step < 5) { state.step++; state.maxStep = Math.max(state.maxStep, state.step); save(); render(true); return; }
     localStorage.setItem(storageKey, new Date().toISOString());
     localStorage.removeItem(draftKey);
     state.completed = true;
@@ -129,4 +130,4 @@ function bind() {
   });
 }
 restore();
-render();
+render(true);
