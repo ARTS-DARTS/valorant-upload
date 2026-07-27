@@ -1,19 +1,40 @@
 <!doctype html>
 <html lang="ru">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Интерактивный прототип обучения авторов VLineups"
-    />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Выбор инструктажа автора VLineups">
     <title>VLineups — Инструктаж автора</title>
-    <script type="module" crossorigin src="/author-training/assets/index-BbZhphZw.js"></script>
-    <link rel="stylesheet" crossorigin href="/author-training/assets/index-Dv8y2T1n.css">
-    <link rel="stylesheet" href="/author-training/training-fixes.css?v=2026-07-27-completion-wide-v13">
-    <script defer src="/author-training/training-enhancements.js?v=2026-07-27-completion-wide-v11"></script>
+    <link rel="stylesheet" href="/author-training/course-select.css?v=2026-07-27-v1">
+    <script defer src="/author-training/course-select.js?v=2026-07-27-v1"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <main class="select-shell">
+      <header class="select-brand"><span>V</span><b>VLINEUPS</b></header>
+      <section class="select-copy">
+        <p>ИНСТРУКТАЖ АВТОРА</p>
+        <h1>Выбери тип материала</h1>
+        <div>У каждого формата свои правила записи и оформления. Допуски сохраняются отдельно.</div>
+      </section>
+      <section class="course-grid">
+        <a class="course-card lineup" data-course="lineup" href="/author-training/lineups/">
+          <span class="course-number">01</span>
+          <div class="course-icon">⌁</div>
+          <p>ТОЧКА БРОСКА · ОРИЕНТИР · РЕЗУЛЬТАТ</p>
+          <h2>Лайнапы</h2>
+          <div>Научись записывать повторяемые броски способностей и правильно показывать каждый этап.</div>
+          <b>НАЧАТЬ ИНСТРУКТАЖ →</b>
+        </a>
+        <a class="course-card defense" data-course="defense" href="/author-training/defense/">
+          <span class="course-number">02</span>
+          <div class="course-icon">◇</div>
+          <p>УСТАНОВКА · УДЕРЖАНИЕ · АКТИВАЦИЯ</p>
+          <h2>Защита</h2>
+          <div>Покажи защитный сетап, размещение способностей и полный результат при входе соперника.</div>
+          <b>НАЧАТЬ ИНСТРУКТАЖ →</b>
+        </a>
+      </section>
+      <footer>ДАННЫЕ В УЧЕБНОМ РЕЖИМЕ НЕ ПУБЛИКУЮТСЯ</footer>
+    </main>
   </body>
 </html>

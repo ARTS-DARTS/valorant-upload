@@ -2156,7 +2156,8 @@ let moderationController = null;
 let moderationModulePromise = null;
 let pendingLineupDeepLink = new URLSearchParams(window.location.search).get('lineup') || '';
 const CATEGORY_TRAINING_PATHS = {
-  defense: '/author-training/',
+  lineup: '/author-training/lineups/',
+  defense: '/author-training/defense/',
 };
 let categoryTrainingGateActive = false;
 
