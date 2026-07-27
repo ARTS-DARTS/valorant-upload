@@ -2344,10 +2344,30 @@ function cooldownMinutesFor(approved) {
 function _updateLevelDisplay(approved) {
   _approvedLineups = approved;
   const lv = calculateLevel(approved);
+  const levelIndex = LEVELS.indexOf(lv);
+  const next = LEVELS[levelIndex + 1] || null;
+  const progress = next
+    ? Math.max(0, Math.min(1, (approved - lv.min) / (next.min - lv.min)))
+    : 1;
   document.getElementById('level-icon').textContent = lv.icon;
   const nameEl = document.getElementById('level-name');
   nameEl.textContent = lv.name;
   nameEl.style.color = lv.color;
+  const progressName = document.getElementById('profile-level-progress-name');
+  const progressValue = document.getElementById('profile-level-progress-value');
+  const progressBar = document.getElementById('profile-level-progress-bar');
+  const progressNext = document.getElementById('profile-level-progress-next');
+  if (progressName) {
+    progressName.textContent = `${lv.icon} ${lv.name}`;
+    progressName.style.color = lv.color;
+  }
+  if (progressValue) progressValue.textContent = next ? `${approved} / ${next.min}` : `${approved}`;
+  if (progressBar) progressBar.style.width = `${progress * 100}%`;
+  if (progressNext) {
+    progressNext.textContent = next
+      ? `До уровня «${next.name}» осталось ${Math.max(0, next.min - approved)}`
+      : `Максимальный уровень · ${approved} очков профиля`;
+  }
 }
 
 function _clearCooldownTimer() {
@@ -2390,7 +2410,7 @@ function _subscribeStats(uid) {
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
   const q = query(collection(db, 'lineups'), where('user_id', '==', uid));
   _statsUnsub = onSnapshot(q, snap => {
-    let approved = 0, pending = 0, rejected = 0;
+    let approved = 0, pending = 0, rejected = 0, archived = 0;
     currentUserLineups = [];
     snap.forEach(d => {
       const data = d.data();
@@ -2398,7 +2418,8 @@ function _subscribeStats(uid) {
       const s = data.status;
       if (s === 'approved') approved++;
       else if (s === 'rejected') rejected++;
-      else pending++;
+      else if (s === 'archived') archived++;
+      else if (!s || s === 'pending') pending++;
     });
     currentUserLineups.sort((a, b) => {
       const at = b.submitted_at?.toMillis?.() || b.created_at?.toMillis?.() || 0;
@@ -2408,6 +2429,7 @@ function _subscribeStats(uid) {
     document.getElementById('stat-approved').textContent = approved;
     document.getElementById('stat-pending').textContent  = pending;
     document.getElementById('stat-rejected').textContent = rejected;
+    document.getElementById('stat-archived').textContent = archived;
     _updateLevelDisplay(effectiveApprovedLineups(approved));
     renderAuthorWorkspace();
     updateCategoryTrainingGate();
@@ -2426,7 +2448,7 @@ function _unsubscribeStats() {
   document.getElementById('stats-loader').style.display = '';
   document.getElementById('stats-loader').textContent   = 'Загрузка…';
   document.getElementById('stats-cards').style.display  = 'none';
-  ['stat-approved', 'stat-pending', 'stat-rejected'].forEach(id => {
+  ['stat-approved', 'stat-pending', 'stat-rejected', 'stat-archived'].forEach(id => {
     document.getElementById(id).textContent = '—';
   });
   currentUserLineups = [];
@@ -2552,6 +2574,16 @@ function initWorkspaceTabs() {
       return;
     }
     saveCurrentDraftSnapshot();
+  });
+  document.querySelectorAll('[data-stat-filter]').forEach(card => {
+    card.addEventListener('click', () => {
+      const status = card.dataset.statFilter || 'all';
+      myLineupsStatusFilter = status;
+      document.querySelectorAll('#my-status-filter .filter-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.dataset.status === status);
+      });
+      switchWorkspaceTab('mine');
+    });
   });
   document.getElementById('btn-cancel-moderation')?.addEventListener('click', event => {
     event.preventDefault();
@@ -3160,6 +3192,7 @@ document.getElementById('admin-chat-form')?.addEventListener('submit', async eve
 function statusLabel(status) {
   if (status === 'approved') return 'Одобрен';
   if (status === 'rejected') return 'Отклонён';
+  if (status === 'archived') return 'В архиве';
   return 'На проверке';
 }
 
@@ -3938,7 +3971,7 @@ function renderCabinetStats() {
   const effectiveApproved = effectiveApprovedLineups(approved);
   const bonusLineups = Number(currentUserProfile?.bonus_lineups || 0);
   const rejected = currentUserLineups.filter(x => x.status === 'rejected').length;
-  const pending = currentUserLineups.filter(x => x.status !== 'approved' && x.status !== 'rejected').length;
+  const pending = currentUserLineups.filter(x => !x.status || x.status === 'pending').length;
   const submittedCount = approved + pending;
   const viewed = Number(currentUserProfile?.lineups_viewed || 0);
   const lv = calculateLevel(effectiveApproved);

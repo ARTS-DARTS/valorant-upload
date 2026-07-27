@@ -6,8 +6,8 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-27-support-messenger-v1">
-  <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-27-training-progress-v3">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-27-clickable-stats-v2">
+  <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-27-profile-level-v4">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-26-workspace-fixes-v3">
 </head>
 <body>
@@ -78,6 +78,17 @@
         <div class="workspace-kicker">Личный кабинет автора</div>
         <h1>Управляй своими лайнапами</h1>
       </div>
+      <section class="profile-level-progress" aria-label="Прогресс уровня профиля">
+        <div class="profile-level-progress-head">
+          <span>УРОВЕНЬ ПРОФИЛЯ</span>
+          <strong id="profile-level-progress-name">—</strong>
+          <b id="profile-level-progress-value">—</b>
+        </div>
+        <div class="profile-level-progress-track">
+          <i id="profile-level-progress-bar" style="width:0%"></i>
+        </div>
+        <small id="profile-level-progress-next">Загружаем прогресс…</small>
+      </section>
       <button class="btn-out workspace-refresh" id="btn-refresh-workspace">Обновить</button>
     </div>
     <nav class="workspace-tabs" aria-label="Разделы кабинета автора">
@@ -489,18 +500,22 @@
       </div>
       <!-- 3 count cards -->
       <div class="stat-counts-row">
-        <div class="stat-card s-approved">
+        <button class="stat-card stat-filter-card s-approved" type="button" data-stat-filter="approved">
           <div class="stat-label">ОДОБРЕНО</div>
           <div class="stat-count" id="stat-approved">—</div>
-        </div>
-        <div class="stat-card s-pending">
+        </button>
+        <button class="stat-card stat-filter-card s-pending" type="button" data-stat-filter="pending">
           <div class="stat-label">В ожидании</div>
           <div class="stat-count" id="stat-pending">—</div>
-        </div>
-        <div class="stat-card s-rejected">
+        </button>
+        <button class="stat-card stat-filter-card s-rejected" type="button" data-stat-filter="rejected">
           <div class="stat-label">Отклонённые</div>
           <div class="stat-count" id="stat-rejected">—</div>
-        </div>
+        </button>
+        <button class="stat-card stat-filter-card s-archived" type="button" data-stat-filter="archived">
+          <div class="stat-label">Архивные</div>
+          <div class="stat-count" id="stat-archived">—</div>
+        </button>
       </div>
       <section class="sidebar-training-progress" id="sidebar-training-progress">
         <div class="sidebar-training-head">
@@ -607,6 +622,7 @@
           <button class="filter-chip" data-status="pending" type="button">На проверке</button>
           <button class="filter-chip" data-status="approved" type="button">Одобренные</button>
           <button class="filter-chip" data-status="rejected" type="button">Отклонённые</button>
+          <button class="filter-chip" data-status="archived" type="button">Архивные</button>
         </div>
         <input class="finput list-search" id="my-lineups-search" type="search" placeholder="Поиск по названию, карте, агенту или абилке">
       </div>
@@ -737,7 +753,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-07-27-training-feedback-v18"></script>
+<script type="module" src="/app.js?v=2026-07-27-archive-status-v19"></script>
 <script defer src="/workspace-redesign.js?v=2026-07-26-workspace-v2"></script>
 </body>
 </html>
