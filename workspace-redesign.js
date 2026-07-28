@@ -126,6 +126,20 @@ function createMapGallery() {
     }
     if (!scrollFrame) scrollFrame = requestAnimationFrame(animateScroll);
   };
+  const revealSelectedMap = () => {
+    const button = track.querySelector(`[data-map-name="${CSS.escape(select.value)}"]`);
+    if (!button) return;
+    const maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
+    scrollTarget = Math.max(0, Math.min(
+      maxScroll,
+      button.offsetLeft - (track.clientWidth - button.offsetWidth) / 2,
+    ));
+    if (reduceMotion) {
+      track.scrollLeft = scrollTarget;
+      return;
+    }
+    if (!scrollFrame) scrollFrame = requestAnimationFrame(animateScroll);
+  };
   const sync = () => track.querySelectorAll('[data-map-name]').forEach((button) => {
     button.classList.toggle('selected', button.dataset.mapName === select.value);
   });
@@ -152,9 +166,10 @@ function createMapGallery() {
   }, { passive: true });
   select.addEventListener('change', () => {
     sync();
-    track.querySelector(`[data-map-name="${CSS.escape(select.value)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    requestAnimationFrame(revealSelectedMap);
   });
   sync();
+  requestAnimationFrame(revealSelectedMap);
 }
 
 function improveFrameCapture() {
