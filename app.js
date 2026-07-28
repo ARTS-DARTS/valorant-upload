@@ -6778,7 +6778,7 @@ function readVideoUrlMetadata(url) {
     setTimeout(() => done({ duration: 0 }), 3500);
   });
 }
-function addFootageOverlay({ url, name, duration }) {
+function addFootageOverlay({ url, name, duration, chromaKey = null }) {
   const outputDuration = editedOutputDuration() || videoDuration();
   const outputAt = clampOutputTime(currentOutputTime());
   const currentAt = outputToSourceTime(outputAt);
@@ -6788,7 +6788,11 @@ function addFootageOverlay({ url, name, duration }) {
   const id = `footage_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   videoEdit.footageOverlays = [
     ...(videoEdit.footageOverlays || []),
-    { id, url, name, at, outputAt, duration: clipDuration, track, muted: true, posX: 50, posY: 50, scale: 0.35 },
+    {
+      id, url, name, at, outputAt, duration: clipDuration, track,
+      muted: true, posX: 50, posY: 50, scale: 0.35,
+      ...(chromaKey ? { chromaKey: normalizeChromaKey(chromaKey) } : {}),
+    },
   ];
   selectedEditorItem = { type: 'footage', id };
   activeEffectTrack = track;
@@ -6799,13 +6803,23 @@ function addFootageOverlay({ url, name, duration }) {
 function renderFootageLibrary() {
   if (!editorEls.footageLibrary) return;
   const uploadButton = '<button class="btn-sm" type="button" data-footage-upload-new>Загрузить новый файл</button>';
+  const builtInHtml = `<div class="footage-library-list">
+    <article class="footage-library-item built-in">
+      <strong>Пульсирующий круг</strong>
+      <span>Встроенная анимация · 2 секунды · фон удаляется автоматически</span>
+      <div class="footage-library-actions">
+        <button class="btn-sm" type="button" data-built-in-footage="pulse-circle">На таймлайн</button>
+      </div>
+    </article>
+  </div>`;
   if (authorMaterialsError) {
     editorEls.footageLibrary.innerHTML = `
       <div class="footage-library-head">
         <span class="footage-library-title">Материалы</span>
         <div class="footage-library-actions">${uploadButton}</div>
       </div>
-      <div class="empty-state"><strong>Не удалось загрузить материалы</strong>${esc(authorMaterialsError)}</div>`;
+      ${builtInHtml}
+      <div class="empty-state"><strong>Не удалось загрузить остальные материалы</strong>${esc(authorMaterialsError)}</div>`;
     return;
   }
   if (!authorMaterialsLoaded) {
@@ -6815,7 +6829,8 @@ function renderFootageLibrary() {
         <span class="footage-library-title">Материалы</span>
         <div class="footage-library-actions">${uploadButton}</div>
       </div>
-      <div class="empty-state"><strong>Загрузка материалов...</strong>Сейчас подтянем опубликованные футажи.</div>`;
+      ${builtInHtml}
+      <div class="empty-state"><strong>Загрузка остальных материалов...</strong>Сейчас подтянем опубликованные футажи.</div>`;
     return;
   }
   const materials = (isCurrentUserAdmin() ? authorMaterials : authorMaterials.filter(item => item.is_published !== false))
@@ -6838,6 +6853,7 @@ function renderFootageLibrary() {
         ${uploadButton}
       </div>
     </div>
+    ${builtInHtml}
     ${listHtml}`;
 }
 function openFootageLibrary() {
@@ -6888,8 +6904,17 @@ async function handleFootageFile(file) {
 document.getElementById('edit-add-footage')?.addEventListener('click', openFootageLibrary);
 editorEls.footageLibrary?.addEventListener('click', event => {
   const materialBtn = event.target.closest('[data-footage-material]');
+  const builtInBtn = event.target.closest('[data-built-in-footage]');
   const refreshBtn = event.target.closest('[data-footage-refresh]');
   const uploadBtn = event.target.closest('[data-footage-upload-new]');
+  if (builtInBtn?.dataset.builtInFootage === 'pulse-circle') {
+    addFootageOverlay({
+      url: '/assets/footage/pulse-circle.mp4',
+      name: 'Пульсирующий круг',
+      duration: 2,
+      chromaKey: { enabled: true, color: '#00ff00', strength: 0.35 },
+    });
+  }
   if (materialBtn) addMaterialFootageToTimeline(materialBtn.dataset.footageMaterial || '');
   if (refreshBtn) loadAuthorMaterials({ force: true });
   if (uploadBtn) editorEls.footageInput?.click();
