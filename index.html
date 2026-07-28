@@ -6,8 +6,8 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-28-saved-video-zoom-v1">
-  <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-28-map-sync-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-28-training-entry-v1">
+  <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-28-training-entry-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-27-guide-circle-v1">
 </head>
 <body>
@@ -103,6 +103,7 @@
       <button class="workspace-tab" data-workspace-tab="materials">Материалы</button>
       <button class="workspace-tab" data-workspace-tab="notifications">🔔 Уведомления <span id="notifications-tab-badge" class="chat-tab-badge" hidden></span></button>
       <button class="workspace-tab" data-workspace-tab="admin-chat">💬 Чаты <span id="admin-chat-badge" class="chat-tab-badge" hidden></span></button>
+      <a class="workspace-tab workspace-training-link" href="/author-training/">🎓 Инструктаж</a>
       <button class="workspace-tab moderator-tab" data-workspace-tab="moderation" data-moderator-only="true" style="display:none;">🛡 Модерация</button>
     </nav>
   </div>
@@ -546,7 +547,7 @@
           <div class="stat-count" id="stat-archived">—</div>
         </button>
       </div>
-      <section class="sidebar-training-progress" id="sidebar-training-progress">
+      <a class="sidebar-training-progress" id="sidebar-training-progress" href="/author-training/" aria-label="Открыть инструктаж автора">
         <div class="sidebar-training-head">
           <span>ЗАДАНИЯ И ПОЛУЧЕНИЕ ОЧКОВ</span>
           <b id="sidebar-training-points">0 / 20</b>
@@ -555,7 +556,8 @@
         <div class="sidebar-training-track" aria-hidden="true">
           <i id="sidebar-training-bar" style="width:0%"></i>
         </div>
-      </section>
+        <strong class="sidebar-training-open">Открыть инструктаж →</strong>
+      </a>
       <button class="btn-out" id="btn-become-mod"
         style="width:100%;margin-top:14px;padding:11px;border-radius:var(--r);border:1px solid var(--border);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">
         🛡 Стать модератором
@@ -782,7 +784,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-07-28-saved-video-zoom-v1"></script>
+<script type="module" src="/app.js?v=2026-07-28-training-entry-v1"></script>
 <script defer src="/workspace-redesign.js?v=2026-07-28-map-sync-v1"></script>
 </body>
 </html>

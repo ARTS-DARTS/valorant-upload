@@ -2364,6 +2364,21 @@ function showTrainingReturnFeedback() {
 function updateCategoryTrainingGate() {
   const category = normalizeContentCategory(selectedCategory || '');
   renderCategoryFormGuide();
+  document.querySelectorAll('#cat-row .pill-btn[data-val]').forEach(button => {
+    const buttonCategory = normalizeContentCategory(button.dataset.val || '');
+    const requiresTraining = Boolean(
+      CATEGORY_TRAINING_PATHS[buttonCategory] &&
+      !hasCategoryTraining(buttonCategory)
+    );
+    button.classList.toggle('training-required', requiresTraining);
+    if (requiresTraining) {
+      button.title = 'Сначала пройди инструктаж для этой категории';
+      button.setAttribute('aria-label', `${button.textContent.trim()}: требуется инструктаж`);
+    } else {
+      button.removeAttribute('title');
+      button.removeAttribute('aria-label');
+    }
+  });
   const trainingPath = CATEGORY_TRAINING_PATHS[category];
   categoryTrainingGateActive = Boolean(trainingPath && !hasCategoryTraining(category));
   const gate = document.getElementById('category-training-gate');

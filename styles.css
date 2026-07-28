@@ -637,6 +637,8 @@
     .form-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; max-width: 1320px; margin: 0 auto; padding: 0 16px; }
     .main { flex: 1; min-width: 0; padding: 24px 0 60px; }
     .category-training-gate { display:flex; align-items:center; gap:14px; margin:14px 0 18px; padding:16px 18px; border:1px solid rgba(255,70,85,.72); background:linear-gradient(100deg,rgba(255,70,85,.16),rgba(17,24,39,.96)); border-radius:var(--r); }
+    #cat-row .pill-btn.training-required::after { content:"🔒"; margin-left:6px; font-size:10px; filter:saturate(.75); }
+    #cat-row .pill-btn.training-required { border-color:rgba(245,158,11,.48); color:#facc15; }
     .category-training-gate[hidden] { display:none; }
     .category-training-gate-icon { display:grid; place-items:center; flex:0 0 34px; width:34px; height:34px; background:var(--red); color:#fff; font-size:18px; font-weight:900; }
     .category-training-gate div:nth-child(2) { min-width:0; flex:1; }
