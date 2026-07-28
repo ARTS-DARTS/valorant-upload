@@ -8,6 +8,7 @@
   border: 1px solid var(--line);
   background: #0d1725;
 }
+.task-progress[hidden] { display: none; }
 .task-progress p {
   margin: 0 0 8px;
   color: var(--cyan);

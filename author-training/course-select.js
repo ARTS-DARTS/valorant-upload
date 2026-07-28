@@ -15,6 +15,7 @@ links.forEach(link => {
 });
 const progressPanel=document.createElement('section');
 progressPanel.className='task-progress';
+progressPanel.hidden=true;
 progressPanel.innerHTML='<div><p>ЗАДАНИЯ И ПОЛУЧЕНИЕ ОЧКОВ</p><b data-task-count>0 из 4 заданий</b></div><strong data-task-points>0 / 20 ОЧКОВ</strong><div class="task-progress-track"><i data-task-progress style="width:0%"></i></div>';
 document.querySelector('.select-copy')?.after(progressPanel);
 let renderedCategories={};
@@ -38,7 +39,6 @@ function renderProgress(categories=renderedCategories, localUid=renderedLocalUid
   progressPanel.querySelector('[data-task-points]').textContent=`${completed*5} / ${total*5} ОЧКОВ`;
   progressPanel.querySelector('[data-task-progress]').style.width=`${total?completed/total*100:0}%`;
 }
-renderProgress();
 const returnPath=params.get('return');
 const siteLink=document.createElement('a');
 siteLink.className='site-return';
@@ -71,13 +71,15 @@ async function applySiteVisibility(user=null){
       code:error?.code,
       message:error?.message||String(error),
     });
+  }finally{
+    document.querySelector('.course-grid')?.removeAttribute('hidden');
+    renderProgress();
   }
 }
-applySiteVisibility();
 onAuthStateChanged(getAuth(app),async user=>{
-  if(!user)return;
   try{
     await applySiteVisibility(user);
+    if(!user)return;
     links.forEach(link=>{
       const url=new URL(link.href);
       url.searchParams.set('uid',user.uid);
