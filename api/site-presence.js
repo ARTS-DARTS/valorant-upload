@@ -22,8 +22,6 @@ async function heartbeat(req, res, decoded) {
   const dailyRef = db.collection('site_activity_daily').doc(activityDay);
   const payload = {
     uid:decoded.uid,
-    display_name:short(req.body?.display_name || decoded.name || decoded.email?.split('@')[0] || 'Пользователь'),
-    display_name_source:'client_v1',
     page:short(req.body?.page || 'upload', 40),
     activity_day:activityDay,
     ip_hash:ipHash(req),
@@ -34,6 +32,24 @@ async function heartbeat(req, res, decoded) {
   await db.runTransaction(async tx => {
     const snap = await tx.get(presenceRef);
     changed = clean(snap.data()?.activity_day) !== activityDay;
+    let canonicalName = '';
+    if (changed || clean(snap.data()?.display_name_source) !== 'profile_v2') {
+      const profile = await tx.get(db.collection('users').doc(decoded.uid));
+      const profileData = profile.data() || {};
+      canonicalName = short(
+        profileData.display_name ||
+        profileData.name ||
+        profileData.nickname ||
+        profileData.username ||
+        decoded.name ||
+        decoded.email?.split('@')[0] ||
+        'Пользователь',
+      );
+    }
+    if (canonicalName) {
+      payload.display_name = canonicalName;
+      payload.display_name_source = 'profile_v2';
+    }
     tx.set(presenceRef, payload, { merge:true });
     if (changed) {
       tx.set(dailyRef, { day:activityDay, unique_users:FieldValue.increment(1), updated_at:FieldValue.serverTimestamp() }, { merge:true });
@@ -62,7 +78,7 @@ async function onlineCount(res, decoded) {
     };
   });
   const todayRows = todaySnap.docs.map(doc => ({ id:doc.id, data:doc.data() || {} }));
-  const unresolvedNames = todayRows.filter(row => !short(row.data.display_name_source));
+  const unresolvedNames = todayRows.filter(row => short(row.data.display_name_source) !== 'profile_v2');
   if (unresolvedNames.length) {
     const profiles = await db.getAll(...unresolvedNames.map(row => db.collection('users').doc(row.id)));
     const batch = db.batch();
@@ -70,10 +86,10 @@ async function onlineCount(res, decoded) {
       const data = profile.data() || {};
       const displayName = short(data.display_name || data.name || data.nickname || data.username || data.email || 'Пользователь');
       unresolvedNames[index].data.display_name = displayName;
-      unresolvedNames[index].data.display_name_source = 'profile_v1';
+      unresolvedNames[index].data.display_name_source = 'profile_v2';
       batch.set(db.collection('site_presence').doc(unresolvedNames[index].id), {
         display_name:displayName,
-        display_name_source:'profile_v1',
+        display_name_source:'profile_v2',
       }, { merge:true });
     });
     await batch.commit();
