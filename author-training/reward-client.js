@@ -49,7 +49,25 @@ async function reconcileLocalProgress(user) {
     return;
   }
 
-  for (const key of localProgressKeys(user.uid)) localStorage.removeItem(key);
+  const storedProgress = localProgressKeys(user.uid)
+    .map(key => [key, localStorage.getItem(key)])
+    .filter(([, value]) => value !== null);
+  for (const [key] of storedProgress) localStorage.removeItem(key);
+  if (storedProgress.length === 0) return;
+
+  const onlyFreshDefenseState = category === 'defense'
+    && storedProgress.every(([key, value]) => {
+      if (key === 'vlineups-training-defense-max-step') return Number(value) === 0;
+      if (key !== 'vlineups-training-demo') return false;
+      try {
+        const draft = JSON.parse(value);
+        return Number(draft?.step || 0) === 0 && draft?.completed !== true;
+      } catch (_) {
+        return false;
+      }
+    });
+  if (onlyFreshDefenseState) return;
+
   if (sessionStorage.getItem(resetAppliedKey) === '1') return;
   sessionStorage.setItem(resetAppliedKey, '1');
   location.reload();
