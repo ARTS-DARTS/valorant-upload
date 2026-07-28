@@ -23,6 +23,57 @@ function scrollToUploadSection(text) {
   section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+const productionSteps = [
+  { key: 'КАРТА', getTarget: () => findSectionByText('КАТЕГОРИЯ') },
+  { key: 'ВИДЕО', getTarget: () => findSectionByText('ВИДЕО') },
+  { key: 'СКРИНШОТЫ', getTarget: () => findSectionByText('СКРИНШОТЫ') },
+  { key: 'НАЗВАНИЕ', getTarget: () => document.getElementById('lineup-copy-title') },
+  { key: 'submit', getTarget: () => document.getElementById('production-submit-anchor') },
+];
+
+let productionScrollTarget = '';
+let productionScrollTimer = 0;
+
+function setActiveProductionStep(key) {
+  document.querySelectorAll('.production-flow [data-production-step]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.productionStep === key);
+  });
+}
+
+function updateActiveProductionStepFromScroll() {
+  if (productionScrollTarget) {
+    setActiveProductionStep(productionScrollTarget);
+    return;
+  }
+  const visibleSteps = productionSteps
+    .map((step) => ({ ...step, target: step.getTarget() }))
+    .filter((step) => step.target && isVisible(step.target));
+  if (!visibleSteps.length) return;
+
+  const viewportMarker = Math.min(220, window.innerHeight * .28);
+  const atPageBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 24;
+  let active = visibleSteps[0];
+  for (const step of visibleSteps) {
+    if (step.target.getBoundingClientRect().top <= viewportMarker) active = step;
+  }
+  if (atPageBottom) active = visibleSteps[visibleSteps.length - 1];
+  setActiveProductionStep(active.key);
+}
+
+function scrollToProductionStep(key) {
+  const step = productionSteps.find((item) => item.key === key);
+  const target = step?.getTarget();
+  if (!target) return;
+  productionScrollTarget = key;
+  setActiveProductionStep(key);
+  target.scrollIntoView({ behavior: 'smooth', block: key === 'submit' ? 'end' : 'start' });
+  clearTimeout(productionScrollTimer);
+  productionScrollTimer = window.setTimeout(() => {
+    productionScrollTarget = '';
+    updateActiveProductionStepFromScroll();
+  }, 700);
+}
+
 function createUploadRail() {
   const upload = document.getElementById('workspace-upload');
   if (!upload || upload.querySelector('.production-flow')) return;
@@ -43,14 +94,10 @@ function createUploadRail() {
   rail.addEventListener('click', (event) => {
     const button = event.target.closest('[data-production-step]');
     if (!button) return;
-    rail.querySelectorAll('button').forEach((item) => item.classList.toggle('active', item === button));
-    if (button.dataset.productionStep === 'submit') {
-      document.getElementById('stats-sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-    scrollToUploadSection(button.dataset.productionStep);
+    scrollToProductionStep(button.dataset.productionStep);
   });
   refreshProductionProgress();
+  updateActiveProductionStepFromScroll();
 }
 
 function isVisible(element) {
@@ -204,6 +251,18 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('form-screen')?.addEventListener('input', refreshProductionProgress);
   document.getElementById('form-screen')?.addEventListener('change', refreshProductionProgress);
   document.getElementById('form-screen')?.addEventListener('click', () => setTimeout(refreshProductionProgress, 80));
+  window.addEventListener('scroll', () => {
+    clearTimeout(productionScrollTimer);
+    if (productionScrollTarget) {
+      productionScrollTimer = window.setTimeout(() => {
+        productionScrollTarget = '';
+        updateActiveProductionStepFromScroll();
+      }, 180);
+    } else {
+      updateActiveProductionStepFromScroll();
+    }
+  }, { passive: true });
+  window.addEventListener('resize', updateActiveProductionStepFromScroll, { passive: true });
   new MutationObserver(refreshProductionProgress).observe(document.getElementById('workspace-upload'), {
     subtree: true,
     childList: true,
