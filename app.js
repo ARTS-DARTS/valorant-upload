@@ -3542,6 +3542,48 @@ function findOwnLineup(id) {
   return currentUserLineups.find(item => item.id === id) || null;
 }
 
+function bindSavedVideoZoom(video, edit) {
+  const clips = Array.isArray(edit?.zoomKeyframes) ? edit.zoomKeyframes : [];
+  if (!video || !clips.length) return;
+  let animationFrame = 0;
+  const update = () => {
+    const time = Number(video.currentTime || 0);
+    const clip = clips.slice().reverse().find(item => {
+      const start = Number.isFinite(Number(item.at)) ? Number(item.at) : Number(item.outputAt || 0);
+      const duration = Math.max(0.2, Number(item.duration || 2));
+      return time >= start && time <= start + duration;
+    });
+    if (!clip) {
+      video.style.transform = '';
+      video.style.transformOrigin = '';
+      return;
+    }
+    const start = Number.isFinite(Number(clip.at)) ? Number(clip.at) : Number(clip.outputAt || 0);
+    const duration = Math.max(0.2, Number(clip.duration || 2));
+    const local = Math.max(0, Math.min(duration, time - start));
+    const ramp = Math.max(0.08, Math.min(0.4, duration / 2));
+    const linear = Math.max(0, Math.min(1, local / ramp, (duration - local) / ramp));
+    const mix = linear * linear * (3 - 2 * linear);
+    const targetScale = Math.max(1, Number(clip.scaleX ?? clip.scale ?? 1), Number(clip.scaleY ?? clip.scale ?? 1));
+    const scale = 1 + (targetScale - 1) * mix;
+    const anchorX = 50 + (Number(clip.anchorX ?? 50) - 50) * mix;
+    const anchorY = 50 + (Number(clip.anchorY ?? 50) - 50) * mix;
+    video.style.transformOrigin = `${anchorX}% ${anchorY}%`;
+    video.style.transform = `scale(${scale})`;
+  };
+  const tick = () => {
+    update();
+    animationFrame = video.paused || video.ended ? 0 : requestAnimationFrame(tick);
+  };
+  video.addEventListener('play', () => {
+    if (!animationFrame) animationFrame = requestAnimationFrame(tick);
+  });
+  video.addEventListener('pause', update);
+  video.addEventListener('seeked', update);
+  video.addEventListener('loadedmetadata', update);
+  update();
+}
+
 function openLineupDetail(lineupId) {
   const item = findOwnLineup(lineupId);
   if (!item) {
@@ -3579,7 +3621,7 @@ function openLineupDetail(lineupId) {
       <div class="detail-section-title">Описание</div>
       <div class="detail-text">${esc(description)}</div>
     </div>
-    ${item.video_url ? `<div class="detail-section"><div class="detail-section-title">Видео</div><video class="detail-video" controls preload="metadata" src="${esc(item.video_url)}"></video></div>` : ''}
+    ${item.video_url ? `<div class="detail-section"><div class="detail-section-title">Видео</div><div class="detail-video-frame"><video class="detail-video" controls preload="metadata" src="${esc(item.video_url)}"></video></div></div>` : ''}
     ${shots.length ? `<div class="detail-section"><div class="detail-section-title">Скриншоты</div><div class="detail-shots">${shots.map(url => `<a href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt=""></a>`).join('')}</div></div>` : ''}
     <div class="detail-actions">
       ${status === 'rejected' ? `<button class="copy-id-btn danger" type="button" data-delete-lineup-id="${esc(item.id)}">Удалить</button>` : ''}
@@ -3595,6 +3637,7 @@ function openLineupDetail(lineupId) {
     const id = event.currentTarget.dataset.lineupId || '';
     navigator.clipboard?.writeText(id).then(() => toast('ID скопирован', 's')).catch(() => toast('Не удалось скопировать ID', 'e'));
   });
+  bindSavedVideoZoom(body.querySelector('.detail-video'), item.video_edit);
   screen.style.display = 'flex';
 }
 
@@ -9309,7 +9352,10 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       try { sessionStorage.removeItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
       moderatorSelectedAuthor = null;
       showModeratorAuthorPicker();
-      showSuccess();
+      resetUploadForm();
+      switchWorkspaceTab('moderation');
+      await moderationController?.load?.();
+      toast('Изменения сохранены. Лайнап возвращён в очередь проверки.', 's');
       return;
     }
     const lineupRef = doc(collection(db, 'lineups'));
