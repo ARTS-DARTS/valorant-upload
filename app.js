@@ -2544,18 +2544,22 @@ function _subscribeStats(uid) {
       const bt = a.submitted_at?.toMillis?.() || a.created_at?.toMillis?.() || 0;
       return at - bt;
     });
-    document.getElementById('stat-approved').textContent = approved;
-    document.getElementById('stat-pending').textContent  = pending;
-    document.getElementById('stat-rejected').textContent = rejected;
-    document.getElementById('stat-archived').textContent = archived;
+    const statValues = { approved, pending, rejected, archived };
+    Object.entries(statValues).forEach(([key, value]) => {
+      const element = document.getElementById(`stat-${key}`);
+      if (element) element.textContent = value;
+    });
     _updateLevelDisplay(effectiveApprovedLineups(approved));
     renderAuthorWorkspace();
     updateCategoryTrainingGate();
     openPendingLineupDeepLink();
-    document.getElementById('stats-loader').style.display = 'none';
-    document.getElementById('stats-cards').style.display  = 'flex';
+    const loader = document.getElementById('stats-loader');
+    const cards = document.getElementById('stats-cards');
+    if (loader) loader.style.display = 'none';
+    if (cards) cards.style.display = 'flex';
   }, () => {
-    document.getElementById('stats-loader').textContent = 'Ошибка загрузки';
+    const loader = document.getElementById('stats-loader');
+    if (loader) loader.textContent = 'Ошибка загрузки';
     renderAuthorWorkspace();
   });
 }
