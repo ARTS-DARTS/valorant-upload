@@ -2914,20 +2914,22 @@ function renderSiteNotifications() {
   }
   list.innerHTML = siteNotifications.map(item => {
     const lineup = findOwnLineup(item.lineup_id || '') || {};
-    const expanded = expandedSiteNotificationId === item.id;
     const isBatch = item.type === 'lineups_hot_batch' || item.type === 'lineups_approved_batch' || (Array.isArray(item.lineup_ids) && item.lineup_ids.length > 1);
     const reason = item.type === 'lineup_rejected' ? firstText(item.reason, lineup.rejection_reason, lineup.reject_reason, lineup.moderation_reason, item.body) : '';
+    const roundSide = firstText(item.round_side, lineup.round_side);
     const details = [
       ['Название', firstText(item.lineup_title, lineup.title)],
       ['Карта', firstText(item.map, lineup.map)],
       ['Агент', firstText(item.agent, lineup.agent)],
       ['Способность', firstText(item.ability, lineup.ability)],
-      ['Сторона', roundSideLabel(firstText(item.round_side, lineup.round_side))],
+      ['Сторона', roundSide ? roundSideLabel(roundSide) : ''],
     ].filter(([, value]) => value);
+    const canExpand = isBatch || details.length > 0 || Boolean(reason) || Boolean(lineup.id);
+    const expanded = canExpand && expandedSiteNotificationId === item.id;
     return `
-    <article class="notification-card ${item.is_read === true ? '' : 'unread'} ${expanded ? 'expanded' : ''}" data-site-notification="${esc(item.id)}" tabindex="0" aria-expanded="${expanded}">
+    <article class="notification-card ${item.is_read === true ? '' : 'unread'} ${expanded ? 'expanded' : ''}" data-site-notification="${esc(item.id)}" data-can-expand="${canExpand}" tabindex="0"${canExpand ? ` aria-expanded="${expanded}"` : ''}>
       <div class="notification-card-icon">${notificationIcon(item)}</div>
-      <div><h3>${esc(item.title || 'Уведомление')}</h3><p>${esc(item.body || '')}</p><span class="notification-expand-hint">${expanded ? 'Скрыть подробности' : 'Нажми, чтобы прочитать полностью'}</span>${item.cooldown_reset ? '<span class="notification-cooldown">✓ КД на отправку сброшено</span>' : ''}</div>
+      <div><h3>${esc(item.title || 'Уведомление')}</h3><p>${esc(item.body || '')}</p>${canExpand ? `<span class="notification-expand-hint">${expanded ? 'Скрыть подробности' : 'Нажми, чтобы прочитать полностью'}</span>` : ''}${item.cooldown_reset ? '<span class="notification-cooldown">✓ КД на отправку сброшено</span>' : ''}</div>
       <time>${notificationDate(item.created_at)}</time>
       ${expanded ? `<div class="notification-details">
         ${isBatch ? notificationBatchDetails(item) : (details.length ? `<div class="notification-details-grid">${details.map(([label, value]) => `<div><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join('')}</div>` : '')}
@@ -3111,7 +3113,9 @@ document.getElementById('notifications-list')?.addEventListener('click', event =
   }
   const card = event.target.closest('[data-site-notification]');
   if (card) {
-    expandedSiteNotificationId = expandedSiteNotificationId === card.dataset.siteNotification ? '' : card.dataset.siteNotification;
+    if (card.dataset.canExpand === 'true') {
+      expandedSiteNotificationId = expandedSiteNotificationId === card.dataset.siteNotification ? '' : card.dataset.siteNotification;
+    }
     markSiteNotificationRead(card.dataset.siteNotification);
     renderSiteNotifications();
   }
