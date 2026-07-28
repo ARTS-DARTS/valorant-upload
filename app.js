@@ -229,12 +229,16 @@ const DEFAULT_WALLBANG_WEAPONS = ['Vandal', 'Phantom', 'Guardian', 'Ares', 'Odin
 const DEFENSE_EXCLUDED_AGENTS = new Set(['Iso', 'Jett', 'Neon', 'Phoenix', 'Raze', 'Reyna', 'Waylay', 'Yoru']);
 const UPLOAD_CONFIG_CACHE_KEY = 'vl_upload_reference_config_v1';
 let uploadCategoryAccess = {
+  lineup_visible: true,
   lineup_enabled: true,
   lineup_staff_enabled: false,
+  combo_visible: true,
   combo_enabled: false,
   combo_staff_enabled: false,
+  wallbang_visible: true,
   wallbang_enabled: false,
   wallbang_staff_enabled: false,
+  defense_visible: true,
   defense_enabled: false,
   defense_staff_enabled: false,
 };
@@ -298,12 +302,16 @@ function applyUploadCategoryAccess(data = {}) {
     ? uploadCategoryFlag(activeCategory)
     : false;
   uploadCategoryAccess = {
+    lineup_visible: data.lineup_visible !== false,
     lineup_enabled: data.lineup_enabled !== false,
     lineup_staff_enabled: data.lineup_staff_enabled === true,
+    combo_visible: data.combo_visible !== false,
     combo_enabled: data.combo_enabled === true,
     combo_staff_enabled: data.combo_staff_enabled === true,
+    wallbang_visible: data.wallbang_visible !== false,
     wallbang_enabled: data.wallbang_enabled === true,
     wallbang_staff_enabled: data.wallbang_staff_enabled === true,
+    defense_visible: data.defense_visible !== false,
     defense_enabled: data.defense_enabled === true,
     defense_staff_enabled: data.defense_staff_enabled === true,
   };
@@ -327,6 +335,7 @@ function applyUploadCategoryAccess(data = {}) {
   }
   uploadCategoryAccessReady = true;
   updateUploadCategoryButtons();
+  renderAuthorTrainingProgress();
 }
 
 function watchUploadCategoryAccess(reference, initialSnapshot) {
@@ -2326,17 +2335,38 @@ function hasCategoryTraining(category) {
   return Boolean(currentUserProfile?.author_training_completed?.[normalized]);
 }
 
+function isTrainingCategoryAvailable(category) {
+  const normalized = normalizeContentCategory(category);
+  if (!CATEGORY_TRAINING_PATHS[normalized]) return false;
+  const publicVisible = uploadCategoryAccess[`${normalized}_visible`] !== false;
+  const staffVisible = canCurrentUserModerate()
+    && uploadCategoryAccess[`${normalized}_staff_enabled`] === true;
+  return publicVisible || staffVisible;
+}
+
+function trainingNoun(total) {
+  const mod100 = total % 100;
+  const mod10 = total % 10;
+  if (mod100 >= 11 && mod100 <= 14) return '\u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u0430\u0436\u0435\u0439';
+  if (mod10 === 1) return '\u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u0430\u0436';
+  if (mod10 >= 2 && mod10 <= 4) return '\u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u0430\u0436\u0430';
+  return '\u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u0430\u0436\u0435\u0439';
+}
+
 function renderAuthorTrainingProgress() {
   const completed = currentUserProfile?.author_training_completed || {};
-  const count = Object.keys(CATEGORY_TRAINING_PATHS)
+  const availableCategories = Object.keys(CATEGORY_TRAINING_PATHS)
+    .filter(category => isTrainingCategoryAvailable(category));
+  const count = availableCategories
     .filter(category => Boolean(completed[category]))
     .length;
+  const total = availableCategories.length;
   const countElement = document.getElementById('sidebar-training-count');
   const pointsElement = document.getElementById('sidebar-training-points');
   const barElement = document.getElementById('sidebar-training-bar');
-  if (countElement) countElement.textContent = `${count} из 4 инструктажей`;
-  if (pointsElement) pointsElement.textContent = `${count * 5} / 20`;
-  if (barElement) barElement.style.width = `${count / 4 * 100}%`;
+  if (countElement) countElement.textContent = `${count} \u0438\u0437 ${total} ${trainingNoun(total)}`;
+  if (pointsElement) pointsElement.textContent = `${count * 5} / ${total * 5}`;
+  if (barElement) barElement.style.width = `${total > 0 ? count / total * 100 : 0}%`;
 }
 
 function showTrainingReturnFeedback() {
