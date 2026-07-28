@@ -16,11 +16,44 @@ const completeTraining = httpsCallable(
   getFunctions(app, 'us-central1'),
   'completeAuthorTraining',
 );
+const getTrainingProgress = httpsCallable(
+  getFunctions(app, 'us-central1'),
+  'getAuthorTrainingProgress',
+);
 const category = new URLSearchParams(location.search).get('category')
   || (location.pathname.includes('/wallbang') ? 'wallbang'
     : location.pathname.includes('/combo') ? 'combo'
       : location.pathname.includes('/defense') ? 'defense' : 'lineup');
 let syncPromise = null;
+
+function localProgressKeys(uid) {
+  const keys = [
+    `vl_category_training_${uid}_${category}`,
+    `vlineups-training-${category}-${uid}`,
+  ];
+  if (category === 'lineup') {
+    keys.push(`vlineups-training-lineup-${uid}`);
+  }
+  if (category === 'defense') {
+    keys.push('vlineups-training-demo', 'vlineups-training-defense-max-step');
+  }
+  return [...new Set(keys)];
+}
+
+async function reconcileLocalProgress(user) {
+  const result = await getTrainingProgress();
+  const completed = result.data?.categories?.[category] === true;
+  const resetAppliedKey = `author-training-reset-applied:${user.uid}:${category}`;
+  if (completed) {
+    sessionStorage.removeItem(resetAppliedKey);
+    return;
+  }
+
+  for (const key of localProgressKeys(user.uid)) localStorage.removeItem(key);
+  if (sessionStorage.getItem(resetAppliedKey) === '1') return;
+  sessionStorage.setItem(resetAppliedKey, '1');
+  location.reload();
+}
 
 function authenticatedUser() {
   if (auth.currentUser) return Promise.resolve(auth.currentUser);
@@ -53,6 +86,17 @@ async function syncCompletion() {
 
 window.addEventListener('author-training-completed', () => {
   syncCompletion().catch(() => {});
+});
+
+authenticatedUser().then(user => {
+  if (!user) return;
+  reconcileLocalProgress(user).catch(error => {
+    console.error('author training local progress reconcile failed', {
+      category,
+      code: error?.code,
+      message: error?.message || String(error),
+    });
+  });
 });
 
 document.addEventListener('click', async event => {
