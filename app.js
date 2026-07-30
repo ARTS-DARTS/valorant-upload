@@ -643,7 +643,7 @@ function abilityPlacementLimit(agentName, abilityName, slot = '') {
   if (/killjoy/.test(key) && /turret|турел/.test(key)) return 1;
   if (/killjoy/.test(key) && /nanoswarm|нанос/.test(key)) return 2;
   if (/deadlock/.test(key) && /sonic|звуков|датчик|сенсор|sensor/.test(key)) return 2;
-  if (/sage/.test(key) && /barrier|стен/.test(key)) return 1;
+  if (/sage/.test(key) && /barrier|барьер|стен/.test(key)) return 1;
   if (/sage/.test(key) && /slow|замед/.test(key)) return 2;
   if (/vyse/.test(key) && /razorvine|лоз/.test(key)) return 2;
   if (/vyse/.test(key) && /shear|стен/.test(key)) return 1;
@@ -680,7 +680,7 @@ function defensePlacementShape(agentName, abilityName, slot = '') {
   if (/viper/.test(key) && /viper.*pit|гнезд.*гадюк|ultimate/.test(key)) {
     return { kind: 'circle_area', points: 1, radius: 0.0475, theme: 'viper-ult' };
   }
-  if (/sage/.test(key) && /barrier|стен/.test(key)) {
+  if (/sage/.test(key) && /barrier|барьер|стен/.test(key)) {
     return { kind: 'wall_sections', points: 2, width: 0.16, height: 0.032, rotation: 0, anchor: 'edge_midpoints', source: 'range_config' };
   }
   return { kind: 'point', points: 1 };
