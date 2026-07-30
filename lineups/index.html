@@ -16,12 +16,18 @@
       <img src="/app_icon3.png" alt="">
       VALORANT <span>LINEUPS</span>
     </a>
+    <div class="site-update" id="site-update">Проверяем дату обновления…</div>
     <nav class="site-sections" aria-label="Главные разделы сайта">
       <a class="active" href="/lineups/" aria-current="page">Лайнапы <span>Premium</span></a>
       <a href="/">Кабинет автора</a>
     </nav>
     <a class="viewer-community" href="https://t.me/Vlineups" target="_blank" rel="noopener noreferrer">Сообщество</a>
   </header>
+
+  <div class="site-update-banner" id="site-update-banner" role="status" aria-live="polite">
+    <span>Вышла новая версия сайта. Обновите страницу, чтобы получить изменения.</span>
+    <button type="button" id="btn-reload-site">Обновить сейчас</button>
+  </div>
 
   <main class="viewer-main">
     <section class="viewer-intro">
@@ -74,5 +80,9 @@
     </section>
 
   </main>
+  <script type="module">
+    import { initSiteVersionWatcher } from '/site-version-watcher.js?v=2026-07-30-global-update-v1';
+    initSiteVersionWatcher();
+  </script>
 </body>
 </html>

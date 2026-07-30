@@ -8,6 +8,7 @@ import { getFirestore, doc, collection, getDoc, setDoc, deleteDoc, writeBatch,
           query, where, getDocs, limit }      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getFunctions, httpsCallable }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
+import { initSiteVersionWatcher }             from './site-version-watcher.js?v=2026-07-30-global-update-v1';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -25,9 +26,6 @@ const functions = getFunctions(app, 'us-central1');
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-30-site-sections-v1';
-const SITE_VERSION_POLL_MS = 10 * 1000;
-let loadedServerDeploymentVersion = '';
 const EDITOR_MAX_ZOOM = 2.2;
 
 const siteSounds = {
@@ -1905,63 +1903,17 @@ window.addEventListener('unhandledrejection', event => {
   logUploadError(event.reason || 'Unhandled rejection', { action: 'unhandledrejection' });
 });
 
-function showSiteUpdateBanner() {
-  const banner = document.getElementById('site-update-banner');
-  if (!banner) return;
-  const wasVisible = banner.classList.contains('show');
-  banner.classList.add('show');
-  if (!wasVisible) playSiteSound('update');
-}
-
-function hideSiteUpdateBanner() {
-  document.getElementById('site-update-banner')?.classList.remove('show');
-}
-
-async function checkSiteVersion() {
-  try {
-    const res = await fetch(`/api/site-version?site_version=${Date.now()}`, {
-      cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache' },
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    const liveVersion = String(data?.version || '').trim();
-    if (!liveVersion) return;
-    const versionLabel = document.getElementById('site-update');
-    if (versionLabel) {
-      const deployedAt = data?.deployedAt ? new Date(data.deployedAt) : null;
-      const validDate = deployedAt && !Number.isNaN(deployedAt.getTime());
-      const stamp = validDate
-        ? `${deployedAt.toLocaleDateString('ru-RU')} ${deployedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
-        : 'время неизвестно';
-      versionLabel.textContent = `${liveVersion.slice(0, 7)} | ${stamp}`;
-      versionLabel.title = `Версия ${liveVersion.slice(0, 7)} · обновлено ${stamp}`;
-    }
-    window.__vlLiveVersion = liveVersion;
-    if (!loadedServerDeploymentVersion) {
-      loadedServerDeploymentVersion = liveVersion;
-      hideSiteUpdateBanner();
-      return;
-    }
-    if (liveVersion !== loadedServerDeploymentVersion) showSiteUpdateBanner();
-    else hideSiteUpdateBanner();
-  } catch (_) {}
-}
-
-function initSiteVersionWatcher() {
-  document.getElementById('btn-reload-site')?.addEventListener('click', async () => {
+function initGlobalSiteVersionWatcher() {
+  initSiteVersionWatcher({
+    onUpdate:() => playSiteSound('update'),
+    beforeReload:async () => {
     if (moderatorDraftSourceId) {
       const saved = await flushModeratorAutosave({ reportError:true });
-      if (!saved) return;
+      if (!saved) return false;
     }
-    hideSiteUpdateBanner();
-    const url = new URL(window.location.href);
-    url.searchParams.set('site_refresh', `${window.__vlLiveVersion || SITE_VERSION}_${Date.now()}`);
-    window.location.assign(url.toString());
-    setTimeout(() => window.location.reload(), 250);
+      return true;
+    },
   });
-  checkSiteVersion();
-  setInterval(checkSiteVersion, SITE_VERSION_POLL_MS);
 }
 
 window.addEventListener('pagehide', () => {
@@ -4494,7 +4446,7 @@ function renderAuthorWorkspace() {
 }
 
 initWorkspaceTabs();
-initSiteVersionWatcher();
+initGlobalSiteVersionWatcher();
 initDescriptionSamples();
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
