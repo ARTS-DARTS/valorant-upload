@@ -20,7 +20,7 @@ const CATALOG = Object.freeze([
   { id:'robokassa_passwords', name:'Пароли Robokassa №1/№2', group:'Платежи', kind:'rotation', interval_days:180, env:['ROBOKASSA_MERCHANT_LOGIN','ROBOKASSA_PASSWORD_1','ROBOKASSA_PASSWORD_2'] },
   { id:'billing_reconcile', name:'Токен reconciliation', group:'Платежи', kind:'rotation', interval_days:180, env:['BILLING_RECONCILIATION_TOKEN'] },
   { id:'deletion_pepper', name:'Account deletion pepper', group:'Серверные ключи', kind:'rotation', interval_days:365, env:['ACCOUNT_DELETION_PEPPER'] },
-  { id:'admin_secret_legacy', name:'Legacy ADMIN_SECRET в браузере', group:'Критические', kind:'critical', env:['ADMIN_SECRET'], action:'Убрать x-admin-key из HTML и перевести endpoints на Firebase admin auth' },
+  { id:'admin_secret_legacy', name:'Авторизация административных API', group:'Серверные ключи', kind:'managed', action:'Firebase ID token + серверная проверка роли admin' },
   { id:'selectel_s3', name:'Selectel S3 access/secret keys', group:'Firebase Functions', kind:'rotation', interval_days:180, manual_presence:true },
   { id:'google_translation', name:'Google Translation credentials', group:'Firebase Functions', kind:'rotation', interval_days:365, manual_presence:true },
   { id:'identity_toolkit', name:'Identity Toolkit API key', group:'Firebase Functions', kind:'review', interval_days:365, manual_presence:true },
@@ -99,9 +99,9 @@ function buildItem(item, metadata, automaticDate, env, now) {
   if (item.kind === 'critical') status = 'critical';
   else if (configured === false) status = 'missing';
   else if (dueMillis === null && ['expiry','rotation','review'].includes(item.kind)) status = 'unknown';
-  else if (daysLeft < 0) status = 'expired';
-  else if (daysLeft <= 14) status = 'critical';
-  else if (daysLeft <= 45) status = 'warning';
+  else if (dueMillis !== null && daysLeft < 0) status = 'expired';
+  else if (dueMillis !== null && daysLeft <= 14) status = 'critical';
+  else if (dueMillis !== null && daysLeft <= 45) status = 'warning';
   return {
     ...item,
     configured,

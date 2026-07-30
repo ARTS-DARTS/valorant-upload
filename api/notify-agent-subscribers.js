@@ -1,5 +1,10 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import {
+  adminRequestError,
+  applyAdminCors,
+  requireAdminRequest,
+} from './_lib/admin-auth.js';
 
 function clean(value) {
   return (value ?? '').replace(/п»ї/g, '').trim();
@@ -97,42 +102,36 @@ async function findSubscriberUids(db, agent) {
   return [...uids];
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-admin-key');
+export function createNotifyAgentSubscribersHandler({ auth, db } = {}) {
+  return async function handler(req, res) {
+    try {
+      applyAdminCors(req, res);
+      if (req.method === 'OPTIONS') return res.status(204).end();
+      if (req.method !== 'POST') return res.status(405).json({ error:'method_not_allowed' });
+      const authorized = await requireAdminRequest(req, { auth, db });
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const adminKey = req.headers['x-admin-key'];
-  const secret = clean(process.env.ADMIN_SECRET);
-  if (!adminKey || adminKey !== secret) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const { lineup = {} } = req.body || {};
+      const { lineup = {} } = req.body || {};
   const agent = lineup.agent || lineup.agent_name || lineup.agentName || '';
   const map = lineup.map || lineup.map_name || lineup.mapName || '';
   const lineupId = lineup.id || lineup.lineup_id || '';
   const lineupTitle = lineup.title || '';
-  if (!agent || !map || !lineupId) {
-    return res.status(400).json({ error: 'lineup.id, lineup.agent and lineup.map are required' });
-  }
+      if (!agent || !map || !lineupId) {
+        return res.status(400).json({ error:'lineup.id, lineup.agent and lineup.map are required' });
+      }
 
-  initFirebase();
-  const db = getFirestore();
-  const uids = await findSubscriberUids(db, agent);
+      if (!db) initFirebase();
+      const store = authorized.db || getFirestore();
+      const uids = await findSubscriberUids(store, agent);
   if (!uids.length) {
-    return res.status(200).json({ ok: true, subscribers: 0, notified: 0 });
+        return res.status(200).json({ ok:true, subscribers:0, notified:0 });
   }
 
-  const translations = agentNotificationTranslations(agent, map);
+      const translations = agentNotificationTranslations(agent, map);
 
-  for (let i = 0; i < uids.length; i += 450) {
-    const batch = db.batch();
+      for (let i = 0; i < uids.length; i += 450) {
+        const batch = store.batch();
     for (const uid of uids.slice(i, i + 450)) {
-      batch.set(db.collection('users').doc(uid).collection('notifications').doc(), {
+          batch.set(store.collection('users').doc(uid).collection('notifications').doc(), {
         type: 'new_lineups_batch',
         lineup_id: lineupId,
         agent,
@@ -146,8 +145,8 @@ export default async function handler(req, res) {
         read: false,
       });
     }
-    await batch.commit();
-  }
+        await batch.commit();
+      }
 
   const pushResults = await Promise.allSettled(
     uids.map((uid) =>
@@ -167,11 +166,17 @@ export default async function handler(req, res) {
   const sent = pushResults.filter((r) => r.status === 'fulfilled').length;
   const failed = pushResults.length - sent;
 
-  return res.status(200).json({
-    ok: true,
-    subscribers: uids.length,
-    notified: uids.length,
-    push_sent: sent,
-    push_failed: failed,
-  });
+      return res.status(200).json({
+        ok:true,
+        subscribers:uids.length,
+        notified:uids.length,
+        push_sent:sent,
+        push_failed:failed,
+      });
+    } catch (error) {
+      return adminRequestError(res, error, 'notify-agent-subscribers');
+    }
+  };
 }
+
+export default createNotifyAgentSubscribersHandler();

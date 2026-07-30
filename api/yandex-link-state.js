@@ -3,7 +3,6 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 function stateSecret() {
   const value = String(
     process.env.YANDEX_STATE_SECRET ||
-    process.env.ADMIN_SECRET ||
     process.env.YANDEX_CLIENT_SECRET ||
     '',
   ).replace(/^\uFEFF/, '').trim();

@@ -3,6 +3,9 @@ import test from 'node:test';
 
 import { createAdminBillingHandler } from '../api/admin-billing.js';
 import { createAdminExpirationsHandler } from '../api/admin-expirations.js';
+import { createModeratorApplicationHandler } from '../api/moderator-application.js';
+import { createNotifyAgentSubscribersHandler } from '../api/notify-agent-subscribers.js';
+import { createSendPushHandler } from '../api/send-push.js';
 import { createBillingOrderStatusHandler } from '../api/billing-order-status.js';
 import {
   createAccountDeleteHandler,
@@ -169,7 +172,7 @@ test('admin expirations reports only metadata and preserves sibling records on u
     db,
     auth:authFor('admin'),
     env:{
-      ADMIN_SECRET:'super-secret-value',
+      UNUSED_TEST_SECRET:'super-secret-value',
       ONESIGNAL_REST_KEY:'another-secret-value',
     },
     now:() => new Date('2026-07-30T12:00:00Z'),
@@ -186,7 +189,7 @@ test('admin expirations reports only metadata and preserves sibling records on u
   assert.equal(first.body.items.find(item => item.id === 'domain_vlineups').days_left, 334);
   assert.equal(first.body.items.find(item => item.id === 'tls_vlineups').status, 'ok');
   assert.equal(first.body.items.find(item => item.id === 'onesignal_rest').configured, true);
-  assert.equal(first.body.items.find(item => item.id === 'admin_secret_legacy').status, 'critical');
+  assert.equal(first.body.items.find(item => item.id === 'admin_secret_legacy').status, 'ok');
   assert.equal(JSON.stringify(first.body).includes('super-secret-value'), false);
   assert.equal(JSON.stringify(first.body).includes('another-secret-value'), false);
 
@@ -200,6 +203,59 @@ test('admin expirations reports only metadata and preserves sibling records on u
   const stored = db.docs.get('settings/credential_expirations').items;
   assert.equal(stored.onesignal_rest.notes, 'плановая ротация');
   assert.equal(stored.selectel_s3.notes, 'не потерять');
+});
+
+test('legacy admin endpoints require Firebase admin authentication and exact origin', async () => {
+  const db = new MemoryDb({
+    'users/admin': { role:'admin' },
+    'users/user': { role:'user' },
+  });
+  const factories = [
+    createSendPushHandler,
+    createModeratorApplicationHandler,
+    createNotifyAgentSubscribersHandler,
+  ];
+  for (const createHandler of factories) {
+    const missing = response();
+    await createHandler({ db, auth:authFor('admin') })({
+      method:'POST', headers:{}, body:{},
+    }, missing);
+    assert.equal(missing.statusCode, 401);
+    assert.equal(missing.body.error, 'authentication_required');
+
+    const nonAdmin = response();
+    await createHandler({ db, auth:authFor('user') })({
+      method:'POST',
+      headers:{ authorization:'Bearer valid-token' },
+      body:{},
+    }, nonAdmin);
+    assert.equal(nonAdmin.statusCode, 403);
+    assert.equal(nonAdmin.body.error, 'admin_required');
+
+    const wrongOrigin = response();
+    await createHandler({ db, auth:authFor('admin') })({
+      method:'POST',
+      headers:{
+        authorization:'Bearer valid-token',
+        origin:'https://evil.example',
+      },
+      body:{},
+    }, wrongOrigin);
+    assert.equal(wrongOrigin.statusCode, 403);
+    assert.equal(wrongOrigin.body.error, 'origin_not_allowed');
+
+    const accepted = response();
+    await createHandler({ db, auth:authFor('admin') })({
+      method:'POST',
+      headers:{
+        authorization:'Bearer valid-token',
+        origin:'https://arts-darts.github.io',
+      },
+      body:{},
+    }, accepted);
+    assert.equal(accepted.statusCode, 400);
+    assert.equal(accepted.headers.get('Access-Control-Allow-Origin'), 'https://arts-darts.github.io');
+  }
 });
 
 test('admin billing paginates bounded orders and diagnoses stuck/review states', async () => {

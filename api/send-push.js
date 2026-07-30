@@ -1,25 +1,25 @@
 // Vercel serverless: proxies OneSignal push notifications (browser → server → OneSignal)
-// Env vars required: ONESIGNAL_APP_ID, ONESIGNAL_REST_KEY, ADMIN_SECRET
+// Env vars required: ONESIGNAL_APP_ID, ONESIGNAL_REST_KEY
+
+import {
+  adminRequestError,
+  applyAdminCors,
+  requireAdminRequest,
+} from './_lib/admin-auth.js';
 
 function clean(value) {
   return String(value ?? '').replace(/﻿/g, '').trim();
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-admin-key');
+export function createSendPushHandler({ auth, db } = {}) {
+  return async function handler(req, res) {
+    try {
+      applyAdminCors(req, res);
+      if (req.method === 'OPTIONS') return res.status(204).end();
+      if (req.method !== 'POST') return res.status(405).json({ error:'method_not_allowed' });
+      await requireAdminRequest(req, { auth, db });
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST')   return res.status(405).json({ error: 'Method not allowed' });
-
-  const adminKey = req.headers['x-admin-key'];
-  const secret   = clean(process.env.ADMIN_SECRET);
-  if (!adminKey || adminKey !== secret) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const {
+      const {
     title,
     body,
     translations,
@@ -29,33 +29,33 @@ export default async function handler(req, res) {
     minAndroidVersionCode,
     maxAndroidVersionCode,
     data: extraData = {},
-  } = req.body || {};
-  if (!title || !body) return res.status(400).json({ error: 'title and body required' });
+      } = req.body || {};
+      if (!title || !body) return res.status(400).json({ error:'title and body required' });
 
-  const localized = await normalizeTranslations(translations, title, body);
+      const localized = await normalizeTranslations(translations, title, body);
 
-  const OS_APP_ID  = clean(process.env.ONESIGNAL_APP_ID);
-  const OS_REST    = clean(process.env.ONESIGNAL_REST_KEY);
+      const OS_APP_ID = clean(process.env.ONESIGNAL_APP_ID);
+      const OS_REST = clean(process.env.ONESIGNAL_REST_KEY);
 
-  const payload = {
+      const payload = {
     app_id:   OS_APP_ID,
     headings: Object.fromEntries(Object.entries(localized).map(([locale, text]) => [locale, text.title])),
     contents: Object.fromEntries(Object.entries(localized).map(([locale, text]) => [locale, text.body])),
     data:     { ...extraData, type: type || extraData.type || 'admin_message' },
     priority: 10,
-  };
+      };
 
-  if (targetUid) {
+      if (targetUid) {
     payload.include_aliases = { external_id: [targetUid] };
     payload.target_channel  = 'push';
-  } else if (requiredTag || type === 'duel') {
+      } else if (requiredTag || type === 'duel') {
     const allowedTags = new Set(['duel_notifications']);
     const tag = clean(requiredTag || 'duel_notifications');
     if (!allowedTags.has(tag)) return res.status(400).json({ error: 'Unsupported notification audience' });
     payload.filters = [
       { field: 'tag', key: tag, relation: '=', value: '1' },
     ];
-  } else if (minAndroidVersionCode || maxAndroidVersionCode) {
+      } else if (minAndroidVersionCode || maxAndroidVersionCode) {
     payload.filters = [
       ...(minAndroidVersionCode
         ? [{ field: 'app_version', relation: '>', value: clean(minAndroidVersionCode) }]
@@ -67,22 +67,28 @@ export default async function handler(req, res) {
         ? [{ field: 'app_version', relation: '<', value: clean(maxAndroidVersionCode) }]
         : []),
     ];
-  } else {
-    payload.included_segments = ['All'];
-  }
+      } else {
+        payload.included_segments = ['All'];
+      }
 
-  const osRes = await fetch('https://api.onesignal.com/notifications', {
+      const osRes = await fetch('https://api.onesignal.com/notifications', {
     method:  'POST',
     headers: {
       'Content-Type':  'application/json',
       'Authorization': `Key ${OS_REST}`,
     },
     body: JSON.stringify(payload),
-  });
+      });
 
-  const data = await osRes.json().catch(() => ({}));
-  return res.status(osRes.status).json(data);
+      const data = await osRes.json().catch(() => ({}));
+      return res.status(osRes.status).json(data);
+    } catch (error) {
+      return adminRequestError(res, error, 'send-push');
+    }
+  };
 }
+
+export default createSendPushHandler();
 
 async function normalizeTranslations(value, fallbackTitle, fallbackBody) {
   const locales = ['ru', 'en', 'tr', 'es', 'pt'];

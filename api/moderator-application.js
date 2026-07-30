@@ -2,6 +2,11 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import {
+  adminRequestError,
+  applyAdminCors,
+  requireAdminRequest,
+} from './_lib/admin-auth.js';
 
 dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
@@ -16,33 +21,26 @@ function initFirebase() {
   initializeApp({ credential: cert(JSON.parse(raw)) });
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-admin-key');
+export function createModeratorApplicationHandler({ auth, db } = {}) {
+  return async function handler(req, res) {
+    try {
+      applyAdminCors(req, res);
+      if (req.method === 'OPTIONS') return res.status(204).end();
+      if (req.method !== 'POST') return res.status(405).json({ error:'method_not_allowed' });
+      const authorized = await requireAdminRequest(req, { auth, db });
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { uid, action, username = '', email = '' } = req.body || {};
+      if (!uid || !['approve', 'reject'].includes(action)) {
+        return res.status(400).json({ error:'uid and valid action are required' });
+      }
 
-  const adminKey = req.headers['x-admin-key'];
-  const secret = clean(process.env.ADMIN_SECRET);
-  if (!adminKey || adminKey !== secret) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+      if (!db) initFirebase();
+      const store = authorized.db || getFirestore();
+      const approved = action === 'approve';
 
-  const { uid, action, username = '', email = '' } = req.body || {};
-  if (!uid || !['approve', 'reject'].includes(action)) {
-    return res.status(400).json({ error: 'uid and valid action are required' });
-  }
-
-  try {
-    initFirebase();
-    const db = getFirestore();
-    const approved = action === 'approve';
-
-    if (approved) {
-      const batch = db.batch();
-      batch.set(db.collection('users').doc(uid), {
+      if (approved) {
+        const batch = store.batch();
+        batch.set(store.collection('users').doc(uid), {
         uid,
         role: 'moderator',
         email: email || '',
@@ -52,23 +50,25 @@ export default async function handler(req, res) {
         name_lower: String(username || '').toLowerCase(),
         moderator_approved_at: FieldValue.serverTimestamp(),
       }, { merge: true });
-      batch.set(db.collection('user_private').doc(uid), {
+        batch.set(store.collection('user_private').doc(uid), {
         uid,
         contact_email: email || '',
         updated_at: FieldValue.serverTimestamp(),
         schema_version: 2,
       }, { merge: true });
-      await batch.commit();
-    }
+        await batch.commit();
+      }
 
-    await db.collection('moderator_applications').doc(uid).set({
+      await store.collection('moderator_applications').doc(uid).set({
       status: approved ? 'approved' : 'rejected',
       decided_at: FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    return res.status(200).json({ ok: true, status: approved ? 'approved' : 'rejected' });
-  } catch (e) {
-    console.error('moderator-application error:', e);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
+      return res.status(200).json({ ok:true, status:approved ? 'approved' : 'rejected' });
+    } catch (error) {
+      return adminRequestError(res, error, 'moderator-application');
+    }
+  };
 }
+
+export default createModeratorApplicationHandler();
