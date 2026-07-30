@@ -16,6 +16,7 @@ import siteVersionHandler from './api/site-version.js';
 import pushConfigHandler from './api/push-config.js';
 import { notifySiteUpdateOnce } from './api/site-update-notifier.js';
 import { finalizeExpiredDuels } from './api/duel-finalizer.js';
+import billingMeHandler from './api/billing-me.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,6 +67,7 @@ app.all('/api/moderation', moderationHandler);
 app.all('/api/site-presence', sitePresenceHandler);
 app.all('/api/site-version', siteVersionHandler);
 app.all('/api/push-config', pushConfigHandler);
+app.all('/api/billing/me', billingMeHandler);
 
 app.get(['/author-training', '/author-training/'], (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
