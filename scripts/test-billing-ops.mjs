@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import { createAdminBillingHandler } from '../api/admin-billing.js';
 import { createAdminExpirationsHandler } from '../api/admin-expirations.js';
+import { createAdminHealthHandler } from '../api/admin-health.js';
+import { createAdminConfigBackupHandler } from '../api/admin-config-backup.js';
 import { createModeratorApplicationHandler } from '../api/moderator-application.js';
 import { createNotifyAgentSubscribersHandler } from '../api/notify-agent-subscribers.js';
 import { createSendPushHandler } from '../api/send-push.js';
@@ -17,6 +19,7 @@ import {
   buildAlertText,
   runExpirationAlert,
 } from './notify-expirations-telegram.mjs';
+import { runOperationalMonitor } from './monitor-operations-telegram.mjs';
 
 class Ref {
   constructor(db, path) { this.db = db; this.path = path; this.id = path.split('/').at(-1); }
@@ -74,7 +77,7 @@ class Query {
 }
 
 class Collection extends Query {
-  doc(id) { return new Ref(this.db, `${this.path}/${id}`); }
+  doc(id = `auto-${this.db.docs.size + 1}`) { return new Ref(this.db, `${this.path}/${id}`); }
 }
 
 class MemoryDb {
@@ -264,6 +267,46 @@ test('legacy admin endpoints require Firebase admin authentication and exact ori
   }
 });
 
+test('admin health checks providers and config backup contains presence but no secrets', async () => {
+  const db = new MemoryDb({
+    'users/admin': { role:'admin' },
+    'settings/credential_expiration_alerts': { checked_at:timestamp('2026-07-30T11:00:00Z') },
+    'settings/credential_expirations': { items:{ tls:{ expires_at:'2026-09-29' } } },
+  });
+  const env = {
+    ONESIGNAL_APP_ID:'app-id',
+    ONESIGNAL_REST_KEY:'rest-secret',
+    YANDEX_CLIENT_ID:'client',
+    YANDEX_CLIENT_SECRET:'oauth-secret',
+    YANDEX_STATE_SECRET:'state-secret',
+    TELEGRAM_BOT_TOKEN:'telegram-secret',
+    TELEGRAM_ALERT_CHAT_ID:'-1001',
+  };
+  const health = response();
+  await createAdminHealthHandler({
+    db,
+    auth:authFor('admin'),
+    env,
+    httpCheck:async () => ({ ok:true, status:200, latency_ms:12 }),
+  })({
+    method:'GET',
+    headers:{ authorization:'Bearer valid-token', origin:'https://arts-darts.github.io' },
+  }, health);
+  assert.equal(health.statusCode, 200);
+  assert.equal(health.body.checks.find(item => item.id === 'onesignal').ok, true);
+  assert.equal(health.body.checks.find(item => item.id === 'robokassa').ok, false);
+
+  const backup = response();
+  await createAdminConfigBackupHandler({ db, auth:authFor('admin'), env })({
+    method:'GET',
+    headers:{ authorization:'Bearer valid-token' },
+  }, backup);
+  assert.equal(backup.statusCode, 200);
+  assert.equal(backup.body.environment_presence.ONESIGNAL_REST_KEY, true);
+  assert.equal(JSON.stringify(backup.body).includes('rest-secret'), false);
+  assert.equal(JSON.stringify(backup.body).includes('telegram-secret'), false);
+});
+
 test('expiration Telegram alert sends once per changed risk set without exposing secrets', async () => {
   const db = new MemoryDb();
   const sent = [];
@@ -288,6 +331,21 @@ test('expiration Telegram alert sends once per changed risk set without exposing
   assert.doesNotMatch(sent[0].text, /Domain/);
   assert.equal(alertFingerprint(riskyItems.slice(0, 2)), alertFingerprint([...riskyItems.slice(0, 2)].reverse()));
   assert.match(buildAlertText(riskyItems.slice(0, 1)), /осталось 20 дн/);
+});
+
+test('operational Telegram monitor deduplicates API and payment problems', async () => {
+  const db = new MemoryDb();
+  const sent = [];
+  const options = {
+    db,
+    env:{ TELEGRAM_BOT_TOKEN:'token', TELEGRAM_ALERT_CHAT_ID:'chat' },
+    collector:async () => ['API недоступен: нет ответа', 'Зависшие платежи: 1'],
+    sender:async (_token, _chat, text) => sent.push(text),
+  };
+  assert.equal((await runOperationalMonitor(options)).sent, true);
+  assert.equal((await runOperationalMonitor(options)).sent, false);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /Зависшие платежи/);
 });
 
 test('admin billing paginates bounded orders and diagnoses stuck/review states', async () => {

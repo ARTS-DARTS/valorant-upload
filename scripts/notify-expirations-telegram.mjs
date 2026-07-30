@@ -39,7 +39,7 @@ export function buildAlertText(items) {
   return lines.join('\n');
 }
 
-async function sendTelegram(token, chatId, text) {
+export async function sendTelegram(token, chatId, text) {
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },

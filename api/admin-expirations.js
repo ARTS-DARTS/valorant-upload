@@ -12,11 +12,12 @@ const CATALOG = Object.freeze([
   { id:'domain_vlineups', name:'Домен vlineups.ru', group:'Инфраструктура', kind:'expiry', automatic:'domain', default_expires_at:'2027-06-28T13:19:50Z', action:'Продлить в REG.RU до остановки делегирования' },
   { id:'tls_vlineups', name:'SSL vlineups.ru', group:'Инфраструктура', kind:'expiry', automatic:'tls', action:'Проверить certbot и автоматическое продление' },
   { id:'vps_onedash', name:'VPS OneDash', group:'Инфраструктура', kind:'expiry', default_expires_at:'2027-01-31T00:00:00+03:00', action:'Пополнить баланс и продлить сервер' },
-  { id:'play_signing', name:'Сертификат подписи Google Play', group:'Публикация', kind:'expiry', action:'Проверить срок upload/app-signing certificate' },
+  { id:'play_signing', name:'Сертификат подписи Google Play', group:'Публикация', kind:'expiry', default_expires_at:'2053-10-04T14:31:35Z', action:'Upload certificate alias upload · SHA-256 начинается F3:B9:37' },
   { id:'terms_review', name:'Оферта и условия подписки', group:'Юридическое', kind:'review', default_expires_at:'2027-08-01T00:00:00+03:00', action:'Ежегодно пересмотреть реквизиты, цены и формулировки' },
   { id:'firebase_admin', name:'Firebase service account', group:'Серверные ключи', kind:'rotation', interval_days:365, env:['FIREBASE_SERVICE_ACCOUNT'] },
   { id:'onesignal_rest', name:'OneSignal REST API key', group:'Серверные ключи', kind:'rotation', interval_days:180, env:['ONESIGNAL_REST_KEY'] },
   { id:'yandex_oauth', name:'Яндекс OAuth secret', group:'Серверные ключи', kind:'rotation', interval_days:180, env:['YANDEX_CLIENT_ID','YANDEX_CLIENT_SECRET'] },
+  { id:'yandex_state', name:'Яндекс OAuth state secret', group:'Серверные ключи', kind:'rotation', interval_days:365, env:['YANDEX_STATE_SECRET'] },
   { id:'robokassa_passwords', name:'Пароли Robokassa №1/№2', group:'Платежи', kind:'rotation', interval_days:180, env:['ROBOKASSA_MERCHANT_LOGIN','ROBOKASSA_PASSWORD_1','ROBOKASSA_PASSWORD_2'] },
   { id:'billing_reconcile', name:'Токен reconciliation', group:'Платежи', kind:'rotation', interval_days:180, env:['BILLING_RECONCILIATION_TOKEN'] },
   { id:'deletion_pepper', name:'Account deletion pepper', group:'Серверные ключи', kind:'rotation', interval_days:365, env:['ACCOUNT_DELETION_PEPPER'] },
@@ -190,12 +191,26 @@ export function createAdminExpirationsHandler({
         update.updated_at = now().toISOString();
         update.updated_by = admin.uid;
         await configRef.set({ items:{ ...currentItems, [id]:update } }, { merge:true });
+        await store.collection('credential_expiration_audit').doc().set({
+          item_id:id,
+          changed_at:now().toISOString(),
+          changed_by:admin.uid,
+          expires_at:update.expires_at || null,
+          last_rotated_at:update.last_rotated_at || null,
+          configured:update.configured ?? null,
+          notes:update.notes || '',
+        });
       } else if (req.method !== 'GET') {
         return res.status(405).json({ error:'method_not_allowed' });
       }
-      return res.status(200).json(await buildExpirationSnapshot({
+      const [snapshot, auditSnap] = await Promise.all([
+        buildExpirationSnapshot({
         store, env, now, tlsProbe, domainProbe,
-      }));
+        }),
+        store.collection('credential_expiration_audit').orderBy('changed_at', 'desc').limit(20).get(),
+      ]);
+      snapshot.history = auditSnap.docs.map(doc => ({ id:doc.id, ...doc.data() }));
+      return res.status(200).json(snapshot);
     } catch (error) {
       const status = Number(error.status) || (String(error.code || '').startsWith('auth/') ? 401 : 500);
       if (status >= 500) console.error('admin-expirations error:', error);
