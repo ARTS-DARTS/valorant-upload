@@ -25,6 +25,7 @@ import billingOrderStatusHandler from './api/billing-order-status.js';
 import adminBillingHandler from './api/admin-billing.js';
 import accountDeleteHandler from './api/account-delete.js';
 import adminExpirationsHandler from './api/admin-expirations.js';
+import adminCloudinaryUsageHandler from './api/admin-cloudinary-usage.js';
 import robokassaWebhookHandler from './api/billing-webhook-robokassa.js';
 import robokassaReconciliationHandler from './api/billing-reconcile-robokassa.js';
 
@@ -72,6 +73,7 @@ app.all('/api/billing/order-status', billingOrderStatusHandler);
 app.all('/api/admin/billing', adminBillingHandler);
 app.all('/api/account/delete', accountDeleteHandler);
 app.all('/api/admin/expirations', adminExpirationsHandler);
+app.all('/api/admin/cloudinary-usage', adminCloudinaryUsageHandler);
 
 app.use(
   express.static(__dirname, {
