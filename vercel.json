@@ -27,6 +27,10 @@
   "rewrites": [
     { "source": "/offer", "destination": "/offer.html" },
     { "source": "/offer/", "destination": "/offer.html" },
+    { "source": "/payment/success", "destination": "/payment-success.html" },
+    { "source": "/payment/success/", "destination": "/payment-success.html" },
+    { "source": "/payment/fail", "destination": "/payment-fail.html" },
+    { "source": "/payment/fail/", "destination": "/payment-fail.html" },
     { "source": "/author-training/defense", "destination": "/author-training/defense/index.html" },
     { "source": "/author-training/defense/", "destination": "/author-training/defense/index.html" },
     { "source": "/author-training/lineups", "destination": "/author-training/lineups/index.html" },
