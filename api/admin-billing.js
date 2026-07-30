@@ -1,5 +1,10 @@
 import { adminAuth, adminFirestore } from './_lib/firebase-admin.js';
 
+const ALLOWED_ORIGINS = new Set([
+  'https://arts-darts.github.io',
+  'http://localhost:3000',
+]);
+
 function fail(status, message) {
   return Object.assign(new Error(message), { status });
 }
@@ -31,6 +36,17 @@ export function createAdminBillingHandler({
 } = {}) {
   return async function adminBillingHandler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
+    const origin = String(req.headers?.origin || '');
+    if (origin && !ALLOWED_ORIGINS.has(origin)) {
+      return res.status(403).json({ error: 'origin_not_allowed' });
+    }
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    }
+    if (req.method === 'OPTIONS') return res.status(204).end();
     if (req.method !== 'GET') return res.status(405).json({ error: 'method_not_allowed' });
     try {
       const store = db ?? adminFirestore();
