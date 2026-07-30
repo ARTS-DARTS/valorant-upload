@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-30-pacman-jaws-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-30-pacman-dots-v3">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-28-training-entry-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-27-guide-circle-v1">
 </head>
@@ -21,6 +21,15 @@
   <div class="site-loader__title">Загрузка сайта</div>
   <div class="site-loader__hint">Проверяем вход и готовим личный кабинет</div>
 </div>
+<script>
+  // Не оставляем пользователя на вечной заставке, даже если основной module-скрипт не загрузился.
+  window.setTimeout(() => {
+    const loader = document.getElementById('site-loader');
+    if (!loader || loader.classList.contains('site-loader--hidden')) return;
+    loader.classList.add('site-loader--hidden');
+    window.setTimeout(() => loader.remove(), 450);
+  }, 12000);
+</script>
 
 <header class="header">
   <div class="logo" style="display:flex;align-items:center;gap:10px;">
