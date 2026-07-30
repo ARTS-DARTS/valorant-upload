@@ -24,4 +24,4 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ALERT_CHAT_ID: ${{ secrets.TELEGRAM_ALERT_CHAT_ID }}
-          CREDENTIAL_PRESENCE_OVERRIDES: firebase_admin,onesignal_rest,yandex_oauth,robokassa_passwords,billing_reconcile,deletion_pepper
+          CREDENTIAL_PRESENCE_OVERRIDES: firebase_admin,onesignal_rest,yandex_oauth,yandex_state,billing_reconcile,deletion_pepper
