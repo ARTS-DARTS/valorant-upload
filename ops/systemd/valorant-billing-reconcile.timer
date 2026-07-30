@@ -1,0 +1,11 @@
+[Unit]
+Description=Run VLineups billing reconciliation every 10 minutes
+
+[Timer]
+OnCalendar=*:0/10
+RandomizedDelaySec=45
+Persistent=true
+Unit=valorant-billing-reconcile.service
+
+[Install]
+WantedBy=timers.target

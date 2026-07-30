@@ -171,6 +171,7 @@ ensure_release() {
     cd "$candidate_dir"
     npm ci --omit=optional
     npm run check
+    npm run check:billing-results --if-present
     npm run test:billing --if-present
   )
   printf '%s\n' "$remote_sha" >"$candidate_dir/.release-sha"

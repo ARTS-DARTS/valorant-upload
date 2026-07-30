@@ -107,6 +107,7 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
     });
     tx.update(orderRef, {
       status: entitlementConflict ? 'requires_review' : 'succeeded',
+      review_reason: entitlementConflict ? 'active_plan_conflict' : null,
       paid_at: nowTimestamp,
       period_start: entitlementConflict ? null : Timestamp.fromMillis(baseMillis),
       period_end: entitlementConflict ? null : accessUntil,
@@ -413,13 +414,37 @@ export function createRobokassaWebhookHandler({
       const verified = verifyRobokassaResult({ config: provider, payload: req.body || {} });
       if (!verified) throw fail(400, 'invalid_signature');
       verified.payment_method = req.body?.PaymentMethod;
-      await applyRobokassaPayment({
+      const result = await applyRobokassaPayment({
         db: db ?? adminFirestore(), verified, provider, now: now(),
       });
+      try {
+        const store = db ?? adminFirestore();
+        const observedAt = Timestamp.fromDate(now());
+        await store.collection('billing_monitoring').doc('robokassa').set({
+          result_callbacks_total: FieldValue.increment(1),
+          duplicate_callbacks_total: FieldValue.increment(result.duplicate ? 1 : 0),
+          last_callback_at: observedAt,
+          last_callback_invoice_id: verified.invoice_id,
+          updated_at: observedAt,
+        }, { merge: true });
+      } catch (monitoringError) {
+        console.error('robokassa monitoring write error:', monitoringError);
+      }
       return res.status(200).send(`OK${verified.invoice_id}`);
     } catch (error) {
       const status = Number(error.status) || 500;
-      if (status >= 500) console.error('robokassa webhook error:', error);
+      if (status >= 500) {
+        console.error('robokassa webhook error:', error);
+        try {
+          const store = db ?? adminFirestore();
+          await store.collection('billing_monitoring').doc('robokassa').set({
+            webhook_errors_total: FieldValue.increment(1),
+            last_webhook_error_at: Timestamp.fromDate(now()),
+            last_webhook_error_code: String(error.message || 'temporary_error').slice(0, 80),
+            updated_at: Timestamp.fromDate(now()),
+          }, { merge: true });
+        } catch (_) {}
+      }
       return res.status(status).send(status >= 500 ? 'temporary_error' : error.message);
     }
   };

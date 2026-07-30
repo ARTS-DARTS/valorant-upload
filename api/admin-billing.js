@@ -33,6 +33,7 @@ async function requireAdmin(store, auth, req) {
 export function createAdminBillingHandler({
   db = null,
   auth = null,
+  now = () => new Date(),
 } = {}) {
   return async function adminBillingHandler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
@@ -53,20 +54,36 @@ export function createAdminBillingHandler({
       await requireAdmin(store, auth ?? adminAuth(), req);
       const limit = Math.min(Math.max(Number(req.query?.limit) || 40, 1), 100);
       const status = String(req.query?.status || 'all').trim();
+      const cursor = String(req.query?.cursor || '').trim();
       let ordersQuery = store.collection('billing_orders').orderBy('created_at', 'desc');
       if (status !== 'all') {
         if (!['pending', 'succeeded', 'failed', 'requires_review', 'reversed'].includes(status)) {
           throw fail(400, 'invalid_status');
         }
       }
-      const [ordersSnap, overviewSnap] = await Promise.all([
-        ordersQuery.limit(status === 'all' ? limit : 100).get(),
+      if (cursor) {
+        if (!/^\d{1,18}$/.test(cursor)) throw fail(400, 'invalid_cursor');
+        const cursorSnap = await store.collection('billing_orders').doc(cursor).get();
+        if (!cursorSnap.exists) throw fail(400, 'invalid_cursor');
+        ordersQuery = ordersQuery.startAfter(cursorSnap);
+      }
+      const scanLimit = status === 'all' ? limit + 1 : 100;
+      const [ordersSnap, overviewSnap, monitoringSnap] = await Promise.all([
+        ordersQuery.limit(scanLimit).get(),
         store.collection('subscription_stats').doc('overview').get(),
+        store.collection('billing_monitoring').doc('robokassa').get(),
       ]);
-      const orders = ordersSnap.docs
+      const scannedDocs = ordersSnap.docs;
+      const matchingOrders = scannedDocs
         .map(doc => ({ id: doc.id, ...(doc.data() || {}) }))
-        .filter(order => status === 'all' || order.status === status)
-        .slice(0, limit);
+        .filter(order => status === 'all' || order.status === status);
+      const orders = matchingOrders.slice(0, limit);
+      const hasMore = status === 'all'
+        ? scannedDocs.length > limit
+        : scannedDocs.length === scanLimit;
+      const cursorDoc = status === 'all'
+        ? scannedDocs[Math.min(limit, scannedDocs.length) - 1]
+        : scannedDocs.at(-1);
       const userIds = [...new Set(orders.map(order => order.uid).filter(Boolean))];
       const refs = userIds.map(uid => store.collection('users').doc(uid));
       const userSnaps = refs.length ? await store.getAll(...refs) : [];
@@ -74,9 +91,32 @@ export function createAdminBillingHandler({
       const entitlementRefs = userIds.map(uid => store.collection('account_entitlements').doc(uid));
       const entitlementSnaps = entitlementRefs.length ? await store.getAll(...entitlementRefs) : [];
       const entitlements = new Map(entitlementSnaps.map(snap => [snap.id, snap.data() || {}]));
+      const currentMillis = now().getTime();
+      const recentOrders = scannedDocs.map(doc => ({ id: doc.id, ...(doc.data() || {}) }));
+      const pending = recentOrders.filter(order => order.status === 'pending');
+      const stuckPending = pending.filter(order => {
+        const created = typeof order.created_at?.toMillis === 'function'
+          ? order.created_at.toMillis()
+          : new Date(order.created_at || 0).getTime();
+        return Number.isFinite(created) && currentMillis - created > 35 * 60 * 1000;
+      });
+      const requiresReview = recentOrders.filter(order => order.status === 'requires_review');
+      const monitoringRaw = monitoringSnap.exists ? (monitoringSnap.data() || {}) : {};
 
       return res.status(200).json({
         overview: overviewSnap.exists ? (overviewSnap.data() || {}) : {},
+        monitoring: {
+          ...monitoringRaw,
+          last_callback_at:toIso(monitoringRaw.last_callback_at),
+          last_webhook_error_at:toIso(monitoringRaw.last_webhook_error_at),
+          updated_at:toIso(monitoringRaw.updated_at),
+          pending_recent: pending.length,
+          stuck_pending: stuckPending.length,
+          requires_review: requiresReview.length,
+          oldest_stuck_order_id: stuckPending.at(-1)?.id || '',
+          scanned_orders: recentOrders.length,
+        },
+        next_cursor: hasMore && cursorDoc ? cursorDoc.id : null,
         orders: orders.map(order => {
           const user = users.get(order.uid) || {};
           const entitlement = entitlements.get(order.uid) || {};
@@ -94,6 +134,7 @@ export function createAdminBillingHandler({
             created_at: toIso(order.created_at),
             paid_at: toIso(order.paid_at),
             reversed_at: toIso(order.reversed_at),
+            review_reason: String(order.review_reason || ''),
             entitlement_status: String(entitlement.status || ''),
             entitlement_plan_id: String(entitlement.plan_id || ''),
             access_until: toIso(entitlement.access_until),

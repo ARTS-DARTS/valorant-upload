@@ -1,0 +1,16 @@
+[Unit]
+Description=VLineups Robokassa bounded reconciliation
+After=network-online.target valorant-upload.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/bin/run-vlineups-billing-reconciliation.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log
+

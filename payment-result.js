@@ -19,6 +19,7 @@ const panel = document.getElementById('order-panel');
 const checkButton = document.getElementById('check-again');
 let timer = null;
 let attempts = 0;
+const planNames = { ad_free:'Без рекламы', plus:'Плюс', sponsor:'Спонсор' };
 
 function money(minor, currency) {
   return new Intl.NumberFormat('ru-RU', { style:'currency', currency:currency || 'RUB' }).format((minor || 0) / 100);
@@ -31,6 +32,8 @@ function date(value) {
 function showOrder(order, entitlement) {
   panel.hidden = false;
   document.getElementById('order-id').textContent = `№ ${order.id}`;
+  document.getElementById('order-plan').textContent = planNames[order.plan_id] || order.plan_id || '—';
+  document.getElementById('order-period').textContent = `${order.months} ${order.months === 1 ? 'месяц' : order.months < 5 ? 'месяца' : 'месяцев'}`;
   document.getElementById('order-amount').textContent = money(order.amount_minor, order.currency);
   document.getElementById('order-access').textContent = date(order.period_end || entitlement.access_until);
 }
@@ -59,6 +62,7 @@ async function check(user) {
       copy.textContent = 'Оплата подтверждена сервером. Новый уровень уже действует в приложении и кабинете.';
       clearTimeout(timer);
       checkButton.hidden = true;
+      document.getElementById('open-app').hidden = false;
       return;
     }
     if (data.order.status === 'requires_review') {
