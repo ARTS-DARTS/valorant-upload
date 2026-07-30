@@ -90,7 +90,7 @@ start_runtime() {
       DOTENV_CONFIG_PATH="$CONTROL_DIR/.env" \
       SITE_DEPLOY_VERSION="$sha" \
       pm2 startOrReload "$runtime/ecosystem.config.cjs" \
-        --only "$PM2_APP" --update-env
+        --only "$PM2_APP" --cwd "$runtime" --update-env
   )
 }
 
