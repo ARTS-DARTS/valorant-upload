@@ -101,7 +101,10 @@ export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
     if (![duel.lineup1Id, duel.lineup2Id].includes(winnerId)) throw new Error('invalid_winner');
     const loserId = winnerId === duel.lineup1Id ? duel.lineup2Id : duel.lineup1Id;
     const winnerVotes = winnerId === duel.lineup1Id ? v1 : v2;
-    const likesAwarded = Math.min(100, Math.max(0, winnerVotes));
+    const winnerBallots = winnerId === duel.lineup1Id
+      ? Number(duel.ballots1 ?? winnerVotes)
+      : Number(duel.ballots2 ?? winnerVotes);
+    const likesAwarded = Math.min(100, Math.max(0, winnerBallots));
     const winnerRef = db.collection('lineups').doc(winnerId);
     const loserRef = db.collection('lineups').doc(loserId);
     const winnerSnap = await tx.get(winnerRef), loserSnap = await tx.get(loserRef);
@@ -118,7 +121,16 @@ export async function finalizeDuelById(duelId, { forcedWinnerId = '' } = {}) {
         tx.get(db.collection('user_stats').doc(loserUid)),
       ]);
     }
-    tx.update(winnerRef, { status: 'approved', likes_count: FieldValue.increment(likesAwarded), votes_actual: FieldValue.increment(5), duel_wins: FieldValue.increment(1), last_duel_id: duelId, updated_at: FieldValue.serverTimestamp() });
+    tx.update(winnerRef, {
+      status: 'approved',
+      likes_count: FieldValue.increment(likesAwarded),
+      likes_system_bonus: FieldValue.increment(likesAwarded),
+      votes_actual: FieldValue.increment(5),
+      relevance_system_bonus: FieldValue.increment(5),
+      duel_wins: FieldValue.increment(1),
+      last_duel_id: duelId,
+      updated_at: FieldValue.serverTimestamp(),
+    });
     tx.update(loserRef, { status: 'archived', archived_reason: 'duel_loss', lost_duel_id: duelId, updated_at: FieldValue.serverTimestamp() });
     if (loserUid && loserUserSnap?.exists) {
       const loserUser = loserUserSnap.data() || {};

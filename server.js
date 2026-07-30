@@ -18,6 +18,7 @@ import { notifySiteUpdateOnce } from './api/site-update-notifier.js';
 import { finalizeExpiredDuels } from './api/duel-finalizer.js';
 import billingMeHandler from './api/billing-me.js';
 import readinessHandler, { firebaseReadiness } from './api/readiness.js';
+import engagementHandler from './api/engagement.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,6 +50,8 @@ app.all('/api/billing/me', billingMeHandler);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+app.all('/api/engagement/:action', engagementHandler);
 
 app.use(
   express.static(__dirname, {
