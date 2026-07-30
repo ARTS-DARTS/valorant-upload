@@ -9,7 +9,7 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}(?:T[\d:.+-]+Z?)?$/;
 const CATALOG = Object.freeze([
-  { id:'domain_vlineups', name:'Домен vlineups.ru', group:'Инфраструктура', kind:'expiry', automatic:'domain', action:'Продлить в REG.RU до остановки делегирования' },
+  { id:'domain_vlineups', name:'Домен vlineups.ru', group:'Инфраструктура', kind:'expiry', automatic:'domain', default_expires_at:'2027-06-28T13:19:50Z', action:'Продлить в REG.RU до остановки делегирования' },
   { id:'tls_vlineups', name:'SSL vlineups.ru', group:'Инфраструктура', kind:'expiry', automatic:'tls', action:'Проверить certbot и автоматическое продление' },
   { id:'vps_onedash', name:'VPS OneDash', group:'Инфраструктура', kind:'expiry', default_expires_at:'2027-01-31T00:00:00+03:00', action:'Пополнить баланс и продлить сервер' },
   { id:'play_signing', name:'Сертификат подписи Google Play', group:'Публикация', kind:'expiry', action:'Проверить срок upload/app-signing certificate' },
@@ -21,10 +21,10 @@ const CATALOG = Object.freeze([
   { id:'billing_reconcile', name:'Токен reconciliation', group:'Платежи', kind:'rotation', interval_days:180, env:['BILLING_RECONCILIATION_TOKEN'] },
   { id:'deletion_pepper', name:'Account deletion pepper', group:'Серверные ключи', kind:'rotation', interval_days:365, env:['ACCOUNT_DELETION_PEPPER'] },
   { id:'admin_secret_legacy', name:'Авторизация административных API', group:'Серверные ключи', kind:'managed', action:'Firebase ID token + серверная проверка роли admin' },
-  { id:'selectel_s3', name:'Selectel S3 access/secret keys', group:'Firebase Functions', kind:'rotation', interval_days:180, manual_presence:true },
-  { id:'google_translation', name:'Google Translation credentials', group:'Firebase Functions', kind:'rotation', interval_days:365, manual_presence:true },
-  { id:'identity_toolkit', name:'Identity Toolkit API key', group:'Firebase Functions', kind:'review', interval_days:365, manual_presence:true },
-  { id:'github_deploy', name:'GitHub/SSH deploy-доступы', group:'Публикация', kind:'rotation', interval_days:365, manual_presence:true },
+  { id:'selectel_s3', name:'Selectel S3 access/secret keys', group:'Firebase Functions', kind:'rotation', interval_days:180, manual_presence:true, default_configured:true },
+  { id:'google_translation', name:'Google Translation credentials', group:'Firebase Functions', kind:'rotation', interval_days:365, manual_presence:true, default_configured:true },
+  { id:'identity_toolkit', name:'Identity Toolkit API key', group:'Firebase Functions', kind:'review', interval_days:365, manual_presence:true, default_configured:true },
+  { id:'github_deploy', name:'GitHub/SSH deploy-доступы', group:'Публикация', kind:'rotation', interval_days:365, manual_presence:true, default_configured:true },
 ]);
 const IDS = new Set(CATALOG.map(item => item.id));
 
@@ -85,9 +85,12 @@ function dateMillis(value) {
   return Number.isFinite(result) ? result : null;
 }
 function buildItem(item, metadata, automaticDate, env, now) {
+  const configuredOverrides = new Set(String(env.CREDENTIAL_PRESENCE_OVERRIDES || '')
+    .split(',').map(value => value.trim()).filter(Boolean));
   const configured = item.env
-    ? item.env.every(name => String(env[name] || '').trim().length > 0)
-    : metadata.configured ?? (item.manual_presence ? null : true);
+    ? configuredOverrides.has(item.id)
+      || item.env.every(name => String(env[name] || '').trim().length > 0)
+    : metadata.configured ?? item.default_configured ?? (item.manual_presence ? null : true);
   const lastRotated = toIso(metadata.last_rotated_at);
   let dueAt = automaticDate || toIso(metadata.expires_at) || item.default_expires_at || null;
   if (!dueAt && item.interval_days && lastRotated) {

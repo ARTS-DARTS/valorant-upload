@@ -178,7 +178,8 @@ test('admin expirations reports only metadata and preserves sibling records on u
     auth:authFor('admin'),
     env:{
       UNUSED_TEST_SECRET:'super-secret-value',
-      ONESIGNAL_REST_KEY:'another-secret-value',
+      UNUSED_SECOND_SECRET:'another-secret-value',
+      CREDENTIAL_PRESENCE_OVERRIDES:'onesignal_rest',
     },
     now:() => new Date('2026-07-30T12:00:00Z'),
     tlsProbe:async () => 'Sep 29 18:20:17 2026 GMT',
