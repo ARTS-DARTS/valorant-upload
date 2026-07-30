@@ -249,7 +249,7 @@ const agentCategoryLoadPromises = new Map();
 const agentCategoryAbilityConfigs = new Map();
 let uploadCategoryAccessUnsub = null;
 let uploadConfigVersionsUnsub = null;
-let uploadAbilityConfigVersion = '';
+let uploadConfigVersions = {};
 let agentCategoryConfigGeneration = 0;
 let uploadCategoryAccessReady = false;
 
@@ -413,26 +413,94 @@ function loadAgentCategoryAvailability(category = selectedCategory, { force = fa
   return promise;
 }
 
+function softlyRevealTechnicalUpdate(element) {
+  if (!element || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  element.getAnimations().forEach(animation => animation.cancel());
+  element.animate(
+    [
+      { opacity: .55, transform: 'translateY(4px)' },
+      { opacity: 1, transform: 'translateY(0)' },
+    ],
+    { duration: 240, easing: 'cubic-bezier(.22,1,.36,1)' },
+  );
+}
+
+async function refreshUploadReferenceConfigs(changedFields, nextVersions) {
+  const refreshWeapons = changedFields.includes('weapon_whitelist');
+  const refreshDefense = changedFields.includes('defense_agents');
+  const refreshMap = changedFields.includes('map_annotations');
+  try {
+    const [weaponsSnap, defenseSnap] = await Promise.all([
+      refreshWeapons ? getDoc(doc(db, 'settings', 'weapon_whitelist')) : null,
+      refreshDefense ? getDoc(doc(db, 'settings', 'defense_agents')) : null,
+    ]);
+    if (refreshWeapons) {
+      uploadWeaponWhitelist = weaponsSnap?.exists() && Array.isArray(weaponsSnap.data().weapons)
+        ? weaponsSnap.data().weapons.filter(Boolean)
+        : [...DEFAULT_WALLBANG_WEAPONS];
+      renderWallbangWeapons();
+      softlyRevealTechnicalUpdate(document.getElementById('wallbang-weapons'));
+      validateForm();
+    }
+    if (refreshDefense) {
+      uploadDefenseAgents = new Set(
+        defenseSnap?.exists() && Array.isArray(defenseSnap.data().agents)
+          ? defenseSnap.data().agents.filter(Boolean)
+          : [],
+      );
+      if (normalizeContentCategory(selectedCategory) === 'defense') renderAgentsGrid();
+    }
+    if (refreshWeapons || refreshDefense) {
+      let cached = {};
+      try { cached = JSON.parse(localStorage.getItem(UPLOAD_CONFIG_CACHE_KEY) || '{}') || {}; } catch (_) {}
+      try {
+        localStorage.setItem(UPLOAD_CONFIG_CACHE_KEY, JSON.stringify({
+          ...cached,
+          weaponVersion: String(nextVersions.weapon_whitelist || ''),
+          defenseVersion: String(nextVersions.defense_agents || ''),
+          weapons: uploadWeaponWhitelist,
+          defenseAgents: [...uploadDefenseAgents],
+        }));
+      } catch (_) {}
+    }
+    if (refreshMap) {
+      mapAnnotationsPromise = null;
+      mapAnnotationsReady = false;
+      await loadMapAnnotations();
+      softlyRevealTechnicalUpdate(document.getElementById('map-site-labels'));
+    }
+  } catch (error) {
+    console.warn('refreshUploadReferenceConfigs', error.message);
+  }
+}
+
 function watchUploadConfigVersions(reference, initialData = {}) {
   uploadConfigVersionsUnsub?.();
   uploadConfigVersionsUnsub = null;
-  uploadAbilityConfigVersion = String(initialData.ability_config || '');
+  uploadConfigVersions = { ...initialData };
   uploadConfigVersionsUnsub = onSnapshot(
     reference,
     snapshot => {
-      const nextVersion = String(snapshot.data()?.ability_config || '');
-      if (nextVersion === uploadAbilityConfigVersion) return;
-      uploadAbilityConfigVersion = nextVersion;
-      agentCategoryConfigGeneration += 1;
-      agentCategoryAvailability.clear();
-      agentCategoryAbilityConfigs.clear();
-      agentCategoryLoadPromises.clear();
-      const activeCategory = normalizeContentCategory(selectedCategory);
-      if (!activeCategory || activeCategory === 'wallbang' || !agentsList.length) {
-        renderAgentsGrid();
-        return;
+      const nextVersions = snapshot.exists() ? snapshot.data() : {};
+      const watchedFields = ['ability_config', 'weapon_whitelist', 'defense_agents', 'map_annotations'];
+      const changedFields = watchedFields.filter(field =>
+        String(nextVersions[field] || '') !== String(uploadConfigVersions[field] || '')
+      );
+      if (!changedFields.length) return;
+      uploadConfigVersions = { ...nextVersions };
+      if (changedFields.includes('ability_config')) {
+        agentCategoryConfigGeneration += 1;
+        agentCategoryAvailability.clear();
+        agentCategoryAbilityConfigs.clear();
+        agentCategoryLoadPromises.clear();
+        const activeCategory = normalizeContentCategory(selectedCategory);
+        if (!activeCategory || activeCategory === 'wallbang' || !agentsList.length) {
+          renderAgentsGrid();
+        } else {
+          loadAgentCategoryAvailability(activeCategory, { force: true });
+        }
       }
-      loadAgentCategoryAvailability(activeCategory, { force: true });
+      void refreshUploadReferenceConfigs(changedFields, nextVersions);
     },
     error => console.warn('watchUploadConfigVersions', error.message),
   );
@@ -4393,7 +4461,7 @@ onAuthStateChanged(auth, async user => {
     uploadCategoryAccessUnsub = null;
     uploadConfigVersionsUnsub?.();
     uploadConfigVersionsUnsub = null;
-    uploadAbilityConfigVersion = '';
+    uploadConfigVersions = {};
     adminChatUnsub?.();
     adminChatUnsub = null;
     adminChatItems = [];
@@ -4713,9 +4781,10 @@ function loadMapAnnotations() {
     mapSpawnZonesConfig = zones.exists() ? zones.data() : {};
     mapAnnotationModesConfig = modes.exists() ? modes.data() : {};
     const storedOrientations = orientations.data()?.defense_quarter_turns;
-    if (storedOrientations && typeof storedOrientations === 'object') {
-      mapOrientationsConfig = { ...DEFAULT_MAP_ORIENTATIONS, ...storedOrientations };
-    }
+    mapOrientationsConfig = {
+      ...DEFAULT_MAP_ORIENTATIONS,
+      ...(storedOrientations && typeof storedOrientations === 'object' ? storedOrientations : {}),
+    };
     applyMapViewTransform();
     renderMapSiteLabels();
     mapAnnotationsReady = true;
