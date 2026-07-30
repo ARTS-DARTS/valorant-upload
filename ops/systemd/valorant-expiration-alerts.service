@@ -6,6 +6,5 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/var/www/valorant-upload
-EnvironmentFile=/var/www/valorant-upload/.env
 ExecStart=/usr/bin/node /var/www/valorant-upload/scripts/notify-expirations-telegram.mjs
 User=root
