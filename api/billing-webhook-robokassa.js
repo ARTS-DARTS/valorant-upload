@@ -41,11 +41,15 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
       throw fail(409, 'order_mismatch');
     }
     const entitlementRef = db.collection('account_entitlements').doc(order.uid);
-    const entitlementSnap = await tx.get(entitlementRef);
+    const customerRef = db.collection('billing_customers').doc(order.uid);
+    const [entitlementSnap, customerSnap] = await Promise.all([
+      tx.get(entitlementRef), tx.get(customerRef),
+    ]);
     const current = normalizeEntitlement(
       entitlementSnap.exists ? entitlementSnap.data() : null,
       { now },
     );
+    const customer = customerSnap.exists ? (customerSnap.data() || {}) : {};
     const currentEnd = timestampMillis(entitlementSnap.data()?.access_until);
     const baseMillis = current.active && current.plan_id === order.plan_id && currentEnd > now.getTime()
       ? currentEnd
@@ -54,10 +58,11 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
     const entitlementVersion = safeVersion(current.entitlement_version) + 1;
     const capabilities = capabilitiesForPlan(order.plan_id);
     const day = now.toISOString().slice(0, 10);
+    const entitlementConflict = current.active && current.plan_id !== order.plan_id;
 
     tx.create(eventRef, {
       provider: 'robokassa',
-      type: 'payment_succeeded',
+      type: entitlementConflict ? 'payment_succeeded_requires_review' : 'payment_succeeded',
       provider_invoice_id: invoiceId,
       order_id: invoiceId,
       amount_minor: order.amount_minor,
@@ -70,10 +75,11 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
       provider_payment_id: invoiceId,
       order_id: invoiceId,
       uid: order.uid,
-      status: 'succeeded',
+      status: entitlementConflict ? 'requires_review' : 'succeeded',
       amount_minor: order.amount_minor,
       currency: 'RUB',
       payment_method: String(verified.payment_method ?? '').slice(0, 60),
+      provider_operation_key: String(verified.op_key ?? '').slice(0, 200),
       succeeded_at: nowTimestamp,
       created_at: nowTimestamp,
     });
@@ -89,47 +95,258 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
       immutable: true,
     });
     tx.update(orderRef, {
-      status: 'succeeded',
+      status: entitlementConflict ? 'requires_review' : 'succeeded',
       paid_at: nowTimestamp,
-      period_start: Timestamp.fromMillis(baseMillis),
-      period_end: accessUntil,
+      period_start: entitlementConflict ? null : Timestamp.fromMillis(baseMillis),
+      period_end: entitlementConflict ? null : accessUntil,
       updated_at: nowTimestamp,
     });
-    tx.set(entitlementRef, {
-      uid: order.uid,
-      schema_version: 1,
-      plan_id: order.plan_id,
-      tier: { ad_free: 1, plus: 2, sponsor: 3 }[order.plan_id],
-      status: 'active',
-      valid_from: nowTimestamp,
-      access_until: accessUntil,
-      grace_until: null,
-      revoked_at: null,
-      cancel_at_period_end: false,
-      capabilities,
-      entitlement_version: entitlementVersion,
-      source: 'billing',
-      latest_order_id: invoiceId,
-      updated_at: nowTimestamp,
-    });
-    tx.set(db.collection('user_public_perks').doc(order.uid), {
-      subscriber_badge: true,
-      sponsor_badge: order.plan_id === 'sponsor',
-      sponsor_until: order.plan_id === 'sponsor' ? accessUntil : null,
-      updated_at: nowTimestamp,
-    }, { merge: true });
+    if (customer.open_order_id === invoiceId) {
+      tx.set(customerRef, {
+        open_order_id: null,
+        open_order_expires_at: null,
+        updated_at: nowTimestamp,
+      }, { merge: true });
+    }
+    if (!entitlementConflict) {
+      tx.set(entitlementRef, {
+        uid: order.uid,
+        schema_version: 1,
+        plan_id: order.plan_id,
+        tier: { ad_free: 1, plus: 2, sponsor: 3 }[order.plan_id],
+        status: 'active',
+        valid_from: nowTimestamp,
+        access_until: accessUntil,
+        grace_until: null,
+        revoked_at: null,
+        cancel_at_period_end: false,
+        capabilities,
+        entitlement_version: entitlementVersion,
+        source: 'billing',
+        latest_order_id: invoiceId,
+        updated_at: nowTimestamp,
+      });
+      tx.set(db.collection('user_public_perks').doc(order.uid), {
+        subscriber_badge: true,
+        sponsor_badge: order.plan_id === 'sponsor',
+        sponsor_until: order.plan_id === 'sponsor' ? accessUntil : null,
+        updated_at: nowTimestamp,
+      }, { merge: true });
+    }
     tx.set(db.collection('subscription_stats').doc('overview'), {
       purchases_total: FieldValue.increment(1),
       gross_minor: FieldValue.increment(order.amount_minor),
+      net_minor: FieldValue.increment(order.amount_minor),
       updated_at: nowTimestamp,
     }, { merge: true });
     tx.set(db.collection('subscription_stats_daily').doc(day), {
       purchases: FieldValue.increment(1),
       gross_minor: FieldValue.increment(order.amount_minor),
+      net_minor: FieldValue.increment(order.amount_minor),
       currency: 'RUB',
       updated_at: nowTimestamp,
     }, { merge: true });
-    return { duplicate: false, invoiceId, accessUntil: accessUntil.toDate() };
+    return {
+      duplicate: false,
+      invoiceId,
+      requiresReview: entitlementConflict,
+      accessUntil: entitlementConflict ? null : accessUntil.toDate(),
+    };
+  });
+}
+
+export async function applyRobokassaPendingFailure({
+  db,
+  invoiceId,
+  providerState,
+  now,
+}) {
+  const normalizedInvoiceId = String(invoiceId);
+  const stateCode = Number(providerState);
+  if (![10, 60].includes(stateCode)) throw fail(400, 'invalid_provider_state');
+  const orderRef = db.collection('billing_orders').doc(normalizedInvoiceId);
+  const eventRef = db.collection('billing_events')
+    .doc(`robokassa__failed_${stateCode}__${sha(normalizedInvoiceId)}`);
+  const nowTimestamp = Timestamp.fromDate(now);
+  return db.runTransaction(async tx => {
+    const [eventSnap, orderSnap] = await Promise.all([tx.get(eventRef), tx.get(orderRef)]);
+    if (eventSnap.exists) return { duplicate: true, invoiceId: normalizedInvoiceId };
+    if (!orderSnap.exists) throw fail(404, 'order_not_found');
+    const order = orderSnap.data() || {};
+    if (
+      order.provider !== 'robokassa' ||
+      order.provider_invoice_id !== normalizedInvoiceId ||
+      order.status !== 'pending'
+    ) {
+      throw fail(409, 'order_mismatch');
+    }
+    const customerRef = db.collection('billing_customers').doc(order.uid);
+    const customerSnap = await tx.get(customerRef);
+    const customer = customerSnap.exists ? (customerSnap.data() || {}) : {};
+    tx.create(eventRef, {
+      provider: 'robokassa',
+      type: stateCode === 10 ? 'payment_cancelled' : 'payment_reversed_before_settlement',
+      provider_invoice_id: normalizedInvoiceId,
+      order_id: normalizedInvoiceId,
+      provider_state_code: stateCode,
+      received_at: nowTimestamp,
+      processed_at: nowTimestamp,
+    });
+    tx.update(orderRef, {
+      status: 'failed',
+      provider_state_code: stateCode,
+      failed_at: nowTimestamp,
+      updated_at: nowTimestamp,
+    });
+    if (customer.open_order_id === normalizedInvoiceId) {
+      tx.set(customerRef, {
+        open_order_id: null,
+        open_order_expires_at: null,
+        updated_at: nowTimestamp,
+      }, { merge: true });
+    }
+    return { duplicate: false, invoiceId: normalizedInvoiceId };
+  });
+}
+
+export async function applyRobokassaReversal({
+  db,
+  invoiceId,
+  providerState = 60,
+  now,
+}) {
+  const normalizedInvoiceId = String(invoiceId);
+  const stateCode = Number(providerState);
+  if (stateCode !== 60) throw fail(400, 'invalid_provider_state');
+  const suffix = sha(normalizedInvoiceId);
+  const orderRef = db.collection('billing_orders').doc(normalizedInvoiceId);
+  const eventRef = db.collection('billing_events').doc(`robokassa__reversal__${suffix}`);
+  const paymentRef = db.collection('billing_payments').doc(`robokassa__${suffix}`);
+  const ledgerRef = db.collection('billing_ledger').doc(`robokassa__${suffix}__reversal`);
+  const nowTimestamp = Timestamp.fromDate(now);
+
+  return db.runTransaction(async tx => {
+    const [eventSnap, orderSnap, paymentSnap] = await Promise.all([
+      tx.get(eventRef), tx.get(orderRef), tx.get(paymentRef),
+    ]);
+    if (eventSnap.exists) return { duplicate: true, invoiceId: normalizedInvoiceId };
+    if (!orderSnap.exists || !paymentSnap.exists) throw fail(404, 'payment_not_found');
+    const order = orderSnap.data() || {};
+    const payment = paymentSnap.data() || {};
+    if (
+      order.provider !== 'robokassa' ||
+      order.provider_invoice_id !== normalizedInvoiceId ||
+      order.status !== 'succeeded' ||
+      payment.status !== 'succeeded' ||
+      payment.order_id !== normalizedInvoiceId ||
+      payment.amount_minor !== order.amount_minor
+    ) {
+      throw fail(409, 'payment_mismatch');
+    }
+
+    const entitlementRef = db.collection('account_entitlements').doc(order.uid);
+    const entitlementSnap = await tx.get(entitlementRef);
+    const rawEntitlement = entitlementSnap.exists ? (entitlementSnap.data() || {}) : {};
+    const current = normalizeEntitlement(rawEntitlement, { now });
+    const currentEnd = timestampMillis(rawEntitlement.access_until);
+    const currentStart = timestampMillis(rawEntitlement.valid_from);
+    const orderEnd = timestampMillis(order.period_end);
+    const periodMillis = order.period_days * 24 * 60 * 60 * 1000;
+    const affectsCurrentWindow =
+      current.active &&
+      rawEntitlement.source === 'billing' &&
+      current.plan_id === order.plan_id &&
+      orderEnd > currentStart &&
+      Number.isSafeInteger(periodMillis) &&
+      periodMillis > 0;
+
+    let entitlementActive = current.active;
+    let entitlementEnd = currentEnd;
+    if (affectsCurrentWindow) {
+      entitlementEnd = Math.max(now.getTime(), currentEnd - periodMillis);
+      entitlementActive = entitlementEnd > now.getTime();
+      const entitlementVersion = safeVersion(current.entitlement_version) + 1;
+      const capabilities = capabilitiesForPlan(entitlementActive ? order.plan_id : 'free');
+      tx.set(entitlementRef, {
+        uid: order.uid,
+        schema_version: 1,
+        plan_id: order.plan_id,
+        tier: entitlementActive ? { ad_free: 1, plus: 2, sponsor: 3 }[order.plan_id] : 0,
+        status: entitlementActive ? 'active' : 'refunded',
+        valid_from: rawEntitlement.valid_from || nowTimestamp,
+        access_until: Timestamp.fromMillis(entitlementEnd),
+        grace_until: null,
+        revoked_at: entitlementActive ? null : nowTimestamp,
+        cancel_at_period_end: false,
+        capabilities,
+        entitlement_version: entitlementVersion,
+        source: 'billing',
+        latest_order_id: null,
+        updated_at: nowTimestamp,
+      });
+      tx.set(db.collection('user_public_perks').doc(order.uid), {
+        subscriber_badge: entitlementActive,
+        sponsor_badge: entitlementActive && order.plan_id === 'sponsor',
+        sponsor_until: entitlementActive && order.plan_id === 'sponsor'
+          ? Timestamp.fromMillis(entitlementEnd)
+          : null,
+        updated_at: nowTimestamp,
+      }, { merge: true });
+    }
+
+    tx.create(eventRef, {
+      provider: 'robokassa',
+      type: 'payment_reversed',
+      provider_invoice_id: normalizedInvoiceId,
+      order_id: normalizedInvoiceId,
+      amount_minor: order.amount_minor,
+      currency: order.currency,
+      provider_state_code: stateCode,
+      received_at: nowTimestamp,
+      processed_at: nowTimestamp,
+    });
+    tx.update(paymentRef, {
+      status: 'reversed',
+      reversed_at: nowTimestamp,
+      updated_at: nowTimestamp,
+    });
+    tx.create(ledgerRef, {
+      provider: 'robokassa',
+      operation: 'reversal',
+      provider_transaction_id: normalizedInvoiceId,
+      order_id: normalizedInvoiceId,
+      uid: order.uid,
+      amount_minor: -order.amount_minor,
+      currency: order.currency,
+      occurred_at: nowTimestamp,
+      immutable: true,
+    });
+    tx.update(orderRef, {
+      status: 'reversed',
+      provider_state_code: stateCode,
+      reversed_at: nowTimestamp,
+      updated_at: nowTimestamp,
+    });
+    const day = now.toISOString().slice(0, 10);
+    tx.set(db.collection('subscription_stats').doc('overview'), {
+      reversals_total: FieldValue.increment(1),
+      reversals_minor: FieldValue.increment(order.amount_minor),
+      net_minor: FieldValue.increment(-order.amount_minor),
+      updated_at: nowTimestamp,
+    }, { merge: true });
+    tx.set(db.collection('subscription_stats_daily').doc(day), {
+      reversals: FieldValue.increment(1),
+      reversals_minor: FieldValue.increment(order.amount_minor),
+      net_minor: FieldValue.increment(-order.amount_minor),
+      currency: order.currency,
+      updated_at: nowTimestamp,
+    }, { merge: true });
+    return {
+      duplicate: false,
+      invoiceId: normalizedInvoiceId,
+      entitlementAdjusted: affectsCurrentWindow,
+      entitlementActive,
+    };
   });
 }
 

@@ -58,7 +58,7 @@ function shpSuffix(shp = {}) {
     .join('');
 }
 
-export function buildRobokassaCheckout({ config, plan, invoiceId }) {
+export function buildRobokassaCheckout({ config, plan, invoiceId, expiresAt = null }) {
   const outSum = amountMinorToOutSum(plan.amount_minor);
   const receipt = JSON.stringify({
     items: [{
@@ -84,6 +84,9 @@ export function buildRobokassaCheckout({ config, plan, invoiceId }) {
     Receipt: encodedReceipt,
     ...shp,
   });
+  if (expiresAt instanceof Date && Number.isFinite(expiresAt.getTime())) {
+    params.set('ExpirationDate', expiresAt.toISOString().slice(0, 16));
+  }
   if (config.testMode) params.set('IsTest', '1');
   return {
     checkout_url: `https://auth.robokassa.ru/Merchant/Index.aspx?${params}`,
@@ -112,4 +115,110 @@ export function verifyRobokassaResult({ config, payload }) {
     out_sum: outSum,
     shp,
   };
+}
+
+function decodeXmlText(value) {
+  return String(value ?? '')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&amp;', '&')
+    .trim();
+}
+
+function xmlTag(xml, tag) {
+  const match = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i').exec(xml);
+  return match ? decodeXmlText(match[1].replace(/<[^>]*>/g, '')) : '';
+}
+
+export function buildRobokassaOpStateUrl({ config, invoiceId }) {
+  const normalizedInvoiceId = String(invoiceId ?? '').trim();
+  if (!/^\d{1,19}$/.test(normalizedInvoiceId)) {
+    throw Object.assign(new Error('invalid_invoice_id'), { status: 400 });
+  }
+  const signature = digest(
+    `${config.merchantLogin}:${normalizedInvoiceId}:${config.password2}`,
+    config.algorithm,
+  );
+  const params = new URLSearchParams({
+    MerchantLogin: config.merchantLogin,
+    InvoiceID: normalizedInvoiceId,
+    Signature: signature,
+  });
+  return `https://auth.robokassa.ru/Merchant/WebService/Service.asmx/OpStateExt?${params}`;
+}
+
+export function parseRobokassaOpStateXml(xmlValue) {
+  const xml = String(xmlValue ?? '');
+  if (!xml || xml.length > 256 * 1024) {
+    throw Object.assign(new Error('invalid_provider_response'), { status: 502 });
+  }
+  const resultBlock = /<Result(?:\s[^>]*)?>([\s\S]*?)<\/Result>/i.exec(xml)?.[1] ?? '';
+  const resultCode = Number(xmlTag(resultBlock, 'Code'));
+  if (!Number.isSafeInteger(resultCode) || resultCode < 0) {
+    throw Object.assign(new Error('invalid_provider_response'), { status: 502 });
+  }
+  if (resultCode !== 0) {
+    return Object.freeze({ result_code: resultCode, state_code: null });
+  }
+  const stateBlock = /<State(?:\s[^>]*)?>([\s\S]*?)<\/State>/i.exec(xml)?.[1] ?? '';
+  const infoBlock = /<Info(?:\s[^>]*)?>([\s\S]*?)<\/Info>/i.exec(xml)?.[1] ?? '';
+  const stateCode = Number(xmlTag(stateBlock, 'Code'));
+  if (![5, 10, 20, 50, 60, 80, 100].includes(stateCode)) {
+    throw Object.assign(new Error('invalid_provider_response'), { status: 502 });
+  }
+  const userFields = {};
+  const userFieldsBlock = /<UserFields(?:\s[^>]*)?>([\s\S]*?)<\/UserFields>/i.exec(xml)?.[1] ?? '';
+  for (const fieldMatch of userFieldsBlock.matchAll(/<Field(?:\s[^>]*)?>([\s\S]*?)<\/Field>/gi)) {
+    const name = xmlTag(fieldMatch[1], 'Name');
+    if (/^Shp_[A-Za-z0-9_]{1,40}$/.test(name)) {
+      userFields[name] = xmlTag(fieldMatch[1], 'Value').slice(0, 200);
+    }
+  }
+  const outSum = xmlTag(infoBlock, 'OutSum');
+  return Object.freeze({
+    result_code: resultCode,
+    state_code: stateCode,
+    out_sum: outSum,
+    amount_minor: outSum ? outSumToAmountMinor(outSum) : null,
+    op_key: xmlTag(infoBlock, 'OpKey').slice(0, 200),
+    payment_method: xmlTag(
+      /<PaymentMethod(?:\s[^>]*)?>([\s\S]*?)<\/PaymentMethod>/i.exec(infoBlock)?.[1] ?? '',
+      'Code',
+    ).slice(0, 60),
+    shp: Object.freeze(userFields),
+  });
+}
+
+export async function fetchRobokassaOpState({
+  config,
+  invoiceId,
+  fetchImpl = fetch,
+  timeoutMs = 10_000,
+}) {
+  if (config.testMode) {
+    throw Object.assign(new Error('reconciliation_unavailable_in_test_mode'), { status: 503 });
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(buildRobokassaOpStateUrl({ config, invoiceId }), {
+      method: 'GET',
+      headers: { Accept: 'application/xml, text/xml' },
+      redirect: 'error',
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw Object.assign(new Error('provider_unavailable'), { status: 502 });
+    }
+    return parseRobokassaOpStateXml(await response.text());
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw Object.assign(new Error('provider_timeout'), { status: 504 });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }

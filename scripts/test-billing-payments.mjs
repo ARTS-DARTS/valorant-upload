@@ -5,13 +5,19 @@ import { capabilitiesForPlan } from '../api/_lib/billing/entitlements.js';
 import { parseBillingCatalog, publicBillingCatalog } from '../api/_lib/billing/catalog.js';
 import {
   amountMinorToOutSum,
+  buildRobokassaOpStateUrl,
   buildRobokassaCheckout,
   digest,
   outSumToAmountMinor,
+  parseRobokassaOpStateXml,
   verifyRobokassaResult,
 } from '../api/_lib/billing/robokassa.js';
 import { createBillingCheckoutHandler, createCheckout } from '../api/billing-checkout.js';
-import { applyRobokassaPayment } from '../api/billing-webhook-robokassa.js';
+import { reconcileRobokassaOrder } from '../api/billing-reconcile-robokassa.js';
+import {
+  applyRobokassaPayment,
+  applyRobokassaReversal,
+} from '../api/billing-webhook-robokassa.js';
 
 const now = new Date('2026-07-30T12:00:00.000Z');
 const provider = Object.freeze({
@@ -121,6 +127,38 @@ test('checkout signs the encoded receipt and ResultURL uses password 2', () => {
   }), null);
 });
 
+test('OpStateExt request and namespaced XML bind state to the canonical order', () => {
+  const url = new URL(buildRobokassaOpStateUrl({ config: provider, invoiceId: '700000' }));
+  assert.equal(url.searchParams.get('MerchantLogin'), 'merchant');
+  assert.equal(url.searchParams.get('InvoiceID'), '700000');
+  assert.equal(
+    url.searchParams.get('Signature'),
+    digest('merchant:700000:password-two', 'sha256'),
+  );
+  const state = parseRobokassaOpStateXml(`<?xml version="1.0"?>
+    <OperationStateResponse xmlns="http://merchant.roboxchange.com/WebService/">
+      <Result><Code>0</Code></Result>
+      <State><Code>100</Code></State>
+      <Info>
+        <OutSum>499.000000</OutSum>
+        <OpKey>operation-key</OpKey>
+        <PaymentMethod><Code>BankCard</Code></PaymentMethod>
+      </Info>
+      <UserFields>
+        <Field><Name>Shp_order</Name><Value>700000</Value></Field>
+      </UserFields>
+    </OperationStateResponse>`);
+  assert.equal(state.state_code, 100);
+  assert.equal(state.amount_minor, 49900);
+  assert.equal(state.op_key, 'operation-key');
+  assert.equal(state.payment_method, 'BankCard');
+  assert.equal(state.shp.Shp_order, '700000');
+  assert.deepEqual(
+    parseRobokassaOpStateXml('<x><Result><Code>3</Code></Result></x>'),
+    { result_code: 3, state_code: null },
+  );
+});
+
 test('checkout idempotency creates exactly one server-priced order', async () => {
   const db = new MemoryDb();
   const input = { planId: 'sponsor', period: 'P30D', termsVersion: '2026-08-01' };
@@ -135,6 +173,19 @@ test('checkout idempotency creates exactly one server-priced order', async () =>
   assert.equal(second.reused, true);
   assert.equal(db.docs.get('billing_orders/700000').amount_minor, 49900);
   assert.equal(db.docs.get('billing_sequences/robokassa').last_invoice_id, 700000);
+  assert.equal(
+    new URL(first.checkout_url).searchParams.get('ExpirationDate'),
+    '2026-07-30T12:30',
+  );
+  await assert.rejects(createCheckout({
+    db,
+    uid: 'user-1',
+    input,
+    idempotencyKey: 'different_key_1234',
+    catalog,
+    provider,
+    now,
+  }), error => error?.status === 409 && error?.message === 'checkout_in_progress');
 });
 
 test('verified payment writes one ledger entry and one bounded entitlement', async () => {
@@ -176,6 +227,116 @@ test('valid provider signature still cannot override canonical order amount', as
     now,
   }), error => error?.status === 409 && error?.message === 'order_mismatch');
   assert.equal(db.docs.has('account_entitlements/user-1'), false);
+});
+
+test('a late conflicting plan payment is audited without replacing active rights', async () => {
+  const db = new MemoryDb({
+    'billing_orders/700000': {
+      uid: 'user-1', provider: 'robokassa', provider_invoice_id: '700000', status: 'pending',
+      plan_id: 'plus', period: 'P30D', period_days: 30, amount_minor: 29900,
+      currency: 'RUB', test_mode: true,
+    },
+    'billing_customers/user-1': {
+      uid: 'user-1', open_order_id: '700000',
+      open_order_expires_at: new Date('2026-07-30T12:30:00.000Z'),
+    },
+    'account_entitlements/user-1': {
+      uid: 'user-1', schema_version: 1, plan_id: 'sponsor', tier: 3, status: 'active',
+      valid_from: new Date('2026-07-01T00:00:00.000Z'),
+      access_until: new Date('2026-08-15T00:00:00.000Z'),
+      grace_until: null, revoked_at: null,
+      capabilities: capabilitiesForPlan('sponsor'), entitlement_version: 4, source: 'billing',
+    },
+  });
+  const result = await applyRobokassaPayment({
+    db,
+    verified: {
+      invoice_id: '700000', amount_minor: 29900, out_sum: '299.00',
+      shp: { Shp_order: '700000' },
+    },
+    provider,
+    now,
+  });
+  assert.equal(result.requiresReview, true);
+  assert.equal(db.docs.get('billing_orders/700000').status, 'requires_review');
+  assert.equal(db.docs.get('account_entitlements/user-1').plan_id, 'sponsor');
+  assert.equal(db.docs.get('account_entitlements/user-1').entitlement_version, 4);
+  assert.equal(db.docs.get('billing_customers/user-1').open_order_id, null);
+  const payment = [...db.docs.entries()]
+    .find(([key]) => key.startsWith('billing_payments/'))?.[1];
+  assert.equal(payment.status, 'requires_review');
+});
+
+test('reconciliation restores a missed verified payment but rejects order mismatch', async () => {
+  const order = {
+    uid: 'user-1', provider: 'robokassa', provider_invoice_id: '700000', status: 'pending',
+    plan_id: 'sponsor', period: 'P30D', period_days: 30, amount_minor: 49900,
+    currency: 'RUB', test_mode: false,
+  };
+  const productionProvider = { ...provider, testMode: false };
+  const db = new MemoryDb({ 'billing_orders/700000': order });
+  const paid = await reconcileRobokassaOrder({
+    db,
+    order,
+    provider: productionProvider,
+    now,
+    providerState: {
+      result_code: 0, state_code: 100, amount_minor: 49900, out_sum: '499.000000',
+      op_key: 'operation-key', payment_method: 'BankCard', shp: { Shp_order: '700000' },
+    },
+  });
+  assert.equal(paid.action, 'paid');
+  assert.equal(db.docs.get('billing_payments/robokassa__bbce68c972781f645c57245c19d0e0c5990e221ac9a1e70afbadd82609c87fce').provider_operation_key, 'operation-key');
+
+  const mismatchDb = new MemoryDb({ 'billing_orders/700000': order });
+  const mismatch = await reconcileRobokassaOrder({
+    db: mismatchDb,
+    order,
+    provider: productionProvider,
+    now,
+    providerState: {
+      result_code: 0, state_code: 100, amount_minor: 100, out_sum: '1.00',
+      shp: { Shp_order: '700000' },
+    },
+  });
+  assert.equal(mismatch.action, 'mismatch');
+  assert.equal(mismatchDb.docs.has('account_entitlements/user-1'), false);
+});
+
+test('a verified reversal is idempotent and removes only its 30-day access window', async () => {
+  const paymentTime = new Date('2026-07-20T12:00:00.000Z');
+  const periodEnd = new Date('2026-09-18T12:00:00.000Z');
+  const hash = 'bbce68c972781f645c57245c19d0e0c5990e221ac9a1e70afbadd82609c87fce';
+  const db = new MemoryDb({
+    'billing_orders/700000': {
+      uid: 'user-1', provider: 'robokassa', provider_invoice_id: '700000', status: 'succeeded',
+      plan_id: 'sponsor', period: 'P30D', period_days: 30, amount_minor: 49900,
+      currency: 'RUB', test_mode: false, period_end: periodEnd,
+    },
+    [`billing_payments/robokassa__${hash}`]: {
+      order_id: '700000', status: 'succeeded', amount_minor: 49900,
+    },
+    'account_entitlements/user-1': {
+      uid: 'user-1', schema_version: 1, plan_id: 'sponsor', tier: 3, status: 'active',
+      valid_from: paymentTime, access_until: periodEnd, grace_until: null, revoked_at: null,
+      capabilities: capabilitiesForPlan('sponsor'), entitlement_version: 2, source: 'billing',
+    },
+  });
+  const first = await applyRobokassaReversal({
+    db, invoiceId: '700000', providerState: 60, now,
+  });
+  const duplicate = await applyRobokassaReversal({
+    db, invoiceId: '700000', providerState: 60, now,
+  });
+  assert.equal(first.entitlementAdjusted, true);
+  assert.equal(first.entitlementActive, true);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(
+    db.docs.get('account_entitlements/user-1').access_until.toDate().toISOString(),
+    '2026-08-19T12:00:00.000Z',
+  );
+  assert.equal(db.docs.get(`billing_ledger/robokassa__${hash}__reversal`).amount_minor, -49900);
+  assert.equal(db.docs.get('billing_orders/700000').status, 'reversed');
 });
 
 test('checkout bounds authentication time and releases pre-auth capacity', async () => {

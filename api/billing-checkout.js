@@ -12,12 +12,18 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9_-]{16,96}$/;
 const ALLOWED_ORIGINS = new Set(['https://vlineups.ru', 'https://www.vlineups.ru', 'http://localhost:3000']);
 const AUTH_TIMEOUT_MS = 10_000;
 const RATE_MAX_KEYS = 10_000;
+const CHECKOUT_TTL_MS = 30 * 60 * 1000;
 const preAuthLimiter = createPreAuthLimiter({ requestLimit: 30, globalConcurrencyLimit: 32 });
 const uidWindows = new Map();
 
 function fail(status, code) { return Object.assign(new Error(code), { status }); }
 function clean(value) { return String(value ?? '').trim(); }
 function sha(value) { return createHash('sha256').update(value).digest('hex'); }
+function timestampMillis(value) {
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  return 0;
+}
 
 async function authorize(req, verifyIdToken, timeoutMs = AUTH_TIMEOUT_MS) {
   const header = clean(req.headers.authorization);
@@ -58,11 +64,12 @@ export async function createCheckout({ db, uid, input, idempotencyKey, catalog, 
   const bodyHash = sha(JSON.stringify(input));
   const intentRef = db.collection('billing_checkout_intents').doc(sha(`${uid}\0${idempotencyKey}`));
   const entitlementRef = db.collection('account_entitlements').doc(uid);
+  const customerRef = db.collection('billing_customers').doc(uid);
   const sequenceRef = db.collection('billing_sequences').doc('robokassa');
 
   return db.runTransaction(async tx => {
-    const [intentSnap, entitlementSnap, sequenceSnap] = await Promise.all([
-      tx.get(intentRef), tx.get(entitlementRef), tx.get(sequenceRef),
+    const [intentSnap, entitlementSnap, customerSnap, sequenceSnap] = await Promise.all([
+      tx.get(intentRef), tx.get(entitlementRef), tx.get(customerRef), tx.get(sequenceRef),
     ]);
     if (intentSnap.exists) {
       const intent = intentSnap.data() || {};
@@ -76,12 +83,23 @@ export async function createCheckout({ db, uid, input, idempotencyKey, catalog, 
     if (entitlement.active && entitlement.plan_id !== input.planId) {
       throw fail(409, 'plan_change_not_supported');
     }
+    const customer = customerSnap.exists ? (customerSnap.data() || {}) : {};
+    if (
+      typeof customer.open_order_id === 'string' &&
+      customer.open_order_id &&
+      timestampMillis(customer.open_order_expires_at) > now.getTime()
+    ) {
+      throw fail(409, 'checkout_in_progress');
+    }
     const previousInvoice = Number(sequenceSnap.data()?.last_invoice_id ?? (provider.invoiceStart - 1));
     if (!Number.isSafeInteger(previousInvoice) || previousInvoice < 0 || previousInvoice >= 9_007_199_254_740_000) {
       throw fail(503, 'billing_unavailable');
     }
     const invoiceId = previousInvoice + 1;
-    const payment = buildRobokassaCheckout({ config: provider, plan, invoiceId });
+    const checkoutExpiresAt = new Date(now.getTime() + CHECKOUT_TTL_MS);
+    const payment = buildRobokassaCheckout({
+      config: provider, plan, invoiceId, expiresAt: checkoutExpiresAt,
+    });
     const orderRef = db.collection('billing_orders').doc(String(invoiceId));
     const createdAt = Timestamp.fromDate(now);
     const response = {
@@ -95,6 +113,12 @@ export async function createCheckout({ db, uid, input, idempotencyKey, catalog, 
       terms_version: catalog.terms_version,
     };
     tx.set(sequenceRef, { last_invoice_id: invoiceId, updated_at: createdAt }, { merge: true });
+    tx.set(customerRef, {
+      uid,
+      open_order_id: String(invoiceId),
+      open_order_expires_at: Timestamp.fromDate(checkoutExpiresAt),
+      updated_at: createdAt,
+    }, { merge: true });
     tx.create(orderRef, {
       uid,
       provider: 'robokassa',
@@ -110,6 +134,7 @@ export async function createCheckout({ db, uid, input, idempotencyKey, catalog, 
       receipt_name: plan.receipt_name,
       tax: plan.tax,
       test_mode: provider.testMode,
+      expires_at: Timestamp.fromDate(checkoutExpiresAt),
       created_at: createdAt,
       updated_at: createdAt,
     });
@@ -120,7 +145,7 @@ export async function createCheckout({ db, uid, input, idempotencyKey, catalog, 
       status: 'pending',
       response,
       created_at: createdAt,
-      expires_at: Timestamp.fromMillis(now.getTime() + 24 * 60 * 60 * 1000),
+      expires_at: Timestamp.fromDate(checkoutExpiresAt),
     });
     return { ...response, reused: false };
   });

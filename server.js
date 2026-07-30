@@ -22,6 +22,7 @@ import engagementHandler from './api/engagement.js';
 import billingPlansHandler from './api/billing-plans.js';
 import billingCheckoutHandler from './api/billing-checkout.js';
 import robokassaWebhookHandler from './api/billing-webhook-robokassa.js';
+import robokassaReconciliationHandler from './api/billing-reconcile-robokassa.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +57,7 @@ app.post(
   express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 50 }),
   robokassaWebhookHandler,
 );
+app.post('/api/internal/billing/reconcile/robokassa', robokassaReconciliationHandler);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
