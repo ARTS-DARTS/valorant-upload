@@ -248,6 +248,9 @@ const agentCategoryAvailability = new Map();
 const agentCategoryLoadPromises = new Map();
 const agentCategoryAbilityConfigs = new Map();
 let uploadCategoryAccessUnsub = null;
+let uploadConfigVersionsUnsub = null;
+let uploadAbilityConfigVersion = '';
+let agentCategoryConfigGeneration = 0;
 let uploadCategoryAccessReady = false;
 
 function uploadCategoryFlag(category) {
@@ -357,15 +360,6 @@ function watchUploadCategoryAccess(reference, initialSnapshot) {
 
 function agentConfigId(name) { return String(name || '').replaceAll('/', '_'); }
 
-function categoryAbilityEnabled(agent, stored = {}) {
-  const abilities = (agent?.abilities || []).filter(ab => ab.displayIcon && ab.slot !== 'Passive');
-  if (!abilities.length) return false;
-  return abilities.some(ab => {
-    const normalized = normalizeAbilityName(agent.displayName, ab.displayName, ab.slot);
-    return stored[normalized] !== false && stored[ab.displayName] !== false;
-  });
-}
-
 function agentAbilityEnabled(agent, ability, category = selectedCategory) {
   const normalizedCategory = normalizeContentCategory(category);
   const stored = agentCategoryAbilityConfigs.get(`${normalizedCategory}|${agent?.displayName || ''}`);
@@ -374,22 +368,33 @@ function agentAbilityEnabled(agent, ability, category = selectedCategory) {
   return stored[normalizedAbility] !== false && stored[ability.displayName] !== false;
 }
 
-function loadAgentCategoryAvailability(category = selectedCategory) {
+function loadAgentCategoryAvailability(category = selectedCategory, { force = false } = {}) {
   const normalized = normalizeContentCategory(category);
   if (!normalized || normalized === 'wallbang') return Promise.resolve();
+  if (force) {
+    agentCategoryAvailability.delete(normalized);
+    for (const key of agentCategoryAbilityConfigs.keys()) {
+      if (key.startsWith(`${normalized}|`)) agentCategoryAbilityConfigs.delete(key);
+    }
+  }
   if (agentCategoryAvailability.has(normalized)) return Promise.resolve();
   if (agentCategoryLoadPromises.has(normalized)) return agentCategoryLoadPromises.get(normalized);
+  const generation = agentCategoryConfigGeneration;
   const promise = Promise.all(agentsList.map(async agent => {
     let snap = await getDoc(doc(db, 'agents_config', agentConfigId(agent.displayName), 'categories', `${normalized}__site`));
     if (!snap.exists()) snap = await getDoc(doc(db, 'agents_config', agentConfigId(agent.displayName), 'categories', normalized));
     const data = snap.exists() ? snap.data() : {};
     const abilities = data.abilities || {};
-    agentCategoryAbilityConfigs.set(`${normalized}|${agent.displayName}`, abilities);
-    return [agent.displayName, data.visible !== false && categoryAbilityEnabled(agent, abilities)];
+    return [agent.displayName, data.visible !== false, abilities];
   })).then(entries => {
-    agentCategoryAvailability.set(normalized, new Map(entries));
+    if (generation !== agentCategoryConfigGeneration) return;
+    const availabilityEntries = entries.map(([name, enabled]) => [name, enabled]);
+    entries.forEach(([name, , abilities]) => {
+      agentCategoryAbilityConfigs.set(`${normalized}|${name}`, abilities);
+    });
+    agentCategoryAvailability.set(normalized, new Map(availabilityEntries));
     if (normalizeContentCategory(selectedCategory) !== normalized) return;
-    const selectedStillAllowed = !selectedAgent || entries.some(([name, enabled]) => name === selectedAgent && enabled);
+    const selectedStillAllowed = !selectedAgent || availabilityEntries.some(([name, enabled]) => name === selectedAgent && enabled);
     if (!selectedStillAllowed) {
       selectedAgent = null;
       selectedAbility = null;
@@ -399,9 +404,38 @@ function loadAgentCategoryAvailability(category = selectedCategory) {
     validateForm();
   }).catch(error => {
     console.warn('agent category config', normalized, error);
-  }).finally(() => agentCategoryLoadPromises.delete(normalized));
+  }).finally(() => {
+    if (agentCategoryLoadPromises.get(normalized) === promise) {
+      agentCategoryLoadPromises.delete(normalized);
+    }
+  });
   agentCategoryLoadPromises.set(normalized, promise);
   return promise;
+}
+
+function watchUploadConfigVersions(reference, initialData = {}) {
+  uploadConfigVersionsUnsub?.();
+  uploadConfigVersionsUnsub = null;
+  uploadAbilityConfigVersion = String(initialData.ability_config || '');
+  uploadConfigVersionsUnsub = onSnapshot(
+    reference,
+    snapshot => {
+      const nextVersion = String(snapshot.data()?.ability_config || '');
+      if (nextVersion === uploadAbilityConfigVersion) return;
+      uploadAbilityConfigVersion = nextVersion;
+      agentCategoryConfigGeneration += 1;
+      agentCategoryAvailability.clear();
+      agentCategoryAbilityConfigs.clear();
+      agentCategoryLoadPromises.clear();
+      const activeCategory = normalizeContentCategory(selectedCategory);
+      if (!activeCategory || activeCategory === 'wallbang' || !agentsList.length) {
+        renderAgentsGrid();
+        return;
+      }
+      loadAgentCategoryAvailability(activeCategory, { force: true });
+    },
+    error => console.warn('watchUploadConfigVersions', error.message),
+  );
 }
 
 function selectedWallbangWeapons() {
@@ -1532,8 +1566,10 @@ async function loadUploadCategoryConfig() {
   let cached = {};
   try { cached = JSON.parse(localStorage.getItem(UPLOAD_CONFIG_CACHE_KEY) || '{}') || {}; } catch (_) {}
   try {
-    const versionsSnap = await getDoc(doc(db, 'settings', 'config_versions'));
+    const versionsReference = doc(db, 'settings', 'config_versions');
+    const versionsSnap = await getDoc(versionsReference);
     const versions = versionsSnap.exists() ? versionsSnap.data() : {};
+    watchUploadConfigVersions(versionsReference, versions);
     const weaponVersion = String(versions.weapon_whitelist || '');
     const defenseVersion = String(versions.defense_agents || '');
     const useCachedWeapons = weaponVersion && cached.weaponVersion === weaponVersion && Array.isArray(cached.weapons);
@@ -4353,6 +4389,11 @@ onAuthStateChanged(auth, async user => {
     updateUploadGate();
     _unsubscribeUserProfile();
     _unsubscribeStats();
+    uploadCategoryAccessUnsub?.();
+    uploadCategoryAccessUnsub = null;
+    uploadConfigVersionsUnsub?.();
+    uploadConfigVersionsUnsub = null;
+    uploadAbilityConfigVersion = '';
     adminChatUnsub?.();
     adminChatUnsub = null;
     adminChatItems = [];
