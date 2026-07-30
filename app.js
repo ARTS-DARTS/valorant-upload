@@ -3539,7 +3539,7 @@ document.getElementById('admin-chat-form')?.addEventListener('submit', async eve
   const existing = await getDoc(ref);
   if (existing.exists()) {
     if (!isMainAdminChat(activeAdminChatId) && existing.data()?.status === 'closed') return;
-    await updateDoc(ref, { thread:arrayUnion(message), admin_unread:true, user_unread:false, last_from:'user', status:'open' });
+    await updateDoc(ref, { thread:arrayUnion(message), admin_unread:true, user_unread:false, reply_read:true, user_read_at:serverTimestamp(), last_from:'user', status:'open' });
   } else {
     await setDoc(ref, { text, category:'Чат с администрацией', username:profileName, user_id:currentUser.uid, is_read:false, reply:null, reply_read:null, created_at:serverTimestamp() });
   }
