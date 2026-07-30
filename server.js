@@ -13,6 +13,7 @@ import moderatorApplicationHandler from './api/moderator-application.js';
 import moderationHandler from './api/moderation.js';
 import sitePresenceHandler from './api/site-presence.js';
 import siteVersionHandler from './api/site-version.js';
+import appVersionHandler from './api/app-version.js';
 import pushConfigHandler from './api/push-config.js';
 import { notifySiteUpdateOnce } from './api/site-update-notifier.js';
 import { finalizeExpiredDuels } from './api/duel-finalizer.js';
@@ -102,6 +103,7 @@ app.all('/api/moderator-application', moderatorApplicationHandler);
 app.all('/api/moderation', moderationHandler);
 app.all('/api/site-presence', sitePresenceHandler);
 app.all('/api/site-version', siteVersionHandler);
+app.all('/api/app-version', appVersionHandler);
 app.all('/api/push-config', pushConfigHandler);
 
 app.get(['/lineups', '/lineups/'], (req, res) => {
