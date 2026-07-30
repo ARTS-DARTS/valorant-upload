@@ -1,4 +1,6 @@
 {
+  "name": "valorant-upload",
+  "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.js",
@@ -9,8 +11,12 @@
     "moderation:clear-locks": "node scripts/clear-moderation-locks.mjs"
   },
   "dependencies": {
+    "@google-cloud/firestore": "^8.7.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "firebase-admin": "^14.1.0"
+  },
+  "overrides": {
+    "rimraf": "^6.1.3"
   }
 }

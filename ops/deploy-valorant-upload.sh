@@ -164,7 +164,7 @@ ensure_release() {
   git -C "$CONTROL_DIR" archive "$remote_sha" | tar -x -C "$candidate_dir"
   (
     cd "$candidate_dir"
-    npm ci
+    npm ci --omit=optional
     npm run check
     npm run test:billing --if-present
   )
