@@ -25,7 +25,7 @@ const functions = getFunctions(app, 'us-central1');
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-30-create-feedback-v1';
+const SITE_VERSION = '2026-07-30-site-sections-v1';
 const SITE_VERSION_POLL_MS = 10 * 1000;
 let loadedServerDeploymentVersion = '';
 const EDITOR_MAX_ZOOM = 2.2;
@@ -3018,12 +3018,34 @@ function switchWorkspaceTab(tab) {
   document.querySelectorAll('.workspace-panel').forEach(panel => {
     panel.classList.toggle('active', panel.id === `workspace-${activeWorkspaceTab}`);
   });
+  document.getElementById('header-moderation')?.classList.toggle('active', activeWorkspaceTab === 'moderation');
   if (activeWorkspaceTab === 'materials') loadAuthorMaterials();
   if (activeWorkspaceTab === 'moderation') loadModerationWorkspace();
   if (activeWorkspaceTab === 'admin-chat') openAdminChat();
   if (activeWorkspaceTab === 'notifications') renderSiteNotifications();
   renderAuthorWorkspace();
 }
+
+const MODERATION_MOVED_HINT_KEY = 'vl_moderation_moved_hint_20260730';
+
+function dismissModerationMovedHint() {
+  const hint = document.getElementById('moderation-moved-hint');
+  if (hint) hint.hidden = true;
+  localStorage.setItem(MODERATION_MOVED_HINT_KEY, '1');
+}
+
+function updateModerationMovedHint(canModerate) {
+  const hint = document.getElementById('moderation-moved-hint');
+  if (!hint) return;
+  hint.hidden = !canModerate || localStorage.getItem(MODERATION_MOVED_HINT_KEY) === '1';
+}
+
+document.getElementById('header-moderation')?.addEventListener('click', () => {
+  dismissModerationMovedHint();
+  switchWorkspaceTab('moderation');
+  document.getElementById('workspace-moderation')?.scrollIntoView({ behavior:'smooth', block:'start' });
+});
+document.getElementById('moderation-moved-close')?.addEventListener('click', dismissModerationMovedHint);
 
 function openNotificationsWorkspace({ behavior = 'smooth' } = {}) {
   switchWorkspaceTab('notifications');
@@ -3742,6 +3764,8 @@ function updateAdminOnlyWorkspace() {
   document.querySelectorAll('[data-moderator-only="true"]').forEach(el => {
     el.style.display = canModerate ? '' : 'none';
   });
+  document.getElementById('header-moderation')?.classList.toggle('active', canModerate && activeWorkspaceTab === 'moderation');
+  updateModerationMovedHint(canModerate);
   if (!canModerate && activeWorkspaceTab === 'moderation') switchWorkspaceTab('upload');
 }
 
