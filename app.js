@@ -956,7 +956,21 @@ function renderSageWallOptions() {
   });
   const count = document.getElementById('sage-wall-section-count');
   if (count) count.textContent = `${active.length} из 4 секций`;
+  const handlesToggle = document.getElementById('sage-wall-handles-toggle');
+  if (handlesToggle) {
+    handlesToggle.textContent = sageWallHandlesHidden ? 'Показать точки' : 'Скрыть точки';
+    handlesToggle.setAttribute('aria-pressed', String(sageWallHandlesHidden));
+  }
 }
+
+document.getElementById('sage-wall-handles-toggle')?.addEventListener('click', event => {
+  event.preventDefault();
+  event.stopPropagation();
+  sageWallHandlesHidden = !sageWallHandlesHidden;
+  renderSageWallOptions();
+  renderDefenseAbilityMarkers();
+  _saveDraft();
+});
 
 document.getElementById('sage-wall-options')?.addEventListener('click', event => {
   const button = event.target.closest('[data-wall-section]');
@@ -1172,7 +1186,8 @@ function renderDefenseAbilityMarkers() {
     const points = normalizedDefensePoints(item);
     const center = defenseAbilityCenter(item);
     const centerPos = mapPointToPercent(center);
-    const anchors = hasEndpoints ? points.map((point, pointIdx) => {
+    const hideWallAnchors = shapeKind === 'wall_sections' && sageWallHandlesHidden;
+    const anchors = hasEndpoints && !hideWallAnchors ? points.map((point, pointIdx) => {
       const pos = mapPointToPercent(point);
       const sensorRole = isSensor ? (pointIdx === 0 ? ' sensor-pivot' : ' sensor-rotate') : '';
       const title = isSensor ? (pointIdx === 0 ? 'Белая точка: переместить сенсор' : 'Красная точка: повернуть и изменить длину') : `Край ${pointIdx + 1}: ${item.ability}`;
@@ -2324,6 +2339,7 @@ let defenseAbilityDrag = null;
 let defenseLineDraft = null;
 let defenseLineJustCreated = false;
 let selectedDefenseMarkerIndex = null;
+let sageWallHandlesHidden = false;
 let mapMode = 'position';
 let videoUrl = null;
 let localVideoPreviewUrl = '';
@@ -8868,6 +8884,7 @@ function collectDraftData() {
     defenseNumber: defenseNumberValue(),
     defenseZoomArea,
     defenseAbilities,
+    sageWallHandlesHidden,
     videoUrl,
     videoEdit: videoUrl ? normalizedVideoEdit() : createDefaultVideoEdit(),
     screenshots: screenshots.filter(s => s.cloudUrl).map(s => s.cloudUrl),
@@ -9093,6 +9110,7 @@ function resetCategorySpecificData() {
   defenseAbilities = [];
   defenseLineDraft = null;
   defenseLineJustCreated = false;
+  sageWallHandlesHidden = false;
   mapMode = 'position';
   document.getElementById('abilities-row')?.querySelectorAll('.ability-btn').forEach(btn => btn.classList.remove('selected'));
   document.querySelectorAll('#wallbang-weapons input[type="checkbox"]').forEach(input => { input.checked = false; });
@@ -9184,6 +9202,7 @@ function _restoreDraft(sourceDraft = null) {
   resubmissionSourceId = d.resubmissionSourceId || '';
   moderatorDraftSourceId = d.moderatorDraftSourceId || '';
   moderatorSelectedAuthor = d.moderatorAuthor?.uid ? d.moderatorAuthor : null;
+  sageWallHandlesHidden = d.sageWallHandlesHidden === true;
   showModeratorAuthorPicker(moderatorSelectedAuthor);
   renderResubmissionBanner();
 
@@ -9822,6 +9841,7 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   defenseAbilities = [];
   defenseLineDraft = null;
   defenseLineJustCreated = false;
+  sageWallHandlesHidden = false;
   mapMode = 'position';
   videoUrl = retainedVideoUrl; videoEdit = retainedVideoEdit || createDefaultVideoEdit(); screenshots = [];
   if (!keepVideo) moderatorVideoRemovalRequested = false;
