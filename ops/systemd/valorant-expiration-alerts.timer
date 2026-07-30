@@ -1,0 +1,10 @@
+[Unit]
+Description=Check VLineups credential expirations daily
+
+[Timer]
+OnCalendar=*-*-* 09:15:00 Europe/Moscow
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

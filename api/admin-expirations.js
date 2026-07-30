@@ -113,6 +113,40 @@ function buildItem(item, metadata, automaticDate, env, now) {
   };
 }
 
+export async function buildExpirationSnapshot({
+  store,
+  env = process.env,
+  now = () => new Date(),
+  tlsProbe = () => probeTls('vlineups.ru'),
+  domainProbe = () => probeWhois('vlineups.ru'),
+} = {}) {
+  const [configSnap, tlsDate, domainDate] = await Promise.all([
+    store.collection('settings').doc('credential_expirations').get(),
+    tlsProbe(),
+    domainProbe(),
+  ]);
+  const metadata = configSnap.data()?.items || {};
+  const automatic = {
+    tls_vlineups:tlsDate ? new Date(tlsDate).toISOString() : null,
+    domain_vlineups:domainDate ? new Date(domainDate).toISOString() : null,
+  };
+  const checkedAt = now();
+  const items = CATALOG.map(item => buildItem(
+    item, metadata[item.id] || {}, automatic[item.id] || null, env, checkedAt,
+  )).sort((a, b) => {
+    const weight = { critical:0, expired:1, missing:2, warning:3, unknown:4, ok:5 };
+    return weight[a.status] - weight[b.status] || (a.days_left ?? 99999) - (b.days_left ?? 99999);
+  });
+  return {
+    checked_at:checkedAt.toISOString(),
+    counts:items.reduce((result, item) => {
+      result[item.status] = (result[item.status] || 0) + 1;
+      return result;
+    }, {}),
+    items,
+  };
+}
+
 export function createAdminExpirationsHandler({
   db = null,
   auth = null,
@@ -156,30 +190,9 @@ export function createAdminExpirationsHandler({
       } else if (req.method !== 'GET') {
         return res.status(405).json({ error:'method_not_allowed' });
       }
-      const [configSnap, tlsDate, domainDate] = await Promise.all([
-        configRef.get(),
-        tlsProbe(),
-        domainProbe(),
-      ]);
-      const metadata = configSnap.data()?.items || {};
-      const automatic = {
-        tls_vlineups:tlsDate ? new Date(tlsDate).toISOString() : null,
-        domain_vlineups:domainDate ? new Date(domainDate).toISOString() : null,
-      };
-      const items = CATALOG.map(item => buildItem(
-        item, metadata[item.id] || {}, automatic[item.id] || null, env, now(),
-      )).sort((a, b) => {
-        const weight = { critical:0, expired:1, missing:2, warning:3, unknown:4, ok:5 };
-        return weight[a.status] - weight[b.status] || (a.days_left ?? 99999) - (b.days_left ?? 99999);
-      });
-      return res.status(200).json({
-        checked_at:now().toISOString(),
-        counts:items.reduce((result, item) => {
-          result[item.status] = (result[item.status] || 0) + 1;
-          return result;
-        }, {}),
-        items,
-      });
+      return res.status(200).json(await buildExpirationSnapshot({
+        store, env, now, tlsProbe, domainProbe,
+      }));
     } catch (error) {
       const status = Number(error.status) || (String(error.code || '').startsWith('auth/') ? 401 : 500);
       if (status >= 500) console.error('admin-expirations error:', error);

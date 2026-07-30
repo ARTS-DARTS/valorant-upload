@@ -12,6 +12,11 @@ import {
   deletedSubjectId,
 } from '../api/account-delete.js';
 import { buildRobokassaTestScenarios } from './generate-robokassa-test-scenarios.mjs';
+import {
+  alertFingerprint,
+  buildAlertText,
+  runExpirationAlert,
+} from './notify-expirations-telegram.mjs';
 
 class Ref {
   constructor(db, path) { this.db = db; this.path = path; this.id = path.split('/').at(-1); }
@@ -256,6 +261,32 @@ test('legacy admin endpoints require Firebase admin authentication and exact ori
     assert.equal(accepted.statusCode, 400);
     assert.equal(accepted.headers.get('Access-Control-Allow-Origin'), 'https://arts-darts.github.io');
   }
+});
+
+test('expiration Telegram alert sends once per changed risk set without exposing secrets', async () => {
+  const db = new MemoryDb();
+  const sent = [];
+  const riskyItems = [
+    { id:'tls', name:'SSL', status:'warning', days_left:20, expires_at:'2026-08-19', configured:true },
+    { id:'key', name:'API key', status:'missing', days_left:null, expires_at:null, configured:false },
+    { id:'ok', name:'Domain', status:'ok', days_left:300, expires_at:'2027-05-26', configured:true },
+  ];
+  const options = {
+    db,
+    env:{ TELEGRAM_BOT_TOKEN:'secret-token', TELEGRAM_ALERT_CHAT_ID:'-100123' },
+    snapshotBuilder:async () => ({ items:riskyItems }),
+    sender:async (token, chatId, text) => sent.push({ token, chatId, text }),
+  };
+  const first = await runExpirationAlert(options);
+  const second = await runExpirationAlert(options);
+  assert.equal(first.sent, true);
+  assert.equal(second.sent, false);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /SSL/);
+  assert.match(sent[0].text, /API key/);
+  assert.doesNotMatch(sent[0].text, /Domain/);
+  assert.equal(alertFingerprint(riskyItems.slice(0, 2)), alertFingerprint([...riskyItems.slice(0, 2)].reverse()));
+  assert.match(buildAlertText(riskyItems.slice(0, 1)), /осталось 20 дн/);
 });
 
 test('admin billing paginates bounded orders and diagnoses stuck/review states', async () => {
