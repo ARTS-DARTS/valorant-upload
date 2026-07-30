@@ -53,8 +53,12 @@ probe_ready_once() {
   local payload
   payload=$(curl --fail --silent --show-error --max-time 3 "$READY_URL") || return 1
   node -e '
-    const payload = JSON.parse(process.argv[1]);
-    process.exit(payload?.ok === true && payload?.sha === process.argv[2] ? 0 : 1);
+    try {
+      const payload = JSON.parse(process.argv[1]);
+      process.exit(payload?.ok === true && payload?.sha === process.argv[2] ? 0 : 1);
+    } catch {
+      process.exit(1);
+    }
   ' "$payload" "$expected_sha"
 }
 
@@ -84,12 +88,13 @@ probe_health() {
 start_runtime() {
   local runtime=$1
   local sha=$2
+  pm2 delete "$PM2_APP" >/dev/null 2>&1 || true
   (
     cd "$runtime"
     VALORANT_UPLOAD_RELEASE_DIR="$runtime" \
       DOTENV_CONFIG_PATH="$CONTROL_DIR/.env" \
       SITE_DEPLOY_VERSION="$sha" \
-      pm2 startOrReload "$runtime/ecosystem.config.cjs" \
+      pm2 start "$runtime/ecosystem.config.cjs" \
         --only "$PM2_APP" --cwd "$runtime" --update-env
   )
 }
