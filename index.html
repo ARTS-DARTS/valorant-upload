@@ -7,7 +7,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
   <link rel="stylesheet" href="/styles.css?v=2026-07-30-site-sections-v1">
-  <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-28-training-entry-v1">
+  <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-30-profile-levels-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-27-guide-circle-v1">
 </head>
 <body>
@@ -576,7 +576,8 @@
           <div class="stat-count" id="stat-archived">—</div>
         </button>
       </div>
-      <section class="profile-level-progress" aria-label="Прогресс уровня профиля">
+      <button class="profile-level-progress" id="profile-level-progress" type="button"
+        aria-label="Открыть все уровни профиля" aria-haspopup="dialog">
         <div class="profile-level-progress-head">
           <span>УРОВЕНЬ ПРОФИЛЯ</span>
           <strong id="profile-level-progress-name">—</strong>
@@ -589,7 +590,7 @@
           <small id="profile-level-cooldown">КД: —</small>
           <small id="profile-level-progress-next">Загружаем прогресс…</small>
         </div>
-      </section>
+      </button>
       <a class="sidebar-training-progress" id="sidebar-training-progress" href="/author-training/" aria-label="Открыть инструктаж автора">
         <div class="sidebar-training-head">
           <span>ЗАДАНИЯ И ПОЛУЧЕНИЕ ОЧКОВ</span>
@@ -828,6 +829,22 @@
   </div>
 </div>
 
+<!-- Profile levels modal -->
+<div class="profile-levels-modal" id="profile-levels-modal" hidden>
+  <section class="profile-levels-dialog" role="dialog" aria-modal="true"
+    aria-labelledby="profile-levels-title" aria-describedby="profile-levels-description">
+    <header class="profile-levels-dialog-head">
+      <div>
+        <span>ПРОГРЕСС АВТОРА</span>
+        <h2 id="profile-levels-title">Уровни профиля</h2>
+        <p id="profile-levels-description">Чем больше одобренных лайнапов, тем меньше ожидание между отправками.</p>
+      </div>
+      <button class="modal-close" id="profile-levels-close" type="button" aria-label="Закрыть">✕</button>
+    </header>
+    <div class="profile-levels-list" id="profile-levels-list"></div>
+  </section>
+</div>
+
 <!-- Own lineup detail modal -->
 <div id="lineup-detail-screen" style="display:none;" class="success-overlay">
   <div class="lineup-detail-card">
@@ -872,7 +889,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-07-30-site-sections-v1"></script>
+<script type="module" src="/app.js?v=2026-07-30-profile-levels-v1"></script>
 <script defer src="/workspace-redesign.js?v=2026-07-28-section-navigation-v1"></script>
 </body>
 </html>

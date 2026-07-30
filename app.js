@@ -2644,6 +2644,63 @@ function formatLevelCooldown(minutes) {
   return `КД: ${minutes} ${unit}`;
 }
 
+function levelPrivilegeText(minutes) {
+  if (minutes <= 0) return 'Отправка лайнапов без ожидания';
+  if (minutes === 60) return 'Новый лайнап можно отправлять раз в час';
+  return `Новый лайнап можно отправлять каждые ${minutes} минут`;
+}
+
+let _profileLevelsReturnFocus = null;
+
+function renderProfileLevels() {
+  const list = document.getElementById('profile-levels-list');
+  if (!list) return;
+  const current = calculateLevel(_approvedLineups);
+  const currentIndex = LEVELS.indexOf(current);
+  list.innerHTML = LEVELS.map((level, index) => {
+    const state = index < currentIndex ? 'is-passed' : index === currentIndex ? 'is-current' : 'is-future';
+    const status = index < currentIndex ? 'Пройдено' : index === currentIndex ? 'Текущий уровень' : 'Впереди';
+    return `<article class="profile-level-row ${state}" style="--row-color:${level.color}">
+      <span class="profile-level-row-icon" aria-hidden="true">${level.icon}</span>
+      <span class="profile-level-row-copy">
+        <strong>${level.name}</strong>
+        <span>${levelPrivilegeText(level.cooldownMinutes)}</span>
+      </span>
+      <span class="profile-level-row-threshold">
+        <b>От ${level.min} одобренных</b>
+        <small>${status}</small>
+      </span>
+    </article>`;
+  }).join('');
+}
+
+function openProfileLevels() {
+  const modal = document.getElementById('profile-levels-modal');
+  if (!modal) return;
+  _profileLevelsReturnFocus = document.activeElement;
+  renderProfileLevels();
+  modal.hidden = false;
+  document.getElementById('profile-levels-close')?.focus();
+}
+
+function closeProfileLevels() {
+  const modal = document.getElementById('profile-levels-modal');
+  if (!modal || modal.hidden) return;
+  modal.hidden = true;
+  _profileLevelsReturnFocus?.focus?.();
+}
+
+document.getElementById('profile-level-progress')?.addEventListener('click', openProfileLevels);
+document.getElementById('profile-levels-close')?.addEventListener('click', closeProfileLevels);
+document.getElementById('profile-levels-modal')?.addEventListener('click', event => {
+  if (event.target.id === 'profile-levels-modal') closeProfileLevels();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !document.getElementById('profile-levels-modal')?.hidden) {
+    closeProfileLevels();
+  }
+});
+
 function _updateLevelDisplay(approved) {
   _approvedLineups = approved;
   const lv = calculateLevel(approved);
@@ -2679,6 +2736,7 @@ function _updateLevelDisplay(approved) {
       ? `До уровня «${next.name}» осталось ${Math.max(0, next.min - approved)}`
       : `Максимальный уровень · ${approved} очков профиля`;
   }
+  if (!document.getElementById('profile-levels-modal')?.hidden) renderProfileLevels();
 }
 
 function _clearCooldownTimer() {
