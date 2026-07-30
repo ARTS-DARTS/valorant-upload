@@ -4342,6 +4342,7 @@ onAuthStateChanged(auth, async user => {
     startSiteNotifications(user.uid);
     initializeBrowserPush(user.uid);
     startSitePresence();
+    hideSiteLoader();
   } else {
     clearInterval(sitePresenceTimer);
     sitePresenceTimer = null;
@@ -4371,8 +4372,19 @@ onAuthStateChanged(auth, async user => {
     const loginButton = document.getElementById('btn-email-login');
     loginButton.disabled = false;
     loginButton.textContent = 'Войти';
+    hideSiteLoader();
   }
 });
+
+function hideSiteLoader() {
+  const loader = document.getElementById('site-loader');
+  if (!loader || loader.classList.contains('site-loader--hidden')) return;
+  loader.classList.add('site-loader--hidden');
+  window.setTimeout(() => loader.remove(), 450);
+}
+
+// Firebase может не ответить из-за сети — интерфейс всё равно должен открыться.
+window.setTimeout(hideSiteLoader, 12000);
 
 document.getElementById('tab-yandex-btn').addEventListener('click', () => {
   document.getElementById('tab-yandex-btn').classList.add('active');
