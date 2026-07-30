@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createAdminBillingHandler } from '../api/admin-billing.js';
+import { createAdminExpirationsHandler } from '../api/admin-expirations.js';
 import { createBillingOrderStatusHandler } from '../api/billing-order-status.js';
 import {
   createAccountDeleteHandler,
@@ -12,6 +13,10 @@ import { buildRobokassaTestScenarios } from './generate-robokassa-test-scenarios
 class Ref {
   constructor(db, path) { this.db = db; this.path = path; this.id = path.split('/').at(-1); }
   async get() { return new Snap(this, this.db.docs.get(this.path)); }
+  async set(value, options = {}) {
+    const current = this.db.docs.get(this.path) || {};
+    this.db.docs.set(this.path, options.merge ? { ...current, ...value } : value);
+  }
 }
 
 class Snap {
@@ -144,6 +149,57 @@ test('admin billing enforces role and exact browser origin', async () => {
   }, preflight);
   assert.equal(preflight.statusCode, 204);
   assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), 'https://arts-darts.github.io');
+});
+
+test('admin expirations reports only metadata and preserves sibling records on update', async () => {
+  const db = new MemoryDb({
+    'users/admin': { role:'admin' },
+    'settings/credential_expirations': {
+      items:{
+        onesignal_rest:{
+          configured:true,
+          last_rotated_at:'2026-07-01',
+          notes:'сменён после аудита',
+        },
+        selectel_s3:{ configured:true, notes:'не потерять' },
+      },
+    },
+  });
+  const options = {
+    db,
+    auth:authFor('admin'),
+    env:{
+      ADMIN_SECRET:'super-secret-value',
+      ONESIGNAL_REST_KEY:'another-secret-value',
+    },
+    now:() => new Date('2026-07-30T12:00:00Z'),
+    tlsProbe:async () => 'Sep 29 18:20:17 2026 GMT',
+    domainProbe:async () => '2027-06-28T13:19:50Z',
+  };
+  const handler = createAdminExpirationsHandler(options);
+  const first = response();
+  await handler({
+    method:'GET',
+    headers:{ authorization:'Bearer valid-token', origin:'https://arts-darts.github.io' },
+  }, first);
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.body.items.find(item => item.id === 'domain_vlineups').days_left, 334);
+  assert.equal(first.body.items.find(item => item.id === 'tls_vlineups').status, 'ok');
+  assert.equal(first.body.items.find(item => item.id === 'onesignal_rest').configured, true);
+  assert.equal(first.body.items.find(item => item.id === 'admin_secret_legacy').status, 'critical');
+  assert.equal(JSON.stringify(first.body).includes('super-secret-value'), false);
+  assert.equal(JSON.stringify(first.body).includes('another-secret-value'), false);
+
+  const saved = response();
+  await handler({
+    method:'POST',
+    headers:{ authorization:'Bearer valid-token' },
+    body:{ id:'onesignal_rest', last_rotated_at:'2026-07-30', notes:'плановая ротация' },
+  }, saved);
+  assert.equal(saved.statusCode, 200);
+  const stored = db.docs.get('settings/credential_expirations').items;
+  assert.equal(stored.onesignal_rest.notes, 'плановая ротация');
+  assert.equal(stored.selectel_s3.notes, 'не потерять');
 });
 
 test('admin billing paginates bounded orders and diagnoses stuck/review states', async () => {
