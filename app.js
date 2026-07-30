@@ -4583,6 +4583,14 @@ async function loadMaps() {
 
 function renderAgentsGrid() {
   const grid = document.getElementById('agents-grid');
+  const animateChanges = grid.dataset.agentGridReady === 'true'
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const previousCards = new Map(
+    [...grid.querySelectorAll('.agent-card[data-uuid]')].map(card => [
+      card.dataset.uuid,
+      { card, rect: card.getBoundingClientRect() },
+    ]),
+  );
   const visibleAgents = agentsForCurrentCategory();
   grid.innerHTML = visibleAgents.length ? visibleAgents.map(a => `
     <div class="agent-card ${a.displayName === selectedAgent ? 'selected' : ''}" data-uuid="${esc(a.uuid)}">
@@ -4591,6 +4599,62 @@ function renderAgentsGrid() {
            onerror="this.style.display='none'">
       <span>${esc(a.displayName)}</span>
     </div>`).join('') : '<span style="color:var(--text2);font-size:13px;grid-column:1/-1;">Для этой категории нет доступных агентов</span>';
+  grid.dataset.agentGridReady = 'true';
+
+  if (animateChanges) {
+    const currentCards = new Map(
+      [...grid.querySelectorAll('.agent-card[data-uuid]')].map(card => [card.dataset.uuid, card]),
+    );
+    currentCards.forEach((card, uuid) => {
+      const previous = previousCards.get(uuid);
+      if (!previous) {
+        card.animate(
+          [
+            { opacity: 0, transform: 'translateY(7px) scale(.92)' },
+            { opacity: 1, transform: 'translateY(0) scale(1)' },
+          ],
+          { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' },
+        );
+        return;
+      }
+      const nextRect = card.getBoundingClientRect();
+      const dx = previous.rect.left - nextRect.left;
+      const dy = previous.rect.top - nextRect.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      card.animate(
+        [
+          { transform: `translate(${dx}px, ${dy}px)` },
+          { transform: 'translate(0, 0)' },
+        ],
+        { duration: 280, easing: 'cubic-bezier(.22,1,.36,1)' },
+      );
+    });
+    previousCards.forEach(({ card, rect }, uuid) => {
+      if (currentCards.has(uuid) || rect.width <= 0 || rect.height <= 0) return;
+      const leavingCard = card.cloneNode(true);
+      Object.assign(leavingCard.style, {
+        position: 'fixed',
+        left: `${rect.left}px`,
+        top: `${rect.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+        margin: '0',
+        pointerEvents: 'none',
+        transformOrigin: 'center',
+        zIndex: '9999',
+      });
+      document.body.appendChild(leavingCard);
+      const animation = leavingCard.animate(
+        [
+          { opacity: 1, transform: 'translateY(0) scale(1)' },
+          { opacity: 0, transform: 'translateY(-7px) scale(.88)' },
+        ],
+        { duration: 220, easing: 'cubic-bezier(.4,0,1,1)' },
+      );
+      animation.finished.then(() => leavingCard.remove(), () => leavingCard.remove());
+    });
+  }
+
   grid.querySelectorAll('.agent-card').forEach(card => {
     card.addEventListener('click', () => {
       const agent = agentsList.find(a => a.uuid === card.dataset.uuid);
