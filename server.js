@@ -19,6 +19,9 @@ import { finalizeExpiredDuels } from './api/duel-finalizer.js';
 import billingMeHandler from './api/billing-me.js';
 import readinessHandler, { firebaseReadiness } from './api/readiness.js';
 import engagementHandler from './api/engagement.js';
+import billingPlansHandler from './api/billing-plans.js';
+import billingCheckoutHandler from './api/billing-checkout.js';
+import robokassaWebhookHandler from './api/billing-webhook-robokassa.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,11 +50,18 @@ app.get('/health', (req, res) => {
 
 app.get('/ready', readinessHandler);
 app.all('/api/billing/me', billingMeHandler);
+app.all('/api/billing/plans', billingPlansHandler);
+app.post(
+  '/api/billing/webhook/robokassa',
+  express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 50 }),
+  robokassaWebhookHandler,
+);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 app.all('/api/engagement/:action', engagementHandler);
+app.all('/api/billing/checkout', billingCheckoutHandler);
 
 app.use(
   express.static(__dirname, {
