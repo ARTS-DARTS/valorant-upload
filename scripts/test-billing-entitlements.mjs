@@ -253,6 +253,15 @@ test('billing me endpoint authenticates the owner and exposes only normalized fi
         provider_customer_id: 'must-not-leak',
       };
     },
+    loadCustomer: async uid => {
+      assert.equal(uid, 'owner-uid');
+      return { intro_offer_redeemed: true, private_note: 'must-not-leak' };
+    },
+    loadIntroClaim: async claimId => {
+      assert.equal(claimId.length, 64);
+      return null;
+    },
+    loadIntroPepper: () => 'p'.repeat(32),
     preAuthCheck: () => () => {},
     rateCheck: () => {},
     now: () => new Date(now),
@@ -268,6 +277,8 @@ test('billing me endpoint authenticates the owner and exposes only normalized fi
   assert.equal(response.body.entitlement.plan_id, 'sponsor');
   assert.equal(response.body.entitlement.capabilities.duel_vote_weight, 2);
   assert.equal(response.body.entitlement.provider_customer_id, undefined);
+  assert.equal(response.body.intro_offer_eligible, false);
+  assert.equal(response.body.private_note, undefined);
   assert.equal(response.body.server_time, '2026-07-30T12:00:00.000Z');
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
 });

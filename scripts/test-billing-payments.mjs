@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { capabilitiesForPlan } from '../api/_lib/billing/entitlements.js';
+import { introIdentityClaim } from '../api/_lib/billing/intro-offer.js';
 import { parseBillingCatalog, publicBillingCatalog } from '../api/_lib/billing/catalog.js';
 import {
   amountMinorToOutSum,
@@ -26,10 +27,15 @@ const provider = Object.freeze({
 });
 const catalog = parseBillingCatalog(JSON.stringify({
   terms_version: '2026-08-01', catalog_version: 'v1', period: 'P30D',
+  term_discounts_bps: {
+    1: 0, 2: 300, 3: 500, 4: 700, 5: 1000, 6: 1200,
+    7: 1500, 8: 1700, 9: 2000, 10: 2200, 11: 2500, 12: 3000,
+  },
+  intro_offer: { active: true, months: 1, discount_bps: 3000 },
   plans: {
-    ad_free: { active: true, display_name: 'Без рекламы', receipt_name: 'Подписка Без рекламы — 30 дней', amount_minor: 19900, tax: 'none' },
-    plus: { active: true, display_name: 'Плюс', receipt_name: 'Подписка Плюс — 30 дней', amount_minor: 29900, tax: 'none' },
-    sponsor: { active: true, display_name: 'Спонсор', receipt_name: 'Подписка Спонсор — 30 дней', amount_minor: 49900, tax: 'none' },
+    ad_free: { active: true, display_name: 'Без рекламы', receipt_name: 'Подписка Без рекламы', monthly_amount_minor: 9900, tax: 'none' },
+    plus: { active: true, display_name: 'Плюс', receipt_name: 'Подписка Плюс', monthly_amount_minor: 16900, tax: 'none' },
+    sponsor: { active: true, display_name: 'Спонсор', receipt_name: 'Подписка Спонсор', monthly_amount_minor: 34900, tax: 'none' },
   },
 }));
 
@@ -82,16 +88,37 @@ function response() {
 }
 
 test('catalog is strictly server-priced and exposes no receipt internals', () => {
-  assert.equal(catalog.plans.sponsor.amount_minor, 49900);
+  assert.equal(catalog.plans.sponsor.amount_minor, 34900);
+  assert.equal(catalog.plans.sponsor.offers[11].amount_minor, 293160);
+  assert.equal(catalog.plans.sponsor.intro_amount_minor, 24430);
   assert.equal(catalog.plans.sponsor.capabilities.duel_vote_weight, 2);
   const publicValue = publicBillingCatalog(catalog);
   assert.equal(publicValue.plans[2].receipt_name, undefined);
   assert.equal(publicValue.plans[2].tax, undefined);
+  assert.equal(publicValue.plans[2].offers.length, 12);
   assert.throws(() => parseBillingCatalog('{}'), error => error?.status === 503);
   assert.throws(() => parseBillingCatalog(JSON.stringify({
     terms_version: 'v', catalog_version: 'v', period: 'P30D',
     plans: { sponsor: { active: true, display_name: 'x', receipt_name: 'x', amount_minor: 0, tax: 'none' } },
   })), error => error?.status === 503);
+});
+
+test('intro identity is stable without storing the source identity', () => {
+  const pepper = 'p'.repeat(32);
+  const first = introIdentityClaim(
+    { uid: 'uid-1', email: ' Player@Example.com ' },
+    pepper,
+  );
+  const recreated = introIdentityClaim(
+    { uid: 'uid-2', email: 'player@example.com' },
+    pepper,
+  );
+  assert.match(first, /^[a-f0-9]{64}$/);
+  assert.equal(first, recreated);
+  assert.notEqual(
+    first,
+    introIdentityClaim({ uid: 'uid-1', email: 'other@example.com' }, pepper),
+  );
 });
 
 test('money conversion rejects fractional kopecks and preserves provider formatting', () => {
@@ -108,24 +135,25 @@ test('checkout signs the encoded receipt and ResultURL uses password 2', () => {
   const encodedReceipt = url.searchParams.get('Receipt');
   assert.deepEqual(JSON.parse(decodeURIComponent(encodedReceipt)), JSON.parse(checkout.receipt));
   const expectedCheckout = digest(
-    `merchant:499.00:700000:${encodedReceipt}:password-one:Shp_order=700000`,
+    `merchant:349.00:700000:${encodedReceipt}:password-one:Shp_order=700000`,
     'sha256',
   );
   assert.equal(url.searchParams.get('SignatureValue'), expectedCheckout);
   assert.equal(url.searchParams.get('IsTest'), '1');
 
-  const outSum = '499.000000';
+  const outSum = '349.000000';
   const signature = digest(`${outSum}:700000:password-two:Shp_order=700000`, 'sha256');
   const verified = verifyRobokassaResult({
     config: provider,
     payload: { OutSum: outSum, InvId: '700000', Shp_order: '700000', SignatureValue: signature.toUpperCase() },
   });
-  assert.equal(verified.amount_minor, 49900);
+  assert.equal(verified.amount_minor, 34900);
   assert.equal(verifyRobokassaResult({
     config: provider,
     payload: { OutSum: outSum, InvId: '700000', Shp_order: '700001', SignatureValue: signature },
   }), null);
 });
+const introClaimId = 'a'.repeat(64);
 
 test('OpStateExt request and namespaced XML bind state to the canonical order', () => {
   const url = new URL(buildRobokassaOpStateUrl({ config: provider, invoiceId: '700000' }));
@@ -161,17 +189,26 @@ test('OpStateExt request and namespaced XML bind state to the canonical order', 
 
 test('checkout idempotency creates exactly one server-priced order', async () => {
   const db = new MemoryDb();
-  const input = { planId: 'sponsor', period: 'P30D', termsVersion: '2026-08-01' };
+  const input = {
+    planId: 'sponsor',
+    months: 12,
+    expectedAmountMinor: 293160,
+    termsVersion: '2026-08-01',
+  };
   const first = await createCheckout({
-    db, uid: 'user-1', input, idempotencyKey: 'abcdefghijklmnop', catalog, provider, now,
+    db, uid: 'user-1', introClaimId, input,
+    idempotencyKey: 'abcdefghijklmnop', catalog, provider, now,
   });
   const second = await createCheckout({
-    db, uid: 'user-1', input, idempotencyKey: 'abcdefghijklmnop', catalog, provider, now,
+    db, uid: 'user-1', introClaimId, input,
+    idempotencyKey: 'abcdefghijklmnop', catalog, provider, now,
   });
   assert.equal(first.order_id, '700000');
   assert.equal(second.order_id, first.order_id);
   assert.equal(second.reused, true);
-  assert.equal(db.docs.get('billing_orders/700000').amount_minor, 49900);
+  assert.equal(db.docs.get('billing_orders/700000').amount_minor, 293160);
+  assert.equal(db.docs.get('billing_orders/700000').period_days, 360);
+  assert.equal(db.docs.get('billing_orders/700000').discount_bps, 3000);
   assert.equal(db.docs.get('billing_sequences/robokassa').last_invoice_id, 700000);
   assert.equal(
     new URL(first.checkout_url).searchParams.get('ExpirationDate'),
@@ -180,6 +217,7 @@ test('checkout idempotency creates exactly one server-priced order', async () =>
   await assert.rejects(createCheckout({
     db,
     uid: 'user-1',
+    introClaimId,
     input,
     idempotencyKey: 'different_key_1234',
     catalog,
@@ -188,11 +226,112 @@ test('checkout idempotency creates exactly one server-priced order', async () =>
   }), error => error?.status === 409 && error?.message === 'checkout_in_progress');
 });
 
+test('intro offer is limited to the first one-month payment', async () => {
+  const db = new MemoryDb();
+  const introInput = {
+    planId: 'ad_free',
+    months: 1,
+    expectedAmountMinor: 6930,
+    termsVersion: '2026-08-01',
+  };
+  const checkout = await createCheckout({
+    db,
+    uid: 'intro-user',
+    introClaimId,
+    input: introInput,
+    idempotencyKey: 'intro_checkout_0001',
+    catalog,
+    provider,
+    now,
+  });
+  assert.equal(checkout.intro_offer_applied, true);
+  assert.equal(checkout.discount_bps, 3000);
+  assert.equal(db.docs.get('billing_orders/700000').amount_minor, 6930);
+
+  await applyRobokassaPayment({
+    db,
+    verified: {
+      invoice_id: '700000',
+      amount_minor: 6930,
+      out_sum: '69.30',
+      shp: { Shp_order: '700000' },
+    },
+    provider,
+    now,
+  });
+  assert.equal(db.docs.get('billing_customers/intro-user').intro_offer_redeemed, true);
+
+  const renewal = await createCheckout({
+    db,
+    uid: 'intro-user',
+    introClaimId,
+    input: { ...introInput, expectedAmountMinor: 9900 },
+    idempotencyKey: 'intro_checkout_0002',
+    catalog,
+    provider,
+    now: new Date('2026-07-30T12:31:00.000Z'),
+  });
+  assert.equal(renewal.intro_offer_applied, false);
+  assert.equal(renewal.amount_minor, 9900);
+});
+
+test('a successful longer first purchase consumes the intro offer', async () => {
+  const db = new MemoryDb();
+  await createCheckout({
+    db,
+    uid: 'long-term-user',
+    introClaimId,
+    input: {
+      planId: 'sponsor',
+      months: 2,
+      expectedAmountMinor: 67706,
+      termsVersion: '2026-08-01',
+    },
+    idempotencyKey: 'long_checkout_0001',
+    catalog,
+    provider,
+    now,
+  });
+  await applyRobokassaPayment({
+    db,
+    verified: {
+      invoice_id: '700000',
+      amount_minor: 67706,
+      out_sum: '677.06',
+      shp: { Shp_order: '700000' },
+    },
+    provider,
+    now,
+  });
+  assert.equal(
+    db.docs.get('billing_customers/long-term-user').intro_offer_redeemed,
+    true,
+  );
+  const renewal = await createCheckout({
+    db,
+    uid: 'long-term-user',
+    introClaimId,
+    input: {
+      planId: 'sponsor',
+      months: 1,
+      expectedAmountMinor: 34900,
+      termsVersion: '2026-08-01',
+    },
+    idempotencyKey: 'long_checkout_0002',
+    catalog,
+    provider,
+    now: new Date('2026-07-30T12:31:00.000Z'),
+  });
+  assert.equal(renewal.intro_offer_applied, false);
+  assert.equal(renewal.amount_minor, 34900);
+});
+
 test('verified payment writes one ledger entry and one bounded entitlement', async () => {
   const db = new MemoryDb({
     'billing_orders/700000': {
       uid: 'user-1', provider: 'robokassa', provider_invoice_id: '700000', status: 'pending',
-      plan_id: 'sponsor', period: 'P30D', period_days: 30, amount_minor: 49900,
+      intro_claim_id: introClaimId,
+      plan_id: 'sponsor', months: 1, period: 'P30D', period_days: 30, amount_minor: 49900,
       currency: 'RUB', test_mode: true,
     },
   });
@@ -216,7 +355,8 @@ test('valid provider signature still cannot override canonical order amount', as
   const db = new MemoryDb({
     'billing_orders/700000': {
       uid: 'user-1', provider: 'robokassa', provider_invoice_id: '700000', status: 'pending',
-      plan_id: 'sponsor', period: 'P30D', period_days: 30, amount_minor: 49900,
+      intro_claim_id: introClaimId,
+      plan_id: 'sponsor', months: 1, period: 'P30D', period_days: 30, amount_minor: 49900,
       currency: 'RUB', test_mode: true,
     },
   });
@@ -233,7 +373,8 @@ test('a late conflicting plan payment is audited without replacing active rights
   const db = new MemoryDb({
     'billing_orders/700000': {
       uid: 'user-1', provider: 'robokassa', provider_invoice_id: '700000', status: 'pending',
-      plan_id: 'plus', period: 'P30D', period_days: 30, amount_minor: 29900,
+      intro_claim_id: introClaimId,
+      plan_id: 'plus', months: 1, period: 'P30D', period_days: 30, amount_minor: 29900,
       currency: 'RUB', test_mode: true,
     },
     'billing_customers/user-1': {
@@ -270,7 +411,8 @@ test('a late conflicting plan payment is audited without replacing active rights
 test('reconciliation restores a missed verified payment but rejects order mismatch', async () => {
   const order = {
     uid: 'user-1', provider: 'robokassa', provider_invoice_id: '700000', status: 'pending',
-    plan_id: 'sponsor', period: 'P30D', period_days: 30, amount_minor: 49900,
+    intro_claim_id: introClaimId,
+    plan_id: 'sponsor', months: 1, period: 'P30D', period_days: 30, amount_minor: 49900,
     currency: 'RUB', test_mode: false,
   };
   const productionProvider = { ...provider, testMode: false };
@@ -310,7 +452,8 @@ test('a verified reversal is idempotent and removes only its 30-day access windo
   const db = new MemoryDb({
     'billing_orders/700000': {
       uid: 'user-1', provider: 'robokassa', provider_invoice_id: '700000', status: 'succeeded',
-      plan_id: 'sponsor', period: 'P30D', period_days: 30, amount_minor: 49900,
+      intro_claim_id: introClaimId,
+      plan_id: 'sponsor', months: 1, period: 'P30D', period_days: 30, amount_minor: 49900,
       currency: 'RUB', test_mode: false, period_end: periodEnd,
     },
     [`billing_payments/robokassa__${hash}`]: {
@@ -320,6 +463,9 @@ test('a verified reversal is idempotent and removes only its 30-day access windo
       uid: 'user-1', schema_version: 1, plan_id: 'sponsor', tier: 3, status: 'active',
       valid_from: paymentTime, access_until: periodEnd, grace_until: null, revoked_at: null,
       capabilities: capabilitiesForPlan('sponsor'), entitlement_version: 2, source: 'billing',
+    },
+    'billing_customers/user-1': {
+      uid: 'user-1', intro_offer_redeemed: true, first_purchase_order_id: '700000',
     },
   });
   const first = await applyRobokassaReversal({
@@ -337,6 +483,7 @@ test('a verified reversal is idempotent and removes only its 30-day access windo
   );
   assert.equal(db.docs.get(`billing_ledger/robokassa__${hash}__reversal`).amount_minor, -49900);
   assert.equal(db.docs.get('billing_orders/700000').status, 'reversed');
+  assert.equal(db.docs.get('billing_customers/user-1').intro_offer_redeemed, true);
 });
 
 test('checkout bounds authentication time and releases pre-auth capacity', async () => {

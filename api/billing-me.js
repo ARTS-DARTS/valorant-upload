@@ -1,5 +1,9 @@
 import { adminAuth, adminFirestore } from './_lib/firebase-admin.js';
 import { normalizeEntitlement } from './_lib/billing/entitlements.js';
+import {
+  introIdentityClaim,
+  loadIntroOfferPepper,
+} from './_lib/billing/intro-offer.js';
 
 const ALLOWED_ORIGINS = new Set([
   'https://vlineups.ru',
@@ -19,6 +23,12 @@ const requestWindows = new Map();
 
 function clean(value) {
   return String(value ?? '').replace(/п»ї/g, '').trim();
+}
+
+function timestampMillis(value) {
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  return 0;
 }
 
 function setHeaders(req, res) {
@@ -181,6 +191,22 @@ export function createBillingMeHandler({
       .get();
     return snapshot.exists ? snapshot.data() : null;
   },
+  loadCustomer = async (uid) => {
+    const snapshot = await adminFirestore()
+      .collection('billing_customers')
+      .doc(uid)
+      .get();
+    return snapshot.exists ? snapshot.data() : null;
+  },
+  loadIntroClaim = async (claimId) => {
+    const snapshot = await adminFirestore()
+      .collection('billing_intro_claims')
+      .doc(claimId)
+      .get();
+    return snapshot.exists ? snapshot.data() : null;
+  },
+  loadIntroPepper = loadIntroOfferPepper,
+  deriveIntroClaim = introIdentityClaim,
   preAuthCheck = checkPreAuthRequest,
   rateCheck = checkRate,
   now = () => new Date(),
@@ -201,10 +227,19 @@ export function createBillingMeHandler({
       const decoded = await authorize(req, verifyIdToken, authTimeoutMs);
       rateCheck(decoded.uid);
       const serverNow = now();
-      const raw = await loadEntitlement(decoded.uid);
+      const introClaimId = deriveIntroClaim(decoded, loadIntroPepper());
+      const [raw, customer, introClaim] = await Promise.all([
+        loadEntitlement(decoded.uid),
+        loadCustomer(decoded.uid),
+        loadIntroClaim(introClaimId),
+      ]);
       const entitlement = normalizeEntitlement(raw, { now: serverNow });
       return res.status(200).json({
         entitlement,
+        intro_offer_eligible:
+          customer?.intro_offer_redeemed !== true &&
+          introClaim?.redeemed !== true &&
+          timestampMillis(introClaim?.reserved_until) <= serverNow.getTime(),
         server_time: serverNow.toISOString(),
       });
     } catch (error) {

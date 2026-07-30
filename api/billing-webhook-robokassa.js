@@ -30,11 +30,20 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
     if (eventSnap.exists) return { duplicate: true, invoiceId };
     if (!orderSnap.exists) throw fail(404, 'order_not_found');
     const order = orderSnap.data() || {};
+    const validMonths =
+      Number.isSafeInteger(order.months) &&
+      order.months >= 1 &&
+      order.months <= 12;
+    const validPeriod =
+      validMonths &&
+      order.period_days === order.months * 30 &&
+      order.period === `P${order.period_days}D`;
+    const validIntroClaim = /^[a-f0-9]{64}$/.test(String(order.intro_claim_id));
     if (
       order.provider !== 'robokassa' || order.provider_invoice_id !== invoiceId ||
       order.status !== 'pending' || typeof order.uid !== 'string' || !order.uid ||
       order.currency !== 'RUB' || order.amount_minor !== verified.amount_minor ||
-      order.period !== 'P30D' || order.period_days !== 30 ||
+      !validPeriod || !validIntroClaim ||
       order.test_mode !== provider.testMode ||
       !['ad_free', 'plus', 'sponsor'].includes(order.plan_id)
     ) {
@@ -42,14 +51,16 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
     }
     const entitlementRef = db.collection('account_entitlements').doc(order.uid);
     const customerRef = db.collection('billing_customers').doc(order.uid);
-    const [entitlementSnap, customerSnap] = await Promise.all([
-      tx.get(entitlementRef), tx.get(customerRef),
+    const introClaimRef = db.collection('billing_intro_claims').doc(order.intro_claim_id);
+    const [entitlementSnap, customerSnap, introClaimSnap] = await Promise.all([
+      tx.get(entitlementRef), tx.get(customerRef), tx.get(introClaimRef),
     ]);
     const current = normalizeEntitlement(
       entitlementSnap.exists ? entitlementSnap.data() : null,
       { now },
     );
     const customer = customerSnap.exists ? (customerSnap.data() || {}) : {};
+    const introClaim = introClaimSnap.exists ? (introClaimSnap.data() || {}) : {};
     const currentEnd = timestampMillis(entitlementSnap.data()?.access_until);
     const baseMillis = current.active && current.plan_id === order.plan_id && currentEnd > now.getTime()
       ? currentEnd
@@ -101,13 +112,33 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
       period_end: entitlementConflict ? null : accessUntil,
       updated_at: nowTimestamp,
     });
-    if (customer.open_order_id === invoiceId) {
-      tx.set(customerRef, {
+    tx.set(customerRef, {
+      ...(customer.open_order_id === invoiceId ? {
         open_order_id: null,
         open_order_expires_at: null,
-        updated_at: nowTimestamp,
-      }, { merge: true });
-    }
+      } : {}),
+      intro_offer_redeemed: true,
+      intro_offer_redeemed_at: customer.intro_offer_redeemed === true
+        ? customer.intro_offer_redeemed_at
+        : nowTimestamp,
+      first_purchase_order_id: customer.first_purchase_order_id || invoiceId,
+      intro_offer_reserved_order_id: null,
+      intro_offer_reserved_until: null,
+      ...(order.intro_offer_applied === true ? {
+          intro_offer_order_id: invoiceId,
+      } : {}),
+      updated_at: nowTimestamp,
+    }, { merge: true });
+    tx.set(introClaimRef, {
+      redeemed: true,
+      redeemed_at: introClaim.redeemed === true
+        ? introClaim.redeemed_at
+        : nowTimestamp,
+      first_purchase_order_id: introClaim.first_purchase_order_id || invoiceId,
+      reserved_order_id: null,
+      reserved_until: null,
+      updated_at: nowTimestamp,
+    }, { merge: true });
     if (!entitlementConflict) {
       tx.set(entitlementRef, {
         uid: order.uid,
@@ -180,9 +211,16 @@ export async function applyRobokassaPendingFailure({
     ) {
       throw fail(409, 'order_mismatch');
     }
+    if (!/^[a-f0-9]{64}$/.test(String(order.intro_claim_id))) {
+      throw fail(409, 'order_mismatch');
+    }
     const customerRef = db.collection('billing_customers').doc(order.uid);
-    const customerSnap = await tx.get(customerRef);
+    const introClaimRef = db.collection('billing_intro_claims').doc(order.intro_claim_id);
+    const [customerSnap, introClaimSnap] = await Promise.all([
+      tx.get(customerRef), tx.get(introClaimRef),
+    ]);
     const customer = customerSnap.exists ? (customerSnap.data() || {}) : {};
+    const introClaim = introClaimSnap.exists ? (introClaimSnap.data() || {}) : {};
     tx.create(eventRef, {
       provider: 'robokassa',
       type: stateCode === 10 ? 'payment_cancelled' : 'payment_reversed_before_settlement',
@@ -202,6 +240,17 @@ export async function applyRobokassaPendingFailure({
       tx.set(customerRef, {
         open_order_id: null,
         open_order_expires_at: null,
+        ...(customer.intro_offer_reserved_order_id === normalizedInvoiceId ? {
+          intro_offer_reserved_order_id: null,
+          intro_offer_reserved_until: null,
+        } : {}),
+        updated_at: nowTimestamp,
+      }, { merge: true });
+    }
+    if (introClaim.reserved_order_id === normalizedInvoiceId) {
+      tx.set(introClaimRef, {
+        reserved_order_id: null,
+        reserved_until: null,
         updated_at: nowTimestamp,
       }, { merge: true });
     }
