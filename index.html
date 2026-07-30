@@ -6,7 +6,7 @@
   <title>Valorant Lineups — Загрузить лайнап</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
   <link rel="icon" type="image/png" href="app_icon3.png">
-  <link rel="stylesheet" href="/styles.css?v=2026-07-30-pacman-dots-v3">
+  <link rel="stylesheet" href="/styles.css?v=2026-07-30-create-feedback-v1">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-07-28-training-entry-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-07-27-guide-circle-v1">
 </head>
@@ -633,8 +633,13 @@
     <div class="messenger-shell">
       <aside class="messenger-sidebar" aria-label="Диалоги с администрацией">
         <header class="messenger-sidebar-head">
-          <div class="workspace-kicker">Обращения</div>
-          <h2>Сообщения</h2>
+          <div class="messenger-sidebar-title">
+            <div>
+              <div class="workspace-kicker">Обращения</div>
+              <h2>Сообщения</h2>
+            </div>
+            <button id="feedback-create-open" class="feedback-create-open" type="button"><span>＋</span> Создать</button>
+          </div>
           <p>Все вопросы и ответы в одном месте</p>
         </header>
         <div id="admin-chat-list" class="messenger-dialogs">
@@ -655,6 +660,44 @@
         <form id="admin-chat-form" class="admin-chat-compose">
           <textarea id="admin-chat-input" maxlength="500" rows="2" placeholder="Напиши сообщение…"></textarea>
           <button type="submit">Отправить</button>
+        </form>
+      </section>
+    </div>
+    <div id="feedback-create-overlay" class="feedback-create-overlay" hidden>
+      <section class="feedback-create-card" role="dialog" aria-modal="true" aria-labelledby="feedback-create-title">
+        <header class="feedback-create-head">
+          <div>
+            <div class="workspace-kicker">Новое обращение</div>
+            <h2 id="feedback-create-title">Написать администрации</h2>
+            <p>Выбери тему — так вопрос быстрее попадёт к нужному человеку.</p>
+          </div>
+          <button id="feedback-create-close" class="feedback-create-close" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <form id="feedback-create-form">
+          <fieldset class="feedback-category-picker">
+            <legend>Тема обращения</legend>
+            <label>
+              <input type="radio" name="feedback-category" value="предложение" checked>
+              <span><i>💡</i><b>Предложение</b><small>Идея для приложения или сайта</small></span>
+            </label>
+            <label>
+              <input type="radio" name="feedback-category" value="баг">
+              <span><i>🐛</i><b>Ошибка</b><small>Что-то работает неправильно</small></span>
+            </label>
+            <label>
+              <input type="radio" name="feedback-category" value="другое">
+              <span><i>💬</i><b>Другое</b><small>Вопрос или обращение</small></span>
+            </label>
+          </fieldset>
+          <label class="feedback-create-message">
+            <span>Сообщение</span>
+            <textarea id="feedback-create-text" maxlength="2000" rows="6" placeholder="Опиши вопрос подробно: что произошло, где и какого результата ты ожидаешь."></textarea>
+            <small><b id="feedback-create-count">0</b> / 2000</small>
+          </label>
+          <div class="feedback-create-actions">
+            <button id="feedback-create-cancel" type="button">Отмена</button>
+            <button id="feedback-create-submit" type="submit">Создать обращение</button>
+          </div>
         </form>
       </section>
     </div>
@@ -815,7 +858,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-07-30-sage-wall-v1"></script>
+<script type="module" src="/app.js?v=2026-07-30-create-feedback-v1"></script>
 <script defer src="/workspace-redesign.js?v=2026-07-28-section-navigation-v1"></script>
 </body>
 </html>

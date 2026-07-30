@@ -25,7 +25,7 @@ const functions = getFunctions(app, 'us-central1');
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
-const SITE_VERSION = '2026-07-27-support-messenger-v1';
+const SITE_VERSION = '2026-07-30-create-feedback-v1';
 const SITE_VERSION_POLL_MS = 10 * 1000;
 let loadedServerDeploymentVersion = '';
 const EDITOR_MAX_ZOOM = 2.2;
@@ -3525,6 +3525,69 @@ document.getElementById('admin-chat-list')?.addEventListener('click', event => {
 });
 document.getElementById('admin-chat-back')?.addEventListener('click', () => {
   document.querySelector('.messenger-shell')?.classList.remove('chat-open');
+});
+
+const feedbackCreateOverlay = document.getElementById('feedback-create-overlay');
+const feedbackCreateText = document.getElementById('feedback-create-text');
+
+function setFeedbackCreateOpen(open) {
+  if (!feedbackCreateOverlay) return;
+  feedbackCreateOverlay.hidden = !open;
+  document.body.style.overflow = open ? 'hidden' : '';
+  if (open) {
+    requestAnimationFrame(() => feedbackCreateText?.focus());
+  }
+}
+
+document.getElementById('feedback-create-open')?.addEventListener('click', () => setFeedbackCreateOpen(true));
+document.getElementById('feedback-create-close')?.addEventListener('click', () => setFeedbackCreateOpen(false));
+document.getElementById('feedback-create-cancel')?.addEventListener('click', () => setFeedbackCreateOpen(false));
+feedbackCreateOverlay?.addEventListener('click', event => {
+  if (event.target === feedbackCreateOverlay) setFeedbackCreateOpen(false);
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && feedbackCreateOverlay && !feedbackCreateOverlay.hidden) setFeedbackCreateOpen(false);
+});
+feedbackCreateText?.addEventListener('input', () => {
+  const count = document.getElementById('feedback-create-count');
+  if (count) count.textContent = String(feedbackCreateText.value.length);
+});
+
+document.getElementById('feedback-create-form')?.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!currentUser) { toast('Войди в аккаунт', 'e'); return; }
+  const text = feedbackCreateText?.value.trim() || '';
+  if (!text) { toast('Напиши текст обращения', 'w'); feedbackCreateText?.focus(); return; }
+  if (text.length > 2000) { toast('Сообщение не должно превышать 2000 символов', 'w'); return; }
+  const category = document.querySelector('input[name="feedback-category"]:checked')?.value || 'другое';
+  const submit = document.getElementById('feedback-create-submit');
+  submit.disabled = true;
+  submit.textContent = 'Создаём…';
+  try {
+    const ref = doc(collection(db, 'feedback'));
+    const username = String(currentUserProfile?.name || currentUserProfile?.display_name || currentUser.displayName || currentUser.email || 'Пользователь').trim().slice(0, 50) || 'Пользователь';
+    await setDoc(ref, {
+      text,
+      category,
+      username,
+      user_id: currentUser.uid,
+      is_read:false,
+      reply:null,
+      reply_read:null,
+      created_at:serverTimestamp(),
+    });
+    activeAdminChatId = ref.id;
+    feedbackCreateText.value = '';
+    document.getElementById('feedback-create-count').textContent = '0';
+    setFeedbackCreateOpen(false);
+    document.querySelector('.messenger-shell')?.classList.add('chat-open');
+    toast('Обращение создано', 's');
+  } catch (error) {
+    toast('Не удалось создать обращение: ' + toSafeErrorMessage(error), 'e');
+  } finally {
+    submit.disabled = false;
+    submit.textContent = 'Создать обращение';
+  }
 });
 
 document.getElementById('admin-chat-form')?.addEventListener('submit', async event => {
