@@ -681,7 +681,7 @@ function defensePlacementShape(agentName, abilityName, slot = '') {
     return { kind: 'circle_area', points: 1, radius: 0.0475, theme: 'viper-ult' };
   }
   if (/sage/.test(key) && /barrier|стен/.test(key)) {
-    return { kind: 'line_segment', points: 2 };
+    return { kind: 'wall_sections', points: 2, width: 0.16, height: 0.032, rotation: 0, anchor: 'edge_midpoints', source: 'range_config' };
   }
   return { kind: 'point', points: 1 };
 }
@@ -929,11 +929,60 @@ function placedDefenseCount(abilityName) {
   return defenseAbilities.filter(item => item.ability === abilityName).length;
 }
 
+function normalizedWallSections(value) {
+  const sections = [...new Set((Array.isArray(value) ? value : [1,2,3,4]).map(Number))]
+    .filter(section => Number.isInteger(section) && section >= 1 && section <= 4)
+    .sort((a,b) => a-b);
+  return sections.length ? sections : [1];
+}
+
+function isSageWallShape(item) {
+  return defenseShapeKind(item) === 'wall_sections';
+}
+
+function selectedSageWallItem() {
+  const placed = Number.isInteger(selectedDefenseMarkerIndex) ? defenseAbilities[selectedDefenseMarkerIndex] : null;
+  if (placed && isSageWallShape(placed)) return placed;
+  return selectedDefenseAbility?.shape?.kind === 'wall_sections' ? selectedDefenseAbility : null;
+}
+
+function renderSageWallOptions() {
+  const panel = document.getElementById('sage-wall-options');
+  if (!panel) return;
+  const item = selectedSageWallItem();
+  panel.hidden = !item;
+  if (!item) return;
+  const active = normalizedWallSections(item.active_sections);
+  panel.querySelectorAll('[data-wall-section]').forEach(button => {
+    button.setAttribute('aria-pressed', String(active.includes(Number(button.dataset.wallSection))));
+  });
+  const count = document.getElementById('sage-wall-section-count');
+  if (count) count.textContent = `${active.length} из 4 секций`;
+}
+
+document.getElementById('sage-wall-options')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-wall-section]');
+  const item = selectedSageWallItem();
+  if (!button || !item) return;
+  const section = Number(button.dataset.wallSection);
+  const active = normalizedWallSections(item.active_sections);
+  const next = active.includes(section) ? active.filter(value => value !== section) : [...active, section];
+  if (!next.length) {
+    toast('У стены должна остаться хотя бы одна секция', 'w');
+    return;
+  }
+  item.active_sections = normalizedWallSections(next);
+  renderSageWallOptions();
+  renderDefenseAbilityMarkers();
+  validateForm(); _saveDraft();
+});
+
 function renderDefenseAbilityPanel() {
   const row = document.getElementById('defense-ability-row');
   const list = document.getElementById('defense-placed-list');
   if (!row || !list) return;
   const abilities = selectedAgentAbilities();
+  renderSageWallOptions();
   if (!abilities.length) {
     row.innerHTML = '<span style="color:var(--text2);font-size:13px;">Сначала выбери агента защиты</span>';
     list.innerHTML = '';
@@ -1062,7 +1111,7 @@ function renderDefenseAbilityMarkers() {
       return `<circle class="defense-area-shape net" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>
         <circle class="defense-area-net-grid" cx="${center.left}%" cy="${center.top}%" r="${radius}%"></circle>`;
     }
-    if (kind === 'sensor_area' || kind === 'sensor_rect') {
+    if (kind === 'sensor_area' || kind === 'sensor_rect' || kind === 'wall_sections') {
       const canonical = defensePlacementShape(selectedAgent, item.ability, item.slot);
       const points = normalizedDefensePoints(item);
       const height = Math.max(.01, Number(item.shape_height || canonical.height || .08));
@@ -1077,6 +1126,20 @@ function renderDefenseAbilityMarkers() {
         { x:b.x-normal.x, y:b.y-normal.y },
         { x:a.x-normal.x, y:a.y-normal.y },
       ].map(mapPointToPercent).map(point => ({ x:point.left * content.wrapWidth / 100, y:point.top * content.wrapHeight / 100 }));
+      if (kind === 'wall_sections') {
+        const active = normalizedWallSections(item.active_sections);
+        const ux = (b.x - a.x) / 4, uy = (b.y - a.y) / 4;
+        return active.map(section => {
+          const offset = section - 1;
+          const start = { x:a.x + ux * offset, y:a.y + uy * offset };
+          const end = { x:a.x + ux * (offset + 1), y:a.y + uy * (offset + 1) };
+          const block = [
+            {x:start.x+normal.x,y:start.y+normal.y},{x:end.x+normal.x,y:end.y+normal.y},
+            {x:end.x-normal.x,y:end.y-normal.y},{x:start.x-normal.x,y:start.y-normal.y},
+          ].map(mapPointToPercent).map(point => ({x:point.left * content.wrapWidth / 100,y:point.top * content.wrapHeight / 100}));
+          return `<polygon class="defense-wall-section" points="${block.map(point => `${point.x},${point.y}`).join(' ')}"></polygon>`;
+        }).join('');
+      }
       return `<polygon class="defense-sensor-zone" points="${corners.map(point => `${point.x},${point.y}`).join(' ')}"></polygon>`;
     }
     if (kind === 'circle_area') {
@@ -1104,7 +1167,7 @@ function renderDefenseAbilityMarkers() {
     const markers = defenseAbilities.map((item, idx) => {
     const shapeKind = defenseShapeKind(item);
     const isLine = shapeKind === 'line_segment';
-    const isSensor = shapeKind === 'sensor_rect';
+    const isSensor = shapeKind === 'sensor_rect' || shapeKind === 'wall_sections';
     const hasEndpoints = isLine || isSensor;
     const markerShape = defensePlacementShape(selectedAgent, item.ability, item.slot);
     const isBareArea = defenseShapeKind(item) === 'circle_area' && !markerShape.theme;
@@ -1135,11 +1198,11 @@ function moveDefenseAbilityTo(index, x, y) {
   const item = defenseAbilities[index];
   if (!item) return;
   const oldCenter = defenseAbilityCenter(item);
-  if (defenseShapeKind(item) === 'line_segment' || defenseShapeKind(item) === 'sensor_rect') {
+  if (['line_segment','sensor_rect','wall_sections'].includes(defenseShapeKind(item))) {
     const dx = x - oldCenter.x;
     const dy = y - oldCenter.y;
     item.points = normalizedDefensePoints(item).map((point, pointIndex) => ({
-      ...(defenseShapeKind(item) === 'sensor_rect' ? { role: pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
+      ...(['sensor_rect','wall_sections'].includes(defenseShapeKind(item)) ? { role: pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
       x: clamp01(point.x + dx),
       y: clamp01(point.y + dy),
     }));
@@ -1235,7 +1298,7 @@ function normalizedDefensePoints(item) {
   if (clean.length >= 2) return clean.slice(0, 2);
   const x = Number.isFinite(Number(item?.x)) ? clamp01(item.x) : 0.5;
   const y = Number.isFinite(Number(item?.y)) ? clamp01(item.y) : 0.5;
-  if (defenseShapeKind(item) === 'sensor_rect') {
+  if (['sensor_rect','wall_sections'].includes(defenseShapeKind(item))) {
     const canonical = defensePlacementShape(item?.agent || selectedAgent, item?.ability, item?.slot);
     const width = Math.max(.01, Number(item?.shape_width || canonical.width || .12));
     const rotation = Number(item?.shape_rotation ?? canonical.rotation ?? 0) * Math.PI / 180;
@@ -1248,7 +1311,7 @@ function normalizedDefensePoints(item) {
 
 function defenseAbilityCenter(item) {
   const points = normalizedDefensePoints(item);
-  if (['line_segment','sensor_rect'].includes(defenseShapeKind(item)) && points.length >= 2) {
+  if (['line_segment','sensor_rect','wall_sections'].includes(defenseShapeKind(item)) && points.length >= 2) {
     return {
       x: clamp01((points[0].x + points[1].x) / 2),
       y: clamp01((points[0].y + points[1].y) / 2),
@@ -1265,23 +1328,23 @@ function setDefenseAbilityEndpoint(item, pointIndex, nextPoint) {
   const kind = defenseShapeKind(item);
   let points = normalizedDefensePoints(item);
   const map = document.getElementById('sel-map')?.value || '';
-  const configured = kind === 'sensor_rect'
+  const configured = ['sensor_rect','wall_sections'].includes(kind)
     ? configuredDefenseShapeCache.get(rangeConfigId(map, selectedAgent, item.ability))
     : null;
-  const lockedWidth = kind === 'sensor_rect'
+  const lockedWidth = ['sensor_rect','wall_sections'].includes(kind)
     ? Math.max(.01, Number(configured?.width || item.shape_width || .12))
     : 0;
-  const lockedHeight = kind === 'sensor_rect'
+  const lockedHeight = ['sensor_rect','wall_sections'].includes(kind)
     ? Math.max(.01, Number(configured?.height || item.shape_height || .08))
     : 0;
-  if (kind === 'sensor_rect') {
+  if (['sensor_rect','wall_sections'].includes(kind)) {
     const currentDx=points[1].x-points[0].x,currentDy=points[1].y-points[0].y;
     const currentLength=Math.max(.001,Math.hypot(currentDx,currentDy));
     const center={x:(points[0].x+points[1].x)/2,y:(points[0].y+points[1].y)/2};
     const dx=currentDx/currentLength*lockedWidth/2,dy=currentDy/currentLength*lockedWidth/2;
     points=[{x:center.x-dx,y:center.y-dy},{x:center.x+dx,y:center.y+dy}];
   }
-  if (kind === 'sensor_rect' && pointIndex === 0) {
+  if (['sensor_rect','wall_sections'].includes(kind) && pointIndex === 0) {
     const requestedDx = nextPoint.x - points[0].x;
     const requestedDy = nextPoint.y - points[0].y;
     const minX = Math.min(points[0].x, points[1].x), maxX = Math.max(points[0].x, points[1].x);
@@ -1289,7 +1352,7 @@ function setDefenseAbilityEndpoint(item, pointIndex, nextPoint) {
     const dx = Math.max(-minX, Math.min(1-maxX, requestedDx));
     const dy = Math.max(-minY, Math.min(1-maxY, requestedDy));
     points = points.map(point => ({ x:point.x+dx, y:point.y+dy }));
-  } else if (kind === 'sensor_rect') {
+  } else if (['sensor_rect','wall_sections'].includes(kind)) {
     const dx=nextPoint.x-points[0].x,dy=nextPoint.y-points[0].y;
     const length=Math.hypot(dx,dy);
     if (length < .001) return;
@@ -1300,13 +1363,13 @@ function setDefenseAbilityEndpoint(item, pointIndex, nextPoint) {
     points[pointIndex] = { x:clamp01(nextPoint.x), y:clamp01(nextPoint.y) };
   }
   item.points = points.map((point, index) => ({
-    ...(kind === 'sensor_rect' ? { role:index === 0 ? 'pivot' : 'rotation' } : {}),
+    ...(['sensor_rect','wall_sections'].includes(kind) ? { role:index === 0 ? 'pivot' : 'rotation' } : {}),
     x:clamp01(point.x), y:clamp01(point.y),
   }));
   const center = defenseAbilityCenter({ ...item, points:item.points });
   item.x = center.x;
   item.y = center.y;
-  if (kind === 'sensor_rect') {
+  if (['sensor_rect','wall_sections'].includes(kind)) {
     const dx = item.points[1].x - item.points[0].x;
     const dy = item.points[1].y - item.points[0].y;
     item.shape_width = lockedWidth;
@@ -1329,9 +1392,11 @@ function serializedDefenseAbilities() {
     shape_width:Number(item.shape_width || 0),
     shape_height:Number(item.shape_height || 0),
     shape_rotation:Number(item.shape_rotation || 0),
-    points:['line_segment','sensor_rect'].includes(defenseShapeKind(item))
+    active_sections:isSageWallShape(item) ? normalizedWallSections(item.active_sections) : [],
+    section_count:isSageWallShape(item) ? normalizedWallSections(item.active_sections).length : 0,
+    points:['line_segment','sensor_rect','wall_sections'].includes(defenseShapeKind(item))
       ? normalizedDefensePoints(item).map((point, pointIndex) => ({
-          ...(defenseShapeKind(item) === 'sensor_rect' ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
+          ...(['sensor_rect','wall_sections'].includes(defenseShapeKind(item)) ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
           x:point.x, y:point.y,
         }))
       : [],
@@ -1371,7 +1436,7 @@ async function getConfiguredDefenseShape(map, agent, ability, fallback = {}) {
   if (!map || !agent || !ability) return fallback;
   // range_config stores the adjustable Sonic Sensor rectangle. It must never
   // replace the canonical geometry of Barrier Mesh, GravNet or Annihilation.
-  if (fallback.kind !== 'sensor_rect') return fallback;
+  if (!['sensor_rect','wall_sections'].includes(fallback.kind)) return fallback;
   const requestedKey = rangeConfigId(map, agent, ability);
   if (configuredDefenseShapeCache.has(requestedKey)) return configuredDefenseShapeCache.get(requestedKey);
   const candidates = [...new Set([ability, ...abilityAliasesFor(ability)].filter(Boolean))];
@@ -1388,7 +1453,7 @@ async function getConfiguredDefenseShape(map, agent, ability, fallback = {}) {
       console.warn('getConfiguredDefenseShape', candidate, error.message);
     }
   }
-  const globalKey=`__sensor_shape__${agent}`;
+  const globalKey=`__${fallback.kind}_shape__${agent}`;
   if (configuredDefenseShapeCache.has(globalKey)) {
     const configured=configuredDefenseShapeCache.get(globalKey);
     configuredDefenseShapeCache.set(requestedKey,configured);
@@ -1398,7 +1463,7 @@ async function getConfiguredDefenseShape(map, agent, ability, fallback = {}) {
     const snap=await getDocs(query(collection(db,'range_config'),where('agent','==',agent),limit(200)));
     const matches=snap.docs
       .map(item=>item.data())
-      .filter(data=>data.shape_kind==='sensor_rect' && defensePlacementShape(agent,data.ability).kind==='sensor_rect')
+      .filter(data=>data.shape_kind===fallback.kind && defensePlacementShape(agent,data.ability).kind===fallback.kind)
       .sort((a,b)=>(b.updatedAt?.toMillis?.()||0)-(a.updatedAt?.toMillis?.()||0));
     if(matches.length){
       const configured=configuredDefenseShapeFromData(matches[0],fallback);
@@ -1419,7 +1484,7 @@ async function syncConfiguredDefenseAbilityShapes() {
   let changed = false;
   await Promise.all(defenseAbilities.map(async item => {
     const fallback = defensePlacementShape(selectedAgent, item.ability, item.slot);
-    if (fallback.kind !== 'sensor_rect') return;
+    if (!['sensor_rect','wall_sections'].includes(fallback.kind)) return;
     const configured = await getConfiguredDefenseShape(map, selectedAgent, item.ability, fallback);
     const center = defenseAbilityCenter(item);
     const width = Math.max(.01, Number(configured.width || fallback.width || .12));
@@ -1435,11 +1500,13 @@ async function syncConfiguredDefenseAbilityShapes() {
     const dy = Math.sin(radians) * width / 2;
     Object.assign(item, {
       x:center.x, y:center.y,
-      shape_kind:'sensor_rect',
+      shape_kind:fallback.kind,
       shape_anchor:configured.anchor || 'edge_midpoints',
       shape_width:width,
       shape_height:Math.max(.01, Number(configured.height || fallback.height || .08)),
       shape_rotation:rotation,
+      active_sections:fallback.kind === 'wall_sections' ? normalizedWallSections(item.active_sections) : [],
+      section_count:fallback.kind === 'wall_sections' ? normalizedWallSections(item.active_sections).length : 0,
       points:[
         { role:'pivot', x:clamp01(center.x-dx), y:clamp01(center.y-dy) },
         { role:'rotation', x:clamp01(center.x+dx), y:clamp01(center.y+dy) },
@@ -1479,7 +1546,7 @@ async function placeDefenseAbilityAt(x, y, options = {}) {
   const shapeWidth = Number(options.shapeWidth || configuredShape?.width || 0);
   const shapeHeight = Number(options.shapeHeight || configuredShape?.height || 0);
   const shapeRotation = Number(options.shapeRotation ?? configuredShape?.rotation ?? 0);
-  const sensorPoints = shapeKind === 'sensor_rect' ? (() => {
+  const sensorPoints = ['sensor_rect','wall_sections'].includes(shapeKind) ? (() => {
     const radians = shapeRotation * Math.PI / 180;
     const dx = Math.cos(radians) * shapeWidth / 2;
     const dy = Math.sin(radians) * shapeWidth / 2;
@@ -1500,6 +1567,8 @@ async function placeDefenseAbilityAt(x, y, options = {}) {
     shape_width: shapeWidth,
     shape_height: shapeHeight,
     shape_rotation: shapeRotation,
+    active_sections: shapeKind === 'wall_sections' ? normalizedWallSections(options.activeSections) : [],
+    section_count: shapeKind === 'wall_sections' ? normalizedWallSections(options.activeSections).length : 0,
     points: sensorPoints,
     order: defenseAbilities.length + 1,
   });
@@ -1862,10 +1931,11 @@ async function checkSiteVersion() {
     if (versionLabel) {
       const deployedAt = data?.deployedAt ? new Date(data.deployedAt) : null;
       const validDate = deployedAt && !Number.isNaN(deployedAt.getTime());
-      versionLabel.textContent = validDate
-        ? `Обновлено: ${deployedAt.toLocaleDateString('ru-RU')} в ${deployedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
-        : `Версия: ${liveVersion.slice(0, 7)}`;
-      versionLabel.title = `Версия ${liveVersion.slice(0, 7)}`;
+      const stamp = validDate
+        ? `${deployedAt.toLocaleDateString('ru-RU')} ${deployedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
+        : 'время неизвестно';
+      versionLabel.textContent = `${liveVersion.slice(0, 7)} | ${stamp}`;
+      versionLabel.title = `Версия ${liveVersion.slice(0, 7)} · обновлено ${stamp}`;
     }
     window.__vlLiveVersion = liveVersion;
     if (!loadedServerDeploymentVersion) {
@@ -7999,12 +8069,12 @@ window.addEventListener('pointermove', e => {
   const { x, y } = eventToMapPoint(e);
   const item = defenseAbilities[defenseMarkerDrag.index];
   if (!item) return;
-  if (['line_segment','sensor_rect'].includes(defenseShapeKind(item))) {
+  if (['line_segment','sensor_rect','wall_sections'].includes(defenseShapeKind(item))) {
     const oldCenter = defenseAbilityCenter(item);
     const dx = x - oldCenter.x;
     const dy = y - oldCenter.y;
     item.points = normalizedDefensePoints(item).map((point, pointIndex) => ({
-      ...(defenseShapeKind(item) === 'sensor_rect' ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
+      ...(['sensor_rect','wall_sections'].includes(defenseShapeKind(item)) ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
       x: clamp01(point.x + dx),
       y: clamp01(point.y + dy),
     }));
@@ -9135,13 +9205,13 @@ function _restoreDraft(sourceDraft = null) {
               const storedShapeKind = item.shape_kind || item.shape?.kind || 'point';
               const hasCanonicalGeometry = catalogShape.kind !== 'point' || /^deadlock$/i.test(String(d.agent || selectedAgent || '').trim());
               const shapeKind = hasCanonicalGeometry ? catalogShape.kind : storedShapeKind;
-              const points = (shapeKind === 'line_segment' || shapeKind === 'sensor_rect')
+              const points = ['line_segment','sensor_rect','wall_sections'].includes(shapeKind)
                 ? normalizedDefensePoints(item).map((point, pointIndex) => ({
-                    ...(shapeKind === 'sensor_rect' ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
+                    ...(['sensor_rect','wall_sections'].includes(shapeKind) ? { role:pointIndex === 0 ? 'pivot' : 'rotation' } : {}),
                     x:point.x, y:point.y,
                   }))
                 : [];
-              const center = ['line_segment','sensor_rect'].includes(shapeKind)
+              const center = ['line_segment','sensor_rect','wall_sections'].includes(shapeKind)
                 ? defenseAbilityCenter({ ...item, shape_kind: shapeKind, points })
                 : { x: Number(item.x), y: Number(item.y) };
               return {
@@ -9156,6 +9226,8 @@ function _restoreDraft(sourceDraft = null) {
                 shape_width: Number(item.shape_width || catalogShape.width || 0.12),
                 shape_height: Number(item.shape_height || catalogShape.height || 0.08),
                 shape_rotation: Number(item.shape_rotation ?? catalogShape.rotation ?? 0),
+                active_sections: shapeKind === 'wall_sections' ? normalizedWallSections(item.active_sections) : [],
+                section_count: shapeKind === 'wall_sections' ? normalizedWallSections(item.active_sections).length : 0,
                 points,
                 order: Number(item.order || idx + 1),
               };

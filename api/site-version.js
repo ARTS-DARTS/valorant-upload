@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { statSync } from 'node:fs';
 
 function gitVersion() {
   try {
@@ -26,6 +27,14 @@ function gitDeploymentTime() {
   }
 }
 
+function fileDeploymentTime() {
+  try {
+    return statSync(new URL('../app.js', import.meta.url)).mtime.toISOString();
+  } catch (_) {
+    return '';
+  }
+}
+
 export const deploymentVersion = String(
   process.env.VERCEL_GIT_COMMIT_SHA ||
   process.env.SITE_DEPLOY_VERSION ||
@@ -35,6 +44,7 @@ export const deploymentVersion = String(
 export const deploymentTime = String(
   process.env.SITE_DEPLOYED_AT ||
   gitDeploymentTime() ||
+  fileDeploymentTime() ||
   '',
 ).trim();
 
