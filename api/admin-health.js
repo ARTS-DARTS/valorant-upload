@@ -39,8 +39,8 @@ export function createAdminHealthHandler({
           headers:{ 'Content-Type':'application/json', Authorization:`Key ${restKey}` },
           body:JSON.stringify({
             app_id:appId,
-            headings:{ ru:'Проверка VLineups' },
-            contents:{ ru:'Защищённый push-контур работает.' },
+            headings:{ en:'VLineups check', ru:'Проверка VLineups' },
+            contents:{ en:'The secure push channel is working.', ru:'Защищённый push-контур работает.' },
             include_aliases:{ external_id:[authorized.decoded.uid] },
             target_channel:'push',
             data:{ type:'admin_health_test' },
