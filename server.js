@@ -94,6 +94,11 @@ app.all('/api/site-presence', sitePresenceHandler);
 app.all('/api/site-version', siteVersionHandler);
 app.all('/api/push-config', pushConfigHandler);
 
+app.get(['/lineups', '/lineups/'], (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.sendFile(path.join(__dirname, 'lineups', 'index.html'));
+});
+
 app.get(['/author-training', '/author-training/'], (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
   res.sendFile(path.join(__dirname, 'author-training', 'index.html'));
