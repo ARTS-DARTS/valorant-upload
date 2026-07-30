@@ -1,4 +1,5 @@
 export const ENTITLEMENT_SCHEMA_VERSION = 1;
+const MAX_DATE_MILLIS = 8_640_000_000_000_000;
 
 const PLAN_ORDER = Object.freeze({
   free: 0,
@@ -62,18 +63,26 @@ function timestampMillis(value) {
   if (value == null) return 0;
   if (typeof value?.toMillis === 'function') {
     const millis = Number(value.toMillis());
-    return Number.isFinite(millis) ? millis : 0;
+    return validTimestampMillis(millis);
   }
-  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : 0;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (value instanceof Date) return validTimestampMillis(value.getTime());
+  if (typeof value === 'number') return validTimestampMillis(value);
   if (typeof value === 'string') {
     const millis = Date.parse(value);
-    return Number.isFinite(millis) ? millis : 0;
+    return validTimestampMillis(millis);
   }
   const seconds = Number(value?._seconds ?? value?.seconds);
   const nanoseconds = Number(value?._nanoseconds ?? value?.nanoseconds ?? 0);
   if (!Number.isFinite(seconds) || !Number.isFinite(nanoseconds)) return 0;
-  return seconds * 1000 + Math.floor(nanoseconds / 1_000_000);
+  return validTimestampMillis(
+    seconds * 1000 + Math.floor(nanoseconds / 1_000_000),
+  );
+}
+
+function validTimestampMillis(value) {
+  return Number.isFinite(value) && value > 0 && value <= MAX_DATE_MILLIS
+    ? value
+    : 0;
 }
 
 function isoOrNull(millis) {
@@ -85,25 +94,71 @@ export function capabilitiesForPlan(planId) {
   return { ...PLAN_CAPABILITIES[normalized] };
 }
 
+function isCapabilityMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function sanitizeCapabilities(planId, rawCapabilities) {
+  const maximum = PLAN_CAPABILITIES[planId];
+  return Object.fromEntries(
+    Object.entries(maximum).map(([key, maxValue]) => {
+      const value = Object.hasOwn(rawCapabilities, key)
+        ? rawCapabilities[key]
+        : undefined;
+      if (typeof maxValue === 'boolean') {
+        return [key, maxValue && value === true];
+      }
+      return [key, maxValue === 2 && value === 2 ? 2 : 1];
+    }),
+  );
+}
+
 export function normalizeEntitlement(rawValue, { now = Date.now() } = {}) {
   const raw = rawValue && typeof rawValue === 'object' ? rawValue : {};
   const nowMillis = timestampMillis(now) || Date.now();
   const requestedPlan = cleanLower(raw.plan_id);
+  const schemaVersion = raw.schema_version;
+  const schemaValid =
+    typeof schemaVersion === 'number' &&
+    Number.isSafeInteger(schemaVersion) &&
+    schemaVersion === ENTITLEMENT_SCHEMA_VERSION;
   const knownPlan = Object.hasOwn(PLAN_ORDER, requestedPlan) ? requestedPlan : 'free';
   const storedStatus = cleanLower(raw.status);
   const validFromMillis = timestampMillis(raw.valid_from);
   const accessUntilMillis = timestampMillis(raw.access_until);
   const graceUntilMillis = timestampMillis(raw.grace_until);
   const revokedAtMillis = timestampMillis(raw.revoked_at);
-  const startsNow = validFromMillis === 0 || validFromMillis <= nowMillis;
-  const notExplicitlyRevoked = revokedAtMillis === 0 || revokedAtMillis > nowMillis;
+  const capabilitiesValid = isCapabilityMap(raw.capabilities);
+  const graceUntilPresent =
+    Object.hasOwn(raw, 'grace_until') &&
+    raw.grace_until !== null &&
+    raw.grace_until !== undefined;
+  const graceUntilValid = !graceUntilPresent || graceUntilMillis > 0;
+  const revokedAtPresent =
+    Object.hasOwn(raw, 'revoked_at') &&
+    raw.revoked_at !== null &&
+    raw.revoked_at !== undefined;
+  const revokedAtValid = !revokedAtPresent || revokedAtMillis > 0;
+  const startsNow = validFromMillis > 0 && validFromMillis <= nowMillis;
+  const notExplicitlyRevoked =
+    revokedAtValid && (revokedAtMillis === 0 || revokedAtMillis > nowMillis);
   const hasPaidWindow = startsNow && accessUntilMillis > nowMillis;
-  const hasGraceWindow = startsNow && graceUntilMillis > nowMillis;
+  const hasGraceWindow =
+    startsNow &&
+    accessUntilMillis > validFromMillis &&
+    accessUntilMillis <= nowMillis &&
+    graceUntilMillis > accessUntilMillis &&
+    graceUntilMillis > nowMillis;
 
   let active = false;
   let effectiveStatus = 'free';
   if (
+    schemaValid &&
     knownPlan !== 'free' &&
+    capabilitiesValid &&
+    graceUntilValid &&
     notExplicitlyRevoked &&
     !REVOKED_STATUSES.has(storedStatus)
   ) {
@@ -122,6 +177,9 @@ export function normalizeEntitlement(rawValue, { now = Date.now() } = {}) {
 
   const planId = active ? knownPlan : 'free';
   const entitlementVersion = Number(raw.entitlement_version);
+  const capabilities = active
+    ? sanitizeCapabilities(planId, raw.capabilities)
+    : capabilitiesForPlan('free');
   return {
     schema_version: ENTITLEMENT_SCHEMA_VERSION,
     plan_id: planId,
@@ -136,6 +194,6 @@ export function normalizeEntitlement(rawValue, { now = Date.now() } = {}) {
       Number.isSafeInteger(entitlementVersion) && entitlementVersion >= 0
         ? entitlementVersion
         : 0,
-    capabilities: capabilitiesForPlan(planId),
+    capabilities,
   };
 }

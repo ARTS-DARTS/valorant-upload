@@ -17,15 +17,19 @@ import pushConfigHandler from './api/push-config.js';
 import { notifySiteUpdateOnce } from './api/site-update-notifier.js';
 import { finalizeExpiredDuels } from './api/duel-finalizer.js';
 import billingMeHandler from './api/billing-me.js';
+import readinessHandler, { firebaseReadiness } from './api/readiness.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  throw new Error('PORT must be an integer between 1 and 65535');
+}
 
 app.disable('x-powered-by');
-app.set('trust proxy', true);
+app.set('trust proxy', 'loopback');
 
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
@@ -36,12 +40,15 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
-
 app.get('/health', (req, res) => {
   res.status(200).json({ ok: true });
 });
+
+app.get('/ready', readinessHandler);
+app.all('/api/billing/me', billingMeHandler);
+
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 app.use(
   express.static(__dirname, {
@@ -67,7 +74,6 @@ app.all('/api/moderation', moderationHandler);
 app.all('/api/site-presence', sitePresenceHandler);
 app.all('/api/site-version', siteVersionHandler);
 app.all('/api/push-config', pushConfigHandler);
-app.all('/api/billing/me', billingMeHandler);
 
 app.get(['/author-training', '/author-training/'], (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
@@ -113,8 +119,19 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+const production = process.env.NODE_ENV === 'production';
+if (production) {
+  const firebaseReady = await firebaseReadiness.check();
+  if (!firebaseReady) {
+    throw new Error('Firebase readiness validation failed');
+  }
+} else {
+  void firebaseReadiness.check();
+}
+
 app.listen(port, '127.0.0.1', () => {
   console.log(`Valorant upload site listening on http://127.0.0.1:${port}`);
+  if (typeof process.send === 'function') process.send('ready');
   const runDuelFinalizer = () => finalizeExpiredDuels().then(results => {
     const finalized = results.filter(item => item && !item.tie && !item.alreadyFinalized).length;
     if (finalized) console.log(`Finalized duels: ${finalized}`);

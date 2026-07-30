@@ -49,11 +49,14 @@ nano .env
 
 Fill all values in `.env`.
 
-Start:
+Install the release deployer and perform the first start through it. The
+deployer injects the exact commit SHA required by `/ready`:
 
 ```bash
-pm2 start ecosystem.config.cjs
-pm2 save
+install -o root -g root -m 0750 \
+  /var/www/valorant-upload/ops/deploy-valorant-upload.sh \
+  /usr/local/bin/deploy-valorant-upload.sh
+/usr/local/bin/deploy-valorant-upload.sh
 pm2 startup
 ```
 
@@ -61,6 +64,7 @@ Check:
 
 ```bash
 curl http://127.0.0.1:3000/health
+curl http://127.0.0.1:3000/ready
 ```
 
 ## Nginx
@@ -108,35 +112,55 @@ In the Yandex OAuth app, keep or set the callback URL:
 https://vlineups.ru/api/yandex-callback
 ```
 
-## Update
-
-```bash
-cd /var/www/valorant-upload
-git pull
-npm ci
-pm2 restart valorant-upload
-```
-
-## Auto update
-
-The production VPS runs a systemd timer:
-
-```bash
-systemctl status valorant-upload-autodeploy.timer
-```
-
-It executes `/usr/local/bin/deploy-valorant-upload.sh` every minute. The script fetches `origin/main`, fast-forwards the local checkout, runs `npm ci`, and restarts PM2 when a new commit exists.
-
-Manual immediate deploy:
+## Safe update
 
 ```bash
 /usr/local/bin/deploy-valorant-upload.sh
 tail -n 80 /var/log/valorant-upload-deploy.log
 ```
 
+Do not update production with raw `git pull`, `npm ci`, or `pm2 restart`.
+The deployer builds an isolated release, atomically switches the runtime, and
+rolls back to the last confirmed release if readiness fails.
+
+## Automatic update
+
+The systemd timer must remain disabled and inactive until the release/rollback
+scenarios have been verified on the VPS:
+
+```bash
+systemctl disable --now valorant-upload-autodeploy.timer
+systemctl is-enabled valorant-upload-autodeploy.timer
+systemctl is-active valorant-upload-autodeploy.timer
+```
+
+The canonical script is versioned at `ops/deploy-valorant-upload.sh`. It fetches
+`origin/main`, runs syntax and billing tests in an isolated archive, creates an
+immutable SHA release, atomically switches `/var/www/valorant-upload-current`,
+and accepts the release only when `/ready` returns that exact SHA. The prior
+release remains available through `/var/www/valorant-upload-last-good`.
+
+Install or update the deploy script:
+
+```bash
+install -o root -g root -m 0750 \
+  /var/www/valorant-upload/ops/deploy-valorant-upload.sh \
+  /usr/local/bin/deploy-valorant-upload.sh
+```
+
+If the deploy script itself changed, reinstall it from the synced control
+checkout before the next manual deployment:
+
+```bash
+install -o root -g root -m 0750 \
+  /var/www/valorant-upload/ops/deploy-valorant-upload.sh \
+  /usr/local/bin/deploy-valorant-upload.sh
+```
+
 After every push, verify the live site:
 
 ```bash
 curl -fsSL "https://vlineups.ru/site-version.json?$(date +%s)"
+curl -fsSL "https://vlineups.ru/ready?$(date +%s)"
 curl -fsSL "https://vlineups.ru/app.js?$(date +%s)" | grep "EXPECTED_NEW_STRING"
 ```
