@@ -1881,11 +1881,17 @@ function canCurrentUserUpload() {
 }
 
 function safePlay(player) {
+  if (!player || !player.isConnected) return;
+  const source = player.currentSrc || player.src;
+  if (!source) return;
   const playPromise = player?.play?.();
   if (playPromise && typeof playPromise.catch === 'function') {
     playPromise.catch(error => {
       const msg = String(error?.message || error || '');
-      if (/interrupted by a call to pause|interrupted by a new load request|play\(\) request was interrupted/i.test(msg)) {
+      if (
+        error?.name === 'NotSupportedError'
+        || /no supported source|element has no supported sources|interrupted by a call to pause|interrupted by a new load request|play\(\) request was interrupted/i.test(msg)
+      ) {
         return;
       }
       logUploadError(error, { action: 'media_play' });
@@ -4546,8 +4552,10 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('form-screen').style.display = '';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'flex';
-    document.getElementById('header-notifications').hidden = false;
-    document.getElementById('header-sound-test').hidden = false;
+    const headerNotifications = document.getElementById('header-notifications');
+    const headerSoundTest = document.getElementById('header-sound-test');
+    if (headerNotifications) headerNotifications.hidden = false;
+    if (headerSoundTest) headerSoundTest.hidden = false;
     await loadCurrentUserProfile(user);
     showTrainingReturnFeedback();
     await loadUploadCategoryConfig();
@@ -4601,8 +4609,10 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('form-screen').style.display = 'none';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'none';
-    document.getElementById('header-notifications').hidden = true;
-    document.getElementById('header-sound-test').hidden = true;
+    const headerNotifications = document.getElementById('header-notifications');
+    const headerSoundTest = document.getElementById('header-sound-test');
+    if (headerNotifications) headerNotifications.hidden = true;
+    if (headerSoundTest) headerSoundTest.hidden = true;
     const loginButton = document.getElementById('btn-email-login');
     loginButton.disabled = false;
     loginButton.textContent = 'Войти';
