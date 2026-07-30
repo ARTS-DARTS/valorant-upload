@@ -120,6 +120,11 @@ app.get(['/upload-redesign-preview', '/upload-redesign-preview/'], (req, res) =>
   res.sendFile(path.join(__dirname, 'upload-redesign-preview', 'index.html'));
 });
 
+app.get(['/offer', '/offer/'], (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.sendFile(path.join(__dirname, 'offer.html'));
+});
+
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
   res.sendFile(path.join(__dirname, 'index.html'));
