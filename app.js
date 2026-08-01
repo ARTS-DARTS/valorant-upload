@@ -4651,13 +4651,16 @@ onAuthStateChanged(auth, async user => {
     const av = document.getElementById('user-avatar');
     if (user.photoURL) { av.src = user.photoURL; av.style.display = ''; }
     const agentsReady = !agentsList.length ? loadAgents() : Promise.resolve();
-    loadMaps();
+    const mapsReady = loadMaps();
     let resumableModeratorEdit = false;
     try { resumableModeratorEdit = !!sessionStorage.getItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
     if (canCurrentUserModerate() && (moderatorDraftSourceId || resumableModeratorEdit)) {
       await agentsReady;
       await loadModerationWorkspace();
     }
+    // Keep the loader over the form until reference lists are final. Otherwise
+    // the full agent catalog flashes before category permissions filter it.
+    await Promise.all([agentsReady, mapsReady]);
     openAdminChat();
     startSiteNotifications(user.uid);
     initializeBrowserPush(user.uid);
@@ -4852,9 +4855,13 @@ async function loadAgents() {
     const res  = await fetch(valorantProxy('https://valorant-api.com/v1/agents?isPlayableCharacter=true&language=ru-RU'));
     const data = await res.json();
     agentsList = (data.data || []).sort((a, b) => a.displayName.localeCompare(b.displayName));
-    renderAgentsGrid();
     await loadMapAnnotations();
     _restoreDraft();
+    const activeCategory = normalizeContentCategory(selectedCategory || '');
+    if (activeCategory && activeCategory !== 'wallbang') {
+      await loadAgentCategoryAvailability(activeCategory);
+    }
+    renderAgentsGrid();
   } catch (e) {
     toast('Не удалось загрузить агентов', 'e');
   }
@@ -4871,8 +4878,9 @@ async function loadMaps() {
 
 function renderAgentsGrid() {
   const grid = document.getElementById('agents-grid');
-  const animateChanges = grid.dataset.agentGridReady === 'true'
-    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Filtering must be visually atomic: moving/ghost cards make the form feel
+  // unstable and can briefly expose options that are not actually available.
+  const animateChanges = false;
   const previousCards = new Map(
     [...grid.querySelectorAll('.agent-card[data-uuid]')].map(card => [
       card.dataset.uuid,
