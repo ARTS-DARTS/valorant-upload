@@ -595,10 +595,10 @@ window.getUploadProductionProgressState = function() {
     abilityReady &&
     positionReady &&
     categoryExtrasValid(category);
-  const titleReady =
-    (document.getElementById('inp-title')?.value.trim().length || 0) >= 8;
-  const descriptionReady =
-    (document.getElementById('inp-desc')?.value.trim().length || 0) >= 20;
+  const titleValue = document.getElementById('inp-title')?.value.trim() || '';
+  const descriptionValue = document.getElementById('inp-desc')?.value.trim() || '';
+  const titleReady = titleValue.length > 0 && titleValue.length <= 100 && !hasCyrillic(titleValue);
+  const descriptionReady = descriptionValue.length <= 1000;
   // The submit button intentionally stays clickable to show missing fields.
   // Its data-ready flag is the actual full-form validation result.
   const submitReady = document.getElementById('btn-submit')?.dataset.ready === 'true';

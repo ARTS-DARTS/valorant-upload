@@ -121,8 +121,11 @@ function refreshProductionProgress() {
           Boolean(document.getElementById('vid-player')?.currentSrc ||
             document.getElementById('vid-player')?.src),
         Boolean(document.querySelector('#shots-row .shot-item')),
-        (document.getElementById('inp-title')?.value.trim().length || 0) >= 8 &&
-          (document.getElementById('inp-desc')?.value.trim().length || 0) >= 20,
+        (() => {
+          const title = document.getElementById('inp-title')?.value.trim() || '';
+          const description = document.getElementById('inp-desc')?.value.trim() || '';
+          return title.length > 0 && title.length <= 100 && !/[А-Яа-яЁё]/.test(title) && description.length <= 1000;
+        })(),
         !document.getElementById('btn-submit')?.disabled,
       ];
   const count = ready.filter(Boolean).length;
