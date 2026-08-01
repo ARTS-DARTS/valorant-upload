@@ -24,6 +24,10 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 const functions = getFunctions(app, 'us-central1');
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
+const syncAuthorTrainingCriteriaNotifications = httpsCallable(
+  functions,
+  'syncAuthorTrainingCriteriaNotifications',
+);
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
 const EDITOR_MAX_ZOOM = 2.2;
@@ -3167,7 +3171,7 @@ function notificationTimestamp(value) {
 }
 
 function notificationIcon(item) {
-  if (item.type === 'author_training_completed') return '🎓';
+  if (item.type === 'author_training_completed' || item.type === 'author_training_criteria_updated') return '🎓';
   if (item.type === 'lineup_hot' || item.type === 'lineups_hot_batch') return '🔥';
   if (item.type === 'lineup_approved') return '✅';
   if (item.type === 'lineup_rejected') return '↩';
@@ -3227,7 +3231,9 @@ function renderSiteNotifications() {
       ['Способность', firstText(item.ability, lineup.ability)],
       ['Сторона', roundSide ? roundSideLabel(roundSide) : ''],
     ].filter(([, value]) => value);
-    const canExpand = isBatch || details.length > 0 || Boolean(reason) || Boolean(lineup.id);
+    const actionPath = String(item.action_path || '');
+    const canOpenAction = actionPath.startsWith('/') && !actionPath.startsWith('//');
+    const canExpand = isBatch || details.length > 0 || Boolean(reason) || Boolean(lineup.id) || canOpenAction;
     const expanded = canExpand && expandedSiteNotificationId === item.id;
     return `
     <article class="notification-card ${item.is_read === true ? '' : 'unread'} ${expanded ? 'expanded' : ''}" data-site-notification="${esc(item.id)}" data-can-expand="${canExpand}" tabindex="0"${canExpand ? ` aria-expanded="${expanded}"` : ''}>
@@ -3238,6 +3244,7 @@ function renderSiteNotifications() {
         ${isBatch ? notificationBatchDetails(item) : (details.length ? `<div class="notification-details-grid">${details.map(([label, value]) => `<div><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join('')}</div>` : '')}
         ${reason ? `<div class="notification-reason"><span>Полная причина</span><p>${esc(reason)}</p></div>` : ''}
         ${!isBatch && lineup.id ? `<button class="copy-id-btn" type="button" data-open-notification-lineup="${esc(lineup.id)}">Открыть карточку лайнапа</button>` : ''}
+        ${canOpenAction ? `<button class="copy-id-btn" type="button" data-notification-action="${esc(actionPath)}">${esc(item.action_label || 'Открыть')}</button>` : ''}
       </div>` : ''}
     </article>`;
   }).join('');
@@ -3373,7 +3380,9 @@ function startSiteNotifications(uid) {
       incoming.slice(0, 3).reverse().forEach(showIncomingNotification);
       if (incoming.some(item => item.cooldown_reset === true) && currentUser) _updateCooldown(currentUser.uid);
     } else {
-      const trainingNotice = next.find(item => item.type === 'author_training_completed' && item.is_read !== true);
+      const trainingNotice = next.find(item =>
+        ['author_training_completed', 'author_training_criteria_updated'].includes(item.type)
+        && item.is_read !== true);
       if (trainingNotice) {
         const bannerKey = `author-training-banner-v1:${uid}:${trainingNotice.id}`;
         if (!localStorage.getItem(bannerKey)) {
@@ -3412,6 +3421,13 @@ document.getElementById('header-sound-test')?.addEventListener('click', async ()
   toast('Звуки сайта включены', 's');
 });
 document.getElementById('notifications-list')?.addEventListener('click', event => {
+  const notificationAction = event.target.closest('[data-notification-action]');
+  if (notificationAction) {
+    event.stopPropagation();
+    const path = notificationAction.dataset.notificationAction || '';
+    if (path.startsWith('/') && !path.startsWith('//')) window.location.href = path;
+    return;
+  }
   const openLineup = event.target.closest('[data-open-notification-lineup]');
   if (openLineup) {
     event.stopPropagation();
@@ -4672,6 +4688,9 @@ onAuthStateChanged(auth, async user => {
     // the full agent catalog flashes before category permissions filter it.
     await Promise.all([agentsReady, mapsReady]);
     openAdminChat();
+    await syncAuthorTrainingCriteriaNotifications().catch(error => {
+      console.warn('training criteria notification sync', error?.message || error);
+    });
     startSiteNotifications(user.uid);
     initializeBrowserPush(user.uid);
     startSitePresence();
