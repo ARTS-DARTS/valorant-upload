@@ -3326,6 +3326,28 @@ function showIncomingNotification(item) {
 }
 
 let browserPushPromise = null;
+const PUSH_PROMPT_REQUESTED_KEY = 'vl_push_prompt_requested';
+
+async function persistNotificationChannelStatus(OneSignal = null) {
+  if (!currentUser) return;
+  const permission = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+  const subscription = OneSignal?.User?.PushSubscription;
+  const subscribed = typeof subscription?.optedIn === 'boolean' ? subscription.optedIn : null;
+  try {
+    await setDoc(doc(db, 'users', currentUser.uid, 'notification_settings', 'channels'), {
+      site_notifications_enabled: true,
+      site_checked_at: serverTimestamp(),
+      push_permission: permission,
+      push_prompt_requested: localStorage.getItem(PUSH_PROMPT_REQUESTED_KEY) === '1',
+      push_subscribed: subscribed,
+      push_subscription_id: subscription?.id || null,
+      push_checked_at: serverTimestamp(),
+      updated_at: serverTimestamp(),
+    }, { merge: true });
+  } catch (error) {
+    console.warn('notification channel status', error?.message || error);
+  }
+}
 
 function updateBrowserPushButton() {
   const button = document.getElementById('browser-push-toggle');
@@ -3345,6 +3367,7 @@ function updateBrowserPushButton() {
 async function initializeBrowserPush(uid = currentUser?.uid) {
   if (!('serviceWorker' in navigator) || typeof Notification === 'undefined') {
     updateBrowserPushButton();
+    await persistNotificationChannelStatus();
     return null;
   }
   if (!browserPushPromise) {
@@ -3380,6 +3403,7 @@ async function initializeBrowserPush(uid = currentUser?.uid) {
     await OneSignal.User.PushSubscription.optIn().catch(() => {});
     await OneSignal.User.addTag('site_update_notifications', '1').catch(() => {});
   }
+  await persistNotificationChannelStatus(OneSignal);
   updateBrowserPushButton();
   return OneSignal;
 }
@@ -3395,8 +3419,11 @@ async function enableBrowserPush() {
     updateBrowserPushButton();
     return;
   }
+  localStorage.setItem(PUSH_PROMPT_REQUESTED_KEY, '1');
+  await persistNotificationChannelStatus(OneSignal);
   await OneSignal.Notifications.requestPermission();
   if (Notification.permission !== 'granted') {
+    await persistNotificationChannelStatus(OneSignal);
     toast('Без разрешения браузер не сможет показывать push.', 'i');
     updateBrowserPushButton();
     return;
@@ -3404,6 +3431,7 @@ async function enableBrowserPush() {
   await OneSignal.User.PushSubscription.optIn().catch(() => {});
   await OneSignal.User.addTag('site_update_notifications', '1');
   if (currentUser?.uid) await OneSignal.login(currentUser.uid).catch(() => {});
+  await persistNotificationChannelStatus(OneSignal);
   updateBrowserPushButton();
   toast('Push об обновлениях сайта включены', 's');
 }
@@ -3448,6 +3476,7 @@ function startSiteNotifications(uid) {
     const list = document.getElementById('notifications-list');
     if (list) list.innerHTML = `<div class="notifications-empty">Не удалось загрузить уведомления: ${esc(error.message)}</div>`;
   });
+  persistNotificationChannelStatus().catch(() => {});
   showNotificationsIntro(uid);
 }
 
