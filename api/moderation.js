@@ -286,6 +286,7 @@ async function saveDraft(req, res, moderator) {
   if (!author.exists) return res.status(400).json({ error: 'Автор не найден' });
   const ref = db.collection('lineups').doc(lineupId);
   const claimRef = db.collection('moderation_claims').doc(moderator.uid);
+  const completionLogRef = db.collection('moderator_logs').doc();
   await db.runTransaction(async tx => {
     const templatesQuery = db.collection('lineups').where('moderator_only', '==', true);
     const [snap, claimSnap, templatesSnap] = await Promise.all([tx.get(ref), tx.get(claimRef), tx.get(templatesQuery)]);
@@ -355,6 +356,15 @@ async function saveDraft(req, res, moderator) {
       update.trajectory = [];
     }
     tx.update(ref, update);
+    tx.create(completionLogRef, {
+      lineup_id: lineupId,
+      action: 'complete_lineup',
+      task_kind: currentData.moderator_only === true ? 'template' : 'lineup',
+      moderator_uid: moderator.uid,
+      moderator_name: moderator.name,
+      moderator_role: moderator.role,
+      created_at: FieldValue.serverTimestamp(),
+    });
     const completedTemplateKey = moderatorTemplateKey(currentData);
     if (completedTemplateKey) {
       templatesSnap.docs.forEach(templateDoc => {
@@ -539,6 +549,7 @@ async function claimDraft(req, res, moderator) {
   const db = getFirestore();
   const ref = db.collection('lineups').doc(lineupId);
   const claimRef = db.collection('moderation_claims').doc(moderator.uid);
+  const claimLogRef = db.collection('moderator_logs').doc();
   const expiresAt = new Date(Date.now() + MODERATION_LOCK_MS);
   await db.runTransaction(async tx => {
     const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
@@ -571,6 +582,17 @@ async function claimDraft(req, res, moderator) {
       expires_at: expiresAt,
       updated_at: FieldValue.serverTimestamp(),
     });
+    if (clean(req.body?.action) === 'claim') {
+      tx.create(claimLogRef, {
+        lineup_id: lineupId,
+        action: 'claim',
+        task_kind: metadataTask ? 'metadata' : (data.moderator_only === true ? 'template' : 'lineup'),
+        moderator_uid: moderator.uid,
+        moderator_name: moderator.name,
+        moderator_role: moderator.role,
+        created_at: FieldValue.serverTimestamp(),
+      });
+    }
   });
   res.status(200).json({ ok: true, expires_at: expiresAt.getTime() });
 }
@@ -650,7 +672,7 @@ async function completeMetadata(req, res, moderator) {
     });
     tx.update(ref, update);
     if (claimSnap.exists && clean(claimSnap.data()?.lineup_id) === lineupId) tx.delete(claimRef);
-    tx.create(db.collection('moderator_logs').doc(), { lineup_id: lineupId, action: 'complete_metadata', fields: Object.keys(update), moderator_uid: moderator.uid, moderator_role: moderator.role, created_at: FieldValue.serverTimestamp() });
+    tx.create(db.collection('moderator_logs').doc(), { lineup_id: lineupId, action: 'complete_metadata', task_kind: 'metadata', fields: Object.keys(update), moderator_uid: moderator.uid, moderator_name: moderator.name, moderator_role: moderator.role, created_at: FieldValue.serverTimestamp() });
   });
   res.status(200).json({ ok: true });
 }
@@ -719,6 +741,7 @@ async function moderate(req, res, moderator) {
       action,
       reason,
       moderator_uid: moderator.uid,
+      moderator_name: moderator.name,
       moderator_role: moderator.role,
       created_at: FieldValue.serverTimestamp(),
     });
