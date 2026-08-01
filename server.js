@@ -180,7 +180,7 @@ if (production) {
   void firebaseReadiness.check();
 }
 
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL_RUNTIME) {
   app.listen(port, '127.0.0.1', () => {
     console.log(`Valorant upload site listening on http://127.0.0.1:${port}`);
     if (typeof process.send === 'function') process.send('ready');
