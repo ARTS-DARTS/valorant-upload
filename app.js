@@ -2863,15 +2863,17 @@ function _subscribeStats(uid) {
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
   const q = query(collection(db, 'lineups'), where('user_id', '==', uid));
   _statsUnsub = onSnapshot(q, snap => {
-    let approved = 0, pending = 0, rejected = 0, archived = 0;
+    let approved = 0, pending = 0, rejected = 0, moderators = 0;
     currentUserLineups = [];
     snap.forEach(d => {
       const data = d.data();
       currentUserLineups.push({ id: d.id, ...data });
-      const s = lineupStatusGroup(data.status);
+      const rawStatus = String(data.status || '').trim().toLowerCase();
+      const s = lineupStatusGroup(rawStatus);
       if (s === 'approved') approved++;
       else if (s === 'rejected') rejected++;
-      else if (s === 'archived') archived++;
+      else if (rawStatus === 'moderator_draft') moderators++;
+      else if (s === 'archived') return;
       else pending++;
     });
     currentUserLineups.sort((a, b) => {
@@ -2879,7 +2881,7 @@ function _subscribeStats(uid) {
       const bt = a.submitted_at?.toMillis?.() || a.created_at?.toMillis?.() || 0;
       return at - bt;
     });
-    const statValues = { approved, pending, rejected, archived };
+    const statValues = { approved, pending, rejected, moderators };
     Object.entries(statValues).forEach(([key, value]) => {
       const element = document.getElementById(`stat-${key}`);
       if (element) element.textContent = value;
@@ -2906,7 +2908,7 @@ function _unsubscribeStats() {
   document.getElementById('stats-loader').style.display = '';
   document.getElementById('stats-loader').textContent   = 'Загрузка…';
   document.getElementById('stats-cards').style.display  = 'none';
-  ['stat-approved', 'stat-pending', 'stat-rejected', 'stat-archived'].forEach(id => {
+  ['stat-approved', 'stat-pending', 'stat-rejected', 'stat-moderators'].forEach(id => {
     document.getElementById(id).textContent = '—';
   });
   currentUserLineups = [];
@@ -3978,8 +3980,12 @@ function searchableText(item) {
 
 function filteredOwnLineups() {
   return currentUserLineups.filter(item => {
+    const rawStatus = String(item.status || '').trim().toLowerCase();
+    if (rawStatus === 'archived') return false;
     const status = lineupStatusGroup(item.status);
-    if (myLineupsStatusFilter !== 'all' && status !== myLineupsStatusFilter) return false;
+    if (myLineupsStatusFilter === 'moderator_draft') {
+      if (rawStatus !== 'moderator_draft') return false;
+    } else if (myLineupsStatusFilter !== 'all' && status !== myLineupsStatusFilter) return false;
     if (myLineupsSearch && !searchableText(item).includes(myLineupsSearch)) return false;
     return true;
   });
@@ -4087,7 +4093,7 @@ function bindSavedVideoZoom(video, edit) {
 
 function openLineupDetail(lineupId) {
   const item = findOwnLineup(lineupId);
-  if (!item) {
+  if (!item || String(item.status || '').trim().toLowerCase() === 'archived') {
     toast('Лайнап не найден в списке', 'e');
     return;
   }
@@ -4670,11 +4676,14 @@ function renderCabinetStats() {
 }
 
 function renderAuthorWorkspace() {
+  const visibleOwnLineups = currentUserLineups.filter(
+    item => String(item.status || '').trim().toLowerCase() !== 'archived'
+  );
   renderLineupList(
     'my-lineups-list',
     filteredOwnLineups(),
-    currentUserLineups.length ? 'Ничего не найдено' : 'Лайнапов пока нет',
-    currentUserLineups.length ? 'Попробуй другой статус или поисковый запрос.' : 'Отправь первый лайнап, и он появится здесь со статусом проверки.'
+    visibleOwnLineups.length ? 'Ничего не найдено' : 'Лайнапов пока нет',
+    visibleOwnLineups.length ? 'Попробуй другой статус или поисковый запрос.' : 'Отправь первый лайнап, и он появится здесь со статусом проверки.'
   );
   renderLineupList(
     'rejected-lineups-list',

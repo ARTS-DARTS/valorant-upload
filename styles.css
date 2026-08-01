@@ -767,7 +767,7 @@
     .stat-card.s-approved .stat-count { color: var(--green); }
     .stat-card.s-pending  .stat-count { color: var(--orange); }
     .stat-card.s-rejected .stat-count { color: var(--red); }
-    .stat-card.s-archived .stat-count { color: var(--text2); }
+    .stat-card.s-moderators .stat-count { color: #38bdf8; }
     .stats-loader { text-align: center; color: var(--text2); font-size: 12px; padding: 20px 0; }
 
     @media (max-width: 1180px) {
