@@ -4709,10 +4709,13 @@ onAuthStateChanged(auth, async user => {
 });
 
 function hideSiteLoader() {
+  if (window.VLineupsLoader) {
+    window.VLineupsLoader.hide();
+    return;
+  }
   const loader = document.getElementById('site-loader');
   if (!loader || loader.classList.contains('site-loader--hidden')) return;
   loader.classList.add('site-loader--hidden');
-  window.setTimeout(() => loader.remove(), 450);
 }
 
 // Firebase может не ответить из-за сети — интерфейс всё равно должен открыться.

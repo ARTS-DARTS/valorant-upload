@@ -71,10 +71,7 @@ async function applySiteVisibility(user=null){
       code:error?.code,
       message:error?.message||String(error),
     });
-  }finally{
-    document.querySelector('.course-grid')?.removeAttribute('hidden');
-    renderProgress();
-  }
+  }finally{ renderProgress(); }
 }
 onAuthStateChanged(getAuth(app),async user=>{
   try{
@@ -93,5 +90,9 @@ onAuthStateChanged(getAuth(app),async user=>{
       code:error?.code,
       message:error?.message||String(error),
     });
+  }finally{
+    document.querySelector('.course-grid')?.removeAttribute('hidden');
+    renderProgress();
+    window.VLineupsLoader?.hide();
   }
 });
