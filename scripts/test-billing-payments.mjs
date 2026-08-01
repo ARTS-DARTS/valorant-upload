@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { capabilitiesForPlan } from '../api/_lib/billing/entitlements.js';
-import { introIdentityClaim } from '../api/_lib/billing/intro-offer.js';
-import { parseBillingCatalog, publicBillingCatalog } from '../api/_lib/billing/catalog.js';
+import { capabilitiesForPlan } from '../backend/_lib/billing/entitlements.js';
+import { introIdentityClaim } from '../backend/_lib/billing/intro-offer.js';
+import { parseBillingCatalog, publicBillingCatalog } from '../backend/_lib/billing/catalog.js';
 import {
   amountMinorToOutSum,
   buildRobokassaOpStateUrl,
@@ -12,13 +12,13 @@ import {
   outSumToAmountMinor,
   parseRobokassaOpStateXml,
   verifyRobokassaResult,
-} from '../api/_lib/billing/robokassa.js';
-import { createBillingCheckoutHandler, createCheckout } from '../api/billing-checkout.js';
-import { reconcileRobokassaOrder } from '../api/billing-reconcile-robokassa.js';
+} from '../backend/_lib/billing/robokassa.js';
+import { createBillingCheckoutHandler, createCheckout } from '../backend/billing-checkout.js';
+import { reconcileRobokassaOrder } from '../backend/billing-reconcile-robokassa.js';
 import {
   applyRobokassaPayment,
   applyRobokassaReversal,
-} from '../api/billing-webhook-robokassa.js';
+} from '../backend/billing-webhook-robokassa.js';
 
 const now = new Date('2026-07-30T12:00:00.000Z');
 const provider = Object.freeze({

@@ -1,4 +1,4 @@
-import { digest } from '../api/_lib/billing/robokassa.js';
+import { digest } from '../backend/_lib/billing/robokassa.js';
 import { pathToFileURL } from 'node:url';
 
 function parseArgs(values) {

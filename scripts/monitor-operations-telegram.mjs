@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import { FieldValue } from 'firebase-admin/firestore';
 
-import { adminFirestore } from '../api/_lib/firebase-admin.js';
+import { adminFirestore } from '../backend/_lib/firebase-admin.js';
 import { sendTelegram } from './notify-expirations-telegram.mjs';
 
 dotenv.config();

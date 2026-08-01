@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createAppVersionHandler } from '../api/app-version.js';
+import { createAppVersionHandler } from '../backend/app-version.js';
 
 function response() {
   return {

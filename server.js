@@ -3,34 +3,34 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import sendPushHandler from './api/send-push.js';
-import notifyAgentSubscribersHandler from './api/notify-agent-subscribers.js';
-import valorantProxyHandler from './api/valorant-proxy.js';
-import yandexCallbackHandler from './api/yandex-callback.js';
-import yandexStartHandler from './api/yandex-start.js';
-import yandexUnlinkHandler from './api/yandex-unlink.js';
-import moderatorApplicationHandler from './api/moderator-application.js';
-import moderationHandler from './api/moderation.js';
-import sitePresenceHandler from './api/site-presence.js';
-import siteVersionHandler from './api/site-version.js';
-import appVersionHandler from './api/app-version.js';
-import pushConfigHandler from './api/push-config.js';
-import { notifySiteUpdateOnce } from './api/site-update-notifier.js';
-import { finalizeExpiredDuels } from './api/duel-finalizer.js';
-import billingMeHandler from './api/billing-me.js';
-import readinessHandler, { firebaseReadiness } from './api/readiness.js';
-import engagementHandler from './api/engagement.js';
-import billingPlansHandler from './api/billing-plans.js';
-import billingCheckoutHandler from './api/billing-checkout.js';
-import billingOrderStatusHandler from './api/billing-order-status.js';
-import adminBillingHandler from './api/admin-billing.js';
-import accountDeleteHandler from './api/account-delete.js';
-import adminExpirationsHandler from './api/admin-expirations.js';
-import adminHealthHandler from './api/admin-health.js';
-import adminConfigBackupHandler from './api/admin-config-backup.js';
-import adminCloudinaryUsageHandler from './api/admin-cloudinary-usage.js';
-import robokassaWebhookHandler from './api/billing-webhook-robokassa.js';
-import robokassaReconciliationHandler from './api/billing-reconcile-robokassa.js';
+import sendPushHandler from './backend/send-push.js';
+import notifyAgentSubscribersHandler from './backend/notify-agent-subscribers.js';
+import valorantProxyHandler from './backend/valorant-proxy.js';
+import yandexCallbackHandler from './backend/yandex-callback.js';
+import yandexStartHandler from './backend/yandex-start.js';
+import yandexUnlinkHandler from './backend/yandex-unlink.js';
+import moderatorApplicationHandler from './backend/moderator-application.js';
+import moderationHandler from './backend/moderation.js';
+import sitePresenceHandler from './backend/site-presence.js';
+import siteVersionHandler from './backend/site-version.js';
+import appVersionHandler from './backend/app-version.js';
+import pushConfigHandler from './backend/push-config.js';
+import { notifySiteUpdateOnce } from './backend/site-update-notifier.js';
+import { finalizeExpiredDuels } from './backend/duel-finalizer.js';
+import billingMeHandler from './backend/billing-me.js';
+import readinessHandler, { firebaseReadiness } from './backend/readiness.js';
+import engagementHandler from './backend/engagement.js';
+import billingPlansHandler from './backend/billing-plans.js';
+import billingCheckoutHandler from './backend/billing-checkout.js';
+import billingOrderStatusHandler from './backend/billing-order-status.js';
+import adminBillingHandler from './backend/admin-billing.js';
+import accountDeleteHandler from './backend/account-delete.js';
+import adminExpirationsHandler from './backend/admin-expirations.js';
+import adminHealthHandler from './backend/admin-health.js';
+import adminConfigBackupHandler from './backend/admin-config-backup.js';
+import adminCloudinaryUsageHandler from './backend/admin-cloudinary-usage.js';
+import robokassaWebhookHandler from './backend/billing-webhook-robokassa.js';
+import robokassaReconciliationHandler from './backend/billing-reconcile-robokassa.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -180,16 +180,20 @@ if (production) {
   void firebaseReadiness.check();
 }
 
-app.listen(port, '127.0.0.1', () => {
-  console.log(`Valorant upload site listening on http://127.0.0.1:${port}`);
-  if (typeof process.send === 'function') process.send('ready');
-  const runDuelFinalizer = () => finalizeExpiredDuels().then(results => {
-    const finalized = results.filter(item => item && !item.tie && !item.alreadyFinalized).length;
-    if (finalized) console.log(`Finalized duels: ${finalized}`);
-  }).catch(error => console.error('duel finalizer:', error));
-  setTimeout(runDuelFinalizer, 15000);
-  setInterval(runDuelFinalizer, 60000);
-  setTimeout(() => notifySiteUpdateOnce()
-    .then(result => console.log('Site update push:', result))
-    .catch(error => console.error('site update push:', error)), 25000);
-});
+if (!process.env.VERCEL) {
+  app.listen(port, '127.0.0.1', () => {
+    console.log(`Valorant upload site listening on http://127.0.0.1:${port}`);
+    if (typeof process.send === 'function') process.send('ready');
+    const runDuelFinalizer = () => finalizeExpiredDuels().then(results => {
+      const finalized = results.filter(item => item && !item.tie && !item.alreadyFinalized).length;
+      if (finalized) console.log(`Finalized duels: ${finalized}`);
+    }).catch(error => console.error('duel finalizer:', error));
+    setTimeout(runDuelFinalizer, 15000);
+    setInterval(runDuelFinalizer, 60000);
+    setTimeout(() => notifySiteUpdateOnce()
+      .then(result => console.log('Site update push:', result))
+      .catch(error => console.error('site update push:', error)), 25000);
+  });
+}
+
+export default app;

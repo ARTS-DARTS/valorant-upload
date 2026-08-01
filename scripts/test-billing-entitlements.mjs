@@ -4,13 +4,13 @@ import test from 'node:test';
 import {
   capabilitiesForPlan,
   normalizeEntitlement,
-} from '../api/_lib/billing/entitlements.js';
-import { validateFirebaseAdminServices } from '../api/_lib/firebase-admin.js';
+} from '../backend/_lib/billing/entitlements.js';
+import { validateFirebaseAdminServices } from '../backend/_lib/firebase-admin.js';
 import {
   createBillingMeHandler,
   createPreAuthLimiter,
-} from '../api/billing-me.js';
-import { createFirebaseReadinessController } from '../api/readiness.js';
+} from '../backend/billing-me.js';
+import { createFirebaseReadinessController } from '../backend/readiness.js';
 
 const now = Date.parse('2026-07-30T12:00:00.000Z');
 const hour = 60 * 60 * 1000;

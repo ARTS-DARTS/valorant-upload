@@ -1,18 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createAdminBillingHandler } from '../api/admin-billing.js';
-import { createAdminExpirationsHandler } from '../api/admin-expirations.js';
-import { createAdminHealthHandler } from '../api/admin-health.js';
-import { createAdminConfigBackupHandler } from '../api/admin-config-backup.js';
-import { createModeratorApplicationHandler } from '../api/moderator-application.js';
-import { createNotifyAgentSubscribersHandler } from '../api/notify-agent-subscribers.js';
-import { createSendPushHandler } from '../api/send-push.js';
-import { createBillingOrderStatusHandler } from '../api/billing-order-status.js';
+import { createAdminBillingHandler } from '../backend/admin-billing.js';
+import { createAdminExpirationsHandler } from '../backend/admin-expirations.js';
+import { createAdminHealthHandler } from '../backend/admin-health.js';
+import { createAdminConfigBackupHandler } from '../backend/admin-config-backup.js';
+import { createModeratorApplicationHandler } from '../backend/moderator-application.js';
+import { createNotifyAgentSubscribersHandler } from '../backend/notify-agent-subscribers.js';
+import { createSendPushHandler } from '../backend/send-push.js';
+import { createBillingOrderStatusHandler } from '../backend/billing-order-status.js';
 import {
   createAccountDeleteHandler,
   deletedSubjectId,
-} from '../api/account-delete.js';
+} from '../backend/account-delete.js';
 import { buildRobokassaTestScenarios } from './generate-robokassa-test-scenarios.mjs';
 import {
   alertFingerprint,

@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
 import { FieldValue } from 'firebase-admin/firestore';
 
-import { buildExpirationSnapshot } from '../api/admin-expirations.js';
-import { adminFirestore } from '../api/_lib/firebase-admin.js';
+import { buildExpirationSnapshot } from '../backend/admin-expirations.js';
+import { adminFirestore } from '../backend/_lib/firebase-admin.js';
 
 dotenv.config();
 

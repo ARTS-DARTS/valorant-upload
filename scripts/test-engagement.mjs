@@ -3,12 +3,12 @@ import test from 'node:test';
 
 import { Timestamp } from 'firebase-admin/firestore';
 
-import { capabilitiesForPlan } from '../api/_lib/billing/entitlements.js';
+import { capabilitiesForPlan } from '../backend/_lib/billing/entitlements.js';
 import {
   applyEngagementAction,
   createEngagementHandler,
   engagementInternals,
-} from '../api/engagement.js';
+} from '../backend/engagement.js';
 
 const now = new Date('2026-07-30T12:00:00.000Z');
 

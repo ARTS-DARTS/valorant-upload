@@ -31,7 +31,7 @@ async function run() {
 
   const { finalizeDuelById } = serverMode
     ? { finalizeDuelById: null }
-    : await import('../api/duel-finalizer.js');
+    : await import('../backend/duel-finalizer.js');
   const db = getFirestore();
   const suffix = `${Date.now()}_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   const prefix = `__codex_duel_e2e_${suffix}`;
