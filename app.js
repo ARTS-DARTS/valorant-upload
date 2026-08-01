@@ -2885,6 +2885,7 @@ function _subscribeStats(uid) {
       if (element) element.textContent = value;
     });
     _updateLevelDisplay(effectiveApprovedLineups(approved));
+    _updateCooldown(uid);
     renderAuthorWorkspace();
     updateCategoryTrainingGate();
     openPendingLineupDeepLink();
@@ -2931,7 +2932,7 @@ function _subscribeUserProfile(uid) {
     updateUploadCategoryButtons();
     updateCategoryTrainingGate();
     renderAuthorTrainingProgress();
-    const approvedDocs = currentUserLineups.filter(x => x.status === 'approved').length;
+    const approvedDocs = currentUserLineups.filter(x => lineupStatusGroup(x.status) === 'approved').length;
     _updateLevelDisplay(effectiveApprovedLineups(approvedDocs));
     updateUploadGate();
     renderAuthorWorkspace();
@@ -3828,6 +3829,7 @@ function statusLabel(status) {
 
 function lineupStatusGroup(status) {
   const value = String(status || '').trim().toLowerCase();
+  if (value === 'hot') return 'approved';
   return ['approved', 'rejected', 'archived'].includes(value) ? value : 'pending';
 }
 
@@ -4647,10 +4649,10 @@ async function deleteAuthorMaterial(id) {
 function renderCabinetStats() {
   const target = document.getElementById('cabinet-stats-grid');
   if (!target) return;
-  const approved = currentUserLineups.filter(x => x.status === 'approved').length;
+  const approved = currentUserLineups.filter(x => lineupStatusGroup(x.status) === 'approved').length;
   const effectiveApproved = effectiveApprovedLineups(approved);
   const bonusLineups = Number(currentUserProfile?.bonus_lineups || 0);
-  const rejected = currentUserLineups.filter(x => x.status === 'rejected').length;
+  const rejected = currentUserLineups.filter(x => lineupStatusGroup(x.status) === 'rejected').length;
   const pending = currentUserLineups.filter(x => lineupStatusGroup(x.status) === 'pending').length;
   const submittedCount = approved + pending;
   const viewed = Number(currentUserProfile?.lineups_viewed || 0);
