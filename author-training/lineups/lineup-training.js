@@ -32,7 +32,7 @@ const criteriaUpdateItems = [
   'Видео записано в 1920×1080 (Full HD)',
   'Качество графики в игре — минимум «Среднее»',
 ];
-const criteriaUpdateState = { checked: new Set(), saving: false, completed: false, error: '' };
+const criteriaUpdateState = { checked: new Set(), loading: true, saving: false, completed: false, alreadyCompleted: false, error: '' };
 const uid = params.get('uid') || 'guest';
 const storageKey = `vl_category_training_${uid}_lineup`;
 const draftKey = `vlineups-training-lineup-${uid}`;
@@ -46,7 +46,7 @@ function safeReturnPath() {
 function renderCriteriaUpdate() {
   const ready = criteriaUpdateState.checked.size === criteriaUpdateItems.length;
   const done = criteriaUpdateState.completed;
-  root.innerHTML = `<div class="mobile-lock"><div><h1>Открой обновление на компьютере</h1><p>Для просмотра критериев нужен большой экран.</p></div></div><main class="app criteria-update-app"><aside class="sidebar"><div class="brand"><i>V</i>VLINEUPS</div><div class="course-label">ИНСТРУКТАЖ · ЛАЙНАПЫ</div><nav class="steps"><button class="step active"><span class="num">${done ? '✓' : '1'}</span><span><strong>Изменения</strong><small>Новые критерии отправки</small></span></button></nav><div class="training-nav"><a href="/author-training/">← ВСЕ ИНСТРУКТАЖИ</a><a href="${safeReturnPath()}">ВЕРНУТЬСЯ НА САЙТ ↗</a></div><div class="desktop-note">Только новая редакция · без повторной награды</div></aside><section class="workspace"><header class="top"><div><p class="eyebrow">ОБНОВЛЕНИЕ КРИТЕРИЕВ</p><h2>${done ? 'Изменения подтверждены' : 'Что изменилось'}</h2></div><div class="criteria-revision">НОВАЯ РЕДАКЦИЯ<br><b>${criteriaRevision || 'актуальная'}</b></div></header><div class="content complete"><section class="lesson criteria-update-lesson">${done ? `<div class="completion criteria-update-complete"><div class="seal"><span>✓</span></div><p class="eyebrow">КРИТЕРИИ ОБНОВЛЕНЫ</p><h1>Новые требования сохранены</h1><p class="lead">Старое прохождение и полученные очки остались без изменений.</p><div class="actions"><a class="primary" href="${safeReturnPath()}">ВЕРНУТЬСЯ НА САЙТ →</a></div></div>` : `<p class="eyebrow">ИЗМЕНЕНО В ЭТОЙ РЕДАКЦИИ</p><h1>Проверь два новых требования</h1><p class="lead">Здесь показаны только добавленные пункты. Уже пройденные этапы повторять не нужно.</p><div class="criteria-update-list">${criteriaUpdateItems.map((item, index) => `<button class="${criteriaUpdateState.checked.has(index) ? 'selected' : ''}" data-criteria-item="${index}"><i>${criteriaUpdateState.checked.has(index) ? '✓' : ''}</i><span><b>0${index + 1}</b>${item}</span></button>`).join('')}</div>${criteriaUpdateState.error ? `<div class="feedback">${criteriaUpdateState.error}</div>` : ''}<div class="lesson-actions"><span>${ready ? 'Можно подтвердить изменения' : 'Отметь оба новых требования'}</span><button class="primary" data-criteria-confirm ${ready && !criteriaUpdateState.saving ? '' : 'disabled'}>${criteriaUpdateState.saving ? 'СОХРАНЯЕМ…' : 'ПОДТВЕРДИТЬ ИЗМЕНЕНИЯ'} →</button></div>`}</section></div></section></main>`;
+  root.innerHTML = `<div class="mobile-lock"><div><h1>Открой обновление на компьютере</h1><p>Для просмотра критериев нужен большой экран.</p></div></div><main class="app criteria-update-app"><aside class="sidebar"><div class="brand"><i>V</i>VLINEUPS</div><div class="course-label">ИНСТРУКТАЖ · ЛАЙНАПЫ</div><nav class="steps"><button class="step active"><span class="num">${done ? '✓' : '1'}</span><span><strong>Изменения</strong><small>Новые критерии отправки</small></span></button></nav><div class="training-nav"><a href="/author-training/">← ВСЕ ИНСТРУКТАЖИ</a><a href="${safeReturnPath()}">ВЕРНУТЬСЯ НА САЙТ ↗</a></div><div class="desktop-note">Только новая редакция · без повторной награды</div></aside><section class="workspace"><header class="top"><div><p class="eyebrow">ОБНОВЛЕНИЕ КРИТЕРИЕВ</p><h2>${criteriaUpdateState.loading ? 'Проверяем статус' : done ? 'Изменения подтверждены' : 'Что изменилось'}</h2></div><div class="criteria-revision">НОВАЯ РЕДАКЦИЯ<br><b>${criteriaRevision || 'актуальная'}</b></div></header><div class="content complete"><section class="lesson criteria-update-lesson">${criteriaUpdateState.loading ? `<div class="criteria-status-loading"><i></i><h1>Проверяем ознакомление…</h1><p class="lead">Сверяем сохранённую редакцию критериев.</p></div>` : done ? `<div class="completion criteria-update-complete"><div class="seal"><span>✓</span></div><p class="eyebrow">КРИТЕРИИ ОБНОВЛЕНЫ</p><h1>${criteriaUpdateState.alreadyCompleted ? 'Вы уже ознакомились с изменениями' : 'Новые требования сохранены'}</h1><p class="lead">${criteriaUpdateState.alreadyCompleted ? 'Эта редакция уже подтверждена. Повторно проходить её не нужно.' : 'Старое прохождение и полученные очки остались без изменений.'}</p><div class="actions"><a class="primary" href="${safeReturnPath()}">ВЕРНУТЬСЯ НА САЙТ →</a></div></div>` : `<p class="eyebrow">ИЗМЕНЕНО В ЭТОЙ РЕДАКЦИИ</p><h1>Проверь два новых требования</h1><p class="lead">Здесь показаны только добавленные пункты. Уже пройденные этапы повторять не нужно.</p><div class="criteria-update-list">${criteriaUpdateItems.map((item, index) => `<button class="${criteriaUpdateState.checked.has(index) ? 'selected' : ''}" data-criteria-item="${index}"><i>${criteriaUpdateState.checked.has(index) ? '✓' : ''}</i><span><b>0${index + 1}</b>${item}</span></button>`).join('')}</div>${criteriaUpdateState.error ? `<div class="feedback">${criteriaUpdateState.error}</div>` : ''}<div class="lesson-actions"><span>${ready ? 'Можно подтвердить изменения' : 'Отметь оба новых требования'}</span><button class="primary" data-criteria-confirm ${ready && !criteriaUpdateState.saving ? '' : 'disabled'}>${criteriaUpdateState.saving ? 'СОХРАНЯЕМ…' : 'ПОДТВЕРДИТЬ ИЗМЕНЕНИЯ'} →</button></div>`}</section></div></section></main>`;
   root.querySelectorAll('[data-criteria-item]').forEach(button => {
     button.onclick = () => {
       const index = Number(button.dataset.criteriaItem);
@@ -70,6 +70,22 @@ function renderCriteriaUpdate() {
       renderCriteriaUpdate();
     }
   });
+}
+
+async function loadCriteriaUpdateStatus() {
+  criteriaUpdateState.loading = true;
+  renderCriteriaUpdate();
+  try {
+    const progress = await window.loadAuthorTrainingCriteriaStatus();
+    const acknowledged = progress?.criteriaRevisions?.lineup === criteriaRevision;
+    criteriaUpdateState.completed = acknowledged;
+    criteriaUpdateState.alreadyCompleted = acknowledged;
+  } catch (error) {
+    criteriaUpdateState.error = error?.message || 'Не удалось проверить сохранённую редакцию.';
+  } finally {
+    criteriaUpdateState.loading = false;
+    renderCriteriaUpdate();
+  }
 }
 
 function saveDraft() {
@@ -158,6 +174,8 @@ function bind() {
 }
 if (criteriaUpdateMode) {
   renderCriteriaUpdate();
+  if (typeof window.loadAuthorTrainingCriteriaStatus === 'function') loadCriteriaUpdateStatus();
+  else window.addEventListener('author-training-reward-ready', loadCriteriaUpdateStatus, { once: true });
 } else {
   restoreDraft();
   state.completed = Boolean(localStorage.getItem(storageKey));

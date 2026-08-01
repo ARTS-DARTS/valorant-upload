@@ -37,6 +37,14 @@ window.acknowledgeAuthorTrainingCriteria = async revision => {
   return result.data || {};
 };
 
+window.loadAuthorTrainingCriteriaStatus = async () => {
+  const user = await authenticatedUser();
+  if (!user) throw new Error('Чтобы проверить ознакомление, войди в аккаунт');
+  const result = await getTrainingProgress();
+  return result.data || {};
+};
+window.dispatchEvent(new CustomEvent('author-training-reward-ready'));
+
 function localProgressKeys(uid) {
   const keys = [
     `vl_category_training_${uid}_${category}`,
