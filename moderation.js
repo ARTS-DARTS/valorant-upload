@@ -8,6 +8,11 @@ let claimExpiresAt = 0;
 let claimCountdownTimer = null;
 let totalQueueItems = 0;
 let renderedQueueSignature = '';
+let active = false;
+let queueLoadAbortController = null;
+let lockAbortController = null;
+let refreshButton = null;
+let moderationList = null;
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
@@ -164,7 +169,7 @@ function restoreMetadataFormState(state) {
 
 const moderationPreviewObserver = 'IntersectionObserver' in window
   ? new IntersectionObserver(entries => entries.forEach(entry => {
-      if (!entry.isIntersecting) return;
+      if (!active || !entry.isIntersecting) return;
       moderationPreviewObserver.unobserve(entry.target);
       loadVideoPreviewFrame(entry.target);
     }), { rootMargin: '180px 0px' })
@@ -187,7 +192,10 @@ function loadVideoPreviewFrame(video) {
 }
 
 function hydrateVideoPreviews() {
-  document.querySelectorAll('video[poster]:not([data-poster-checked])').forEach(video => {
+  if (!active) return;
+  const list = document.getElementById('moderation-list');
+  if (!list) return;
+  list.querySelectorAll('video[poster]:not([data-poster-checked])').forEach(video => {
     video.dataset.posterChecked = 'loading';
     const probe = new Image();
     probe.onload = () => { video.dataset.posterChecked = 'ready'; };
@@ -201,13 +209,14 @@ function hydrateVideoPreviews() {
     };
     probe.src = video.poster;
   });
-  document.querySelectorAll('video[data-preview-frame="pending"]').forEach(video => {
+  list.querySelectorAll('video[data-preview-frame="pending"]').forEach(video => {
     if (moderationPreviewObserver) moderationPreviewObserver.observe(video);
     else loadVideoPreviewFrame(video);
   });
 }
 
 function render(items, total = totalQueueItems) {
+  if (!active) return;
   // Defensive client-side deduplication in case an older/cached API response
   // contains the same Firestore document through overlapping queue queries.
   items = [...new Map(items.map(item => [item.id, item])).values()];
@@ -281,9 +290,13 @@ function applyLockToCard(item) {
 
 async function refreshLocks() {
   const ids = loadedItems.map(item => item.id);
-  if (!ids.length || document.hidden) return;
+  if (!active || !ids.length || document.hidden) return;
+  lockAbortController?.abort();
+  const requestController = new AbortController();
+  lockAbortController = requestController;
   try {
-    const body = await api(`?locks=${encodeURIComponent(ids.join(','))}`);
+    const body = await api(`?locks=${encodeURIComponent(ids.join(','))}`, { signal: requestController.signal });
+    if (!active) return;
     removeQueueItems(body.processed);
     let ownershipChanged = false;
     loadedItems.forEach(item => {
@@ -296,7 +309,11 @@ async function refreshLocks() {
       applyLockToCard(item);
     });
     if (ownershipChanged) render(loadedItems);
-  } catch (_) {}
+  } catch (error) {
+    if (error?.name !== 'AbortError') console.warn('moderation lock refresh', error?.message || error);
+  } finally {
+    if (lockAbortController === requestController) lockAbortController = null;
+  }
 }
 
 function renderClaimTimer() {
@@ -334,20 +351,27 @@ function clearClaim() {
   renderClaimTimer();
 }
 
-async function load({ silent = false } = {}) {
-  if (loading) return;
+async function load({ silent = false, allowInactive = false, renderQueue = true } = {}) {
+  if ((!active && !allowInactive) || loading) return;
   loading = true;
   const status = document.getElementById('moderation-status');
-  if (!silent) status.textContent = 'Загрузка очереди…';
+  const requestController = new AbortController();
+  queueLoadAbortController?.abort();
+  queueLoadAbortController = requestController;
+  if (!silent && active && status) status.textContent = 'Загрузка очереди…';
   try {
     if (context.getRole?.() === 'admin' && !sessionStorage.getItem('metadata-review-seeded-v2')) {
-      await api('', { method: 'POST', body: JSON.stringify({ action: 'seed_metadata_queue' }) });
+      await api('', { method: 'POST', body: JSON.stringify({ action: 'seed_metadata_queue' }), signal: requestController.signal });
       sessionStorage.setItem('metadata-review-seeded-v2', '1');
     }
-    const body = await api();
+    const body = await api('', { signal: requestController.signal });
+    if (!active && !allowInactive) return;
     const items = Array.isArray(body.items) ? body.items : [];
     const nextSignature = queueSignature(items);
-    if (nextSignature === renderedQueueSignature) {
+    if (!active || !renderQueue) {
+      loadedItems = items;
+      totalQueueItems = Number.isFinite(Number(body.total)) ? Number(body.total) : items.length;
+    } else if (nextSignature === renderedQueueSignature) {
       loadedItems = items;
       totalQueueItems = Number.isFinite(Number(body.total)) ? Number(body.total) : items.length;
       updateQueueStatus();
@@ -357,10 +381,14 @@ async function load({ silent = false } = {}) {
     const owned = items.find(item => item.moderation_lock_owned && item.moderation_lock_expires_at > Date.now());
     if (owned) startClaimHeartbeat(owned.id, owned.moderation_lock_expires_at);
   } catch (error) {
-    status.textContent = `Не удалось загрузить очередь: ${error.message}`;
-    document.getElementById('moderation-list').innerHTML = '';
+    if (error?.name === 'AbortError' || (!active && !allowInactive)) return;
+    if (status) status.textContent = `Не удалось загрузить очередь: ${error.message}`;
+    if (active) document.getElementById('moderation-list').innerHTML = '';
   } finally {
-    loading = false;
+    if (queueLoadAbortController === requestController) {
+      queueLoadAbortController = null;
+      loading = false;
+    }
   }
 }
 
@@ -470,66 +498,119 @@ async function act(card, action) {
 
 let loadedItems = [];
 
-export function initModeration(nextContext) {
-  context = nextContext;
-  document.getElementById('moderation-refresh')?.addEventListener('click', load);
-  document.getElementById('moderation-list')?.addEventListener('click', event => {
-    const button = event.target.closest('[data-moderation-action]');
-    const card = button?.closest('[data-moderation-id]');
-    if (button && card) act(card, button.dataset.moderationAction);
+function handleModerationListClick(event) {
+  if (!active) return;
+  const actionButton = event.target.closest('[data-moderation-action]');
+  const card = actionButton?.closest('[data-moderation-id]');
+  if (actionButton && card) act(card, actionButton.dataset.moderationAction);
+
+  const bounceButton = event.target.closest('[data-metadata-bounce]');
+  if (!bounceButton) return;
+  const picker = bounceButton.closest('[data-metadata-bounces]');
+  const requested = Number(bounceButton.dataset.metadataBounce);
+  const current = picker.dataset.value === '' ? 0 : Number(picker.dataset.value);
+  const next = current === requested ? requested - 1 : requested;
+  picker.dataset.value = String(next);
+  picker.classList.add('selected');
+  picker.querySelectorAll('[data-metadata-bounce]').forEach(item => {
+    const value = Number(item.dataset.metadataBounce);
+    item.classList.toggle('active', value <= next);
   });
-  document.getElementById('moderation-list')?.addEventListener('input', event => {
-    if (!event.target.matches('[data-metadata-charge]')) return;
-    const wrapper = event.target.parentElement;
-    const value = Number(event.target.value);
-    wrapper?.style.setProperty('--sova-charge-pct', `${value / 3 * 100}%`);
-    wrapper?.classList.toggle('is-max', value >= 3);
-  });
-  document.getElementById('moderation-list')?.addEventListener('click', event => {
-    const button = event.target.closest('[data-metadata-bounce]');
-    if (!button) return;
-    const picker = button.closest('[data-metadata-bounces]');
-    const requested = Number(button.dataset.metadataBounce);
-    const current = picker.dataset.value === '' ? 0 : Number(picker.dataset.value);
-    const next = current === requested ? requested - 1 : requested;
-    picker.dataset.value = String(next);
-    picker.classList.add('selected');
-    picker.querySelectorAll('[data-metadata-bounce]').forEach(item => {
-      const value = Number(item.dataset.metadataBounce);
-      item.classList.toggle('active', value <= next);
-    });
-  });
+}
+
+function handleModerationListInput(event) {
+  if (!active || !event.target.matches('[data-metadata-charge]')) return;
+  const wrapper = event.target.parentElement;
+  const value = Number(event.target.value);
+  wrapper?.style.setProperty('--sova-charge-pct', `${value / 3 * 100}%`);
+  wrapper?.classList.toggle('is-max', value >= 3);
+}
+
+function startPolling() {
   clearInterval(lockPollTimer);
   clearInterval(queuePollTimer);
+  if (!active) return;
   lockPollTimer = setInterval(refreshLocks, 3_000);
   queuePollTimer = setInterval(() => {
-    if (!document.hidden) load({ silent: true });
+    if (active && !document.hidden) load({ silent: true });
   }, 5_000);
-  document.addEventListener('visibilitychange', async () => {
-    if (document.hidden) return;
-    renderClaimTimer();
-    refreshLocks();
+}
+
+function activate() {
+  if (active) return;
+  active = true;
+  startPolling();
+  renderClaimTimer();
+}
+
+function deactivate() {
+  active = false;
+  clearInterval(lockPollTimer);
+  clearInterval(queuePollTimer);
+  lockPollTimer = null;
+  queuePollTimer = null;
+  queueLoadAbortController?.abort();
+  lockAbortController?.abort();
+  queueLoadAbortController = null;
+  lockAbortController = null;
+  loading = false;
+  moderationPreviewObserver?.disconnect();
+  const list = document.getElementById('moderation-list');
+  list?.querySelectorAll('video, audio').forEach(media => {
+    try { media.pause(); } catch (_) {}
+    media.removeAttribute('src');
+    try { media.load(); } catch (_) {}
   });
+  if (list) list.innerHTML = '';
+  renderedQueueSignature = '';
+  const status = document.getElementById('moderation-status');
+  if (status) status.textContent = 'Открой раздел, чтобы загрузить очередь.';
+}
+
+function destroy() {
+  deactivate();
+  clearClaim();
+  refreshButton?.removeEventListener('click', load);
+  moderationList?.removeEventListener('click', handleModerationListClick);
+  moderationList?.removeEventListener('input', handleModerationListInput);
+  refreshButton = null;
+  moderationList = null;
+  loadedItems = [];
+  totalQueueItems = 0;
+  context = null;
+}
+
+export function initModeration(nextContext) {
+  context = nextContext;
+  refreshButton = document.getElementById('moderation-refresh');
+  moderationList = document.getElementById('moderation-list');
+  refreshButton?.addEventListener('click', load);
+  moderationList?.addEventListener('click', handleModerationListClick);
+  moderationList?.addEventListener('input', handleModerationListInput);
   async function releaseClaim(lineupId) {
     if (!lineupId) return;
     await api('', { method: 'POST', body: JSON.stringify({ lineupId, action: 'release_claim' }) });
     clearClaim();
-    await load();
+    if (active) await load();
   }
   async function resumeDraft(lineupId) {
     if (!lineupId) return false;
     let item = loadedItems.find(entry => entry.id === lineupId);
+    if (!item) {
+      await load({ silent: true, allowInactive: true, renderQueue: active });
+      item = loadedItems.find(entry => entry.id === lineupId);
+    }
     if (item?.moderation_lock_owned && item.moderation_lock_expires_at > Date.now()) {
       startClaimHeartbeat(lineupId, item.moderation_lock_expires_at);
     } else {
       const claim = await api('', { method:'POST', body:JSON.stringify({ lineupId, action:'claim' }) });
       startClaimHeartbeat(lineupId, claim.expires_at);
-      await load({ silent:true });
+      await load({ silent:true, allowInactive: true, renderQueue: active });
       item = loadedItems.find(entry => entry.id === lineupId);
     }
     if (!item) return false;
     context.openDraft(item);
     return true;
   }
-  return { load, clearClaim, releaseClaim, resumeDraft };
+  return { activate, deactivate, destroy, load, clearClaim, releaseClaim, resumeDraft };
 }

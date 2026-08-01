@@ -33,6 +33,26 @@ const productionSteps = [
 
 let productionScrollTarget = '';
 let productionScrollTimer = 0;
+let productionRefreshInterval = 0;
+
+function isUploadWorkspaceActive() {
+  return !document.hidden && !!document.getElementById('workspace-upload')?.classList.contains('active');
+}
+
+function startProductionRefresh() {
+  clearInterval(productionRefreshInterval);
+  productionRefreshInterval = window.setInterval(() => {
+    if (isUploadWorkspaceActive()) refreshProductionProgress();
+  }, 1500);
+}
+
+function stopProductionRefresh() {
+  clearInterval(productionRefreshInterval);
+  productionRefreshInterval = 0;
+  clearTimeout(productionScrollTimer);
+  productionScrollTimer = 0;
+  productionScrollTarget = '';
+}
 
 function setActiveProductionStep(key) {
   document.querySelectorAll('.production-flow [data-production-step]').forEach((button) => {
@@ -41,6 +61,7 @@ function setActiveProductionStep(key) {
 }
 
 function updateActiveProductionStepFromScroll() {
+  if (!isUploadWorkspaceActive()) return;
   if (productionScrollTarget) {
     setActiveProductionStep(productionScrollTarget);
     return;
@@ -108,6 +129,7 @@ function isVisible(element) {
 }
 
 function refreshProductionProgress() {
+  if (!isUploadWorkspaceActive()) return;
   const rail = document.querySelector('.production-flow');
   if (!rail) return;
   const productionState = window.getUploadProductionProgressState?.();
@@ -161,6 +183,10 @@ function createMapGallery() {
   let scrollTarget = track.scrollLeft;
   let scrollFrame = 0;
   const animateScroll = () => {
+    if (!isUploadWorkspaceActive()) {
+      scrollFrame = 0;
+      return;
+    }
     const distance = scrollTarget - track.scrollLeft;
     if (Math.abs(distance) < .5) {
       track.scrollLeft = scrollTarget;
@@ -180,6 +206,7 @@ function createMapGallery() {
     if (!scrollFrame) scrollFrame = requestAnimationFrame(animateScroll);
   };
   const revealSelectedMap = () => {
+    if (!isUploadWorkspaceActive()) return;
     const button = track.querySelector(`[data-map-name="${CSS.escape(select.value)}"]`);
     if (!button) return;
     const trackRect = track.getBoundingClientRect();
@@ -264,6 +291,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('form-screen')?.addEventListener('change', refreshProductionProgress);
   document.getElementById('form-screen')?.addEventListener('click', () => setTimeout(refreshProductionProgress, 80));
   window.addEventListener('scroll', () => {
+    if (!isUploadWorkspaceActive()) return;
     clearTimeout(productionScrollTimer);
     if (productionScrollTarget) {
       productionScrollTimer = window.setTimeout(() => {
@@ -274,12 +302,27 @@ window.addEventListener('DOMContentLoaded', () => {
       updateActiveProductionStepFromScroll();
     }
   }, { passive: true });
-  window.addEventListener('resize', updateActiveProductionStepFromScroll, { passive: true });
+  window.addEventListener('resize', () => {
+    if (isUploadWorkspaceActive()) updateActiveProductionStepFromScroll();
+  }, { passive: true });
   new MutationObserver(refreshProductionProgress).observe(document.getElementById('workspace-upload'), {
     subtree: true,
     childList: true,
     attributes: true,
     attributeFilter: ['class', 'style', 'disabled', 'src'],
   });
-  setInterval(refreshProductionProgress, 1500);
+  document.addEventListener('workspace:deactivate', event => {
+    if (event.detail?.tab === 'upload') stopProductionRefresh();
+  });
+  document.addEventListener('workspace:activate', event => {
+    if (event.detail?.tab !== 'upload') return;
+    refreshProductionProgress();
+    updateActiveProductionStepFromScroll();
+    startProductionRefresh();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopProductionRefresh();
+    else if (isUploadWorkspaceActive()) startProductionRefresh();
+  });
+  startProductionRefresh();
 });

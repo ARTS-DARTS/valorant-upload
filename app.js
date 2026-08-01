@@ -2366,6 +2366,7 @@ let authorMaterialsError = '';
 let materialEditorId = '';
 let materialVideoUploading = false;
 let materialVideoUploadSeq = 0;
+let materialVideoUploadRequest = null;
 let activeWorkspaceTab = 'upload';
 let myLineupsStatusFilter = 'all';
 let myLineupsSearch = '';
@@ -2461,7 +2462,13 @@ function renderCategoryFormGuide() {
 function closeCategoryFormGuide() {
   const modal = document.getElementById('category-form-guide-modal');
   const video = modal?.querySelector('video');
-  if (video) video.pause();
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.removeAttribute('data-guide-src');
+    video.load();
+    video.hidden = true;
+  }
   const important = document.getElementById('category-form-guide-important');
   const importantButton = document.getElementById('category-form-guide-important-toggle');
   if (important) important.hidden = true;
@@ -3128,16 +3135,100 @@ function initWorkspaceTabs() {
   });
 }
 
+function workspacePanel(tab) {
+  return document.getElementById(`workspace-${tab || 'upload'}`);
+}
+
+function pauseMediaTree(root, { releaseNetwork = false } = {}) {
+  if (!root) return;
+  root.querySelectorAll('video, audio').forEach(media => {
+    try { media.pause(); } catch (_) {}
+    if (!releaseNetwork || !media.getAttribute('src')) return;
+    const currentTime = Number(media.currentTime || 0);
+    if (Number.isFinite(currentTime) && currentTime > 0) {
+      media.dataset.workspaceSuspendedTime = String(currentTime);
+    }
+    media.dataset.workspaceSuspendedSrc = media.getAttribute('src');
+    media.removeAttribute('src');
+    try { media.load(); } catch (_) {}
+  });
+}
+
+function restoreMediaTree(root) {
+  if (!root) return;
+  root.querySelectorAll('video[data-workspace-suspended-src], audio[data-workspace-suspended-src]').forEach(media => {
+    const source = media.dataset.workspaceSuspendedSrc || '';
+    const restoreTime = Number(media.dataset.workspaceSuspendedTime || 0);
+    delete media.dataset.workspaceSuspendedSrc;
+    delete media.dataset.workspaceSuspendedTime;
+    if (!source) return;
+    if (restoreTime > 0) {
+      media.addEventListener('loadedmetadata', () => {
+        const duration = Number(media.duration || 0);
+        try { media.currentTime = duration > 0 ? Math.min(restoreTime, Math.max(0, duration - 0.05)) : restoreTime; } catch (_) {}
+      }, { once: true });
+    }
+    media.setAttribute('src', source);
+    try { media.load(); } catch (_) {}
+  });
+}
+
+function deactivateWorkspaceTab(tab) {
+  const panel = workspacePanel(tab);
+  if (tab === 'upload') {
+    stopOutputPlayback({ keepPreview: true });
+    clearFreezeHold();
+    stopSmoothTimelineUi();
+    stopChromaPreview();
+    try { vidPlayer.pause(); } catch (_) {}
+    try { editorEls.footagePreview?.pause(); } catch (_) {}
+    closeCategoryFormGuide();
+    pauseMediaTree(panel, { releaseNetwork: true });
+  } else if (tab === 'moderation') {
+    moderationController?.deactivate?.();
+    pauseMediaTree(panel, { releaseNetwork: true });
+  } else {
+    if (tab === 'materials') stopMaterialWorkspaceActivity();
+    pauseMediaTree(panel, { releaseNetwork: true });
+  }
+  closeLineupDetail();
+  document.dispatchEvent(new CustomEvent('workspace:deactivate', { detail: { tab, panel } }));
+}
+
+function activateWorkspaceTab(tab) {
+  const panel = workspacePanel(tab);
+  restoreMediaTree(panel);
+  if (tab === 'upload') {
+    updateTimelinePlaybackUi();
+  }
+  document.dispatchEvent(new CustomEvent('workspace:activate', { detail: { tab, panel } }));
+}
+
+function pauseAllSiteMedia() {
+  document.querySelectorAll('video, audio').forEach(media => {
+    try { media.pause(); } catch (_) {}
+  });
+  stopOutputPlayback({ keepPreview: true });
+  clearFreezeHold();
+  stopSmoothTimelineUi();
+  stopChromaPreview();
+}
+
 function switchWorkspaceTab(tab) {
-  if (tab === 'moderation' && !canCurrentUserModerate()) return;
-  activeWorkspaceTab = tab || 'upload';
+  const nextTab = tab || 'upload';
+  if (nextTab === 'moderation' && !canCurrentUserModerate()) return;
+  const previousTab = activeWorkspaceTab;
+  if (previousTab !== nextTab) deactivateWorkspaceTab(previousTab);
+  activeWorkspaceTab = nextTab;
   document.querySelectorAll('.workspace-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.workspaceTab === activeWorkspaceTab);
   });
   document.querySelectorAll('.workspace-panel').forEach(panel => {
     panel.classList.toggle('active', panel.id === `workspace-${activeWorkspaceTab}`);
   });
+  document.body.dataset.workspaceSection = activeWorkspaceTab;
   document.getElementById('header-moderation')?.classList.toggle('active', activeWorkspaceTab === 'moderation');
+  if (previousTab !== activeWorkspaceTab) activateWorkspaceTab(activeWorkspaceTab);
   if (activeWorkspaceTab === 'materials') loadAuthorMaterials();
   if (activeWorkspaceTab === 'moderation') loadModerationWorkspace();
   if (activeWorkspaceTab === 'admin-chat') openAdminChat();
@@ -3145,6 +3236,15 @@ function switchWorkspaceTab(tab) {
   renderAuthorWorkspace();
   scheduleSitePresence();
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    pauseAllSiteMedia();
+    moderationController?.deactivate?.();
+    return;
+  }
+  if (activeWorkspaceTab === 'moderation') loadModerationWorkspace();
+});
 
 const MODERATION_MOVED_HINT_KEY = 'vl_moderation_moved_hint_20260730';
 
@@ -3916,10 +4016,10 @@ document.getElementById('moderator-author-search')?.addEventListener('input', ev
   moderatorAuthorTimer = setTimeout(() => searchModeratorAuthors(value), 250);
 });
 
-async function loadModerationWorkspace() {
+async function loadModerationWorkspace({ background = false } = {}) {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-07-21-conflict-stop-v1');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-08-01-workspace-lifecycle-v1');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({
@@ -3929,8 +4029,14 @@ async function loadModerationWorkspace() {
         getRole: () => String(currentUserProfile?.role || '').toLowerCase(),
       });
     }
-    await moderationController.load();
-    if (!moderatorDraftSourceId && !moderatorResumeAttempted) {
+    const panelActive = activeWorkspaceTab === 'moderation' && !background && !document.hidden;
+    if (panelActive) moderationController.activate?.();
+    else moderationController.deactivate?.();
+    await moderationController.load({
+      allowInactive: background,
+      renderQueue: panelActive,
+    });
+    if ((panelActive || background) && !moderatorDraftSourceId && !moderatorResumeAttempted) {
       moderatorResumeAttempted = true;
       let resumeId = '';
       try { resumeId = sessionStorage.getItem(MODERATOR_EDIT_SESSION_KEY) || ''; } catch (_) {}
@@ -4180,8 +4286,13 @@ function closeLineupDetail() {
   const screen = document.getElementById('lineup-detail-screen');
   if (!screen) return;
   screen.style.display = 'none';
-  const video = screen.querySelector('video');
-  if (video) video.pause();
+  screen.querySelectorAll('video, audio').forEach(media => {
+    media.pause();
+    media.removeAttribute('src');
+    media.load();
+  });
+  const body = document.getElementById('detail-body');
+  if (body) body.innerHTML = '';
 }
 
 function rejectedLineupDraft(item) {
@@ -4332,7 +4443,7 @@ async function cancelResubmissionDraft({ skipConfirm = false, resetOnly = false 
     : 'Отменить редактирование и полностью очистить форму?')) return;
   if (claimedId) {
     try {
-      if (!moderationController) await loadModerationWorkspace();
+      if (!moderationController) await loadModerationWorkspace({ background: true });
       await moderationController?.releaseClaim?.(claimedId);
     } catch (error) {
       toast('Не удалось снять бронь: ' + (error.message || error), 'e');
@@ -4391,7 +4502,7 @@ function renderDrafts() {
 
 function renderMaterials() {
   const target = document.getElementById('materials-list');
-  if (!target) return;
+  if (!target || activeWorkspaceTab !== 'materials') return;
   renderMaterialForm();
   if (authorMaterialsError) {
     target.innerHTML = `<div class="empty-state"><strong>Не удалось загрузить материалы</strong>${esc(authorMaterialsError)}</div>`;
@@ -4483,10 +4594,23 @@ function openMaterialForm(id = '') {
 }
 
 function closeMaterialForm() {
+  stopMaterialWorkspaceActivity();
   materialEditorId = '';
   materialVideoUploading = false;
   materialVideoUploadSeq++;
   renderMaterialForm();
+}
+
+function stopMaterialWorkspaceActivity() {
+  if (materialVideoUploadRequest?.abort) materialVideoUploadRequest.abort();
+  materialVideoUploadRequest = null;
+  if (!materialVideoUploading) return;
+  materialVideoUploadSeq++;
+  materialVideoUploading = false;
+  const state = document.getElementById('material-upload-state');
+  const saveButton = document.querySelector('[data-material-save]');
+  if (state) state.textContent = 'Загрузка остановлена при выходе из раздела. Выбери файл заново.';
+  if (saveButton) saveButton.disabled = false;
 }
 
 function renderMaterialForm() {
@@ -4571,10 +4695,12 @@ async function uploadMaterialVideoFile(file) {
   if (state) state.textContent = previewWarning || 'Загрузка видео: 0%';
   if (preview) preview.innerHTML = '';
   try {
-    const url = await uploadVideoToSelectel(file, pct => {
+    const uploadRequest = uploadVideoToSelectel(file, pct => {
       if (seq !== materialVideoUploadSeq) return;
       if (state) state.textContent = `Загрузка видео: ${Math.round(pct * 100)}%`;
     });
+    materialVideoUploadRequest = uploadRequest;
+    const url = await uploadRequest;
     if (seq !== materialVideoUploadSeq) return;
     document.getElementById('material-video-url').value = url;
     document.getElementById('material-video-name').value = file.name;
@@ -4590,6 +4716,7 @@ async function uploadMaterialVideoFile(file) {
   } finally {
     if (seq === materialVideoUploadSeq) {
       materialVideoUploading = false;
+      materialVideoUploadRequest = null;
       if (saveBtn) saveBtn.disabled = false;
     }
   }
@@ -4791,6 +4918,7 @@ onAuthStateChanged(auth, async user => {
     showTrainingReturnFeedback();
     await loadUploadCategoryConfig();
     updateAdminOnlyWorkspace();
+    if (activeWorkspaceTab !== 'moderation') activateWorkspaceTab(activeWorkspaceTab);
     document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
     updateUploadGate();
     _subscribeUserProfile(user.uid);
@@ -4804,6 +4932,8 @@ onAuthStateChanged(auth, async user => {
     try { resumableModeratorEdit = !!sessionStorage.getItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
     if (canCurrentUserModerate() && (moderatorDraftSourceId || resumableModeratorEdit)) {
       await agentsReady;
+      await loadModerationWorkspace({ background: activeWorkspaceTab !== 'moderation' });
+    } else if (canCurrentUserModerate() && activeWorkspaceTab === 'moderation') {
       await loadModerationWorkspace();
     }
     // Keep the loader over the form until reference lists are final. Otherwise
@@ -4820,6 +4950,9 @@ onAuthStateChanged(auth, async user => {
   } else {
     clearInterval(sitePresenceTimer);
     sitePresenceTimer = null;
+    deactivateWorkspaceTab(activeWorkspaceTab);
+    pauseAllSiteMedia();
+    moderationController?.destroy?.();
     currentUserProfile = null;
     if (_cooldownBadgeUnsub) { _cooldownBadgeUnsub(); _cooldownBadgeUnsub = null; }
     _cooldownExempt = false;
@@ -10316,6 +10449,8 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
 }
 
 window.addEventListener('beforeunload', () => {
+  pauseAllSiteMedia();
+  moderationController?.destroy?.();
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
   _unsubscribeUserProfile();
   _clearCooldownTimer();
