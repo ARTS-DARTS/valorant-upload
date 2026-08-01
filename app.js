@@ -2603,6 +2603,8 @@ function openPendingLineupDeepLink() {
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
 let _cooldownInterval = null;
+let _cooldownBadgeUnsub = null;
+let _cooldownExempt = false;
 let _profileUnsubs = [];
 let _profileParts = { public: {}, private: {}, stats: {}, auth: {} };
 
@@ -2628,6 +2630,7 @@ function calculateLevel(approved) {
 }
 
 function cooldownMinutesFor(approved) {
+  if (_cooldownExempt) return 0;
   return calculateLevel(approved).cooldownMinutes;
 }
 
@@ -2730,7 +2733,9 @@ function _updateLevelDisplay(approved) {
   }
   if (progressValue) progressValue.textContent = next ? `${approved} / ${next.min}` : `${approved}`;
   if (progressBar) progressBar.style.width = `${progress * 100}%`;
-  if (progressCooldown) progressCooldown.textContent = formatLevelCooldown(lv.cooldownMinutes);
+  if (progressCooldown) progressCooldown.textContent = _cooldownExempt
+    ? '⚡ Безлимит · без КД'
+    : formatLevelCooldown(lv.cooldownMinutes);
   if (progressNext) {
     progressNext.textContent = next
       ? `До уровня «${next.name}» осталось ${Math.max(0, next.min - approved)}`
@@ -2746,7 +2751,26 @@ function _clearCooldownTimer() {
 function _showCooldownReady() {
   _clearCooldownTimer();
   const badge = document.getElementById('cooldown-badge');
-  if (badge) { badge.textContent = '✓ Можно'; badge.style.color = 'var(--green)'; }
+  if (badge) {
+    badge.textContent = _cooldownExempt ? '⚡ Без КД' : '✓ Можно';
+    badge.style.color = _cooldownExempt ? '#22d3ee' : 'var(--green)';
+  }
+}
+
+async function _subscribeCooldownBadge(uid) {
+  if (_cooldownBadgeUnsub) { _cooldownBadgeUnsub(); _cooldownBadgeUnsub = null; }
+  try {
+    const badgeRef = doc(db, 'user_badges', uid);
+    const firstSnap = await getDoc(badgeRef);
+    _cooldownExempt = firstSnap.data()?.cooldown_exempt === true;
+    _cooldownBadgeUnsub = onSnapshot(badgeRef, snap => {
+      _cooldownExempt = snap.data()?.cooldown_exempt === true;
+      _updateLevelDisplay(_approvedLineups);
+      _updateCooldown(uid);
+    });
+  } catch (_) {
+    _cooldownExempt = false;
+  }
 }
 
 function _startCooldownTimer(remainMs) {
@@ -4615,6 +4639,7 @@ onAuthStateChanged(auth, async user => {
     if (headerNotifications) headerNotifications.hidden = false;
     if (headerSoundTest) headerSoundTest.hidden = false;
     await loadCurrentUserProfile(user);
+    await _subscribeCooldownBadge(user.uid);
     showTrainingReturnFeedback();
     await loadUploadCategoryConfig();
     updateAdminOnlyWorkspace();
@@ -4642,6 +4667,8 @@ onAuthStateChanged(auth, async user => {
     clearInterval(sitePresenceTimer);
     sitePresenceTimer = null;
     currentUserProfile = null;
+    if (_cooldownBadgeUnsub) { _cooldownBadgeUnsub(); _cooldownBadgeUnsub = null; }
+    _cooldownExempt = false;
     moderationController = null;
     moderationModulePromise = null;
     updateAdminOnlyWorkspace();
