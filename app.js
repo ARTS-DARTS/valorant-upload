@@ -3281,6 +3281,7 @@ function renderSiteNotifications() {
     const reason = item.type === 'lineup_rejected' ? firstText(item.reason, lineup.rejection_reason, lineup.reject_reason, lineup.moderation_reason, item.body) : '';
     const roundSide = firstText(item.round_side, lineup.round_side);
     const details = [
+      ['От кого', firstText(item.submitted_by, lineup.submitted_by)],
       ['Название', firstText(item.lineup_title, lineup.title)],
       ['Карта', firstText(item.map, lineup.map)],
       ['Агент', firstText(item.agent, lineup.agent)],
