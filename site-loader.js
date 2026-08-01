@@ -75,4 +75,3 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready, { once:true }); else ready();
   window.setTimeout(() => { if (root.classList.contains('vl-loader-pending')) fail(); }, 20000);
 })();
-

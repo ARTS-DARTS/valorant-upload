@@ -19,4 +19,3 @@ html.vl-loader-pending body > :not(.site-loader) { visibility:hidden !important;
 @keyframes vl-loader-jaw-top { from { transform:rotate(-34deg); } to { transform:rotate(-4deg); } }
 @keyframes vl-loader-jaw-bottom { from { transform:rotate(34deg); } to { transform:rotate(4deg); } }
 @media (prefers-reduced-motion:reduce) { .site-loader { transition:none; } .site-loader__pacman { left:calc(50% - 21px); animation:none; } .site-loader__pacman::before,.site-loader__pacman::after { animation:none; } }
-
