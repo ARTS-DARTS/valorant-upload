@@ -176,10 +176,14 @@ function createMapGallery() {
   const revealSelectedMap = () => {
     const button = track.querySelector(`[data-map-name="${CSS.escape(select.value)}"]`);
     if (!button) return;
+    const trackRect = track.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
     const maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
     scrollTarget = Math.max(0, Math.min(
       maxScroll,
-      button.offsetLeft - (track.clientWidth - button.offsetWidth) / 2,
+      track.scrollLeft +
+        (buttonRect.left + buttonRect.width / 2) -
+        (trackRect.left + trackRect.width / 2),
     ));
     if (reduceMotion) {
       track.scrollLeft = scrollTarget;
@@ -201,6 +205,7 @@ function createMapGallery() {
     select.value = button.dataset.mapName;
     select.dispatchEvent(new Event('change', { bubbles: true }));
     sync();
+    requestAnimationFrame(revealSelectedMap);
   });
   track.addEventListener('wheel', (event) => {
     const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
@@ -215,6 +220,7 @@ function createMapGallery() {
     sync();
     requestAnimationFrame(revealSelectedMap);
   });
+  window.addEventListener('resize', revealSelectedMap, { passive: true });
   sync();
   requestAnimationFrame(revealSelectedMap);
 }
