@@ -2868,11 +2868,11 @@ function _subscribeStats(uid) {
     snap.forEach(d => {
       const data = d.data();
       currentUserLineups.push({ id: d.id, ...data });
-      const s = data.status;
+      const s = lineupStatusGroup(data.status);
       if (s === 'approved') approved++;
       else if (s === 'rejected') rejected++;
       else if (s === 'archived') archived++;
-      else if (!s || s === 'pending') pending++;
+      else pending++;
     });
     currentUserLineups.sort((a, b) => {
       const at = b.submitted_at?.toMillis?.() || b.created_at?.toMillis?.() || 0;
@@ -3799,10 +3799,16 @@ document.getElementById('admin-chat-form')?.addEventListener('submit', async eve
 });
 
 function statusLabel(status) {
-  if (status === 'approved') return 'Одобрен';
-  if (status === 'rejected') return 'Отклонён';
-  if (status === 'archived') return 'В архиве';
+  const normalized = lineupStatusGroup(status);
+  if (normalized === 'approved') return 'Одобрен';
+  if (normalized === 'rejected') return 'Отклонён';
+  if (normalized === 'archived') return 'В архиве';
   return 'На проверке';
+}
+
+function lineupStatusGroup(status) {
+  const value = String(status || '').trim().toLowerCase();
+  return ['approved', 'rejected', 'archived'].includes(value) ? value : 'pending';
 }
 
 function difficultyLabel(value) {
@@ -3950,7 +3956,7 @@ function searchableText(item) {
 
 function filteredOwnLineups() {
   return currentUserLineups.filter(item => {
-    const status = item.status || 'pending';
+    const status = lineupStatusGroup(item.status);
     if (myLineupsStatusFilter !== 'all' && status !== myLineupsStatusFilter) return false;
     if (myLineupsSearch && !searchableText(item).includes(myLineupsSearch)) return false;
     return true;
@@ -3983,7 +3989,7 @@ function renderLineupList(targetId, items, emptyTitle, emptyText) {
     return;
   }
   target.innerHTML = items.map(item => {
-    const status = item.status || 'pending';
+    const status = lineupStatusGroup(item.status);
     const title = firstText(item.title, 'Без названия');
     const stamp = formatClockDate(item);
     const meta = [
@@ -4625,7 +4631,7 @@ function renderCabinetStats() {
   const effectiveApproved = effectiveApprovedLineups(approved);
   const bonusLineups = Number(currentUserProfile?.bonus_lineups || 0);
   const rejected = currentUserLineups.filter(x => x.status === 'rejected').length;
-  const pending = currentUserLineups.filter(x => !x.status || x.status === 'pending').length;
+  const pending = currentUserLineups.filter(x => lineupStatusGroup(x.status) === 'pending').length;
   const submittedCount = approved + pending;
   const viewed = Number(currentUserProfile?.lineups_viewed || 0);
   const lv = calculateLevel(effectiveApproved);
