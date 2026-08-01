@@ -87,7 +87,10 @@ function createUploadRail() {
     <button data-production-step="СКРИНШОТЫ"><i>3</i><span><b>Редактор</b><small>Кадры, абилки и карта</small></span></button>
     <button data-production-step="НАЗВАНИЕ"><i>4</i><span><b>Оформление</b><small>Название и шаблон</small></span></button>
     <button data-production-step="submit"><i>5</i><span><b>Проверка</b><small>Готовность к отправке</small></span></button>
-    <a href="/author-training/">🎓 Открыть инструктаж</a>`;
+    <a class="production-help-card production-training-card" href="/author-training/">
+      <span class="production-help-icon">🎓</span>
+      <span class="production-help-copy"><strong>Открыть инструктаж</strong><small>Правила публикации материалов</small></span>
+    </a>`;
   upload.prepend(rail);
   const categoryGuide = document.getElementById('category-form-guide');
   if (categoryGuide) rail.append(categoryGuide);
