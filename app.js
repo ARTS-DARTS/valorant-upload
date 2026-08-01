@@ -5203,7 +5203,12 @@ function renderMapSiteLabels() {
     return { id:`api-${index}`, label:isSite ? superRegion : region, x, y, level:isSite ? 'site' : 'full' };
   }).filter(Boolean);
   const configuredLabels = Array.isArray(mapSiteLabelsConfig[map]) ? mapSiteLabelsConfig[map] : [];
-  const sourceLabels = configuredLabels.length ? [...configuredLabels, ...apiLabels] : [...(DEFAULT_MAP_SITE_LABELS[map] || []), ...apiLabels];
+  const hasConfiguredCallouts = configuredLabels.some(item =>
+    !['site'].includes(item?.level)
+    && !/^[ABC]$/i.test(String(item?.label || '').trim()));
+  const sourceLabels = configuredLabels.length
+    ? [...configuredLabels, ...(hasConfiguredCallouts ? [] : apiLabels)]
+    : [...(DEFAULT_MAP_SITE_LABELS[map] || []), ...apiLabels];
   const seenLabels = new Set();
   const labels = sourceLabels.filter(item => {
     if (!item) return false;
