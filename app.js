@@ -7220,9 +7220,11 @@ function readVideoMetadata(file) {
     video.preload = 'metadata';
     video.onloadedmetadata = () => done({
       duration: Number.isFinite(video.duration) ? video.duration : 0,
+      width: Number(video.videoWidth || 0),
+      height: Number(video.videoHeight || 0),
     });
-    video.onerror = () => done({ duration: 0 });
-    timeout = setTimeout(() => done({ duration: 0 }), 5000);
+    video.onerror = () => done({ duration: 0, width: 0, height: 0 });
+    timeout = setTimeout(() => done({ duration: 0, width: 0, height: 0 }), 5000);
     video.src = url;
   });
 }
@@ -7427,12 +7429,20 @@ function isVideoFile(file) {
 async function handleVideoFile(file) {
   if (!isVideoFile(file)) { toast('Выбери видеофайл', 'e'); return; }
   if (file.size > 50 * 1024 * 1024) { toast('Видео превышает 50 МБ', 'e'); return; }
+  const localMetadata = await readVideoMetadata(file);
+  if (localMetadata.width !== 1920 || localMetadata.height !== 1080) {
+    const actualSize = localMetadata.width && localMetadata.height
+      ? ` Загружено: ${localMetadata.width}×${localMetadata.height}.`
+      : '';
+    toast(`Видео должно быть записано строго в 1920×1080 (Full HD).${actualSize}`, 'e');
+    return;
+  }
   pendingVideoSeekRatio = null;
   if (videoXhr) { videoXhr.abort(); videoXhr = null; }
   releaseLocalVideoPreview();
   localVideoPreviewUrl = URL.createObjectURL(file);
   knownVideoDuration = 0;
-  const localMetadataPromise = readVideoMetadata(file).then(meta => {
+  const localMetadataPromise = Promise.resolve(localMetadata).then(meta => {
     if (Number.isFinite(meta.duration) && meta.duration > 0) knownVideoDuration = meta.duration;
     return meta;
   });
