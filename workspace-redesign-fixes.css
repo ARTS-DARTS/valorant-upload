@@ -131,6 +131,8 @@
   min-height: 78px;
   margin: 8px 0 0;
   padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--guide-accent) 72%, #24415e);
+  background: linear-gradient(115deg, color-mix(in srgb, var(--guide-accent) 9%, #101c2d), #111d30 68%);
 }
 
 .workspace-redesign .production-flow .category-form-guide-play {
