@@ -3220,6 +3220,7 @@ let siteNotifications = [];
 let siteNotificationsReady = false;
 let knownSiteNotificationIds = new Set();
 let expandedSiteNotificationId = '';
+const moderationAuthorCache = new Map();
 
 function notificationTimestamp(value) {
   if (typeof value?.toDate === 'function') return value.toDate();
@@ -3358,6 +3359,23 @@ async function persistNotificationChannelStatus(OneSignal = null) {
   }
 }
 
+async function hydrateLegacyModerationAuthors(items) {
+  const missing = items.filter(item =>
+    item.type === 'moderation_work'
+    && item.lineup_id
+    && !firstText(item.submitted_by, moderationAuthorCache.get(item.lineup_id)));
+  if (!missing.length) return;
+  await Promise.all(missing.map(async item => {
+    const lineupId = String(item.lineup_id);
+    if (!moderationAuthorCache.has(lineupId)) {
+      const snapshot = await getDoc(doc(db, 'lineups', lineupId)).catch(() => null);
+      moderationAuthorCache.set(lineupId, snapshot?.exists() ? firstText(snapshot.data()?.submitted_by) : '');
+    }
+    item.submitted_by = moderationAuthorCache.get(lineupId) || '';
+  }));
+  renderSiteNotifications();
+}
+
 function updateBrowserPushButton() {
   const button = document.getElementById('browser-push-toggle');
   if (!button) return;
@@ -3481,6 +3499,7 @@ function startSiteNotifications(uid) {
     siteNotificationsReady = true;
     updateNotificationBadges();
     renderSiteNotifications();
+    void hydrateLegacyModerationAuthors(siteNotifications);
   }, error => {
     const list = document.getElementById('notifications-list');
     if (list) list.innerHTML = `<div class="notifications-empty">Не удалось загрузить уведомления: ${esc(error.message)}</div>`;
