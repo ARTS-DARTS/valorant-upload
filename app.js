@@ -3080,6 +3080,7 @@ function switchWorkspaceTab(tab) {
   if (activeWorkspaceTab === 'admin-chat') openAdminChat();
   if (activeWorkspaceTab === 'notifications') renderSiteNotifications();
   renderAuthorWorkspace();
+  scheduleSitePresence();
 }
 
 const MODERATION_MOVED_HINT_KEY = 'vl_moderation_moved_hint_20260730';
@@ -3140,13 +3141,18 @@ async function sendSitePresence() {
   } catch (_) {}
 }
 let sitePresenceTimer = null;
+let sitePresenceDebounce = null;
+function scheduleSitePresence() {
+  clearTimeout(sitePresenceDebounce);
+  sitePresenceDebounce = setTimeout(sendSitePresence, 180);
+}
 function startSitePresence() {
   clearInterval(sitePresenceTimer);
-  sendSitePresence();
+  scheduleSitePresence();
   sitePresenceTimer = setInterval(sendSitePresence, 60 * 1000);
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && currentUser) sendSitePresence();
+  if (document.visibilityState === 'visible' && currentUser) scheduleSitePresence();
 });
 
 let siteNotificationsUnsub = null;
