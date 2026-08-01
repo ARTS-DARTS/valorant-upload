@@ -2712,7 +2712,8 @@ function renderProfileLevels() {
   if (!list) return;
   const current = calculateLevel(_approvedLineups);
   const currentIndex = LEVELS.indexOf(current);
-  list.innerHTML = LEVELS.map((level, index) => {
+  list.classList.toggle('is-immune', _cooldownExempt);
+  const rows = LEVELS.map((level, index) => {
     const state = index < currentIndex ? 'is-passed' : index === currentIndex ? 'is-current' : 'is-future';
     const status = index < currentIndex ? 'Пройдено' : index === currentIndex ? 'Текущий уровень' : 'Впереди';
     return `<article class="profile-level-row ${state}" style="--row-color:${level.color}">
@@ -2727,6 +2728,12 @@ function renderProfileLevels() {
       </span>
     </article>`;
   }).join('');
+  list.innerHTML = `${rows}${_cooldownExempt ? `<div class="profile-immunity-notice" role="status">
+    <span class="profile-immunity-pill" aria-hidden="true">💊</span>
+    <span class="profile-immunity-kicker">БЕЙДЖ «БЕЗЛИМИТ» АКТИВЕН</span>
+    <strong>А у вас есть иммунитет!</strong>
+    <span>Поздравляем! Ограничение между отправками для вас полностью снято.</span>
+  </div>` : ''}`;
 }
 
 function openProfileLevels() {
@@ -2785,9 +2792,10 @@ function _updateLevelDisplay(approved) {
   }
   if (progressValue) progressValue.textContent = next ? `${approved} / ${next.min}` : `${approved}`;
   if (progressBar) progressBar.style.width = `${progress * 100}%`;
-  if (progressCooldown) progressCooldown.textContent = _cooldownExempt
-    ? '⚡ Безлимит · без КД'
-    : formatLevelCooldown(lv.cooldownMinutes);
+  if (progressCooldown) {
+    progressCooldown.textContent = _cooldownExempt ? '💊 Иммунитет' : formatLevelCooldown(lv.cooldownMinutes);
+    progressCooldown.classList.toggle('is-immunity', _cooldownExempt);
+  }
   if (progressNext) {
     progressNext.textContent = next
       ? `До уровня «${next.name}» осталось ${Math.max(0, next.min - approved)}`
