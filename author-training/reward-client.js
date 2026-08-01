@@ -20,11 +20,22 @@ const getTrainingProgress = httpsCallable(
   getFunctions(app, 'us-central1'),
   'getAuthorTrainingProgress',
 );
+const acknowledgeTrainingCriteria = httpsCallable(
+  getFunctions(app, 'us-central1'),
+  'acknowledgeAuthorTrainingCriteria',
+);
 const category = new URLSearchParams(location.search).get('category')
   || (location.pathname.includes('/wallbang') ? 'wallbang'
     : location.pathname.includes('/combo') ? 'combo'
       : location.pathname.includes('/defense') ? 'defense' : 'lineup');
 let syncPromise = null;
+
+window.acknowledgeAuthorTrainingCriteria = async revision => {
+  const user = await authenticatedUser();
+  if (!user) throw new Error('Чтобы сохранить ознакомление, войди в аккаунт');
+  const result = await acknowledgeTrainingCriteria({ category, revision });
+  return result.data || {};
+};
 
 function localProgressKeys(uid) {
   const keys = [

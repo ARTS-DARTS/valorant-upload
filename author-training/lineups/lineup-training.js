@@ -26,10 +26,51 @@ const quiz = [
 ];
 const state = { step: 0, maxStep: 0, category: '', recording: new Set(), acknowledged: false, template: '', issues: new Set(), answers: [] };
 const params = new URLSearchParams(location.search);
+const criteriaUpdateMode = params.get('mode') === 'changes';
+const criteriaRevision = params.get('revision') || '';
+const criteriaUpdateItems = [
+  'Видео записано в 1920×1080 (Full HD)',
+  'Качество графики в игре — минимум «Среднее»',
+];
+const criteriaUpdateState = { checked: new Set(), saving: false, completed: false, error: '' };
 const uid = params.get('uid') || 'guest';
 const storageKey = `vl_category_training_${uid}_lineup`;
 const draftKey = `vlineups-training-lineup-${uid}`;
 const root = document.getElementById('lineup-training-root');
+
+function safeReturnPath() {
+  const raw = params.get('return') || '/';
+  return raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+}
+
+function renderCriteriaUpdate() {
+  const ready = criteriaUpdateState.checked.size === criteriaUpdateItems.length;
+  const done = criteriaUpdateState.completed;
+  root.innerHTML = `<div class="mobile-lock"><div><h1>Открой обновление на компьютере</h1><p>Для просмотра критериев нужен большой экран.</p></div></div><main class="app criteria-update-app"><aside class="sidebar"><div class="brand"><i>V</i>VLINEUPS</div><div class="course-label">ИНСТРУКТАЖ · ЛАЙНАПЫ</div><nav class="steps"><button class="step active"><span class="num">${done ? '✓' : '1'}</span><span><strong>Изменения</strong><small>Новые критерии отправки</small></span></button></nav><div class="training-nav"><a href="/author-training/">← ВСЕ ИНСТРУКТАЖИ</a><a href="${safeReturnPath()}">ВЕРНУТЬСЯ НА САЙТ ↗</a></div><div class="desktop-note">Только новая редакция · без повторной награды</div></aside><section class="workspace"><header class="top"><div><p class="eyebrow">ОБНОВЛЕНИЕ КРИТЕРИЕВ</p><h2>${done ? 'Изменения подтверждены' : 'Что изменилось'}</h2></div><div class="criteria-revision">НОВАЯ РЕДАКЦИЯ<br><b>${criteriaRevision || 'актуальная'}</b></div></header><div class="content complete"><section class="lesson criteria-update-lesson">${done ? `<div class="completion criteria-update-complete"><div class="seal"><span>✓</span></div><p class="eyebrow">КРИТЕРИИ ОБНОВЛЕНЫ</p><h1>Новые требования сохранены</h1><p class="lead">Старое прохождение и полученные очки остались без изменений.</p><div class="actions"><a class="primary" href="${safeReturnPath()}">ВЕРНУТЬСЯ НА САЙТ →</a></div></div>` : `<p class="eyebrow">ИЗМЕНЕНО В ЭТОЙ РЕДАКЦИИ</p><h1>Проверь два новых требования</h1><p class="lead">Здесь показаны только добавленные пункты. Уже пройденные этапы повторять не нужно.</p><div class="criteria-update-list">${criteriaUpdateItems.map((item, index) => `<button class="${criteriaUpdateState.checked.has(index) ? 'selected' : ''}" data-criteria-item="${index}"><i>${criteriaUpdateState.checked.has(index) ? '✓' : ''}</i><span><b>0${index + 1}</b>${item}</span></button>`).join('')}</div>${criteriaUpdateState.error ? `<div class="feedback">${criteriaUpdateState.error}</div>` : ''}<div class="lesson-actions"><span>${ready ? 'Можно подтвердить изменения' : 'Отметь оба новых требования'}</span><button class="primary" data-criteria-confirm ${ready && !criteriaUpdateState.saving ? '' : 'disabled'}>${criteriaUpdateState.saving ? 'СОХРАНЯЕМ…' : 'ПОДТВЕРДИТЬ ИЗМЕНЕНИЯ'} →</button></div>`}</section></div></section></main>`;
+  root.querySelectorAll('[data-criteria-item]').forEach(button => {
+    button.onclick = () => {
+      const index = Number(button.dataset.criteriaItem);
+      criteriaUpdateState.checked.has(index) ? criteriaUpdateState.checked.delete(index) : criteriaUpdateState.checked.add(index);
+      renderCriteriaUpdate();
+    };
+  });
+  root.querySelector('[data-criteria-confirm]')?.addEventListener('click', async () => {
+    if (!ready || criteriaUpdateState.saving) return;
+    criteriaUpdateState.saving = true;
+    criteriaUpdateState.error = '';
+    renderCriteriaUpdate();
+    try {
+      if (typeof window.acknowledgeAuthorTrainingCriteria !== 'function') throw new Error('Сервис сохранения ещё загружается. Попробуй ещё раз.');
+      await window.acknowledgeAuthorTrainingCriteria(criteriaRevision);
+      criteriaUpdateState.completed = true;
+    } catch (error) {
+      criteriaUpdateState.error = error?.message || 'Не удалось сохранить ознакомление. Попробуй ещё раз.';
+    } finally {
+      criteriaUpdateState.saving = false;
+      renderCriteriaUpdate();
+    }
+  });
+}
 
 function saveDraft() {
   localStorage.setItem(draftKey, JSON.stringify({ ...state, recording: [...state.recording], issues: [...state.issues] }));
@@ -115,6 +156,10 @@ function bind() {
   root.querySelector('[data-next]')?.addEventListener('click', () => { if (!valid()) return; if (state.step === 5) complete(); else { state.step++; state.maxStep = Math.max(state.maxStep, state.step); saveDraft(); render(true); } });
   root.querySelector('[data-repeat]')?.addEventListener('click', () => { localStorage.removeItem(storageKey); Object.assign(state, { step: 0, maxStep: 0, category: '', recording: new Set(), acknowledged: false, template: '', issues: new Set(), answers: [], completed: false }); render(); });
 }
-restoreDraft();
-state.completed = Boolean(localStorage.getItem(storageKey));
-render(true);
+if (criteriaUpdateMode) {
+  renderCriteriaUpdate();
+} else {
+  restoreDraft();
+  state.completed = Boolean(localStorage.getItem(storageKey));
+  render(true);
+}
