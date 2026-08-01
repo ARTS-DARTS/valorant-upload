@@ -8172,6 +8172,70 @@ function renderScreenshots() {
 }
 
 let moderatorShotRailFrame = 0;
+let moderatorShotRailTimer = 0;
+
+function updateModeratorShotRailToggle() {
+  const rail = document.getElementById('moderator-shot-rail');
+  const toggle = rail?.querySelector('[data-moderator-rail-toggle]');
+  if (!rail || !toggle) return;
+  const collapsed = rail.classList.contains('is-collapsed');
+  toggle.textContent = collapsed ? '›' : '‹';
+  toggle.setAttribute('aria-expanded', String(!collapsed));
+  toggle.setAttribute('aria-label', collapsed ? 'Открыть панель кадров' : 'Скрыть панель кадров');
+  toggle.title = collapsed ? 'Открыть кадры' : 'Скрыть кадры';
+}
+
+function cancelModeratorShotRailTimer() {
+  clearTimeout(moderatorShotRailTimer);
+  moderatorShotRailTimer = 0;
+}
+
+function scheduleModeratorShotRailClose() {
+  const rail = document.getElementById('moderator-shot-rail');
+  cancelModeratorShotRailTimer();
+  if (!rail || rail.hidden || rail.classList.contains('is-collapsed') || rail.matches(':hover') || rail.contains(document.activeElement)) return;
+  moderatorShotRailTimer = window.setTimeout(() => {
+    if (rail.hidden || rail.matches(':hover') || rail.contains(document.activeElement)) return;
+    rail.classList.add('is-collapsed');
+    updateModeratorShotRailToggle();
+  }, 5000);
+}
+
+function openModeratorShotRail() {
+  const rail = document.getElementById('moderator-shot-rail');
+  if (!rail) return;
+  rail.classList.remove('is-collapsed');
+  updateModeratorShotRailToggle();
+  scheduleModeratorShotRailClose();
+}
+
+function bindModeratorShotRailDrawer() {
+  const rail = document.getElementById('moderator-shot-rail');
+  if (!rail || rail.dataset.drawerBound === 'true') return;
+  rail.dataset.drawerBound = 'true';
+  rail.addEventListener('pointerenter', cancelModeratorShotRailTimer);
+  rail.addEventListener('pointerleave', scheduleModeratorShotRailClose);
+  rail.addEventListener('focusin', cancelModeratorShotRailTimer);
+  rail.addEventListener('focusout', () => requestAnimationFrame(scheduleModeratorShotRailClose));
+  rail.addEventListener('click', event => {
+    const toggle = event.target.closest('[data-moderator-rail-toggle]');
+    if (toggle) {
+      if (rail.classList.contains('is-collapsed')) openModeratorShotRail();
+      else {
+        cancelModeratorShotRailTimer();
+        rail.classList.add('is-collapsed');
+        updateModeratorShotRailToggle();
+      }
+      return;
+    }
+    const shotButton = event.target.closest('[data-moderator-shot]');
+    if (!shotButton) return;
+    const shot = screenshots[Number(shotButton.dataset.moderatorShot)];
+    const src = shot?.localUrl || shot?.cloudUrl || '';
+    if (src) openScreenshotPreview(src, `Скриншот ${Number(shotButton.dataset.moderatorShot) + 1}`);
+  });
+}
+
 function updateModeratorScreenshotRailVisibility() {
   cancelAnimationFrame(moderatorShotRailFrame);
   moderatorShotRailFrame = requestAnimationFrame(() => {
@@ -8183,7 +8247,13 @@ function updateModeratorScreenshotRailVisibility() {
     const rect = copy.getBoundingClientRect();
     const visible = !!moderatorDraftSourceId && screenshots.length > 0 && window.innerWidth >= 1680 &&
       uploadPanel?.classList.contains('active') && rect.top < window.innerHeight * .58 && rect.bottom > 82;
+    const wasHidden = rail.hidden;
     rail.hidden = !visible;
+    if (!visible) {
+      cancelModeratorShotRailTimer();
+    } else if (wasHidden) {
+      openModeratorShotRail();
+    }
   });
 }
 
@@ -8195,17 +8265,13 @@ function renderModeratorScreenshotRail() {
     rail.hidden = true;
     return;
   }
-  rail.innerHTML = `<div class="moderator-shot-rail-head">Кадры лайнапа <span>${screenshots.length}</span></div><div class="moderator-shot-rail-list">${screenshots.map((shot, index) => `
+  rail.innerHTML = `<button class="moderator-shot-rail-toggle" type="button" data-moderator-rail-toggle aria-expanded="true" aria-label="Скрыть панель кадров">‹</button><div class="moderator-shot-rail-head">Кадры лайнапа <span>${screenshots.length}</span></div><div class="moderator-shot-rail-list">${screenshots.map((shot, index) => `
     <button class="moderator-shot-rail-item" type="button" data-moderator-shot="${index}" aria-label="Открыть скриншот ${index + 1}">
       <img src="${esc(shot.localUrl || shot.cloudUrl || '')}" alt="Скриншот ${index + 1}">
       <b class="moderator-shot-rail-index">${index + 1}</b>
     </button>`).join('')}</div>`;
-  rail.querySelectorAll('[data-moderator-shot]').forEach(button => button.addEventListener('click', () => {
-    const index = Number(button.dataset.moderatorShot);
-    const shot = screenshots[index];
-    const src = shot?.localUrl || shot?.cloudUrl || '';
-    if (src) openScreenshotPreview(src, `Скриншот ${index + 1}`);
-  }));
+  bindModeratorShotRailDrawer();
+  updateModeratorShotRailToggle();
   updateModeratorScreenshotRailVisibility();
 }
 
