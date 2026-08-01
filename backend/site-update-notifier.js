@@ -33,9 +33,7 @@ async function sendUpdatePush() {
         ru: 'На сайте появилась новая версия. Откройте, чтобы увидеть изменения.',
         en: 'A new site version is available. Open it to see the changes.',
       },
-      filters: [
-        { field: 'tag', key: 'site_update_notifications', relation: '=', value: '1' },
-      ],
+      included_segments: ['Subscribed Users'],
       url: `https://vlineups.ru/?site_refresh=${encodeURIComponent(deploymentVersion)}`,
       data: {
         type: 'site_update',

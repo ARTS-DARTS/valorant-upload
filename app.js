@@ -3321,6 +3321,10 @@ async function initializeBrowserPush(uid = currentUser?.uid) {
   }
   const OneSignal = await browserPushPromise;
   if (OneSignal && uid) await OneSignal.login(uid).catch(() => {});
+  if (OneSignal && Notification.permission === 'granted') {
+    await OneSignal.User.PushSubscription.optIn().catch(() => {});
+    await OneSignal.User.addTag('site_update_notifications', '1').catch(() => {});
+  }
   updateBrowserPushButton();
   return OneSignal;
 }
