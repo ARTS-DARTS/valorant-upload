@@ -5453,8 +5453,15 @@ let chromaRenderRaf = null;
 let chromaRenderFootageId = null;
 let chromaRenderSignature = '';
 let chromaRenderErrorShown = false;
+let chromaRenderLastAt = 0;
+let chromaRenderLastVideoTime = -1;
 let footageStageDrag = null;
 let timelineSmoothRaf = null;
+let timelineSmoothLastAt = 0;
+const TIMELINE_UI_FRAME_INTERVAL_MS = 1000 / 30;
+const CHROMA_PREVIEW_FRAME_INTERVAL_MS = 1000 / 15;
+const CHROMA_PREVIEW_MAX_WIDTH = 640;
+const CHROMA_PREVIEW_MAX_HEIGHT = 360;
 const freezeFrameImages = new Map();
 const editorEls = {
   editor: document.getElementById('video-editor'),
@@ -5941,15 +5948,47 @@ function hexToRgb(hex) {
 }
 
 function stopChromaPreview() {
+  const canvas = editorEls.footageCanvas;
+  const wasActive = !!chromaRenderRaf || !!chromaRenderFootageId || !!chromaRenderSignature || !!canvas?.classList.contains('show');
   if (chromaRenderRaf) {
     cancelAnimationFrame(chromaRenderRaf);
     chromaRenderRaf = null;
   }
   chromaRenderFootageId = null;
   chromaRenderSignature = '';
-  editorEls.footageCanvas?.classList.remove('show');
-  const ctx = editorEls.footageCanvas?.getContext?.('2d', { willReadFrequently: true });
-  if (ctx && editorEls.footageCanvas) ctx.clearRect(0, 0, editorEls.footageCanvas.width, editorEls.footageCanvas.height);
+  chromaRenderLastAt = 0;
+  chromaRenderLastVideoTime = -1;
+  canvas?.classList.remove('show');
+  if (!wasActive || !canvas) return;
+  const ctx = canvas.getContext?.('2d', { willReadFrequently: true });
+  if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function releaseFootagePreviewResources({ releaseCanvas = false } = {}) {
+  const preview = editorEls.footagePreview;
+  const canvas = editorEls.footageCanvas;
+  const hadPreviewState = !!chromaRenderRaf || !!chromaRenderFootageId || !!chromaRenderSignature ||
+    !!preview?.dataset.url || !!preview?.getAttribute('src') || !!preview?.currentSrc ||
+    !!preview?.classList.contains('show') || !!preview?.classList.contains('processing-chroma') ||
+    !!canvas?.classList.contains('show') || !!editorEls.footageFrame?.classList.contains('show');
+  if (!hadPreviewState && !releaseCanvas) return;
+  stopChromaPreview();
+  if (preview) {
+    const hadSource = !!preview.dataset.url || !!preview.getAttribute('src') || !!preview.currentSrc;
+    if (!preview.paused) preview.pause();
+    if (hadSource) {
+      preview.removeAttribute('src');
+      preview.load();
+    }
+    delete preview.dataset.url;
+    preview.classList.remove('show', 'processing-chroma', 'interactive');
+  }
+  canvas?.classList.remove('show', 'interactive');
+  editorEls.footageFrame?.classList.remove('show');
+  if (releaseCanvas && canvas && (canvas.width > 1 || canvas.height > 1)) {
+    canvas.width = 1;
+    canvas.height = 1;
+  }
 }
 
 function startChromaPreview(footage) {
@@ -5959,40 +5998,62 @@ function startChromaPreview(footage) {
   }
   const chroma = normalizeChromaKey(footage.chromaKey);
   const signature = `${footage.id}|${chroma.color}|${chroma.strength}`;
-  if (chromaRenderRaf && chromaRenderSignature === signature) return;
+  if (chromaRenderFootageId === footage.id && chromaRenderSignature === signature) {
+    const videoTime = Number(editorEls.footagePreview?.currentTime || 0);
+    const alreadyRendered = editorEls.footageCanvas?.classList.contains('show') &&
+      Math.abs(chromaRenderLastVideoTime - videoTime) < 0.01;
+    if (chromaRenderRaf || (editorEls.footagePreview?.paused && alreadyRendered)) return;
+    chromaRenderRaf = requestAnimationFrame(now => renderChromaPreviewFrame(footage, now));
+    return;
+  }
   stopChromaPreview();
   chromaRenderFootageId = footage.id;
   chromaRenderSignature = signature;
-  chromaRenderRaf = requestAnimationFrame(() => renderChromaPreviewFrame(footage));
+  chromaRenderRaf = requestAnimationFrame(now => renderChromaPreviewFrame(footage, now));
 }
 
-function renderChromaPreviewFrame(footage) {
+function renderChromaPreviewFrame(footage, now = performance.now()) {
+  chromaRenderRaf = null;
   const video = editorEls.footagePreview;
   const canvas = editorEls.footageCanvas;
   if (!video || !canvas || !footage?.chromaKey?.enabled) {
     stopChromaPreview();
     return;
   }
-  if (chromaRenderFootageId && chromaRenderFootageId !== footage.id) return;
+  const chroma = normalizeChromaKey(footage.chromaKey);
+  const signature = `${footage.id}|${chroma.color}|${chroma.strength}`;
+  if (chromaRenderFootageId !== footage.id || chromaRenderSignature !== signature) return;
   const vw = video.videoWidth || 0;
   const vh = video.videoHeight || 0;
   if (!vw || !vh) {
-    chromaRenderRaf = requestAnimationFrame(() => renderChromaPreviewFrame(footage));
     return;
   }
-  if (canvas.width !== vw || canvas.height !== vh) {
-    canvas.width = vw;
-    canvas.height = vh;
+  const scheduleNextFrame = () => {
+    if (document.visibilityState === 'visible' && !video.paused && !video.ended && !chromaRenderRaf) {
+      chromaRenderRaf = requestAnimationFrame(nextNow => renderChromaPreviewFrame(footage, nextNow));
+    }
+  };
+  if (chromaRenderLastAt && now - chromaRenderLastAt < CHROMA_PREVIEW_FRAME_INTERVAL_MS) {
+    scheduleNextFrame();
+    return;
+  }
+  chromaRenderLastAt = now;
+  const previewScale = Math.min(1, CHROMA_PREVIEW_MAX_WIDTH / vw, CHROMA_PREVIEW_MAX_HEIGHT / vh);
+  const previewWidth = Math.max(1, Math.round(vw * previewScale));
+  const previewHeight = Math.max(1, Math.round(vh * previewScale));
+  if (canvas.width !== previewWidth || canvas.height !== previewHeight) {
+    canvas.width = previewWidth;
+    canvas.height = previewHeight;
   }
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return;
   try {
-    ctx.clearRect(0, 0, vw, vh);
-    ctx.drawImage(video, 0, 0, vw, vh);
-    const frame = ctx.getImageData(0, 0, vw, vh);
+    ctx.clearRect(0, 0, previewWidth, previewHeight);
+    ctx.drawImage(video, 0, 0, previewWidth, previewHeight);
+    const frame = ctx.getImageData(0, 0, previewWidth, previewHeight);
     const data = frame.data;
-    const key = hexToRgb(footage.chromaKey.color);
-    const strength = Math.max(0, Math.min(1, Number(footage.chromaKey.strength ?? 0.35)));
+    const key = hexToRgb(chroma.color);
+    const strength = chroma.strength;
     const tolerance = 18 + strength * 160;
     const feather = 18 + strength * 54;
     const despill = Math.min(1, 0.25 + strength * 0.75);
@@ -6023,6 +6084,7 @@ function renderChromaPreviewFrame(footage) {
     }
     ctx.putImageData(frame, 0, 0);
     canvas.classList.add('show');
+    chromaRenderLastVideoTime = Number(video.currentTime || 0);
     chromaRenderErrorShown = false;
   } catch (error) {
     stopChromaPreview();
@@ -6033,7 +6095,7 @@ function renderChromaPreviewFrame(footage) {
     }
     return;
   }
-  chromaRenderRaf = requestAnimationFrame(() => renderChromaPreviewFrame(footage));
+  scheduleNextFrame();
 }
 
 function syncFootageChromaPanel() {
@@ -6173,6 +6235,7 @@ function stopOutputPlayback({ keepPreview = true } = {}) {
     cancelAnimationFrame(outputPlaybackRaf);
     outputPlaybackRaf = null;
   }
+  stopSmoothTimelineUi();
   const currentOut = outputPlaybackTime;
   outputPlaybackActive = false;
   outputPlaybackStartedAt = 0;
@@ -6227,14 +6290,27 @@ function startOutputPlayback(startOutput = null) {
   clearFreezeHold();
   playedFreezeHolds.clear();
   timelinePreviewOutputTime = null;
-  outputPlaybackStartTime = startOutput === null
+  const nextOutputTime = startOutput === null
     ? (outputPlaybackTime ?? currentOutputTime())
     : Math.max(0, Math.min(editedOutputDuration(), startOutput));
+  if (!(videoEdit.freezeFrames || []).length) {
+    if (outputPlaybackRaf) cancelAnimationFrame(outputPlaybackRaf);
+    outputPlaybackRaf = null;
+    outputPlaybackActive = false;
+    outputPlaybackTime = null;
+    const sourceTime = outputToSourceTime(nextOutputTime);
+    if (Math.abs((vidPlayer.currentTime || 0) - sourceTime) > 0.03) {
+      vidPlayer.currentTime = sourceTime;
+    }
+    setFreezeOverlay('');
+    safePlay(vidPlayer);
+    return;
+  }
+  outputPlaybackStartTime = nextOutputTime;
   outputPlaybackStartedAt = performance.now();
   outputPlaybackActive = true;
   if (vidPlayBtn) vidPlayBtn.textContent = '⏸';
   showOutputFrame(outputPlaybackStartTime);
-  startSmoothTimelineUi();
   outputPlaybackRaf = requestAnimationFrame(tickOutputPlayback);
 }
 
@@ -6284,19 +6360,22 @@ function updateTimelinePlaybackUi({ keepVisible = false } = {}) {
 
 function startSmoothTimelineUi() {
   if (timelineSmoothRaf) return;
-  const tick = () => {
+  const tick = now => {
     timelineSmoothRaf = null;
-    if (!outputPlaybackActive && vidPlayer.paused && !timelineDrag) return;
-    updateTimelinePlaybackUi({ keepVisible: outputPlaybackActive || !vidPlayer.paused });
+    if (outputPlaybackActive || (vidPlayer.paused && !timelineDrag)) return;
+    if (!timelineSmoothLastAt || now - timelineSmoothLastAt >= TIMELINE_UI_FRAME_INTERVAL_MS || timelineDrag) {
+      timelineSmoothLastAt = now;
+      updateTimelinePlaybackUi({ keepVisible: !vidPlayer.paused });
+    }
     timelineSmoothRaf = requestAnimationFrame(tick);
   };
   timelineSmoothRaf = requestAnimationFrame(tick);
 }
 
 function stopSmoothTimelineUi() {
-  if (!timelineSmoothRaf) return;
-  cancelAnimationFrame(timelineSmoothRaf);
+  if (timelineSmoothRaf) cancelAnimationFrame(timelineSmoothRaf);
   timelineSmoothRaf = null;
+  timelineSmoothLastAt = 0;
 }
 
 function renderVideoEditor() {
@@ -6419,7 +6498,8 @@ function setEditorMode(mode) {
 }
 
 function applyVideoEditPreview() {
-  const { clip: activeZoom, mix: zoomMix } = zoomPreviewStateAtOutput(currentOutputTime());
+  const previewOutputTime = currentOutputTime();
+  const { clip: activeZoom, mix: zoomMix } = zoomPreviewStateAtOutput(previewOutputTime);
   const targetScaleX = activeZoom ? Number(activeZoom.scaleX ?? activeZoom.scale ?? 1) : 1;
   const targetScaleY = activeZoom ? Number(activeZoom.scaleY ?? activeZoom.scale ?? 1) : 1;
   const scaleX = 1 + (targetScaleX - 1) * zoomMix;
@@ -6433,13 +6513,13 @@ function applyVideoEditPreview() {
   const pan = zoomPanForAnchor(anchorX, anchorY, scale);
   const transformOrigin = '50% 50%';
   const transform = `scale(${scale}) translate(${pan.x + posX}px, ${pan.y + posY}px) rotate(${rotation}deg)`;
-  vidPlayer.style.transformOrigin = transformOrigin;
-  vidPlayer.style.transform = transform;
+  if (vidPlayer.style.transformOrigin !== transformOrigin) vidPlayer.style.transformOrigin = transformOrigin;
+  if (vidPlayer.style.transform !== transform) vidPlayer.style.transform = transform;
   if (editorEls.freezeOverlay) {
-    editorEls.freezeOverlay.style.transformOrigin = transformOrigin;
-    editorEls.freezeOverlay.style.transform = transform;
+    if (editorEls.freezeOverlay.style.transformOrigin !== transformOrigin) editorEls.freezeOverlay.style.transformOrigin = transformOrigin;
+    if (editorEls.freezeOverlay.style.transform !== transform) editorEls.freezeOverlay.style.transform = transform;
   }
-  const activeFootage = activeFootageClipAtOutput(currentOutputTime());
+  const activeFootage = activeFootageClipAtOutput(previewOutputTime);
   if (editorEls.footagePreview) {
     if (activeFootage?.url) {
       applyFootageOverlayTransform(activeFootage);
@@ -6449,8 +6529,8 @@ function applyVideoEditPreview() {
         stopChromaPreview();
       }
       editorEls.footagePreview.muted = activeFootage.muted !== false;
-      const clipStart = sourceToOutputTime(activeFootage.at);
-      const localTime = Math.max(0, currentOutputTime() - clipStart);
+      const clipStart = effectOutputStart(activeFootage);
+      const localTime = Math.max(0, previewOutputTime - clipStart);
       if (Number.isFinite(localTime) && Math.abs((editorEls.footagePreview.currentTime || 0) - localTime) > 0.12) {
         try { editorEls.footagePreview.currentTime = localTime; } catch (_) {}
       }
@@ -6469,15 +6549,7 @@ function applyVideoEditPreview() {
       if (hasChroma) startChromaPreview(activeFootage);
       else stopChromaPreview();
     } else {
-      editorEls.footagePreview.pause();
-      editorEls.footagePreview.classList.remove('show');
-      editorEls.footagePreview.classList.remove('processing-chroma');
-      editorEls.footagePreview.classList.remove('interactive');
-      editorEls.footageCanvas?.classList.remove('interactive');
-      editorEls.footageFrame?.classList.remove('show');
-      stopChromaPreview();
-      delete editorEls.footagePreview.dataset.url;
-      editorEls.footagePreview.removeAttribute('src');
+      releaseFootagePreviewResources();
     }
   }
   vidPlayer.style.filter = '';
@@ -6747,6 +6819,7 @@ editorEls.footagePreview?.addEventListener('loadeddata', () => {
   if (editorEls.footageStatus?.textContent === 'Не удалось показать футаж в предпросмотре') {
     editorEls.footageStatus.textContent = '';
   }
+  applyVideoEditPreview();
 });
 editorEls.footagePreview?.addEventListener('error', () => {
   if (editorEls.footageStatus) editorEls.footageStatus.textContent = 'Не удалось показать футаж в предпросмотре';
@@ -7765,7 +7838,7 @@ vidPlayer.addEventListener('play',  () => {
   }
   vidPlayBtn.textContent = '⏸';
   lastVideoTime = vidPlayer.currentTime;
-  startSmoothTimelineUi();
+  if (!outputPlaybackActive) startSmoothTimelineUi();
 });
 vidPlayer.addEventListener('pause', () => {
   if (!outputPlaybackActive) vidPlayBtn.textContent = '▶';
@@ -7851,10 +7924,15 @@ vidPlayBtn.addEventListener('click', toggleEditorPlayback);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     videoHiddenAt = Date.now();
+    stopSmoothTimelineUi();
+    stopChromaPreview();
+    if (editorEls.footagePreview && !editorEls.footagePreview.paused) editorEls.footagePreview.pause();
     return;
   }
   const hiddenMs = videoHiddenAt ? Date.now() - videoHiddenAt : 0;
   reviveEditorVideo(hiddenMs > 5 * 60 * 1000 ? 'stale-visible' : 'visible');
+  if (!vidPlayer.paused && !outputPlaybackActive) startSmoothTimelineUi();
+  applyVideoEditPreview();
 });
 window.addEventListener('pageshow', event => {
   if (event.persisted) reviveEditorVideo('pageshow');
@@ -7862,6 +7940,7 @@ window.addEventListener('pageshow', event => {
 document.getElementById('vid-remove-btn').addEventListener('click', () => {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
+  releaseFootagePreviewResources({ releaseCanvas: true });
   timelinePreviewOutputTime = null;
   freezeFrameImages.clear();
   setFreezeOverlay('');
@@ -10188,6 +10267,7 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   writeVideoEditUndoStack();
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
+  releaseFootagePreviewResources({ releaseCanvas: !keepVideo });
   setFreezeOverlay('');
   if (vidPlayer && !keepVideo) {
     releaseLocalVideoPreview();
