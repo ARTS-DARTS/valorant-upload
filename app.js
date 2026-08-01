@@ -2390,6 +2390,13 @@ const CATEGORY_FORM_GUIDES = {
     title: 'Лайнап: как заполнить?',
     description: 'Зритель должен повторить бросок с первого раза. Проведи его от стартовой позиции до результата.',
     steps: ['Выбери карту', 'Покажи позицию', 'Зафиксируй прицел', 'Выполни бросок', 'Покажи результат'],
+    important: [
+      'Записывай видео в 1920×1080 (Full HD), качество графики — не ниже «Среднего».',
+      'Покажи стартовую позицию, ориентир прицела, сам бросок и конечный результат.',
+      'Не вырезай движение, подготовку броска и момент использования способности.',
+      'Карта, агент, способность и название должны точно соответствовать записи.',
+      'Скриншоты должны идти по порядку повторения лайнапа и оставаться читаемыми.',
+    ],
     video: '/author-training/lineup-form-guide.mp4',
     color: '#38bdf8',
   },
@@ -2397,6 +2404,13 @@ const CATEGORY_FORM_GUIDES = {
     title: 'Защита: как заполнить?',
     description: 'Собери понятный сетап: где стоят способности, какую зону они держат и что происходит при активации.',
     steps: ['Выбери карту', 'Покажи зону', 'Расставь способности', 'Займи позицию', 'Покажи активацию'],
+    important: [
+      'Записывай видео в 1920×1080 (Full HD), качество графики — не ниже «Среднего».',
+      'Сначала покажи общий вид плента и зону, которую удерживает сетап.',
+      'Отдельно и разборчиво покажи установку каждой способности.',
+      'Покажи итоговую позицию игрока после установки всего сетапа.',
+      'Заверши запись полной активацией и результатом при входе соперника.',
+    ],
     video: '/author-training/defense-form-guide.mp4',
     color: '#ff4655',
   },
@@ -2404,6 +2418,13 @@ const CATEGORY_FORM_GUIDES = {
     title: 'Комбо: как заполнить?',
     description: 'Объясни связку без лишних слов: кто начинает, в каком порядке действуют игроки и когда срабатывает комбинация.',
     steps: ['Выбери агентов', 'Покажи позиции', 'Задай порядок', 'Попади в тайминг', 'Покажи результат'],
+    important: [
+      'Укажи всех агентов и способности, которые участвуют в комбинации.',
+      'Покажи исходную позицию каждого участника до начала действий.',
+      'Сохрани правильный порядок использования способностей и реальный тайминг.',
+      'Не скрывай монтажом момент запуска или взаимодействия способностей.',
+      'В конце обязательно покажи полный результат комбинации.',
+    ],
     video: '/author-training/combo-form-guide.mp4',
     color: '#ffb23f',
   },
@@ -2411,6 +2432,13 @@ const CATEGORY_FORM_GUIDES = {
     title: 'Прострел: как заполнить?',
     description: 'Докажи прострел одним понятным фрагментом: оружие, позиция, точка прицела и нанесённый урон.',
     steps: ['Выбери оружие', 'Покажи позицию', 'Покажи стену', 'Зафиксируй прицел', 'Подтверди урон'],
+    important: [
+      'Покажи выбранное оружие, карту и точную стартовую позицию.',
+      'Стена и ориентир прицела должны быть хорошо видны до выстрела.',
+      'Не меняй позицию или настройки между показом ориентира и выстрелом.',
+      'Запись должна подтверждать попадание и нанесённый противнику урон.',
+      'Качество видео должно позволять повторить прострел без догадок.',
+    ],
     video: '/author-training/wallbang-form-guide.mp4',
     color: '#ff5e91',
   },
@@ -2434,6 +2462,10 @@ function closeCategoryFormGuide() {
   const modal = document.getElementById('category-form-guide-modal');
   const video = modal?.querySelector('video');
   if (video) video.pause();
+  const important = document.getElementById('category-form-guide-important');
+  const importantButton = document.getElementById('category-form-guide-important-toggle');
+  if (important) important.hidden = true;
+  if (importantButton) importantButton.setAttribute('aria-expanded', 'false');
   if (modal) modal.hidden = true;
   document.body.classList.remove('category-form-guide-open');
 }
@@ -2450,6 +2482,16 @@ function openCategoryFormGuide() {
   document.getElementById('category-form-guide-steps').innerHTML = config.steps
     .map((step, index) => `<span><b>${String(index + 1).padStart(2, '0')}</b>${esc(step)}</span>`)
     .join('');
+  const important = document.getElementById('category-form-guide-important');
+  const importantList = document.getElementById('category-form-guide-important-list');
+  const importantButton = document.getElementById('category-form-guide-important-toggle');
+  if (importantList) {
+    importantList.innerHTML = config.important
+      .map(item => `<li><span>✓</span><p>${esc(item)}</p></li>`)
+      .join('');
+  }
+  if (important) important.hidden = true;
+  if (importantButton) importantButton.setAttribute('aria-expanded', 'false');
   const video = modal.querySelector('video');
   const placeholder = modal.querySelector('.category-form-guide-placeholder');
   video.hidden = true;
@@ -2464,6 +2506,12 @@ function openCategoryFormGuide() {
 }
 
 document.getElementById('category-form-guide-launch')?.addEventListener('click', openCategoryFormGuide);
+document.getElementById('category-form-guide-important-toggle')?.addEventListener('click', event => {
+  const panel = document.getElementById('category-form-guide-important');
+  if (!panel) return;
+  panel.hidden = !panel.hidden;
+  event.currentTarget.setAttribute('aria-expanded', String(!panel.hidden));
+});
 document.querySelector('#category-form-guide-modal .category-form-guide-close')?.addEventListener('click', closeCategoryFormGuide);
 document.getElementById('category-form-guide-modal')?.addEventListener('click', event => {
   if (event.target.id === 'category-form-guide-modal') closeCategoryFormGuide();
