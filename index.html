@@ -8,7 +8,7 @@
   <link rel="icon" type="image/png" href="app_icon3.png">
   <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
   <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/styles.css?v=2026-08-02-freeze-drawing-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-08-02-viewer-zoom-v1">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-08-01-immunity-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-08-01-persistent-guide-border-v1">
 </head>
@@ -212,18 +212,26 @@
       </div>
       <div id="vid-player-wrap" style="display:none;">
         <div class="vid-stage" id="vid-stage">
-          <video class="vid-player" id="vid-player" preload="metadata" crossorigin="anonymous" playsinline></video>
-          <video class="footage-preview-overlay" id="footage-preview-overlay" preload="metadata" crossorigin="anonymous" playsinline muted></video>
-          <canvas class="footage-chroma-canvas" id="footage-chroma-canvas"></canvas>
-          <div class="footage-transform-frame" id="footage-transform-frame" aria-hidden="true">
-            <span class="footage-resize-handle nw" data-footage-stage-handle="nw"></span>
-            <span class="footage-resize-handle ne" data-footage-stage-handle="ne"></span>
-            <span class="footage-resize-handle sw" data-footage-stage-handle="sw"></span>
-            <span class="footage-resize-handle se" data-footage-stage-handle="se"></span>
+          <div class="video-viewer-viewport" id="video-viewer-viewport">
+            <video class="vid-player" id="vid-player" preload="metadata" crossorigin="anonymous" playsinline></video>
+            <video class="footage-preview-overlay" id="footage-preview-overlay" preload="metadata" crossorigin="anonymous" playsinline muted></video>
+            <canvas class="footage-chroma-canvas" id="footage-chroma-canvas"></canvas>
+            <div class="footage-transform-frame" id="footage-transform-frame" aria-hidden="true">
+              <span class="footage-resize-handle nw" data-footage-stage-handle="nw"></span>
+              <span class="footage-resize-handle ne" data-footage-stage-handle="ne"></span>
+              <span class="footage-resize-handle sw" data-footage-stage-handle="sw"></span>
+              <span class="footage-resize-handle se" data-footage-stage-handle="se"></span>
+            </div>
+            <img class="freeze-frame-overlay" id="freeze-frame-overlay" alt="">
+            <canvas class="freeze-drawing-canvas" id="freeze-drawing-canvas" tabindex="0" aria-label="Рисование на стоп-кадре"></canvas>
+            <div class="zoom-frame" id="zoom-preview-frame">Зум</div>
           </div>
-          <img class="freeze-frame-overlay" id="freeze-frame-overlay" alt="">
-          <canvas class="freeze-drawing-canvas" id="freeze-drawing-canvas" tabindex="0" aria-label="Рисование на стоп-кадре"></canvas>
-          <div class="zoom-frame" id="zoom-preview-frame">Зум</div>
+          <output class="video-viewer-zoom-hud" id="video-viewer-zoom-hud" aria-live="polite">100%</output>
+        </div>
+        <div class="video-viewer-tip" id="video-viewer-tip">
+          <span>🔍 Просмотр кадра</span>
+          <span><kbd>Колесо</kbd> зум</span>
+          <span><kbd>Z</kbd> сброс</span>
         </div>
         <div class="vid-controls">
           <button class="btn-sm" id="vid-play-btn">▶</button>
@@ -925,7 +933,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-08-02-freeze-drawing-v1"></script>
+<script type="module" src="/app.js?v=2026-08-02-viewer-zoom-v1"></script>
 <script defer src="/workspace-redesign.js?v=2026-08-02-map-gallery-sync-v1"></script>
 </body>
 </html>

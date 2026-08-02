@@ -16,6 +16,10 @@ import {
   normalizeFreezeAnnotations,
   updateFreezeAnnotation,
 } from './video-frame-annotations.mjs?v=2026-08-02-freeze-drawing-v1';
+import {
+  clampVideoViewerZoom,
+  zoomVideoViewerAtPoint,
+} from './video-viewer-zoom.mjs?v=2026-08-02-viewer-zoom-v1';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -5579,6 +5583,8 @@ let freezeDrawingTool = 'brush';
 let freezeDrawingColor = '#00d4ff';
 let freezeDrawingWidth = 0.006;
 let freezeDrawingRenderKey = '';
+let videoViewerZoom = { scale: 1, panX: 0, panY: 0 };
+let videoViewerZoomResetTimer = null;
 let timelinePixelsPerSecond = 52;
 let timelineMagnetEnabled = true;
 let activeEffectTrack = 0;
@@ -5621,6 +5627,8 @@ const editorEls = {
   scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
   stage: document.getElementById('vid-stage'),
+  viewerViewport: document.getElementById('video-viewer-viewport'),
+  viewerZoomHud: document.getElementById('video-viewer-zoom-hud'),
   footagePreview: document.getElementById('footage-preview-overlay'),
   footageCanvas: document.getElementById('footage-chroma-canvas'),
   footageFrame: document.getElementById('footage-transform-frame'),
@@ -5682,6 +5690,45 @@ function setVideoEditorCollapsed(collapsed, persist = true) {
 }
 try { setVideoEditorCollapsed(localStorage.getItem(VIDEO_EDITOR_COLLAPSED_KEY) === '1', false); } catch (_) {}
 editorEls.toggle?.addEventListener('click', () => setVideoEditorCollapsed(!editorEls.editor.hidden));
+
+function renderVideoViewerZoom() {
+  const viewport = editorEls.viewerViewport;
+  if (!viewport) return;
+  const { scale, panX, panY } = videoViewerZoom;
+  viewport.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`;
+  editorEls.viewerZoomHud?.classList.toggle('active', scale > 1.001);
+  if (editorEls.viewerZoomHud) editorEls.viewerZoomHud.value = `${Math.round(scale * 100)}%`;
+}
+
+function resetVideoViewerZoom({ announce = false } = {}) {
+  if (videoViewerZoomResetTimer) clearTimeout(videoViewerZoomResetTimer);
+  editorEls.viewerViewport?.classList.add('resetting');
+  videoViewerZoom = { scale: 1, panX: 0, panY: 0 };
+  renderVideoViewerZoom();
+  videoViewerZoomResetTimer = setTimeout(() => {
+    editorEls.viewerViewport?.classList.remove('resetting');
+    videoViewerZoomResetTimer = null;
+  }, 260);
+  if (announce) toast('Зум просмотра сброшен до 100%', 'i');
+}
+
+editorEls.stage?.addEventListener('wheel', event => {
+  if (!hasVideoForHotkeys()) return;
+  if (event.target.closest?.('.footage-preview-overlay.interactive,.footage-chroma-canvas.interactive,.footage-transform-frame')) return;
+  event.preventDefault();
+  editorEls.viewerViewport?.classList.remove('resetting');
+  const rect = editorEls.stage.getBoundingClientRect();
+  const direction = Math.max(-120, Math.min(120, event.deltaY));
+  const nextScale = clampVideoViewerZoom(videoViewerZoom.scale * Math.exp(-direction * 0.0022));
+  videoViewerZoom = zoomVideoViewerAtPoint(
+    videoViewerZoom,
+    nextScale,
+    { x: event.clientX - rect.left, y: event.clientY - rect.top },
+    rect,
+  );
+  renderVideoViewerZoom();
+}, { passive: false });
+renderVideoViewerZoom();
 
 function createDefaultVideoEdit() {
   return {
@@ -8046,6 +8093,7 @@ async function handleVideoFile(file) {
     toast(`Видео должно быть записано строго в 1920×1080 (Full HD).${actualSize}`, 'e');
     return;
   }
+  resetVideoViewerZoom();
   pendingVideoSeekRatio = null;
   if (videoXhr) { videoXhr.abort(); videoXhr = null; }
   releaseLocalVideoPreview();
@@ -8286,6 +8334,7 @@ document.getElementById('vid-remove-btn').addEventListener('click', () => {
   timelinePreviewOutputTime = null;
   freezeFrameImages.clear();
   setFreezeOverlay('');
+  resetVideoViewerZoom();
   vidPlayer.src = '';
   releaseLocalVideoPreview();
   knownVideoDuration = 0;
@@ -8426,6 +8475,14 @@ document.addEventListener('keydown', e => {
   }
   const isTyping = isTextTypingTarget(target);
   if (isTyping) return;
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'KeyZ' &&
+      (insideEditor || videoEditorHotkeysActive) && hasVideoForHotkeys()) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation?.();
+    resetVideoViewerZoom({ announce: videoViewerZoom.scale > 1.001 });
+    return;
+  }
   if ((e.code === 'Delete' || e.code === 'Backspace') && selectedEditorItem && (insideEditor || videoEditorHotkeysActive)) {
     e.preventDefault();
     e.stopPropagation();
