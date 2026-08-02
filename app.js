@@ -20,6 +20,19 @@ import {
   clampVideoViewerZoom,
   zoomVideoViewerAtPoint,
 } from './video-viewer-zoom.mjs?v=2026-08-02-viewer-zoom-v1';
+import {
+  advanceVideoTimelinePlayback as sharedPlaybackPosition,
+  buildVideoTimelineSegments as buildSharedTimelineSegments,
+  outputTimeToScrubberValue as sharedOutputToScrubberValue,
+  outputTimeToSourceTime as sharedOutputToSourceTime,
+  scrubberValueToOutputTime as sharedScrubberToOutputTime,
+  sourceTimeToOutputTime as sharedSourceToOutputTime,
+  videoTimelineActiveFootageAt as sharedActiveFootageAt,
+  videoTimelineEffectOutputStart as sharedEffectOutputStart,
+  videoTimelineOutputDuration as sharedOutputDuration,
+  videoTimelineSegmentAt as sharedSegmentAt,
+  videoTimelineZoomStateAt as sharedZoomStateAt,
+} from './video_timeline_core.mjs?v=2026-08-02-video-timeline-core-v1';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -5866,9 +5879,7 @@ function timelineX(outputTime) {
 }
 
 function effectOutputStart(item) {
-  const explicit = Number(item?.outputAt);
-  if (Number.isFinite(explicit)) return clampOutputTime(explicit);
-  return sourceToOutputTime(item?.at || 0);
+  return clampOutputTime(sharedEffectOutputStart(item, videoEdit, videoDuration()));
 }
 
 function normalizedVideoEdit() {
@@ -5974,43 +5985,15 @@ function normalizedVideoEdit() {
 }
 
 function editedOutputDuration() {
-  return buildTimelineSegments().reduce((sum, item) => sum + item.duration, 0);
+  return sharedOutputDuration(videoEdit, videoDuration());
 }
 
 function buildTimelineSegments() {
-  const duration = videoDuration();
-  const end = videoEdit.trimEnd || duration;
-  const start = videoEdit.trimStart || 0;
-  const segments = [];
-  let cursor = start;
-  (videoEdit.freezeFrames || [])
-    .filter(item => item.at >= start && item.at <= end)
-    .sort((a, b) => a.at - b.at)
-    .forEach(item => {
-      if (item.at > cursor) {
-        segments.push({ type: 'video', sourceStart: cursor, sourceEnd: item.at, duration: item.at - cursor });
-      }
-      segments.push({ type: 'freeze', id: item.id, sourceAt: item.at, duration: Number(item.duration || 2) });
-      cursor = item.at;
-    });
-  if (end > cursor) {
-    segments.push({ type: 'video', sourceStart: cursor, sourceEnd: end, duration: end - cursor });
-  }
-  let outputStart = 0;
-  return segments.map(segment => {
-    const withOutput = { ...segment, outputStart };
-    outputStart += segment.duration;
-    return withOutput;
-  });
+  return buildSharedTimelineSegments(videoEdit, videoDuration());
 }
 
 function sourceToOutputTime(sourceTime) {
-  const source = clampTime(sourceTime);
-  let out = Math.max(0, source - (videoEdit.trimStart || 0));
-  for (const freeze of videoEdit.freezeFrames || []) {
-    if (freeze.at < source) out += Number(freeze.duration || 2);
-  }
-  return Math.max(0, out);
+  return sharedSourceToOutputTime(videoEdit, videoDuration(), sourceTime);
 }
 
 function currentOutputTime() {
@@ -6028,24 +6011,11 @@ function currentOutputTime() {
 }
 
 function outputToSourceTime(outputTime) {
-  const out = Math.max(0, Number(outputTime || 0));
-  const segments = buildTimelineSegments();
-  for (const segment of segments) {
-    const local = out - segment.outputStart;
-    if (local < 0 || local > segment.duration) continue;
-    if (segment.type === 'freeze') return segment.sourceAt;
-    return segment.sourceStart + local;
-  }
-  return videoEdit.trimEnd || videoDuration();
+  return sharedOutputToSourceTime(videoEdit, videoDuration(), outputTime);
 }
 
 function segmentForOutputTime(outputTime) {
-  const out = Math.max(0, Number(outputTime || 0));
-  const segments = buildTimelineSegments();
-  return segments.find((segment, index) => {
-    const end = segment.outputStart + segment.duration;
-    return out >= segment.outputStart && (out < end || index === segments.length - 1);
-  }) || null;
+  return sharedSegmentAt(videoEdit, videoDuration(), outputTime);
 }
 
 function captureCurrentVideoFrame() {
@@ -6220,24 +6190,11 @@ function activeZoomClipAtOutput(outputTime) {
 }
 
 function zoomPreviewStateAtOutput(outputTime) {
-  const clip = activeZoomClipAtOutput(outputTime);
-  if (!clip) return { clip: null, mix: 0 };
-  const start = effectOutputStart(clip);
-  const duration = Math.max(0.2, Number(clip.duration || 2));
-  const local = Math.max(0, Math.min(duration, outputTime - start));
-  const ramp = Math.max(0.08, Math.min(0.4, duration / 2));
-  const linear = Math.max(0, Math.min(1, local / ramp, (duration - local) / ramp));
-  return { clip, mix: linear * linear * (3 - 2 * linear) };
+  return sharedZoomStateAt(videoEdit, videoDuration(), outputTime);
 }
 
 function activeFootageClipAtOutput(outputTime) {
-  return (videoEdit.footageOverlays || [])
-    .slice()
-    .reverse()
-    .find(item => {
-      const start = effectOutputStart(item);
-      return outputTime >= start && outputTime <= start + Number(item.duration || 2);
-    }) || null;
+  return sharedActiveFootageAt(videoEdit, videoDuration(), outputTime);
 }
 
 function hexToRgb(hex) {
@@ -6577,14 +6534,14 @@ function showOutputFrame(outputTime) {
 
 function tickOutputPlayback() {
   if (!outputPlaybackActive) return;
-  const out = outputPlaybackStartTime + (performance.now() - outputPlaybackStartedAt) / 1000;
   const total = editedOutputDuration();
-  if (out >= total) {
+  const playback = sharedPlaybackPosition(outputPlaybackStartTime, performance.now() - outputPlaybackStartedAt, total);
+  if (playback.ended) {
     showOutputFrame(total);
     stopOutputPlayback({ keepPreview: true });
     return;
   }
-  showOutputFrame(out);
+  showOutputFrame(playback.outputTime);
   outputPlaybackRaf = requestAnimationFrame(tickOutputPlayback);
 }
 
@@ -6649,7 +6606,9 @@ function renderVideoTransport() {
   const editorExpanded = editorEls.toggle?.getAttribute('aria-expanded') !== 'false';
   const duration = editorExpanded ? editedOutputDuration() : videoDuration();
   const current = editorExpanded ? currentOutputTime() : vidPlayer.currentTime;
-  if (vidScrubber && duration) vidScrubber.value = String((current / duration) * 100);
+  if (vidScrubber && duration) {
+    vidScrubber.value = String(sharedOutputToScrubberValue(current, Number(vidScrubber.max || 100), duration));
+  }
   if (vidTimeEl) vidTimeEl.textContent = fmtTime(current) + ' / ' + fmtTime(duration);
 }
 
@@ -8262,8 +8221,7 @@ function seekFromScrubberValue() {
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   playedFreezeHolds.clear();
-  const rawRatio = Number(vidScrubber.value || 0) / 100;
-  const ratio = Number.isFinite(rawRatio) ? Math.max(0, Math.min(1, rawRatio)) : 0;
+  const ratio = sharedScrubberToOutputTime(vidScrubber.value, Number(vidScrubber.max || 100), 1);
   const duration = editorExpanded ? editedOutputDuration() : videoDuration();
   if (!duration) {
     pendingVideoSeekRatio = ratio;
@@ -8271,7 +8229,7 @@ function seekFromScrubberValue() {
   }
   pendingVideoSeekRatio = null;
   setFreezeOverlay('');
-  const targetTime = ratio * duration;
+  const targetTime = sharedScrubberToOutputTime(vidScrubber.value, Number(vidScrubber.max || 100), duration);
   if (!Number.isFinite(targetTime)) {
     pendingVideoSeekRatio = ratio;
     return;

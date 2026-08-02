@@ -1,0 +1,73 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  advanceVideoTimelinePlayback,
+  buildVideoTimelineSegments,
+  outputTimeToScrubberValue,
+  outputTimeToSourceTime,
+  resolveTimelineSourceDuration,
+  scrubberValueToOutputTime,
+  sourceTimeToOutputTime,
+  videoTimelineActiveFootageAt,
+  videoTimelineOutputDuration,
+  videoTimelineSegmentAt,
+  videoTimelineZoomStateAt,
+} from '../video_timeline_core.mjs';
+
+const edit = {
+  trimStart:2,
+  trimEnd:10,
+  freezeFrames:[{ id:'freeze-1', at:5, duration:2 }],
+  zoomKeyframes:[{ id:'zoom-1', at:5, outputAt:3, duration:2, scale:1.8 }],
+  footageOverlays:[{ id:'footage-1', at:6, outputAt:5, duration:2, url:'/effect.mp4' }],
+};
+
+test('shared timeline builds deterministic video and freeze segments', () => {
+  assert.deepEqual(
+    buildVideoTimelineSegments(edit, 14).map(item => [item.type, item.duration, item.outputStart]),
+    [['video', 3, 0], ['freeze', 2, 3], ['video', 5, 5]],
+  );
+  assert.equal(videoTimelineOutputDuration(edit, 14), 10);
+  assert.equal(videoTimelineSegmentAt(edit, 14, 3.5).type, 'freeze');
+});
+
+test('shared timeline converts source and output time across freeze frames', () => {
+  assert.equal(sourceTimeToOutputTime(edit, 14, 4), 2);
+  assert.equal(sourceTimeToOutputTime(edit, 14, 7), 7);
+  assert.equal(outputTimeToSourceTime(edit, 14, 4), 5);
+  assert.equal(outputTimeToSourceTime(edit, 14, 7), 7);
+});
+
+test('shared timeline ignores freeze frames outside the trimmed interval', () => {
+  const withOutsideFreeze = { ...edit, freezeFrames:[{ id:'outside', at:1, duration:5 }, ...edit.freezeFrames] };
+  assert.equal(videoTimelineOutputDuration(withOutsideFreeze, 14), 10);
+  assert.equal(sourceTimeToOutputTime(withOutsideFreeze, 14, 7), 7);
+});
+
+test('shared timeline seek conversion is stable and independent from UI reset', () => {
+  const sought = scrubberValueToOutputTime(750, 1000, 12);
+  assert.equal(sought, 9);
+  assert.equal(outputTimeToScrubberValue(sought, 1000, 12), 750);
+  assert.equal(scrubberValueToOutputTime(2000, 1000, 12), 12);
+});
+
+test('shared timeline playback advances and ends deterministically', () => {
+  assert.deepEqual(advanceVideoTimelinePlayback(3, 1500, 10), { outputTime:4.5, ended:false });
+  assert.deepEqual(advanceVideoTimelinePlayback(9, 1500, 10), { outputTime:10, ended:true });
+});
+
+test('upload editor delegates its player scrubber to the shared timeline core', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+  assert.match(app, /sharedOutputToScrubberValue\(current/);
+  assert.match(app, /const targetTime = sharedScrubberToOutputTime\(vidScrubber\.value/);
+  assert.match(app, /advanceVideoTimelinePlayback as sharedPlaybackPosition,[\s\S]*from '\.\/video_timeline_core\.mjs/);
+  assert.match(app, /const playback = sharedPlaybackPosition\(outputPlaybackStartTime/);
+});
+
+test('shared timeline resolves cached metadata fallback and effects', () => {
+  assert.equal(resolveTimelineSourceDuration(Number.NaN, edit), 10);
+  assert.equal(videoTimelineZoomStateAt(edit, 14, 4).mix, 1);
+  assert.equal(videoTimelineActiveFootageAt(edit, 14, 6)?.id, 'footage-1');
+});
