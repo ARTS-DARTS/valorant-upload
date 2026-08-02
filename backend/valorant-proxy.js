@@ -3,6 +3,9 @@ import https from 'node:https';
 const MEDIA_HOSTS = new Set([
   'd5adab93-7400-49ad-b1f9-66966c03d203.selstorage.ru',
   'valorant-lineups-video.s3.ru-3.storage.selcloud.ru',
+  'res.cloudinary.com',
+  'firebasestorage.googleapis.com',
+  'storage.googleapis.com',
 ]);
 const ALLOWED_HOSTS = new Set(['valorant-api.com', 'media.valorant-api.com', ...MEDIA_HOSTS]);
 

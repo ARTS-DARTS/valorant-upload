@@ -31,6 +31,7 @@ import adminConfigBackupHandler from './backend/admin-config-backup.js';
 import adminCloudinaryUsageHandler from './backend/admin-cloudinary-usage.js';
 import robokassaWebhookHandler from './backend/billing-webhook-robokassa.js';
 import robokassaReconciliationHandler from './backend/billing-reconcile-robokassa.js';
+import clientErrorHandler from './backend/client-error.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,6 +80,7 @@ app.all('/api/admin/expirations', adminExpirationsHandler);
 app.all('/api/admin/health', adminHealthHandler);
 app.all('/api/admin/config-backup', adminConfigBackupHandler);
 app.all('/api/admin/cloudinary-usage', adminCloudinaryUsageHandler);
+app.post('/api/client-error', clientErrorHandler);
 
 app.use(
   express.static(__dirname, {

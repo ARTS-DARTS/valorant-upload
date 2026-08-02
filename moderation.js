@@ -23,11 +23,46 @@ function safeMediaUrl(value) {
     const url = new URL(String(value || ''));
     const allowedHosts = new Set([
       'd5adab93-7400-49ad-b1f9-66966c03d203.selstorage.ru',
+      'valorant-lineups-video.s3.ru-3.storage.selcloud.ru',
       'firebasestorage.googleapis.com',
+      'storage.googleapis.com',
       'res.cloudinary.com',
     ]);
     return url.protocol === 'https:' && allowedHosts.has(url.hostname) ? url.href : '';
   } catch {
+    return '';
+  }
+}
+
+const MODERATION_PRIMARY_PROXY_HOSTS = new Set([
+  'd5adab93-7400-49ad-b1f9-66966c03d203.selstorage.ru',
+  'valorant-lineups-video.s3.ru-3.storage.selcloud.ru',
+]);
+
+function moderationProxyUrl(value) {
+  const safe = safeMediaUrl(value);
+  return safe ? `/api/valorant-proxy?url=${encodeURIComponent(safe)}` : '';
+}
+
+function moderationVideoSourceUrl(value) {
+  const safe = safeMediaUrl(value);
+  if (!safe) return '';
+  try {
+    return MODERATION_PRIMARY_PROXY_HOSTS.has(new URL(safe).hostname) ? moderationProxyUrl(safe) : safe;
+  } catch (_) {
+    return safe;
+  }
+}
+
+function diagnosticMediaUrl(value) {
+  try {
+    const url = new URL(String(value || ''), window.location.href);
+    if (url.pathname === '/api/valorant-proxy') {
+      const target = new URL(url.searchParams.get('url') || '');
+      return `${url.origin}${url.pathname}?host=${encodeURIComponent(target.hostname)}&path=${encodeURIComponent(target.pathname)}`;
+    }
+    return `${url.origin}${url.pathname}`;
+  } catch (_) {
     return '';
   }
 }
@@ -191,10 +226,65 @@ function loadVideoPreviewFrame(video) {
   video.load();
 }
 
+function moderationMediaErrorContext(video, phase) {
+  const mediaError = video.error;
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  return {
+    action:'moderation_video_load_failed',
+    phase,
+    lineup_id:video.closest('[data-moderation-id]')?.dataset.moderationId || '',
+    media_error_code:Number(mediaError?.code || 0),
+    media_error_message:String(mediaError?.message || ''),
+    network_state:Number(video.networkState),
+    ready_state:Number(video.readyState),
+    current_src:diagnosticMediaUrl(video.currentSrc || video.src),
+    original_src:diagnosticMediaUrl(video.dataset.originalSrc),
+    proxy_retry:video.dataset.proxyRetry || '0',
+    online:navigator.onLine,
+    effective_type:String(connection?.effectiveType || ''),
+    downlink:Number(connection?.downlink || 0),
+    save_data:connection?.saveData === true,
+    visibility:document.visibilityState,
+  };
+}
+
+function showModerationVideoError(video, visible) {
+  const errorBox = video.closest('.moderation-video-wrap')?.querySelector('[data-moderation-video-error]');
+  if (errorBox) errorBox.hidden = !visible;
+}
+
+function bindModerationVideoDiagnostics(video) {
+  if (!(video instanceof HTMLVideoElement) || video.dataset.diagnosticsBound === '1') return;
+  video.dataset.diagnosticsBound = '1';
+  video.addEventListener('loadedmetadata', () => {
+    video.dataset.proxyRetry = '0';
+    showModerationVideoError(video, false);
+  });
+  video.addEventListener('error', () => {
+    const firstFailure = video.dataset.proxyRetry !== '1';
+    const phase = firstFailure ? 'primary' : 'proxy_retry';
+    const details = moderationMediaErrorContext(video, phase);
+    context?.reportError?.(new Error(`Moderator video failed (${details.media_error_code || 'unknown'})`), details);
+    if (firstFailure) {
+      const fallback = moderationProxyUrl(video.dataset.originalSrc);
+      if (fallback) {
+        video.dataset.proxyRetry = '1';
+        showModerationVideoError(video, false);
+        video.src = `${fallback}&retry=${Date.now()}`;
+        video.preload = 'metadata';
+        video.load();
+        return;
+      }
+    }
+    showModerationVideoError(video, true);
+  });
+}
+
 function hydrateVideoPreviews() {
   if (!active) return;
   const list = document.getElementById('moderation-list');
   if (!list) return;
+  list.querySelectorAll('video.moderation-video').forEach(bindModerationVideoDiagnostics);
   list.querySelectorAll('video[poster]:not([data-poster-checked])').forEach(video => {
     video.dataset.posterChecked = 'loading';
     const probe = new Image();
@@ -240,14 +330,15 @@ function render(items, total = totalQueueItems) {
     return;
   }
   list.innerHTML = items.map(item => {
-    const video = safeMediaUrl(item.video_url);
+    const originalVideo = safeMediaUrl(item.video_url);
+    const video = moderationVideoSourceUrl(originalVideo);
     const poster = safeMediaUrl(item.video_thumbnail_url || item.screenshots?.[0]);
     const metadataTask = item.task_kind === 'metadata';
     const ownedByCurrentModerator = item.moderation_lock_owned === true;
     const meta = [item.moderator_only ? 'ЗАГОТОВКА ДЛЯ МОДЕРАЦИИ' : '', item.map, item.agent, item.agent ? item.ability : 'Выбери агента', sideLabel(item.round_side)].filter(Boolean);
     return `<article class="moderation-card" data-moderation-id="${esc(item.id)}">
       <div class="moderation-card-main">
-        ${video ? `<video class="moderation-video" src="${esc(video)}"${poster ? ` poster="${esc(poster)}" preload="none"` : ' preload="metadata" data-preview-frame="pending"'} controls playsinline></video>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
+        ${video ? `<div class="moderation-video-wrap"><video class="moderation-video" src="${esc(video)}" data-original-src="${esc(originalVideo)}"${poster ? ` poster="${esc(poster)}" preload="none"` : ' preload="metadata" data-preview-frame="pending"'} controls playsinline></video><div class="moderation-video-error" data-moderation-video-error hidden><strong>Видео заблокировано или недоступно</strong><span>Отключи блокировщик для vlineups.ru и попробуй ещё раз.</span><button type="button" data-moderation-video-retry>Повторить через прокси</button></div></div>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
         <div class="moderation-info">
           <div class="moderation-meta">${meta.map(value => `<span class="moderation-chip">${esc(value)}</span>`).join('')}</div>
           <h3 class="moderation-title">${metadataTask ? 'Проверить параметры лайнапа' : esc(item.title || 'Без названия')}</h3>
@@ -500,6 +591,18 @@ let loadedItems = [];
 
 function handleModerationListClick(event) {
   if (!active) return;
+  const videoRetry = event.target.closest('[data-moderation-video-retry]');
+  if (videoRetry) {
+    const video = videoRetry.closest('.moderation-video-wrap')?.querySelector('video');
+    const fallback = moderationProxyUrl(video?.dataset.originalSrc);
+    if (video && fallback) {
+      video.dataset.proxyRetry = '1';
+      showModerationVideoError(video, false);
+      video.src = `${fallback}&manual_retry=${Date.now()}`;
+      video.load();
+    }
+    return;
+  }
   const actionButton = event.target.closest('[data-moderation-action]');
   const card = actionButton?.closest('[data-moderation-id]');
   if (actionButton && card) act(card, actionButton.dataset.moderationAction);

@@ -1784,26 +1784,41 @@ function toSafeErrorMessage(error) {
 
 async function logUploadError(error, context = {}) {
   if (!auth.currentUser) return;
+  const payload = {
+    source: 'upload_site',
+    message: String(error?.message || error || 'Unknown upload site error').slice(0, 1000),
+    code: String(error?.code || '').slice(0, 100),
+    stack: String(error?.stack || '').slice(0, 4000),
+    context,
+    user_name: currentUserProfile?.name || currentUserProfile?.username || currentUserProfile?.displayName || auth.currentUser.displayName || '',
+    user_email: currentUserProfile?.email || currentUserProfile?.user_email || auth.currentUser.email || '',
+    appVersion: 'upload-site',
+    url: location.href,
+    userAgent: navigator.userAgent,
+  };
   try {
-    await setDoc(doc(collection(db, 'app_errors')), {
-      type: 'web',
-      source: 'upload_site',
-      message: String(error?.message || error || 'Unknown upload site error').slice(0, 1000),
-      code: String(error?.code || '').slice(0, 100),
-      stack: String(error?.stack || '').slice(0, 4000),
-      context,
-      uid: auth.currentUser.uid,
-      user_id: auth.currentUser.uid,
-      user_name: currentUserProfile?.name || currentUserProfile?.username || currentUserProfile?.displayName || auth.currentUser.displayName || '',
-      user_email: currentUserProfile?.email || currentUserProfile?.user_email || auth.currentUser.email || '',
-      platform: 'web',
-      appVersion: 'upload-site',
-      url: location.href,
-      userAgent: navigator.userAgent,
-      timestamp: serverTimestamp(),
+    const token = await auth.currentUser.getIdToken();
+    const response = await fetch('/api/client-error', {
+      method:'POST',
+      credentials:'same-origin',
+      headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body:JSON.stringify(payload),
     });
-  } catch (e) {
-    console.warn('logUploadError', e.message);
+    if (!response.ok) throw new Error(`client-error endpoint ${response.status}`);
+  } catch (backendError) {
+    console.warn('logUploadError backend', backendError.message);
+    try {
+      await Promise.race([
+        setDoc(doc(collection(db, 'app_errors')), {
+          type:'web', ...payload,
+          uid:auth.currentUser.uid, user_id:auth.currentUser.uid,
+          platform:'web', timestamp:serverTimestamp(), received_via:'firestore_fallback',
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore log timeout')), 2500)),
+      ]);
+    } catch (firestoreError) {
+      console.warn('logUploadError firestore fallback', firestoreError.message);
+    }
   }
 }
 
@@ -4034,12 +4049,13 @@ document.getElementById('moderator-author-search')?.addEventListener('input', ev
 async function loadModerationWorkspace({ background = false } = {}) {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-08-01-workspace-lifecycle-v1');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-08-02-video-delivery-v1');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({
         getToken: () => currentUser.getIdToken(),
         toast,
+        reportError:logUploadError,
         openDraft: openModeratorDraft,
         getRole: () => String(currentUserProfile?.role || '').toLowerCase(),
       });
