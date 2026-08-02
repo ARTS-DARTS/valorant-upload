@@ -3037,7 +3037,7 @@ function initWorkspaceTabs() {
   document.getElementById('btn-save-draft')?.addEventListener('click', event => {
     event.preventDefault();
     if (moderatorDraftSourceId) {
-      document.getElementById('btn-submit')?.click();
+      saveModeratorProgress();
       return;
     }
     saveCurrentDraftSnapshot();
@@ -3055,6 +3055,10 @@ function initWorkspaceTabs() {
   document.getElementById('btn-cancel-moderation')?.addEventListener('click', event => {
     event.preventDefault();
     cancelResubmissionDraft();
+  });
+  document.getElementById('btn-reject-moderation')?.addEventListener('click', event => {
+    event.preventDefault();
+    rejectModeratorDraft();
   });
   document.getElementById('btn-reset-upload')?.addEventListener('click', event => {
     event.preventDefault();
@@ -4408,14 +4412,16 @@ function startRejectedResubmission(lineupId) {
 function renderResubmissionBanner() {
   const banner = document.getElementById('resubmit-banner');
   const cancelButton = document.getElementById('btn-cancel-moderation');
+  const rejectButton = document.getElementById('btn-reject-moderation');
   const submitButton = document.getElementById('btn-submit');
   const saveDraftButton = document.getElementById('btn-save-draft');
   if (cancelButton) {
     cancelButton.hidden = !moderatorDraftSourceId && !resubmissionSourceId;
     cancelButton.textContent = moderatorDraftSourceId ? '✕ Отменить проверку' : '✕ Отменить редактирование';
   }
-  if (submitButton && !submitButton.disabled) submitButton.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
-  if (saveDraftButton) saveDraftButton.textContent = moderatorDraftSourceId ? '💾 Сохранить изменения в очередь' : '💾 Сохранить черновик';
+  if (rejectButton) rejectButton.hidden = !moderatorDraftSourceId;
+  if (submitButton && !submitButton.disabled) submitButton.textContent = moderatorDraftSourceId ? '✅ Завершить проверку' : '⬆ Отправить лайнап';
+  if (saveDraftButton) saveDraftButton.textContent = moderatorDraftSourceId ? '💾 Сохранить без подтверждения' : '💾 Сохранить черновик';
   if (!banner) return;
   if (!resubmissionSourceId && !moderatorDraftSourceId) {
     banner.style.display = 'none';
@@ -9543,6 +9549,104 @@ async function flushModeratorAutosave({ keepalive = false, reportError = false }
   }
 }
 
+async function saveModeratorProgress() {
+  const lineupId = moderatorDraftSourceId;
+  const button = document.getElementById('btn-save-draft');
+  if (!lineupId || !currentUser || button?.disabled) return false;
+  const originalText = button?.textContent || '💾 Сохранить без подтверждения';
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Сохранение…';
+  }
+  try {
+    clearTimeout(moderatorAutosaveTimer);
+    moderatorAutosaveTimer = null;
+    if (moderatorAutosaveRequest) await moderatorAutosaveRequest.catch(() => {});
+    moderatorAutosaveDirty = false;
+    const token = await currentUser.getIdToken();
+    const response = await fetch('/api/moderation', {
+      method:'POST',
+      headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body:JSON.stringify({ lineupId, action:'save_progress', data:moderatorAutosavePayload() }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(result.error || `Ошибка ${response.status}`), { status:response.status });
+    clearModeratorVideoEditBackup(lineupId);
+    moderationController?.clearClaim?.();
+    moderatorDraftSourceId = '';
+    moderatorSelectedAuthor = null;
+    try { sessionStorage.removeItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
+    showModeratorAuthorPicker();
+    resetUploadForm();
+    switchWorkspaceTab('moderation');
+    await moderationController?.load?.();
+    toast('Изменения сохранены без подтверждения. Лайнап остался в очереди.', 's');
+    return true;
+  } catch (error) {
+    logUploadError(error, { action:'moderator_save_progress_failed', lineup_id:lineupId });
+    toast('Не удалось сохранить без подтверждения: ' + (error.message || error), 'e');
+    return false;
+  } finally {
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+}
+
+async function rejectModeratorDraft() {
+  const lineupId = moderatorDraftSourceId;
+  const button = document.getElementById('btn-reject-moderation');
+  if (!lineupId || !currentUser || button?.disabled) return false;
+  const reason = prompt('Что автор должен исправить? Укажи причину отказа — от 10 до 500 символов.')?.trim() || '';
+  if (!reason) return false;
+  if (reason.length < 10 || reason.length > 500) {
+    toast('Причина должна содержать от 10 до 500 символов', 'e');
+    return false;
+  }
+  if (!confirm('Отклонить лайнап? Автор получит указанную причину и сможет отправить материал заново.')) return false;
+
+  const originalText = button?.textContent || '⛔ Отклонить лайнап';
+  const actionButtons = ['btn-submit', 'btn-save-draft', 'btn-reject-moderation', 'btn-cancel-moderation', 'btn-reset-upload']
+    .map(id => document.getElementById(id))
+    .filter(Boolean);
+  actionButtons.forEach(item => { item.disabled = true; });
+  if (button) button.textContent = 'Отклонение…';
+  try {
+    clearTimeout(moderatorAutosaveTimer);
+    moderatorAutosaveTimer = null;
+    if (moderatorAutosaveRequest) await moderatorAutosaveRequest.catch(() => {});
+    moderatorAutosaveDirty = false;
+    const token = await currentUser.getIdToken();
+    const response = await fetch('/api/moderation', {
+      method:'POST',
+      headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body:JSON.stringify({ lineupId, action:'reject', reason }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(result.error || `Ошибка ${response.status}`), { status:response.status });
+    clearModeratorVideoEditBackup(lineupId);
+    moderationController?.clearClaim?.();
+    moderatorDraftSourceId = '';
+    moderatorSelectedAuthor = null;
+    try { sessionStorage.removeItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
+    showModeratorAuthorPicker();
+    resetUploadForm();
+    renderResubmissionBanner();
+    switchWorkspaceTab('moderation');
+    await moderationController?.load?.();
+    toast('Лайнап отклонён, причина отправлена автору', 's');
+    return true;
+  } catch (error) {
+    logUploadError(error, { action:'moderator_reject_failed', lineup_id:lineupId });
+    toast('Не удалось отклонить лайнап: ' + (error.message || error), 'e');
+    return false;
+  } finally {
+    actionButtons.forEach(item => { if (item.isConnected) item.disabled = false; });
+    if (button?.isConnected) button.textContent = originalText;
+  }
+}
+
 function hasDraftContent(draft) {
   return !!(
     draft &&
@@ -10197,7 +10301,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       : '';
     if (categoryNeedsAbility(requestedContentType) && !normalizedAbility) {
       toast('Выбери способность агента', 'e');
-      btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
+      btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Завершить проверку' : '⬆ Отправить лайнап';
       return;
     }
     submitStage = 'load_range_radius';
@@ -10212,13 +10316,13 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     const submittedUid = moderatorDraftSourceId ? (moderatorSelectedAuthor?.uid || '') : uid;
     if (moderatorDraftSourceId && (!submittedBy || !submittedUid)) {
       toast('Выбери автора лайнапа', 'e');
-      btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
+      btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Завершить проверку' : '⬆ Отправить лайнап';
       return;
     }
     contentType = normalizeContentCategory(selectedCategory);
     if (!canSubmitContentCategory(contentType)) {
       toast('Эта категория пока закрыта для отправки.', 'e');
-      btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
+      btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Завершить проверку' : '⬆ Отправить лайнап';
       return;
     }
     if (contentType === 'defense') {
@@ -10362,7 +10466,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       },
     });
     toast('Ошибка отправки: ' + toSafeErrorMessage(e), 'e');
-    btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Сохранить проверку' : '⬆ Отправить лайнап';
+    btn.disabled = false; btn.textContent = moderatorDraftSourceId ? '✅ Завершить проверку' : '⬆ Отправить лайнап';
   }
 });
 

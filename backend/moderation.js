@@ -274,24 +274,33 @@ function safeDefenseAbilities(raw) {
   }).filter(item => item.ability);
 }
 
-async function saveDraft(req, res, moderator) {
+async function saveDraft(req, res, moderator, { complete = true } = {}) {
   const lineupId = clean(req.body?.lineupId);
   const data = req.body?.data || {};
   const authorUid = clean(data.user_id).slice(0, 128);
   const authorName = clean(data.submitted_by).slice(0, 80);
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
-  if (!authorUid || !authorName) return res.status(400).json({ error: 'Выбери автора лайнапа' });
+  if ((complete || authorUid || authorName) && (!authorUid || !authorName)) {
+    return res.status(400).json({ error: 'Выбери автора лайнапа' });
+  }
   const db = getFirestore();
-  const author = await db.collection('users').doc(authorUid).get();
-  if (!author.exists) return res.status(400).json({ error: 'Автор не найден' });
+  if (authorUid) {
+    const author = await db.collection('users').doc(authorUid).get();
+    if (!author.exists) return res.status(400).json({ error: 'Автор не найден' });
+  }
   const ref = db.collection('lineups').doc(lineupId);
   const claimRef = db.collection('moderation_claims').doc(moderator.uid);
-  const completionLogRef = db.collection('moderator_logs').doc();
+  const moderationLogRef = db.collection('moderator_logs').doc();
+  let savedStatus = '';
   await db.runTransaction(async tx => {
-    const templatesQuery = db.collection('lineups').where('moderator_only', '==', true);
-    const [snap, claimSnap, templatesSnap] = await Promise.all([tx.get(ref), tx.get(claimRef), tx.get(templatesQuery)]);
+    const reads = [tx.get(ref), tx.get(claimRef)];
+    if (complete) reads.push(tx.get(db.collection('lineups').where('moderator_only', '==', true)));
+    const [snap, claimSnap, templatesSnap] = await Promise.all(reads);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const currentData = snap.data() || {};
+    savedStatus = clean(currentData.status);
+    const savedAuthorUid = authorUid || clean(currentData.user_id || currentData.uid || currentData.author_uid).slice(0, 128);
+    const savedAuthorName = authorName || clean(currentData.submitted_by || currentData.author).slice(0, 80);
     assertCanModerateLineup(moderator, currentData);
     if (!['pending', 'moderator_draft'].includes(currentData.status)) throw Object.assign(new Error('Лайнап уже обработан'), { status: 409 });
     // An expired lease may be reclaimed by another moderator, but expiration
@@ -324,17 +333,29 @@ async function saveDraft(req, res, moderator) {
       video_edit: data.video_edit && typeof data.video_edit === 'object'
         ? data.video_edit
         : (currentData.video_edit && typeof currentData.video_edit === 'object' ? currentData.video_edit : null),
-      user_id: authorUid, submitted_by: authorName,
-      category: contentType, content_type: contentType, status: 'pending', moderator_only: false,
-      edited_by_moderator_uid: moderator.uid, edited_at: FieldValue.serverTimestamp(), submitted_at: FieldValue.serverTimestamp(),
-      edited_by_moderator_name: moderator.name,
-      moderator_changes_saved: true,
-      moderator_change_note: `Изменения сохранены модератором ${moderator.name}`.slice(0, 160),
-      moderator_template_completed: true,
+      user_id: savedAuthorUid, submitted_by: savedAuthorName,
+      category: contentType, content_type: contentType,
       moderator_autosave: FieldValue.delete(), moderator_autosaved_at: FieldValue.delete(),
       moderation_lock_uid: FieldValue.delete(), moderation_lock_name: FieldValue.delete(),
         moderation_lock_expires_at: FieldValue.delete(),
       };
+    if (complete) {
+      Object.assign(update, {
+        status: 'pending', moderator_only: false,
+        edited_by_moderator_uid: moderator.uid,
+        edited_by_moderator_name: moderator.name,
+        edited_at: FieldValue.serverTimestamp(), submitted_at: FieldValue.serverTimestamp(),
+        moderator_changes_saved: true,
+        moderator_change_note: `Изменения сохранены модератором ${moderator.name}`.slice(0, 160),
+        moderator_template_completed: true,
+      });
+    } else {
+      Object.assign(update, {
+        moderator_progress_saved_by_uid: moderator.uid,
+        moderator_progress_saved_by_name: moderator.name,
+        moderator_progress_saved_at: FieldValue.serverTimestamp(),
+      });
+    }
       const sovaArrow = ['sova', 'сова'].includes(clean(data.agent).toLowerCase()) &&
         /shock|recon|шок|развед|стрел/.test(clean(data.ability).toLowerCase());
       if (!sovaArrow) {
@@ -356,17 +377,17 @@ async function saveDraft(req, res, moderator) {
       update.trajectory = [];
     }
     tx.update(ref, update);
-    tx.create(completionLogRef, {
+    tx.create(moderationLogRef, {
       lineup_id: lineupId,
-      action: 'complete_lineup',
+      action: complete ? 'complete_lineup' : 'save_progress',
       task_kind: currentData.moderator_only === true ? 'template' : 'lineup',
       moderator_uid: moderator.uid,
       moderator_name: moderator.name,
       moderator_role: moderator.role,
       created_at: FieldValue.serverTimestamp(),
     });
-    const completedTemplateKey = moderatorTemplateKey(currentData);
-    if (completedTemplateKey) {
+    const completedTemplateKey = complete ? moderatorTemplateKey(currentData) : '';
+    if (completedTemplateKey && templatesSnap) {
       templatesSnap.docs.forEach(templateDoc => {
         if (templateDoc.id === lineupId) return;
         const template = templateDoc.data() || {};
@@ -382,7 +403,12 @@ async function saveDraft(req, res, moderator) {
     }
     if (claimSnap.exists && clean(claimSnap.data()?.lineup_id) === lineupId) tx.delete(claimRef);
   });
-  res.status(200).json({ ok: true, id: lineupId, status: 'pending' });
+  res.status(200).json({
+    ok: true,
+    id: lineupId,
+    status: complete ? 'pending' : savedStatus,
+    completed: complete,
+  });
 }
 
 async function autosaveDraft(req, res, moderator) {
@@ -702,7 +728,8 @@ async function moderate(req, res, moderator) {
     return autosaveDraft(req, res, moderator);
   }
   checkActionRate(moderator.uid);
-  if (action === 'save_draft') return saveDraft(req, res, moderator);
+  if (action === 'save_draft') return saveDraft(req, res, moderator, { complete:true });
+  if (action === 'save_progress') return saveDraft(req, res, moderator, { complete:false });
   if (action === 'seed_metadata_queue') return seedMetadataQueue(res, moderator);
   if (action === 'complete_metadata') return completeMetadata(req, res, moderator);
   if (action === 'release_claim') return releaseClaim(req, res, moderator);
@@ -716,9 +743,10 @@ async function moderate(req, res, moderator) {
 
   const db = getFirestore();
   const ref = db.collection('lineups').doc(lineupId);
+  const claimRef = db.collection('moderation_claims').doc(moderator.uid);
   let authorUid = '';
   await db.runTransaction(async tx => {
-    const snap = await tx.get(ref);
+    const [snap, claimSnap] = await Promise.all([tx.get(ref), tx.get(claimRef)]);
     if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status: 404 });
     const data = snap.data() || {};
     assertCanModerateLineup(moderator, data);
@@ -734,8 +762,14 @@ async function moderate(req, res, moderator) {
       rejected_at: FieldValue.serverTimestamp(),
       rejected_by_uid: moderator.uid,
       rejected_by_name: moderator.name,
+      moderation_lock_uid: FieldValue.delete(),
+      moderation_lock_name: FieldValue.delete(),
+      moderation_lock_expires_at: FieldValue.delete(),
+      moderator_autosave: FieldValue.delete(),
+      moderator_autosaved_at: FieldValue.delete(),
     };
     tx.update(ref, update);
+    if (claimSnap.exists && clean(claimSnap.data()?.lineup_id) === lineupId) tx.delete(claimRef);
     tx.create(db.collection('moderator_logs').doc(), {
       lineup_id: lineupId,
       action,
