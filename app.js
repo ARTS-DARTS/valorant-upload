@@ -8509,12 +8509,14 @@ function updateModeratorScreenshotRailVisibility() {
   moderatorShotRailFrame = requestAnimationFrame(() => {
     moderatorShotRailFrame = 0;
     const rail = document.getElementById('moderator-shot-rail');
-    const copy = document.querySelector('.lineup-copy-editor');
+    const editor = document.querySelector('.map-editor-shell');
     const uploadPanel = document.getElementById('workspace-upload');
-    if (!rail || !copy) return;
-    const rect = copy.getBoundingClientRect();
+    const form = uploadPanel?.querySelector('.form-layout');
+    if (!rail || !editor || !form) return;
+    const editorRect = editor.getBoundingClientRect();
+    const formRect = form.getBoundingClientRect();
     const visible = !!moderatorDraftSourceId && screenshots.length > 0 && window.innerWidth >= 1680 &&
-      uploadPanel?.classList.contains('active') && rect.top < window.innerHeight * .58 && rect.bottom > 82;
+      uploadPanel?.classList.contains('active') && editorRect.top < window.innerHeight * .58 && formRect.bottom > 82;
     const wasHidden = rail.hidden;
     rail.hidden = !visible;
     if (!visible) {
