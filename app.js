@@ -9,6 +9,13 @@ import { getFirestore, doc, collection, getDoc, setDoc, deleteDoc, writeBatch,
 import { getFunctions, httpsCallable }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
 import { initSiteVersionWatcher }             from './site-version-watcher.js?v=2026-07-30-global-update-v1';
+import {
+  MAX_FREEZE_ANNOTATION_STROKES,
+  createFreezeAnnotation,
+  drawFreezeAnnotations,
+  normalizeFreezeAnnotations,
+  updateFreezeAnnotation,
+} from './video-frame-annotations.mjs?v=2026-08-02-freeze-drawing-v1';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -5566,6 +5573,12 @@ let freezeHoldActive = null;
 let freezeHoldRenderInterval = null;
 let playedFreezeHolds = new Set();
 let lastVideoTime = 0;
+let freezeDrawingVisibleId = '';
+let freezeDrawingPointer = null;
+let freezeDrawingTool = 'brush';
+let freezeDrawingColor = '#00d4ff';
+let freezeDrawingWidth = 0.006;
+let freezeDrawingRenderKey = '';
 let timelinePixelsPerSecond = 52;
 let timelineMagnetEnabled = true;
 let activeEffectTrack = 0;
@@ -5612,6 +5625,10 @@ const editorEls = {
   footageCanvas: document.getElementById('footage-chroma-canvas'),
   footageFrame: document.getElementById('footage-transform-frame'),
   freezeOverlay: document.getElementById('freeze-frame-overlay'),
+  freezeDrawingCanvas: document.getElementById('freeze-drawing-canvas'),
+  freezeDrawingPanel: document.getElementById('freeze-draw-panel'),
+  freezeDrawingUndo: document.getElementById('freeze-draw-undo'),
+  freezeDrawingClear: document.getElementById('freeze-draw-clear'),
   zoomFrame: document.getElementById('zoom-preview-frame'),
   playhead: document.getElementById('timeline-playhead'),
   trimRange: document.getElementById('video-trim-range'),
@@ -5668,7 +5685,7 @@ editorEls.toggle?.addEventListener('click', () => setVideoEditorCollapsed(!edito
 
 function createDefaultVideoEdit() {
   return {
-    version: 1,
+    version: 2,
     trimStart: 0,
     trimEnd: 0,
     splits: [],
@@ -5831,6 +5848,7 @@ function normalizedVideoEdit() {
   const effectTracks = Math.max(storedTrackCount, maxZoomTrack + 1, maxFootageTrack + 1);
   return {
     ...videoEdit,
+    version: 2,
     effectTracks,
     trimStart,
     trimEnd,
@@ -5840,6 +5858,7 @@ function normalizedVideoEdit() {
       id: item.id || `freeze_${Math.round(Number(item.at || 0) * 1000)}_${Math.random().toString(36).slice(2, 7)}`,
       at: clampTime(item.at),
       duration: Math.max(0.2, Math.min(10, Number(item.duration || 2))),
+      annotations: normalizeFreezeAnnotations(item.annotations || item.drawings),
     })).sort((a, b) => a.at - b.at),
     zoomKeyframes: (videoEdit.zoomKeyframes || []).map(item => {
       const at = clampTime(item.at);
@@ -5983,8 +6002,75 @@ function captureCurrentVideoFrame() {
   }
 }
 
-function setFreezeOverlay(src) {
+function selectedFreezeClip() {
+  if (selectedEditorItem?.type !== 'freeze') return null;
+  return (videoEdit.freezeFrames || []).find(item => item.id === selectedEditorItem.id) || null;
+}
+
+function resizeFreezeDrawingCanvas() {
+  const canvas = editorEls.freezeDrawingCanvas;
+  const rect = editorEls.stage?.getBoundingClientRect();
+  if (!canvas || !rect?.width || !rect?.height) return false;
+  const density = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const width = Math.max(1, Math.round(rect.width * density));
+  const height = Math.max(1, Math.round(rect.height * density));
+  if (canvas.width === width && canvas.height === height) return false;
+  canvas.width = width;
+  canvas.height = height;
+  return true;
+}
+
+function renderFreezeDrawing() {
+  const canvas = editorEls.freezeDrawingCanvas;
+  if (!canvas) return;
+  const resized = resizeFreezeDrawingCanvas();
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const freeze = (videoEdit.freezeFrames || []).find(item => item.id === freezeDrawingVisibleId) || null;
+  const selected = selectedFreezeClip();
+  const annotations = normalizeFreezeAnnotations(freeze?.annotations);
+  const visible = !!freeze && (annotations.length > 0 || selected?.id === freeze.id);
+  const interactive = visible && selected?.id === freeze.id && !outputPlaybackActive;
+  canvas.classList.toggle('show', visible);
+  canvas.classList.toggle('interactive', interactive);
+  canvas.setAttribute('aria-hidden', String(!visible));
+  const renderKey = visible ? `${freeze.id}|${canvas.width}x${canvas.height}|${JSON.stringify(annotations)}` : '';
+  if (resized || renderKey !== freezeDrawingRenderKey) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (visible) drawFreezeAnnotations(ctx, annotations, canvas.width, canvas.height);
+    freezeDrawingRenderKey = renderKey;
+  }
+}
+
+function syncFreezeDrawingPanel() {
+  const freeze = selectedFreezeClip();
+  const open = !!freeze;
+  editorEls.freezeDrawingPanel?.classList.toggle('open', open);
+  editorEls.freezeDrawingPanel?.setAttribute('aria-hidden', String(!open));
+  const hasAnnotations = !!freeze?.annotations?.length;
+  if (editorEls.freezeDrawingUndo) editorEls.freezeDrawingUndo.disabled = !hasAnnotations;
+  if (editorEls.freezeDrawingClear) editorEls.freezeDrawingClear.disabled = !hasAnnotations;
+  document.querySelectorAll('[data-freeze-draw-tool]').forEach(button => {
+    const active = button.dataset.freezeDrawTool === freezeDrawingTool;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  document.querySelectorAll('[data-freeze-draw-color]').forEach(button => {
+    const active = button.dataset.freezeDrawColor === freezeDrawingColor;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  document.querySelectorAll('[data-freeze-draw-width]').forEach(button => {
+    const active = Math.abs(Number(button.dataset.freezeDrawWidth) - freezeDrawingWidth) < 0.0001;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  renderFreezeDrawing();
+}
+
+function setFreezeOverlay(src, freezeId = '') {
   if (!editorEls.freezeOverlay) return;
+  freezeDrawingVisibleId = freezeId || '';
   if (src) {
     if (editorEls.freezeOverlay.src !== src) editorEls.freezeOverlay.src = src;
     editorEls.freezeOverlay.classList.add('show');
@@ -5992,6 +6078,21 @@ function setFreezeOverlay(src) {
     editorEls.freezeOverlay.classList.remove('show');
     editorEls.freezeOverlay.removeAttribute('src');
   }
+  renderFreezeDrawing();
+}
+
+function previewFreezeForDrawing(freezeId) {
+  const freeze = (videoEdit.freezeFrames || []).find(item => item.id === freezeId);
+  if (!freeze) return;
+  stopOutputPlayback({ keepPreview: false });
+  clearFreezeHold();
+  vidPlayer.pause();
+  const segment = buildTimelineSegments().find(item => item.type === 'freeze' && item.id === freeze.id);
+  timelinePreviewOutputTime = segment?.outputStart ?? sourceToOutputTime(freeze.at);
+  if (Math.abs((vidPlayer.currentTime || 0) - freeze.at) > 0.02) vidPlayer.currentTime = freeze.at;
+  setFreezeOverlay(freezeFrameImages.get(freeze.id) || '', freeze.id);
+  updateTimelinePlaybackUi({ keepVisible: true });
+  requestAnimationFrame(() => editorEls.freezeDrawingCanvas?.focus({ preventScroll: true }));
 }
 
 function reviveEditorVideo(reason = 'resume') {
@@ -6398,7 +6499,7 @@ function showOutputFrame(outputTime) {
     if (Math.abs((vidPlayer.currentTime || 0) - segment.sourceAt) > 0.03) {
       vidPlayer.currentTime = segment.sourceAt;
     }
-    setFreezeOverlay(freezeFrameImages.get(segment.id) || '');
+    setFreezeOverlay(freezeFrameImages.get(segment.id) || '', segment.id);
   } else {
     setFreezeOverlay('');
     const local = Math.max(0, Math.min(segment.duration, out - segment.outputStart));
@@ -6561,7 +6662,7 @@ function renderVideoEditor() {
         title="Стоп-кадр ${fmtTime(f.duration)} на ${fmtTime(f.at)}"
         style="${timelineBlockStyle(outputStart, f.duration)}">
         <span class="freeze-resize start" data-freeze-edge="start"></span>
-        +${Number(f.duration || 2).toFixed(1)}с
+        ${f.annotations?.length ? '<b class="freeze-drawn-mark" title="На кадре есть рисунок">✎</b>' : ''}+${Number(f.duration || 2).toFixed(1)}с
         <span class="freeze-resize end" data-freeze-edge="end"></span>
       </span>`;
     }).join('');
@@ -6603,6 +6704,7 @@ function renderVideoEditor() {
   renderVideoTransport();
   syncZoomTransformPanel();
   applyVideoEditPreview();
+  syncFreezeDrawingPanel();
   if (editorEls.summary) {
     const parts = [];
     if (videoEdit.trimStart > 0 || (duration && end < duration)) parts.push(`обрезка ${fmtTime(videoEdit.trimStart)}-${fmtTime(end)}`);
@@ -6629,12 +6731,105 @@ function setEditorMode(mode) {
   const hints = {
     trim: 'Клик или drag по таймлайну перематывает. Для обрезки тяни белые края зелёного отрезка или меняй поля старт/конец.',
     split: 'Перемотай на нужное место и нажми “Разрезать тут”. Обычный клик по таймлайну больше не добавляет разрез.',
-    freeze: 'Перемотай на кадр и нажми “Добавить стоп-кадр 2с”. Появится фиолетовый клип, его можно двигать, тянуть за край и удалить.',
+    freeze: 'Добавь стоп-кадр, затем рисуй кистью или прямыми линиями по кадру. Фиолетовый клип можно двигать, тянуть за край и удалить.',
     zoom: 'Выбери силу зума и нажми “Добавить зум”. Зелёный клип на дорожке эффектов можно двигать, растягивать и удалить.',
     effects: 'Выбери футаж на таймлайне, затем включи хромакей и цвет именно для этого блока. Финальный рендер делает модерация/обработка.',
   };
   if (editorEls.hint) editorEls.hint.textContent = hints[activeEditorMode] || hints.trim;
 }
+
+function freezeDrawingPoint(event) {
+  const rect = editorEls.freezeDrawingCanvas?.getBoundingClientRect();
+  if (!rect?.width || !rect?.height) return { x: 0, y: 0 };
+  return {
+    x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+    y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+  };
+}
+
+function finishFreezeDrawing(event) {
+  if (!freezeDrawingPointer || event.pointerId !== freezeDrawingPointer.pointerId) return;
+  try { editorEls.freezeDrawingCanvas?.releasePointerCapture(event.pointerId); } catch (_) {}
+  freezeDrawingPointer = null;
+  saveVideoEdit();
+}
+
+editorEls.freezeDrawingCanvas?.addEventListener('pointerdown', event => {
+  const freeze = selectedFreezeClip();
+  if (!freeze || freeze.id !== freezeDrawingVisibleId || outputPlaybackActive) return;
+  if ((freeze.annotations || []).length >= MAX_FREEZE_ANNOTATION_STROKES) {
+    toast(`На одном стоп-кадре можно сохранить до ${MAX_FREEZE_ANNOTATION_STROKES} штрихов`, 'i');
+    return;
+  }
+  event.preventDefault();
+  const annotation = createFreezeAnnotation({
+    type: freezeDrawingTool,
+    color: freezeDrawingColor,
+    width: freezeDrawingWidth,
+    point: freezeDrawingPoint(event),
+  });
+  if (!annotation) return;
+  freeze.annotations = [...normalizeFreezeAnnotations(freeze.annotations), annotation];
+  freezeDrawingPointer = { pointerId: event.pointerId, freezeId: freeze.id, annotation };
+  try { editorEls.freezeDrawingCanvas.setPointerCapture(event.pointerId); } catch (_) {}
+  renderFreezeDrawing();
+  syncFreezeDrawingPanel();
+});
+
+editorEls.freezeDrawingCanvas?.addEventListener('pointermove', event => {
+  if (!freezeDrawingPointer || event.pointerId !== freezeDrawingPointer.pointerId) return;
+  event.preventDefault();
+  if (updateFreezeAnnotation(freezeDrawingPointer.annotation, freezeDrawingPoint(event))) {
+    renderFreezeDrawing();
+  }
+});
+editorEls.freezeDrawingCanvas?.addEventListener('pointerup', finishFreezeDrawing);
+editorEls.freezeDrawingCanvas?.addEventListener('pointercancel', finishFreezeDrawing);
+editorEls.freezeDrawingCanvas?.addEventListener('keydown', event => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+    event.preventDefault();
+    editorEls.freezeDrawingUndo?.click();
+  }
+});
+
+document.querySelectorAll('[data-freeze-draw-tool]').forEach(button => {
+  button.addEventListener('click', () => {
+    freezeDrawingTool = button.dataset.freezeDrawTool === 'line' ? 'line' : 'brush';
+    syncFreezeDrawingPanel();
+    editorEls.freezeDrawingCanvas?.focus({ preventScroll: true });
+  });
+});
+document.querySelectorAll('[data-freeze-draw-color]').forEach(button => {
+  button.addEventListener('click', () => {
+    freezeDrawingColor = button.dataset.freezeDrawColor || '#00d4ff';
+    syncFreezeDrawingPanel();
+    editorEls.freezeDrawingCanvas?.focus({ preventScroll: true });
+  });
+});
+document.querySelectorAll('[data-freeze-draw-width]').forEach(button => {
+  button.addEventListener('click', () => {
+    freezeDrawingWidth = Math.max(0.0015, Math.min(0.03, Number(button.dataset.freezeDrawWidth || 0.006)));
+    syncFreezeDrawingPanel();
+    editorEls.freezeDrawingCanvas?.focus({ preventScroll: true });
+  });
+});
+editorEls.freezeDrawingUndo?.addEventListener('click', () => {
+  const freeze = selectedFreezeClip();
+  if (!freeze?.annotations?.length) return;
+  freeze.annotations = freeze.annotations.slice(0, -1);
+  saveVideoEdit();
+  editorEls.freezeDrawingCanvas?.focus({ preventScroll: true });
+});
+editorEls.freezeDrawingClear?.addEventListener('click', () => {
+  const freeze = selectedFreezeClip();
+  if (!freeze?.annotations?.length) return;
+  freeze.annotations = [];
+  saveVideoEdit();
+  editorEls.freezeDrawingCanvas?.focus({ preventScroll: true });
+});
+window.addEventListener('resize', () => {
+  if (freezeDrawingVisibleId) renderFreezeDrawing();
+});
 
 function applyVideoEditPreview() {
   const previewOutputTime = currentOutputTime();
@@ -6657,6 +6852,10 @@ function applyVideoEditPreview() {
   if (editorEls.freezeOverlay) {
     if (editorEls.freezeOverlay.style.transformOrigin !== transformOrigin) editorEls.freezeOverlay.style.transformOrigin = transformOrigin;
     if (editorEls.freezeOverlay.style.transform !== transform) editorEls.freezeOverlay.style.transform = transform;
+  }
+  if (editorEls.freezeDrawingCanvas) {
+    if (editorEls.freezeDrawingCanvas.style.transformOrigin !== transformOrigin) editorEls.freezeDrawingCanvas.style.transformOrigin = transformOrigin;
+    if (editorEls.freezeDrawingCanvas.style.transform !== transform) editorEls.freezeDrawingCanvas.style.transform = transform;
   }
   const activeFootage = activeFootageClipAtOutput(previewOutputTime);
   if (editorEls.footagePreview) {
@@ -6824,7 +7023,7 @@ function applyTimelineTool(time, outputTime = null) {
   clearFreezeHold();
   vidPlayer.pause();
   const segment = outputTime === null ? null : segmentForOutputTime(outputTime);
-  setFreezeOverlay(segment?.type === 'freeze' ? (freezeFrameImages.get(segment.id) || '') : '');
+  setFreezeOverlay(segment?.type === 'freeze' ? (freezeFrameImages.get(segment.id) || '') : '', segment?.type === 'freeze' ? segment.id : '');
   timelinePreviewOutputTime = outputTime === null ? sourceToOutputTime(time) : Math.max(0, Math.min(editedOutputDuration(), outputTime));
   vidPlayer.currentTime = clampTime(time);
   renderVideoEditor();
@@ -7039,6 +7238,7 @@ editorEls.shell?.addEventListener('pointerdown', event => {
     const edge = event.target.closest('[data-freeze-edge]')?.dataset.freezeEdge || '';
     const freeze = (videoEdit.freezeFrames || []).find(item => item.id === id);
     selectedEditorItem = { type: 'freeze', id };
+    previewFreezeForDrawing(id);
     timelineDrag = edge
       ? { kind: 'freeze-resize', edge, id, moved: false, startX: event.clientX, startAt: Number(freeze?.at || 0), startDuration: Number(freeze?.duration || 2) }
       : { kind: 'freeze', id, moved: false, offset: freeze ? timeFromTimelineEvent(event) - freeze.at : 0 };
@@ -7147,7 +7347,7 @@ function moveTimelinePointer(event) {
     vidPlayer.pause();
     timelinePreviewOutputTime = outputTime;
     const segment = segmentForOutputTime(outputTime);
-    setFreezeOverlay(segment?.type === 'freeze' ? (freezeFrameImages.get(segment.id) || '') : '');
+    setFreezeOverlay(segment?.type === 'freeze' ? (freezeFrameImages.get(segment.id) || '') : '', segment?.type === 'freeze' ? segment.id : '');
     vidPlayer.currentTime = snapFrameTime(time);
   }
   renderVideoEditor();
@@ -7513,7 +7713,7 @@ document.getElementById('edit-freeze')?.addEventListener('click', () => {
 });
 function toggleFreezeAt(time) {
   const at = Math.round(clampTime(time) * 10) / 10;
-  const freeze = { id: `freeze_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, at, duration: 2 };
+  const freeze = { id: `freeze_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, at, duration: 2, annotations: [] };
   const frame = captureCurrentVideoFrame();
   if (!frame) {
     toast('Не удалось прочитать кадр видео. Перезагрузи страницу и попробуй ещё раз.', 'e');
@@ -7528,8 +7728,9 @@ function toggleFreezeAt(time) {
   freezeFrameImages.set(freeze.id, frame);
   videoEdit.freezeFrames = [...(videoEdit.freezeFrames || []), freeze];
   selectedEditorItem = { type: 'freeze', id: freeze.id };
-  toast('Стоп-кадр +2 сек добавлен', 's');
   saveVideoEdit();
+  previewFreezeForDrawing(freeze.id);
+  toast('Стоп-кадр +2 сек добавлен — можно рисовать по кадру', 's');
 }
 function deleteSelectedEditorItem() {
   if (!selectedEditorItem) { toast('Сначала выбери блок на таймлайне', 'i'); return; }
@@ -7538,9 +7739,11 @@ function deleteSelectedEditorItem() {
     return;
   }
   if (selectedEditorItem.type === 'freeze') {
+    const removedId = selectedEditorItem.id;
     pushVideoEditUndo();
-    videoEdit.freezeFrames = (videoEdit.freezeFrames || []).filter(item => item.id !== selectedEditorItem.id);
-    freezeFrameImages.delete(selectedEditorItem.id);
+    videoEdit.freezeFrames = (videoEdit.freezeFrames || []).filter(item => item.id !== removedId);
+    freezeFrameImages.delete(removedId);
+    if (freezeDrawingVisibleId === removedId) setFreezeOverlay('');
     selectedEditorItem = null;
     toast('Стоп-кадр удалён', 's');
     saveVideoEdit();
