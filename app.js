@@ -9888,7 +9888,10 @@ function _restoreDraft(sourceDraft = null) {
   // Map + marker (load minimap, then place marker after image loads)
   if (d.map) {
     const sel = document.getElementById('sel-map');
-    if (sel) sel.value = d.map;
+    if (sel) {
+      sel.value = d.map;
+      window.syncProductionMapGallery?.();
+    }
     renderDefenseSiteOptions(d.defenseSite || '');
     const img = document.getElementById('map-img');
     const ph  = document.getElementById('map-placeholder');
@@ -10516,6 +10519,7 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   if (vidInput) vidInput.value = '';
 
   document.getElementById('sel-map').value = '';
+  window.syncProductionMapGallery?.({ reveal: false });
   document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
   document.getElementById('abilities-row').innerHTML = '<span style="color:var(--text2);font-size:13px;">Сначала выбери агента</span>';
   document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected'));

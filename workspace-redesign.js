@@ -227,6 +227,11 @@ function createMapGallery() {
   const sync = () => track.querySelectorAll('[data-map-name]').forEach((button) => {
     button.classList.toggle('selected', button.dataset.mapName === select.value);
   });
+  const syncSelection = ({ reveal = true } = {}) => {
+    sync();
+    if (reveal) requestAnimationFrame(revealSelectedMap);
+  };
+  window.syncProductionMapGallery = syncSelection;
   gallery.addEventListener('click', (event) => {
     const arrow = event.target.closest('.production-map-arrow');
     if (arrow) {
@@ -237,8 +242,6 @@ function createMapGallery() {
     if (!button) return;
     select.value = button.dataset.mapName;
     select.dispatchEvent(new Event('change', { bubbles: true }));
-    sync();
-    requestAnimationFrame(revealSelectedMap);
   });
   track.addEventListener('wheel', (event) => {
     const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
@@ -250,12 +253,10 @@ function createMapGallery() {
     if (!scrollFrame) scrollTarget = track.scrollLeft;
   }, { passive: true });
   select.addEventListener('change', () => {
-    sync();
-    requestAnimationFrame(revealSelectedMap);
+    syncSelection();
   });
   window.addEventListener('resize', revealSelectedMap, { passive: true });
-  sync();
-  requestAnimationFrame(revealSelectedMap);
+  syncSelection();
 }
 
 function improveFrameCapture() {
@@ -316,6 +317,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   document.addEventListener('workspace:activate', event => {
     if (event.detail?.tab !== 'upload') return;
+    window.syncProductionMapGallery?.();
     refreshProductionProgress();
     updateActiveProductionStepFromScroll();
     startProductionRefresh();
