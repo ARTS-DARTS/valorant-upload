@@ -5355,7 +5355,7 @@ function renderMapSiteLabels() {
   const labels = sourceLabels.filter(item => {
     if (!item) return false;
     const level = item.level || (/^[ABC]$/i.test(String(item.label || '').trim()) ? 'site' : 'full');
-    if (mode === 'main' && !['site', 'main'].includes(level)) return false;
+    if (mode === 'main' && level !== 'site') return false;
     const normalizedLabel = String(item.label || '').trim().toUpperCase();
     const key = level === 'site' && /^[ABC]$/.test(normalizedLabel)
       ? `site:${normalizedLabel}`
