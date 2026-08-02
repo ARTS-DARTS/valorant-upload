@@ -1,5 +1,16 @@
 # Deploy to VPS
 
+## Current production state
+
+As of 2026-08-02, `https://vlineups.ru` runs on the paid Russian VPS at
+`212.15.49.68` behind Nginx and PM2. This VPS is the production source of
+truth.
+
+The Vercel project's GitHub integration is disconnected and `vlineups.ru` is
+no longer attached to Vercel. Do not use Vercel for production deployments.
+The Vercel project and `vlineups.tech` are temporarily retained only as a
+rollback path; remove them only after a separate stability decision.
+
 This site needs Node.js because it serves two API routes:
 
 - `/api/yandex-callback`
@@ -157,7 +168,8 @@ install -o root -g root -m 0750 \
   /usr/local/bin/deploy-valorant-upload.sh
 ```
 
-After every push, verify the live site:
+After every runtime push, run the safe update script above and verify that
+`/ready` reports the expected Git SHA, then verify the live asset:
 
 ```bash
 curl -fsSL "https://vlineups.ru/site-version.json?$(date +%s)"
