@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">VLineups</title>
+  <rect width="64" height="64" rx="14" fill="#ff4655"/>
+  <circle cx="32" cy="32" r="16" fill="none" stroke="#fff" stroke-width="4"/>
+  <path d="M32 7v8M32 49v8M7 32h8M49 32h8" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="32" cy="32" r="3.5" fill="#fff"/>
+</svg>
