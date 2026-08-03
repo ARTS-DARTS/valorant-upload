@@ -212,7 +212,7 @@ test('checkout idempotency creates exactly one server-priced order', async () =>
   assert.equal(db.docs.get('billing_sequences/robokassa').last_invoice_id, 700000);
   assert.equal(
     new URL(first.checkout_url).searchParams.get('ExpirationDate'),
-    '2026-07-30T12:30',
+    '2026-07-30T15:30',
   );
   await assert.rejects(createCheckout({
     db,
@@ -224,6 +224,19 @@ test('checkout idempotency creates exactly one server-priced order', async () =>
     provider,
     now,
   }), error => error?.status === 409 && error?.message === 'checkout_in_progress');
+});
+
+test('checkout expiry is formatted in Moscow time across the UTC day boundary', () => {
+  const checkout = buildRobokassaCheckout({
+    config: provider,
+    plan: catalog.plans.ad_free,
+    invoiceId: 700001,
+    expiresAt: new Date('2026-08-03T21:45:00.000Z'),
+  });
+  assert.equal(
+    new URL(checkout.checkout_url).searchParams.get('ExpirationDate'),
+    '2026-08-04T00:45',
+  );
 });
 
 test('intro offer is limited to the first one-month payment', async () => {

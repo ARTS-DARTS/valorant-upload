@@ -8,6 +8,16 @@ const HASH_ALGORITHMS = Object.freeze({
   sha512: 'sha512',
 });
 
+const MOSCOW_DATE_TIME = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Europe/Moscow',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
 function required(value, name) {
   const result = String(value ?? '').trim();
   if (!result) throw Object.assign(new Error(`missing_${name}`), { status: 503 });
@@ -58,6 +68,15 @@ function shpSuffix(shp = {}) {
     .join('');
 }
 
+function robokassaExpirationDate(value) {
+  const parts = Object.fromEntries(
+    MOSCOW_DATE_TIME.formatToParts(value)
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
 export function buildRobokassaCheckout({ config, plan, invoiceId, expiresAt = null }) {
   const outSum = amountMinorToOutSum(plan.amount_minor);
   const receipt = JSON.stringify({
@@ -85,7 +104,10 @@ export function buildRobokassaCheckout({ config, plan, invoiceId, expiresAt = nu
     ...shp,
   });
   if (expiresAt instanceof Date && Number.isFinite(expiresAt.getTime())) {
-    params.set('ExpirationDate', expiresAt.toISOString().slice(0, 16));
+    // Merchant/Index.aspx accepts an unzoned YYYY-MM-DDThh:mm value and
+    // Robokassa interprets it as Moscow time. Sending UTC clock fields here
+    // makes every short-lived invoice appear three hours old immediately.
+    params.set('ExpirationDate', robokassaExpirationDate(expiresAt));
   }
   if (config.testMode) params.set('IsTest', '1');
   return {
