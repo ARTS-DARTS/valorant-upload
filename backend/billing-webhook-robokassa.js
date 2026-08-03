@@ -3,7 +3,11 @@ import { createHash } from 'node:crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 
 import { adminFirestore } from './_lib/firebase-admin.js';
-import { capabilitiesForPlan, normalizeEntitlement } from './_lib/billing/entitlements.js';
+import {
+  capabilitiesForPlan,
+  normalizeEntitlement,
+  planTier,
+} from './_lib/billing/entitlements.js';
 import { loadRobokassaConfig, verifyRobokassaResult } from './_lib/billing/robokassa.js';
 
 function fail(status, code) { return Object.assign(new Error(code), { status }); }
@@ -59,21 +63,52 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
       entitlementSnap.exists ? entitlementSnap.data() : null,
       { now },
     );
+    const rawEntitlement = entitlementSnap.exists ? (entitlementSnap.data() || {}) : {};
     const customer = customerSnap.exists ? (customerSnap.data() || {}) : {};
     const introClaim = introClaimSnap.exists ? (introClaimSnap.data() || {}) : {};
-    const currentEnd = timestampMillis(entitlementSnap.data()?.access_until);
-    const baseMillis = current.active && current.plan_id === order.plan_id && currentEnd > now.getTime()
+    const currentEnd = timestampMillis(rawEntitlement.access_until);
+    const upgrade = order.upgrade;
+    const hasUpgrade = upgrade !== null && upgrade !== undefined;
+    const upgradeSourceEnd = timestampMillis(upgrade?.from_access_until);
+    const orderCreatedAt = timestampMillis(order.created_at);
+    const upgradeCreditMs = Number(upgrade?.credit_duration_ms);
+    const upgradeCreditMinor = Number(upgrade?.credit_minor);
+    const validUpgrade =
+      hasUpgrade &&
+      upgrade && typeof upgrade === 'object' && !Array.isArray(upgrade) &&
+      typeof upgrade.from_plan_id === 'string' &&
+      rawEntitlement.source === 'billing' &&
+      rawEntitlement.plan_id === upgrade.from_plan_id &&
+      safeVersion(rawEntitlement.entitlement_version) === upgrade.from_entitlement_version &&
+      upgradeSourceEnd > 0 &&
+      currentEnd === upgradeSourceEnd &&
+      orderCreatedAt > 0 &&
+      planTier(order.plan_id) > planTier(upgrade.from_plan_id) &&
+      Number.isSafeInteger(upgradeCreditMs) && upgradeCreditMs >= 0 &&
+      upgradeCreditMs <= Math.max(0, upgradeSourceEnd - orderCreatedAt) &&
+      Number.isSafeInteger(upgradeCreditMinor) && upgradeCreditMinor >= 0;
+    const samePlanExtension =
+      current.active && current.plan_id === order.plan_id && currentEnd > now.getTime();
+    const baseMillis = validUpgrade
+      ? now.getTime() + upgradeCreditMs
+      : samePlanExtension
       ? currentEnd
       : now.getTime();
     const accessUntil = Timestamp.fromMillis(baseMillis + order.period_days * 24 * 60 * 60 * 1000);
-    const entitlementVersion = safeVersion(current.entitlement_version) + 1;
+    const entitlementVersion = safeVersion(rawEntitlement.entitlement_version) + 1;
     const capabilities = capabilitiesForPlan(order.plan_id);
     const day = now.toISOString().slice(0, 10);
-    const entitlementConflict = current.active && current.plan_id !== order.plan_id;
+    const entitlementConflict = hasUpgrade
+      ? !validUpgrade
+      : current.active && current.plan_id !== order.plan_id;
 
     tx.create(eventRef, {
       provider: 'robokassa',
-      type: entitlementConflict ? 'payment_succeeded_requires_review' : 'payment_succeeded',
+      type: entitlementConflict
+        ? 'payment_succeeded_requires_review'
+        : validUpgrade
+        ? 'payment_succeeded_upgrade'
+        : 'payment_succeeded',
       provider_invoice_id: invoiceId,
       order_id: invoiceId,
       amount_minor: order.amount_minor,
@@ -91,6 +126,7 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
       currency: 'RUB',
       payment_method: String(verified.payment_method ?? '').slice(0, 60),
       provider_operation_key: String(verified.op_key ?? '').slice(0, 200),
+      upgrade_from_plan_id: validUpgrade ? upgrade.from_plan_id : null,
       succeeded_at: nowTimestamp,
       created_at: nowTimestamp,
     });
@@ -111,6 +147,8 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
       paid_at: nowTimestamp,
       period_start: entitlementConflict ? null : Timestamp.fromMillis(baseMillis),
       period_end: entitlementConflict ? null : accessUntil,
+      upgrade_applied: validUpgrade,
+      upgrade_effective_at: validUpgrade ? nowTimestamp : null,
       updated_at: nowTimestamp,
     });
     tx.set(customerRef, {
@@ -182,6 +220,7 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
       duplicate: false,
       invoiceId,
       requiresReview: entitlementConflict,
+      upgraded: validUpgrade,
       accessUntil: entitlementConflict ? null : accessUntil.toDate(),
     };
   });
@@ -302,28 +341,50 @@ export async function applyRobokassaReversal({
     const currentStart = timestampMillis(rawEntitlement.valid_from);
     const orderEnd = timestampMillis(order.period_end);
     const periodMillis = order.period_days * 24 * 60 * 60 * 1000;
-    const affectsCurrentWindow =
+    const upgrade = order.upgrade_applied === true ? order.upgrade : null;
+    const upgradeSourceEnd = timestampMillis(upgrade?.from_access_until);
+    const isUpgrade =
+      upgrade && typeof upgrade === 'object' && !Array.isArray(upgrade) &&
+      typeof upgrade.from_plan_id === 'string' &&
+      planTier(order.plan_id) > planTier(upgrade.from_plan_id);
+    const affectsPurchasedPlan =
       current.active &&
       rawEntitlement.source === 'billing' &&
       current.plan_id === order.plan_id &&
       orderEnd > currentStart &&
       Number.isSafeInteger(periodMillis) &&
       periodMillis > 0;
+    const canRestoreUpgrade =
+      affectsPurchasedPlan &&
+      isUpgrade &&
+      rawEntitlement.latest_order_id === normalizedInvoiceId &&
+      upgradeSourceEnd > 0;
+    const affectsCurrentWindow = isUpgrade
+      ? canRestoreUpgrade
+      : affectsPurchasedPlan;
 
     let entitlementActive = current.active;
     let entitlementEnd = currentEnd;
+    let entitlementPlanId = current.plan_id;
     if (affectsCurrentWindow) {
-      entitlementEnd = Math.max(now.getTime(), currentEnd - periodMillis);
+      entitlementEnd = canRestoreUpgrade
+        ? Math.max(now.getTime(), upgradeSourceEnd)
+        : Math.max(now.getTime(), currentEnd - periodMillis);
       entitlementActive = entitlementEnd > now.getTime();
+      entitlementPlanId = canRestoreUpgrade ? upgrade.from_plan_id : order.plan_id;
       const entitlementVersion = safeVersion(current.entitlement_version) + 1;
-      const capabilities = capabilitiesForPlan(entitlementActive ? order.plan_id : 'free');
+      const capabilities = capabilitiesForPlan(
+        entitlementActive ? entitlementPlanId : 'free',
+      );
       tx.set(entitlementRef, {
         uid: order.uid,
         schema_version: 1,
-        plan_id: order.plan_id,
-        tier: entitlementActive ? { ad_free: 1, plus: 2, sponsor: 3 }[order.plan_id] : 0,
+        plan_id: entitlementPlanId,
+        tier: entitlementActive ? planTier(entitlementPlanId) : 0,
         status: entitlementActive ? 'active' : 'refunded',
-        valid_from: rawEntitlement.valid_from || nowTimestamp,
+        valid_from: canRestoreUpgrade
+          ? (order.created_at || rawEntitlement.valid_from || nowTimestamp)
+          : (rawEntitlement.valid_from || nowTimestamp),
         access_until: Timestamp.fromMillis(entitlementEnd),
         grace_until: null,
         revoked_at: entitlementActive ? null : nowTimestamp,
@@ -336,8 +397,8 @@ export async function applyRobokassaReversal({
       });
       tx.set(db.collection('user_public_perks').doc(order.uid), {
         subscriber_badge: entitlementActive,
-        sponsor_badge: entitlementActive && order.plan_id === 'sponsor',
-        sponsor_until: entitlementActive && order.plan_id === 'sponsor'
+        sponsor_badge: entitlementActive && entitlementPlanId === 'sponsor',
+        sponsor_until: entitlementActive && entitlementPlanId === 'sponsor'
           ? Timestamp.fromMillis(entitlementEnd)
           : null,
         updated_at: nowTimestamp,
@@ -352,6 +413,8 @@ export async function applyRobokassaReversal({
       amount_minor: order.amount_minor,
       currency: order.currency,
       provider_state_code: stateCode,
+      entitlement_adjusted: affectsCurrentWindow,
+      review_required: isUpgrade && !canRestoreUpgrade,
       received_at: nowTimestamp,
       processed_at: nowTimestamp,
     });
@@ -374,6 +437,7 @@ export async function applyRobokassaReversal({
     tx.update(orderRef, {
       status: 'reversed',
       provider_state_code: stateCode,
+      reversal_review_required: isUpgrade && !canRestoreUpgrade,
       reversed_at: nowTimestamp,
       updated_at: nowTimestamp,
     });
@@ -396,6 +460,7 @@ export async function applyRobokassaReversal({
       invoiceId: normalizedInvoiceId,
       entitlementAdjusted: affectsCurrentWindow,
       entitlementActive,
+      reviewRequired: isUpgrade && !canRestoreUpgrade,
     };
   });
 }

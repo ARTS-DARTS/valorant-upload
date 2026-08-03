@@ -4,7 +4,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 
 import { adminAuth, adminFirestore } from './_lib/firebase-admin.js';
 import { loadBillingCatalog } from './_lib/billing/catalog.js';
-import { normalizeEntitlement } from './_lib/billing/entitlements.js';
+import { normalizeEntitlement, planTier } from './_lib/billing/entitlements.js';
 import {
   introIdentityClaim,
   loadIntroOfferPepper,
@@ -17,6 +17,7 @@ const ALLOWED_ORIGINS = new Set(['https://vlineups.ru', 'https://www.vlineups.ru
 const AUTH_TIMEOUT_MS = 10_000;
 const RATE_MAX_KEYS = 10_000;
 const CHECKOUT_TTL_MS = 30 * 60 * 1000;
+const BILLING_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 const preAuthLimiter = createPreAuthLimiter({ requestLimit: 30, globalConcurrencyLimit: 32 });
 const uidWindows = new Map();
 
@@ -112,8 +113,45 @@ export async function createCheckout({
       entitlementSnap.exists ? entitlementSnap.data() : null,
       { now },
     );
+    let upgrade = null;
     if (entitlement.active && entitlement.plan_id !== input.planId) {
-      throw fail(409, 'plan_change_not_supported');
+      const sourcePlan = catalog.plans[entitlement.plan_id];
+      const sourceEndMillis = Date.parse(entitlement.access_until || '');
+      const sourceIsBilling = entitlementSnap.data()?.source === 'billing';
+      if (
+        !sourcePlan ||
+        !sourceIsBilling ||
+        planTier(input.planId) <= planTier(entitlement.plan_id) ||
+        !Number.isFinite(sourceEndMillis) ||
+        sourceEndMillis <= now.getTime()
+      ) {
+        throw fail(409, 'plan_change_not_supported');
+      }
+      const remainingMillis = sourceEndMillis - now.getTime();
+      const creditMinor = Number(
+        BigInt(remainingMillis) * BigInt(sourcePlan.monthly_amount_minor) /
+          BigInt(BILLING_PERIOD_MS),
+      );
+      const creditDurationMs = Number(
+        BigInt(creditMinor) * BigInt(BILLING_PERIOD_MS) /
+          BigInt(plan.monthly_amount_minor),
+      );
+      if (
+        !Number.isSafeInteger(creditMinor) ||
+        !Number.isSafeInteger(creditDurationMs) ||
+        creditMinor < 0 ||
+        creditDurationMs < 0 ||
+        creditDurationMs > remainingMillis
+      ) {
+        throw fail(503, 'billing_unavailable');
+      }
+      upgrade = Object.freeze({
+        from_plan_id: entitlement.plan_id,
+        from_entitlement_version: entitlement.entitlement_version,
+        from_access_until: Timestamp.fromMillis(sourceEndMillis),
+        credit_minor: creditMinor,
+        credit_duration_ms: creditDurationMs,
+      });
     }
     const customer = customerSnap.exists ? (customerSnap.data() || {}) : {};
     const introClaim = introClaimSnap.exists ? (introClaimSnap.data() || {}) : {};
@@ -125,6 +163,7 @@ export async function createCheckout({
       throw fail(409, 'checkout_in_progress');
     }
     const introOfferApplied =
+      !entitlement.active &&
       months === catalog.intro_offer.months &&
       customer.intro_offer_redeemed !== true &&
       introClaim.redeemed !== true &&
@@ -174,6 +213,11 @@ export async function createCheckout({
         : offer.discount_bps,
       intro_offer_applied: introOfferApplied,
       terms_version: catalog.terms_version,
+      upgrade: upgrade ? {
+        from_plan_id: upgrade.from_plan_id,
+        credit_minor: upgrade.credit_minor,
+        credit_duration_seconds: Math.floor(upgrade.credit_duration_ms / 1000),
+      } : null,
     };
     tx.set(sequenceRef, { last_invoice_id: invoiceId, updated_at: createdAt }, { merge: true });
     tx.set(customerRef, {
@@ -209,6 +253,7 @@ export async function createCheckout({
         : offer.discount_bps,
       intro_offer_applied: introOfferApplied,
       intro_claim_id: introClaimId,
+      upgrade,
       currency: 'RUB',
       terms_version: catalog.terms_version,
       catalog_version: catalog.catalog_version,

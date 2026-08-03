@@ -339,6 +339,145 @@ test('a successful longer first purchase consumes the intro offer', async () => 
   assert.equal(renewal.amount_minor, 34900);
 });
 
+test('an active billing plan can be extended or upgraded, but not downgraded', async () => {
+  const sourceEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const entitlement = {
+    uid: 'upgrade-user', schema_version: 1, plan_id: 'ad_free', tier: 1,
+    status: 'active', valid_from: new Date('2026-07-01T00:00:00.000Z'),
+    access_until: sourceEnd, grace_until: null, revoked_at: null,
+    capabilities: capabilitiesForPlan('ad_free'), entitlement_version: 7,
+    source: 'billing', latest_order_id: 'previous-order',
+  };
+  const db = new MemoryDb({
+    'account_entitlements/upgrade-user': entitlement,
+    'billing_customers/upgrade-user': { uid: 'upgrade-user', intro_offer_redeemed: true },
+    [`billing_intro_claims/${introClaimId}`]: { redeemed: true },
+  });
+  const upgrade = await createCheckout({
+    db,
+    uid: 'upgrade-user',
+    introClaimId,
+    input: {
+      planId: 'plus', months: 1, expectedAmountMinor: 16900,
+      termsVersion: '2026-08-01',
+    },
+    idempotencyKey: 'upgrade_checkout_001',
+    catalog,
+    provider,
+    now,
+  });
+  const expectedCreditMs = Number(
+    BigInt(9900) * BigInt(30 * 24 * 60 * 60 * 1000) / BigInt(16900),
+  );
+  assert.deepEqual(upgrade.upgrade, {
+    from_plan_id: 'ad_free',
+    credit_minor: 9900,
+    credit_duration_seconds: Math.floor(expectedCreditMs / 1000),
+  });
+  assert.equal(upgrade.intro_offer_applied, false);
+  assert.equal(db.docs.get('billing_orders/700000').upgrade.credit_duration_ms, expectedCreditMs);
+
+  const payment = await applyRobokassaPayment({
+    db,
+    verified: {
+      invoice_id: '700000', amount_minor: 16900, out_sum: '169.00',
+      shp: { Shp_order: '700000' },
+    },
+    provider,
+    now,
+  });
+  assert.equal(payment.requiresReview, false);
+  assert.equal(payment.upgraded, true);
+  const upgraded = db.docs.get('account_entitlements/upgrade-user');
+  assert.equal(upgraded.plan_id, 'plus');
+  assert.equal(
+    upgraded.access_until.toMillis(),
+    now.getTime() + expectedCreditMs + 30 * 24 * 60 * 60 * 1000,
+  );
+  assert.equal(db.docs.get('billing_orders/700000').upgrade_applied, true);
+
+  const reversed = await applyRobokassaReversal({
+    db, invoiceId: '700000', providerState: 60, now,
+  });
+  assert.equal(reversed.entitlementAdjusted, true);
+  assert.equal(reversed.reviewRequired, false);
+  const restored = db.docs.get('account_entitlements/upgrade-user');
+  assert.equal(restored.plan_id, 'ad_free');
+  assert.equal(restored.access_until.toMillis(), sourceEnd.getTime());
+
+  const downgradeDb = new MemoryDb({
+    'account_entitlements/downgrade-user': {
+      ...entitlement,
+      uid: 'downgrade-user',
+      plan_id: 'plus',
+      tier: 2,
+      capabilities: capabilitiesForPlan('plus'),
+    },
+    'billing_customers/downgrade-user': { uid: 'downgrade-user', intro_offer_redeemed: true },
+    [`billing_intro_claims/${introClaimId}`]: { redeemed: true },
+  });
+  await assert.rejects(createCheckout({
+    db: downgradeDb,
+    uid: 'downgrade-user',
+    introClaimId,
+    input: {
+      planId: 'ad_free', months: 1, expectedAmountMinor: 9900,
+      termsVersion: '2026-08-01',
+    },
+    idempotencyKey: 'downgrade_check_001',
+    catalog,
+    provider,
+    now,
+  }), error => error?.status === 409 && error?.message === 'plan_change_not_supported');
+});
+
+test('an upgrade whose entitlement snapshot changed is held for review', async () => {
+  const sourceEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const db = new MemoryDb({
+    'account_entitlements/stale-upgrade-user': {
+      uid: 'stale-upgrade-user', schema_version: 1, plan_id: 'ad_free', tier: 1,
+      status: 'active', valid_from: new Date('2026-07-01T00:00:00.000Z'),
+      access_until: sourceEnd, grace_until: null, revoked_at: null,
+      capabilities: capabilitiesForPlan('ad_free'), entitlement_version: 2,
+      source: 'billing',
+    },
+    'billing_customers/stale-upgrade-user': {
+      uid: 'stale-upgrade-user', intro_offer_redeemed: true,
+    },
+    [`billing_intro_claims/${introClaimId}`]: { redeemed: true },
+  });
+  await createCheckout({
+    db,
+    uid: 'stale-upgrade-user',
+    introClaimId,
+    input: {
+      planId: 'plus', months: 1, expectedAmountMinor: 16900,
+      termsVersion: '2026-08-01',
+    },
+    idempotencyKey: 'stale_upgrade_0001',
+    catalog,
+    provider,
+    now,
+  });
+  db.docs.set('account_entitlements/stale-upgrade-user', {
+    ...db.docs.get('account_entitlements/stale-upgrade-user'),
+    entitlement_version: 3,
+  });
+  const result = await applyRobokassaPayment({
+    db,
+    verified: {
+      invoice_id: '700000', amount_minor: 16900, out_sum: '169.00',
+      shp: { Shp_order: '700000' },
+    },
+    provider,
+    now,
+  });
+  assert.equal(result.requiresReview, true);
+  assert.equal(result.upgraded, false);
+  assert.equal(db.docs.get('billing_orders/700000').status, 'requires_review');
+  assert.equal(db.docs.get('account_entitlements/stale-upgrade-user').plan_id, 'ad_free');
+});
+
 test('verified payment writes one ledger entry and one bounded entitlement', async () => {
   const db = new MemoryDb({
     'billing_orders/700000': {

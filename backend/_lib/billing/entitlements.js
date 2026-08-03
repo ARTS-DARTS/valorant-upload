@@ -94,6 +94,11 @@ export function capabilitiesForPlan(planId) {
   return { ...PLAN_CAPABILITIES[normalized] };
 }
 
+export function planTier(planId) {
+  const normalized = cleanLower(planId);
+  return Object.hasOwn(PLAN_ORDER, normalized) ? PLAN_ORDER[normalized] : 0;
+}
+
 function isCapabilityMap(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
