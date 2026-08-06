@@ -239,6 +239,57 @@ test('checkout expiry is formatted in Moscow time across the UTC day boundary', 
   );
 });
 
+test('a completed checkout key creates a fresh Robokassa invoice', async () => {
+  const db = new MemoryDb({
+    'billing_customers/renew-user': {
+      uid: 'renew-user',
+      intro_offer_redeemed: true,
+    },
+  });
+  const input = {
+    planId: 'ad_free',
+    months: 1,
+    expectedAmountMinor: 9900,
+    termsVersion: '2026-08-01',
+  };
+  const first = await createCheckout({
+    db,
+    uid: 'renew-user',
+    introClaimId,
+    input,
+    idempotencyKey: 'renew_checkout_0001',
+    catalog,
+    provider,
+    now,
+  });
+  await applyRobokassaPayment({
+    db,
+    verified: {
+      invoice_id: first.order_id,
+      amount_minor: 9900,
+      out_sum: '99.00',
+      shp: { Shp_order: first.order_id },
+    },
+    provider,
+    now,
+  });
+
+  const renewal = await createCheckout({
+    db,
+    uid: 'renew-user',
+    introClaimId,
+    input,
+    idempotencyKey: 'renew_checkout_0001',
+    catalog,
+    provider,
+    now: new Date('2026-07-30T12:01:00.000Z'),
+  });
+
+  assert.equal(first.order_id, '700000');
+  assert.equal(renewal.order_id, '700001');
+  assert.equal(renewal.reused, false);
+});
+
 test('intro offer is limited to the first one-month payment', async () => {
   const db = new MemoryDb();
   const introInput = {

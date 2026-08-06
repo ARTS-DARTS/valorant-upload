@@ -107,7 +107,15 @@ export async function createCheckout({
     if (intentSnap.exists) {
       const intent = intentSnap.data() || {};
       if (intent.uid !== uid || intent.body_hash !== bodyHash) throw fail(409, 'idempotency_key_reused');
-      return { ...intent.response, reused: true };
+      const priorOrderId = clean(intent.order_id);
+      const priorOrderSnap = priorOrderId
+        ? await tx.get(db.collection('billing_orders').doc(priorOrderId))
+        : null;
+      const priorStatus = clean(priorOrderSnap?.data()?.status);
+      const intentExpired = timestampMillis(intent.expires_at) <= now.getTime();
+      if (!intentExpired && !new Set(['succeeded', 'failed', 'reversed']).has(priorStatus)) {
+        return { ...intent.response, reused: true };
+      }
     }
     const entitlement = normalizeEntitlement(
       entitlementSnap.exists ? entitlementSnap.data() : null,
@@ -264,7 +272,7 @@ export async function createCheckout({
       created_at: createdAt,
       updated_at: createdAt,
     });
-    tx.create(intentRef, {
+    tx.set(intentRef, {
       uid,
       body_hash: bodyHash,
       order_id: String(invoiceId),
