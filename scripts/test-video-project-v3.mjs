@@ -42,6 +42,6 @@ test('freeze frames extend project duration and shift following clips', () => {
     freezeFrames:[{ at:5, duration:2 }],
   }, 12);
   assert.equal(projectV3DurationSeconds(project), 10);
-  assert.equal(project.sequence.clips[1].timelineStartUs, 5_000_000);
+  assert.equal(project.sequence.clips[1].timelineStartUs, 3_000_000);
   assert.equal(project.tracks.layers.find(item => item.kind === 'freeze').timelineStartUs, 3_000_000);
 });

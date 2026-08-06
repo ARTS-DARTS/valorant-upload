@@ -48,34 +48,42 @@ export function buildVideoTimelineSegments(editValue = {}, sourceDuration = 0) {
     }))
     .filter(item => item.at >= start && item.at <= end)
     .sort((a, b) => a.at - b.at);
+  const explicitClips = Array.isArray(edit.clips) ? edit.clips : null;
+  const clips = (explicitClips || [{ id:'clip_legacy', sourceStart:start, sourceEnd:end }])
+    .map((clip, index) => ({
+      id:String(clip?.id || `clip_${index}`),
+      sourceStart:clampTimelineNumber(clip?.sourceStart, start, end),
+      sourceEnd:clampTimelineNumber(clip?.sourceEnd, start, end),
+    }))
+    .filter(clip => clip.sourceEnd - clip.sourceStart > 0.000001);
   const segments = [];
-  let sourceCursor = start;
-  freezes.forEach(freeze => {
-    if (freeze.at > sourceCursor) {
+  clips.forEach((clip, clipIndex) => {
+    let sourceCursor = clip.sourceStart;
+    freezes
+      .filter(freeze => freeze.at >= clip.sourceStart && (freeze.at < clip.sourceEnd || (clipIndex === clips.length - 1 && freeze.at <= clip.sourceEnd)))
+      .forEach(freeze => {
+        if (freeze.at > sourceCursor) {
+          segments.push({
+            type:'video', clipId:clip.id,
+            sourceStart:sourceCursor, sourceEnd:freeze.at,
+            duration:freeze.at - sourceCursor,
+          });
+        }
+        segments.push({
+          type:'freeze', id:freeze.id, clipId:clip.id,
+          sourceAt:freeze.at, duration:freeze.duration,
+          annotations:freeze.annotations,
+        });
+        sourceCursor = freeze.at;
+      });
+    if (sourceCursor < clip.sourceEnd) {
       segments.push({
-        type:'video',
-        sourceStart:sourceCursor,
-        sourceEnd:freeze.at,
-        duration:freeze.at - sourceCursor,
+        type:'video', clipId:clip.id,
+        sourceStart:sourceCursor, sourceEnd:clip.sourceEnd,
+        duration:clip.sourceEnd - sourceCursor,
       });
     }
-    segments.push({
-      type:'freeze',
-      id:freeze.id,
-      sourceAt:freeze.at,
-      duration:freeze.duration,
-      annotations:freeze.annotations,
-    });
-    sourceCursor = freeze.at;
   });
-  if (sourceCursor < end) {
-    segments.push({
-      type:'video',
-      sourceStart:sourceCursor,
-      sourceEnd:end,
-      duration:end - sourceCursor,
-    });
-  }
   let outputStart = 0;
   return segments.map(segment => {
     const result = { ...segment, outputStart };
@@ -99,25 +107,24 @@ export function videoTimelineSegmentAt(editValue, sourceDuration, outputTime) {
 }
 
 export function sourceTimeToOutputTime(editValue = {}, sourceDuration = 0, sourceTime = 0) {
-  const edit = editValue && typeof editValue === 'object' ? editValue : {};
-  const { start, end } = timelineBounds(edit, sourceDuration);
-  const source = clampTimelineNumber(sourceTime, start, end);
-  let output = Math.max(0, source - start);
-  (Array.isArray(edit.freezeFrames) ? edit.freezeFrames : []).forEach(freeze => {
-    const at = finiteNumber(freeze?.at);
-    if (at >= start && at <= end && at < source) {
-      output += clampTimelineNumber(freeze?.duration || 2, 0.2, 10);
-    }
-  });
-  return output;
+  const time = finiteNumber(sourceTime);
+  const segments = buildVideoTimelineSegments(editValue, sourceDuration);
+  const segment = segments.find(item => item.type === 'freeze' && Math.abs(time - item.sourceAt) < 0.000001)
+    || segments.find(item => item.type === 'video' && time >= item.sourceStart && time < item.sourceEnd)
+    || segments.find(item => item.type === 'video' && Math.abs(time - item.sourceEnd) < 0.000001);
+  if (!segment) return 0;
+  return segment.type === 'freeze'
+    ? segment.outputStart
+    : segment.outputStart + clampTimelineNumber(time - segment.sourceStart, 0, segment.duration);
 }
 
 export function outputTimeToSourceTime(editValue = {}, sourceDuration = 0, outputTime = 0) {
   const time = Math.max(0, finiteNumber(outputTime));
   const segments = buildVideoTimelineSegments(editValue, sourceDuration);
-  for (const segment of segments) {
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
     const local = time - segment.outputStart;
-    if (local < 0 || local > segment.duration) continue;
+    if (local < 0 || local > segment.duration || (local === segment.duration && index < segments.length - 1)) continue;
     return segment.type === 'freeze' ? segment.sourceAt : segment.sourceStart + local;
   }
   return timelineBounds(editValue, sourceDuration).end;

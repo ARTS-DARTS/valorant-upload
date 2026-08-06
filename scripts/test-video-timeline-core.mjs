@@ -37,6 +37,8 @@ test('shared timeline converts source and output time across freeze frames', () 
   assert.equal(sourceTimeToOutputTime(edit, 14, 7), 7);
   assert.equal(outputTimeToSourceTime(edit, 14, 4), 5);
   assert.equal(outputTimeToSourceTime(edit, 14, 7), 7);
+  assert.equal(sourceTimeToOutputTime(edit, 14, 5), 3);
+  assert.equal(outputTimeToSourceTime(edit, 14, 3), 5);
 });
 
 test('shared timeline ignores freeze frames outside the trimmed interval', () => {
@@ -86,4 +88,23 @@ test('shared timeline resolves cached metadata fallback and effects', () => {
   assert.equal(resolveTimelineSourceDuration(Number.NaN, edit), 10);
   assert.equal(videoTimelineZoomStateAt(edit, 14, 4).mix, 1);
   assert.equal(videoTimelineActiveFootageAt(edit, 14, 6)?.id, 'footage-1');
+});
+
+test('explicit clips define playback order and close gaps after ripple deletion', () => {
+  const reordered = {
+    trimStart:0,
+    trimEnd:10,
+    clips:[
+      { id:'second', sourceStart:5, sourceEnd:10 },
+      { id:'first', sourceStart:0, sourceEnd:5 },
+    ],
+  };
+  const segments = buildVideoTimelineSegments(reordered, 10);
+  assert.deepEqual(segments.map(item => [item.clipId, item.sourceStart, item.outputStart]), [
+    ['second', 5, 0],
+    ['first', 0, 5],
+  ]);
+  assert.equal(outputTimeToSourceTime(reordered, 10, 2), 7);
+  assert.equal(sourceTimeToOutputTime(reordered, 10, 2), 7);
+  assert.equal(videoTimelineOutputDuration({ ...reordered, clips:[reordered.clips[0]] }, 10), 5);
 });

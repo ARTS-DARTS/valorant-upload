@@ -43,27 +43,52 @@ export function migrateVideoEditToProjectV3(editValue = {}, sourceDuration = 0) 
     trimEnd,
   ].map(value => clamp(value, trimStart, trimEnd)).filter(value => value >= trimStart && value <= trimEnd))]
     .sort((a, b) => a - b);
+  const sourceClips = Array.isArray(edit.clips)
+    ? edit.clips.map((clip, index) => ({
+      id:String(clip?.id || `clip_${index}`),
+      sourceStart:clamp(clip?.sourceStart, trimStart, trimEnd),
+      sourceEnd:clamp(clip?.sourceEnd, trimStart, trimEnd),
+    })).filter(clip => clip.sourceEnd - clip.sourceStart >= 0.000001)
+    : cuts.slice(0, -1).map((sourceStart, index) => ({
+      id:`clip_${ticks(sourceStart)}_${ticks(cuts[index + 1])}`,
+      sourceStart,
+      sourceEnd:cuts[index + 1],
+    })).filter(clip => clip.sourceEnd - clip.sourceStart >= 0.000001);
   const clips = [];
   const freezes = (Array.isArray(edit.freezeFrames) ? edit.freezeFrames : [])
     .map((item, index) => ({ ...item, id:stableVideoItemId('freeze', item, index) }))
     .filter(item => finite(item.at) >= trimStart && finite(item.at) <= trimEnd)
     .sort((a, b) => finite(a.at) - finite(b.at));
-  const freezeDurationBefore = sourceTime => freezes.reduce((total, item) => (
-    finite(item.at) <= sourceTime ? total + Math.max(0.2, finite(item.duration, 2)) : total
-  ), 0);
-  const sourceToTimeline = sourceTime => Math.max(0, finite(sourceTime) - trimStart) + freezeDurationBefore(sourceTime);
-  for (let index = 0; index < cuts.length - 1; index += 1) {
-    const sourceStart = cuts[index];
-    const sourceEnd = cuts[index + 1];
-    if (sourceEnd - sourceStart < 0.000001) continue;
+  let timelineCursor = 0;
+  sourceClips.forEach((sourceClip, index) => {
+    const sourceStart = sourceClip.sourceStart;
+    const sourceEnd = sourceClip.sourceEnd;
     clips.push({
-      id:`clip_${ticks(sourceStart)}_${ticks(sourceEnd)}`,
+      id:sourceClip.id,
       sourceStartUs:ticks(sourceStart),
       sourceEndUs:ticks(sourceEnd),
-      timelineStartUs:ticks(sourceToTimeline(sourceStart)),
+      timelineStartUs:ticks(timelineCursor),
       enabled:true,
     });
-  }
+    const clipFreezes = freezes.filter(item => finite(item.at) >= sourceStart && (
+      finite(item.at) < sourceEnd || (index === sourceClips.length - 1 && finite(item.at) <= sourceEnd)
+    ));
+    timelineCursor += sourceEnd - sourceStart + clipFreezes.reduce(
+      (total, item) => total + Math.max(0.2, finite(item.duration, 2)), 0,
+    );
+  });
+  const sourceToTimeline = sourceTime => {
+    const source = finite(sourceTime);
+    const index = sourceClips.findIndex((clip, clipIndex) => source >= clip.sourceStart && (
+      source < clip.sourceEnd || (clipIndex === sourceClips.length - 1 && source <= clip.sourceEnd)
+    ));
+    if (index < 0) return 0;
+    const clip = sourceClips[index];
+    const start = seconds(clips[index].timelineStartUs);
+    const freezeDuration = freezes.filter(item => finite(item.at) >= clip.sourceStart && finite(item.at) < source)
+      .reduce((total, item) => total + Math.max(0.2, finite(item.duration, 2)), 0);
+    return start + source - clip.sourceStart + freezeDuration;
+  };
 
   const layer = (kind, item, index) => ({
     id:stableVideoItemId(kind, item, index),
@@ -77,9 +102,7 @@ export function migrateVideoEditToProjectV3(editValue = {}, sourceDuration = 0) 
   const layers = [
     ...freezes.map((item, index) => layer('freeze', {
       ...item,
-      outputAt:Math.max(0, finite(item.at) - trimStart) + freezes
-        .filter(other => finite(other.at) < finite(item.at))
-        .reduce((total, other) => total + Math.max(0.2, finite(other.duration, 2)), 0),
+      outputAt:sourceToTimeline(item.at),
     }, index)),
     ...(Array.isArray(edit.zoomKeyframes) ? edit.zoomKeyframes : []).map((item, index) => layer('zoom', item, index)),
     ...(Array.isArray(edit.footageOverlays) ? edit.footageOverlays : []).map((item, index) => layer('footage', item, index)),
@@ -92,10 +115,7 @@ export function migrateVideoEditToProjectV3(editValue = {}, sourceDuration = 0) 
     source:{ durationUs:ticks(duration), width:1920, height:1080 },
     sequence:{
       clips,
-      durationUs:ticks(Math.max(0, trimEnd - trimStart) + freezes.reduce(
-        (total, item) => total + Math.max(0.2, finite(item.duration, 2)),
-        0,
-      )),
+      durationUs:ticks(timelineCursor),
     },
     tracks:{ count:Math.max(1, Math.floor(finite(edit.effectTracks, 1))), layers },
     audio:{ muted:!!edit.audio?.muted, volume:clamp(edit.audio?.volume ?? 1, 0, 2) },

@@ -5800,6 +5800,7 @@ function createDefaultVideoEdit() {
     trimStart: 0,
     trimEnd: 0,
     splits: [],
+    clips: null,
     freezeFrames: [],
     zoomKeyframes: [],
     effectTracks: 1,
@@ -5928,6 +5929,20 @@ function normalizedVideoEdit() {
   const trimEnd = duration
     ? Math.min(duration, Math.max(rawEnd, trimStart + minTrim))
     : Math.max(rawStart, rawEnd);
+  const clipBoundaries = [...new Set([trimStart, ...(videoEdit.splits || []), trimEnd]
+    .map(clampTime).filter(value => value >= trimStart && value <= trimEnd))].sort((a, b) => a - b);
+  const derivedClips = clipBoundaries.slice(0, -1).map((sourceStart, index) => ({
+    id:`clip_${Math.round(sourceStart * 1000)}_${Math.round(clipBoundaries[index + 1] * 1000)}`,
+    sourceStart,
+    sourceEnd:clipBoundaries[index + 1],
+  })).filter(clip => clip.sourceEnd - clip.sourceStart >= 0.001);
+  const clips = Array.isArray(videoEdit.clips)
+    ? videoEdit.clips.map((clip, index) => ({
+      id:String(clip?.id || `clip_${index}_${Math.round(Number(clip?.sourceStart || 0) * 1000)}`),
+      sourceStart:clampTime(clip?.sourceStart),
+      sourceEnd:clampTime(clip?.sourceEnd),
+    })).filter(clip => clip.sourceEnd - clip.sourceStart >= 0.001)
+    : null;
   const storedTrackCount = Math.max(1, Math.min(8, Number(videoEdit.effectTracks || 1)));
   const allEffects = [
     ...(videoEdit.zoomKeyframes || []).map(item => ({ ...item, kind: 'zoom' })),
@@ -5971,6 +5986,7 @@ function normalizedVideoEdit() {
     effectTracks,
     trimStart,
     trimEnd,
+    clips:clips || (videoEdit.clips === null ? null : derivedClips),
     splits: [...new Set((videoEdit.splits || []).map(clampTime).filter(t => t > 0 && (!duration || t < duration)))]
       .sort((a, b) => a - b),
     freezeFrames: (videoEdit.freezeFrames || []).map((item, index) => ({
@@ -6717,10 +6733,25 @@ function renderVideoEditor() {
     editorEls.trimRange.innerHTML = '<span class="trim-handle start" data-trim-handle="start"></span><span class="trim-handle end" data-trim-handle="end"></span>';
   }
   if (editorEls.markers) {
-    const clipHtml = buildTimelineSegments().map(segment => segment.type === 'video'
-      ? `<span class="timeline-video-clip" style="${timelineBlockStyle(segment.outputStart, segment.duration, 10)}" title="Видео ${fmtTime(segment.sourceStart)}-${fmtTime(segment.sourceEnd)}"></span>`
-      : '').join('');
-    const splitHtml = videoEdit.splits.map(t => `<span class="timeline-marker split ${selectedEditorItem?.type === 'split' && Math.abs(selectedEditorItem.at - t) < 0.11 ? 'selected' : ''}" data-split-at="${t}" title="Разрез ${fmtTime(t)}" style="left:${pct(sourceToOutputTime(t))}%"></span>`).join('');
+    const timelineSegments = buildTimelineSegments();
+    const clipGroups = new Map();
+    timelineSegments.forEach(segment => {
+      if (!segment.clipId) return;
+      const sourcePoint = segment.sourceStart ?? segment.sourceAt ?? 0;
+      const group = clipGroups.get(segment.clipId) || { id:segment.clipId, start:segment.outputStart, end:segment.outputStart, sourceStart:sourcePoint, sourceEnd:sourcePoint };
+      group.start = Math.min(group.start, segment.outputStart);
+      group.end = Math.max(group.end, segment.outputStart + segment.duration);
+      if (segment.type === 'video') {
+        group.sourceStart = Math.min(group.sourceStart, segment.sourceStart);
+        group.sourceEnd = Math.max(group.sourceEnd, segment.sourceEnd);
+      }
+      clipGroups.set(segment.clipId, group);
+    });
+    const clipHtml = [...clipGroups.values()].map((clip, index) => `
+      <span class="timeline-video-clip ${selectedEditorItem?.type === 'clip' && selectedEditorItem.id === clip.id ? 'selected' : ''}"
+        data-clip-id="${esc(clip.id)}" style="${timelineBlockStyle(clip.start, clip.end - clip.start, 10)}"
+        title="Клип ${index + 1}: ${fmtTime(clip.sourceStart)}-${fmtTime(clip.sourceEnd)}">${index + 1}</span>`).join('');
+    const splitHtml = Array.isArray(videoEdit.clips) ? '' : videoEdit.splits.map(t => `<span class="timeline-marker split ${selectedEditorItem?.type === 'split' && Math.abs(selectedEditorItem.at - t) < 0.11 ? 'selected' : ''}" data-split-at="${t}" title="Разрез ${fmtTime(t)}" style="left:${pct(sourceToOutputTime(t))}%"></span>`).join('');
     const freezeHtml = videoEdit.freezeFrames.map(f => {
       const freezeSegment = buildTimelineSegments().find(segment => segment.type === 'freeze' && segment.id === f.id);
       const outputStart = freezeSegment?.outputStart ?? sourceToOutputTime(f.at);
@@ -6770,6 +6801,13 @@ function renderVideoEditor() {
   }
   if (editorEls.timeLabel) editorEls.timeLabel.textContent = `${fmtTime(vidPlayer.currentTime || 0)} / ${fmtTime(duration)} · итог ${fmtTime(outputDuration)} · каркас ${fmtTime(frameDuration)}`;
   renderVideoTransport();
+  const selectedClipIndex = selectedEditorItem?.type === 'clip'
+    ? (videoEdit.clips || []).findIndex(clip => clip.id === selectedEditorItem.id)
+    : -1;
+  const clipLeft = document.getElementById('edit-clip-left');
+  const clipRight = document.getElementById('edit-clip-right');
+  if (clipLeft) clipLeft.disabled = selectedClipIndex <= 0;
+  if (clipRight) clipRight.disabled = selectedClipIndex < 0 || selectedClipIndex >= (videoEdit.clips || []).length - 1;
   syncZoomTransformPanel();
   applyVideoEditPreview();
   syncFreezeDrawingPanel();
@@ -7256,6 +7294,14 @@ editorEls.shell?.addEventListener('pointerdown', event => {
   const splitMarker = event.target.closest('[data-split-at]');
   if (splitMarker) {
     selectedEditorItem = { type: 'split', at: Number(splitMarker.dataset.splitAt || 0) };
+    suppressTimelineClick = true;
+    renderVideoEditor();
+    event.preventDefault();
+    return;
+  }
+  const clipBlock = event.target.closest('[data-clip-id]');
+  if (clipBlock) {
+    selectedEditorItem = { type:'clip', id:clipBlock.dataset.clipId || '' };
     suppressTimelineClick = true;
     renderVideoEditor();
     event.preventDefault();
@@ -7776,10 +7822,33 @@ document.getElementById('edit-set-out')?.addEventListener('click', () => {
   if (videoEdit.trimEnd < videoEdit.trimStart) videoEdit.trimStart = videoEdit.trimEnd;
   saveVideoEdit();
 });
+function ensureExplicitVideoClips() {
+  if (Array.isArray(videoEdit.clips)) return videoEdit.clips;
+  const start = clampTime(videoEdit.trimStart);
+  const end = clampTime(videoEdit.trimEnd || videoDuration());
+  const boundaries = [...new Set([start, ...(videoEdit.splits || []), end]
+    .map(clampTime).filter(value => value >= start && value <= end))].sort((a, b) => a - b);
+  videoEdit.clips = boundaries.slice(0, -1).map((sourceStart, index) => ({
+    id:`clip_${Math.round(sourceStart * 1000)}_${Math.round(boundaries[index + 1] * 1000)}`,
+    sourceStart,
+    sourceEnd:boundaries[index + 1],
+  })).filter(clip => clip.sourceEnd - clip.sourceStart >= 0.001);
+  return videoEdit.clips;
+}
+
 document.getElementById('edit-split')?.addEventListener('click', () => {
   const at = Math.round(clampTime(vidPlayer.currentTime) * 10) / 10;
+  const currentClips = ensureExplicitVideoClips();
+  const clipIndex = currentClips.findIndex(clip => at > Number(clip.sourceStart) + 0.05 && at < Number(clip.sourceEnd) - 0.05);
+  if (clipIndex < 0) { toast('Поставь курсор внутри клипа', 'w'); return; }
+  const clip = currentClips[clipIndex];
+  const next = [
+    { ...clip, id:`clip_${Math.round(Number(clip.sourceStart) * 1000)}_${Math.round(at * 1000)}`, sourceEnd:at },
+    { ...clip, id:`clip_${Math.round(at * 1000)}_${Math.round(Number(clip.sourceEnd) * 1000)}`, sourceStart:at },
+  ];
+  videoEdit.clips = [...currentClips.slice(0, clipIndex), ...next, ...currentClips.slice(clipIndex + 1)];
   videoEdit.splits = addUniqueTime(videoEdit.splits || [], at);
-  selectedEditorItem = (videoEdit.splits || []).some(t => Math.abs(t - at) < 0.11) ? { type: 'split', at } : null;
+  selectedEditorItem = { type:'clip', id:next[1].id };
   saveVideoEdit();
 });
 document.getElementById('edit-freeze')?.addEventListener('click', () => {
@@ -7833,7 +7902,7 @@ function renderVideoEditConfirmation() {
 
 function videoEditConfirmationReport() {
   const duration = editedOutputDuration();
-  const clips = Math.max(1, (videoEdit.splits || []).length + 1);
+  const clips = Array.isArray(videoEdit.clips) ? videoEdit.clips.length : Math.max(1, (videoEdit.splits || []).length + 1);
   const effects = (videoEdit.freezeFrames || []).length +
     (videoEdit.zoomKeyframes || []).length + (videoEdit.footageOverlays || []).length;
   const warnings = [];
@@ -7916,6 +7985,40 @@ function deleteSelectedEditorItem() {
     removeEffectTrack(selectedEditorItem.track);
     return;
   }
+  if (selectedEditorItem.type === 'clip') {
+    const clips = Array.isArray(videoEdit.clips) ? videoEdit.clips : [];
+    if (clips.length <= 1) { toast('Нельзя удалить единственный клип', 'w'); return; }
+    const index = clips.findIndex(clip => clip.id === selectedEditorItem.id);
+    if (index < 0) return;
+    const removedClip = clips[index];
+    const segments = buildTimelineSegments().filter(segment => segment.clipId === removedClip.id);
+    const outputStart = segments.length ? Math.min(...segments.map(segment => segment.outputStart)) : 0;
+    const outputEnd = segments.length ? Math.max(...segments.map(segment => segment.outputStart + segment.duration)) : outputStart;
+    const removedDuration = Math.max(0, outputEnd - outputStart);
+    const ripple = items => (items || []).filter(item => {
+      const itemStart = effectOutputStart(item);
+      return itemStart < outputStart || itemStart >= outputEnd;
+    }).map(item => {
+      const itemStart = effectOutputStart(item);
+      if (itemStart < outputEnd) return item;
+      const outputAt = Math.max(0, itemStart - removedDuration);
+      return { ...item, outputAt };
+    });
+    pushVideoEditUndo();
+    videoEdit.clips = clips.filter(clip => clip.id !== removedClip.id);
+    videoEdit.zoomKeyframes = ripple(videoEdit.zoomKeyframes);
+    videoEdit.footageOverlays = ripple(videoEdit.footageOverlays);
+    videoEdit.freezeFrames = (videoEdit.freezeFrames || []).filter(freeze => {
+      const belongsToRemoved = freeze.at >= Number(removedClip.sourceStart) && (
+        freeze.at < Number(removedClip.sourceEnd) || (index === clips.length - 1 && freeze.at <= Number(removedClip.sourceEnd))
+      );
+      return !belongsToRemoved;
+    });
+    selectedEditorItem = null;
+    toast(`Клип удалён, таймлайн сдвинут на ${fmtTime(removedDuration)}`, 's');
+    saveVideoEdit();
+    return;
+  }
   if (selectedEditorItem.type === 'freeze') {
     const removedId = selectedEditorItem.id;
     pushVideoEditUndo();
@@ -7952,6 +8055,20 @@ function deleteSelectedEditorItem() {
   }
 }
 document.getElementById('edit-delete-selected')?.addEventListener('click', deleteSelectedEditorItem);
+function moveSelectedVideoClip(direction) {
+  if (selectedEditorItem?.type !== 'clip' || !Array.isArray(videoEdit.clips)) return;
+  const index = videoEdit.clips.findIndex(clip => clip.id === selectedEditorItem.id);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= videoEdit.clips.length) return;
+  pushVideoEditUndo();
+  const clips = [...videoEdit.clips];
+  [clips[index], clips[target]] = [clips[target], clips[index]];
+  videoEdit.clips = clips;
+  saveVideoEdit();
+  toast(direction < 0 ? 'Клип перемещён влево' : 'Клип перемещён вправо', 's');
+}
+document.getElementById('edit-clip-left')?.addEventListener('click', () => moveSelectedVideoClip(-1));
+document.getElementById('edit-clip-right')?.addEventListener('click', () => moveSelectedVideoClip(1));
 document.getElementById('edit-zoom')?.addEventListener('click', () => {
   addZoomAt(vidPlayer.currentTime);
 });
