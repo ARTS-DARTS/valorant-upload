@@ -5866,6 +5866,16 @@ function videoDuration() {
   return Number.isFinite(knownVideoDuration) && knownVideoDuration > 0 ? knownVideoDuration : 0;
 }
 
+function syncKnownVideoDuration(value) {
+  const duration = Number(value);
+  if (!Number.isFinite(duration) || duration <= 0) return false;
+  const changed = Math.abs(knownVideoDuration - duration) > 0.01;
+  knownVideoDuration = duration;
+  if (!videoEdit.trimEnd) videoEdit.trimEnd = duration;
+  if (changed) renderVideoTransport();
+  return true;
+}
+
 function releaseLocalVideoPreview() {
   if (localVideoPreviewUrl) URL.revokeObjectURL(localVideoPreviewUrl);
   localVideoPreviewUrl = '';
@@ -6890,7 +6900,7 @@ function renderVideoEditor() {
       clipGroups.set(segment.clipId, group);
     });
     const clipHtml = [...clipGroups.values()].map((clip, index) => `
-      <span class="timeline-video-clip ${selectedEditorItem?.type === 'clip' && selectedEditorItem.id === clip.id ? 'selected' : ''}"
+      <span class="timeline-video-clip ${selectedEditorItem?.type === 'clip' && selectedEditorItem.id === clip.id ? 'selected' : ''} ${timelineDrag?.kind === 'clip-reorder' && timelineDrag.id === clip.id ? 'moving' : ''}"
         data-clip-id="${esc(clip.id)}" style="${timelineBlockStyle(clip.start, clip.end - clip.start, 10)}"
         title="Клип ${index + 1}: ${fmtTime(clip.sourceStart)}-${fmtTime(clip.sourceEnd)}">
         ${selectedEditorItem?.type === 'clip' && selectedEditorItem.id === clip.id ? '<i class="clip-trim-handle start" data-clip-edge="start" aria-hidden="true"></i>' : ''}
@@ -6983,7 +6993,7 @@ function setEditorMode(mode) {
   if (activeEditorMode !== 'effects' && editorEls.footageLibrary) editorEls.footageLibrary.hidden = true;
   const hints = {
     trim: 'Клик или drag по таймлайну перематывает. Для обрезки тяни белые края зелёного отрезка или меняй поля старт/конец.',
-    split: 'Перемотай на нужное место и нажми “Разрезать тут”. Обычный клик по таймлайну больше не добавляет разрез.',
+    split: 'Кликни по нужному месту видео — клип разрежется сразу. Кнопка “Разрезать тут” режет по красному курсору.',
     freeze: 'Добавь стоп-кадр, затем рисуй кистью или прямыми линиями по кадру. Фиолетовый клип можно двигать, тянуть за край и удалить.',
     zoom: 'Выбери силу зума и нажми “Добавить зум”. Зелёный клип на дорожке эффектов можно двигать, растягивать и удалить.',
     effects: 'Выбери футаж на таймлайне, затем включи хромакей и цвет именно для этого блока. Финальный рендер делает модерация/обработка.',
@@ -7459,6 +7469,10 @@ editorEls.shell?.addEventListener('click', event => {
   const { outputTime, sourceTime } = timelineTimesFromEvent(event, {
     magnet: false,
   });
+  if (activeEditorMode === 'split') {
+    splitVideoClipAt(sourceTime);
+    return;
+  }
   applyTimelineTool(sourceTime, outputTime);
 });
 editorEls.shell?.addEventListener('pointerdown', event => {
@@ -7474,14 +7488,30 @@ editorEls.shell?.addEventListener('pointerdown', event => {
   }
   const clipBlock = event.target.closest('[data-clip-id]');
   if (clipBlock) {
+    if (activeEditorMode === 'split') {
+      const { sourceTime } = timelineTimesFromEvent(event, { magnet:false });
+      splitVideoClipAt(sourceTime);
+      suppressTimelineClick = true;
+      event.preventDefault();
+      return;
+    }
     const id = clipBlock.dataset.clipId || '';
     const edge = event.target.closest('[data-clip-edge]')?.dataset.clipEdge || '';
     const clip = (videoEdit.clips || []).find(item => item.id === id);
     selectedEditorItem = { type:'clip', id };
     if (edge && clip) {
+      const clips = videoEdit.clips || [];
+      const clipIndex = clips.findIndex(item => item.id === id);
+      const neighbor = edge === 'start' ? clips[clipIndex - 1] : clips[clipIndex + 1];
+      const sharedBoundary = edge === 'start'
+        ? neighbor && Math.abs(Number(neighbor.sourceEnd) - Number(clip.sourceStart)) < 0.05
+        : neighbor && Math.abs(Number(clip.sourceEnd) - Number(neighbor.sourceStart)) < 0.05;
       timelineDrag = {
         kind:'clip-resize', edge, id, moved:false, startX:event.clientX,
         startSourceStart:Number(clip.sourceStart || 0), startSourceEnd:Number(clip.sourceEnd || 0),
+        neighborId:sharedBoundary ? neighbor.id : '',
+        neighborSourceStart:Number(neighbor?.sourceStart || 0),
+        neighborSourceEnd:Number(neighbor?.sourceEnd || 0),
       };
       safeSetPointerCapture(editorEls.shell, event.pointerId);
       editorEls.shell.classList.add('dragging');
@@ -7593,19 +7623,28 @@ function moveTimelinePointer(event) {
     }
   } else if (timelineDrag.kind === 'clip-resize') {
     const clip = (videoEdit.clips || []).find(item => item.id === timelineDrag.id);
+    const neighbor = (videoEdit.clips || []).find(item => item.id === timelineDrag.neighborId);
     if (clip) {
       const delta = (event.clientX - timelineDrag.startX) / timelinePixelsPerSecond;
       const minimum = Math.max(0.05, frameStep());
       if (timelineDrag.edge === 'start') {
-        clip.sourceStart = Math.max(0, Math.min(
+        const nextBoundary = Math.max(0, Math.min(
           snapFrameTime(timelineDrag.startSourceStart + delta),
           timelineDrag.startSourceEnd - minimum,
         ));
+        clip.sourceStart = neighbor
+          ? Math.max(timelineDrag.neighborSourceStart + minimum, nextBoundary)
+          : nextBoundary;
+        if (neighbor) neighbor.sourceEnd = clip.sourceStart;
       } else {
-        clip.sourceEnd = Math.min(videoDuration(), Math.max(
+        const nextBoundary = Math.min(videoDuration(), Math.max(
           snapFrameTime(timelineDrag.startSourceEnd + delta),
           timelineDrag.startSourceStart + minimum,
         ));
+        clip.sourceEnd = neighbor
+          ? Math.min(timelineDrag.neighborSourceEnd - minimum, nextBoundary)
+          : nextBoundary;
+        if (neighbor) neighbor.sourceStart = clip.sourceEnd;
       }
     }
   } else if (timelineDrag.kind === 'clip-reorder') {
@@ -8079,8 +8118,8 @@ function ensureExplicitVideoClips() {
   return videoEdit.clips;
 }
 
-function splitVideoClipAtPlayhead() {
-  const at = Math.round(clampTime(vidPlayer.currentTime) * 10) / 10;
+function splitVideoClipAt(time = vidPlayer.currentTime) {
+  const at = Math.round(clampTime(time) * 10) / 10;
   const currentClips = ensureExplicitVideoClips();
   const clipIndex = currentClips.findIndex(clip => at > Number(clip.sourceStart) + 0.05 && at < Number(clip.sourceEnd) - 0.05);
   if (clipIndex < 0) { toast('Поставь курсор внутри клипа', 'w'); return; }
@@ -8092,7 +8131,12 @@ function splitVideoClipAtPlayhead() {
   videoEdit.clips = [...currentClips.slice(0, clipIndex), ...next, ...currentClips.slice(clipIndex + 1)];
   videoEdit.splits = addUniqueTime(videoEdit.splits || [], at);
   selectedEditorItem = { type:'clip', id:next[1].id };
+  timelinePreviewOutputTime = sourceToOutputTime(at);
+  vidPlayer.currentTime = at;
   saveVideoEdit();
+}
+function splitVideoClipAtPlayhead() {
+  splitVideoClipAt(vidPlayer.currentTime);
 }
 document.getElementById('edit-split')?.addEventListener('click', splitVideoClipAtPlayhead);
 document.getElementById('edit-freeze')?.addEventListener('click', () => {
@@ -8396,22 +8440,39 @@ function readVideoMetadata(file) {
     const url = URL.createObjectURL(file);
     let settled = false;
     let timeout;
+    let dimensions = { width: 0, height: 0 };
     const done = value => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
+      video.removeAttribute('src');
+      video.load();
       URL.revokeObjectURL(url);
       resolve(value);
     };
+    const finishWhenDurationIsReady = () => {
+      dimensions = {
+        width: Number(video.videoWidth || dimensions.width || 0),
+        height: Number(video.videoHeight || dimensions.height || 0),
+      };
+      const duration = Number(video.duration);
+      if (!Number.isFinite(duration) || duration <= 0) return false;
+      done({ duration, ...dimensions });
+      return true;
+    };
     video.preload = 'metadata';
-    video.onloadedmetadata = () => done({
-      duration: Number.isFinite(video.duration) ? video.duration : 0,
-      width: Number(video.videoWidth || 0),
-      height: Number(video.videoHeight || 0),
-    });
+    video.onloadedmetadata = () => {
+      if (finishWhenDurationIsReady()) return;
+      // Some MP4 files expose Infinity until the browser probes their end.
+      // Seeking the detached metadata player makes Chromium resolve the real duration.
+      try { video.currentTime = Number.MAX_SAFE_INTEGER; } catch (_) {}
+    };
+    video.ondurationchange = finishWhenDurationIsReady;
+    video.oncanplay = finishWhenDurationIsReady;
     video.onerror = () => done({ duration: 0, width: 0, height: 0 });
-    timeout = setTimeout(() => done({ duration: 0, width: 0, height: 0 }), 5000);
+    timeout = setTimeout(() => done({ duration: 0, ...dimensions }), 8000);
     video.src = url;
+    video.load();
   });
 }
 function readVideoUrlMetadata(url) {
@@ -8630,10 +8691,7 @@ async function handleVideoFile(file) {
   releaseLocalVideoPreview();
   localVideoPreviewUrl = URL.createObjectURL(file);
   knownVideoDuration = 0;
-  const localMetadataPromise = Promise.resolve(localMetadata).then(meta => {
-    if (Number.isFinite(meta.duration) && meta.duration > 0) knownVideoDuration = meta.duration;
-    return meta;
-  });
+  syncKnownVideoDuration(localMetadata.duration);
   videoUrl = null;
   dropZone.style.display = 'none';
   document.getElementById('vid-player-wrap').style.display = 'none';
@@ -8667,7 +8725,6 @@ async function handleVideoFile(file) {
     const url = await upload;
     if (_cancelled) return;
     videoUrl = url;
-    await localMetadataPromise;
     moderatorVideoRemovalRequested = false;
     videoXhr = null;
     prog.style.display = 'none';
@@ -8679,6 +8736,7 @@ async function handleVideoFile(file) {
     // duration/index is available, which leaves native controls at 0:00.
     vidPlayer.removeAttribute('crossorigin');
     vidPlayer.src = localVideoPreviewUrl || videoEditorSourceUrl(url);
+    vidPlayer.load();
     document.getElementById('vid-player-wrap').style.display = '';
     videoEdit = createDefaultVideoEdit();
     videoEditUndoStack = [];
@@ -8716,10 +8774,8 @@ vidPlayer.addEventListener('timeupdate', () => {
   updateTimelinePlaybackUi();
   lastVideoTime = vidPlayer.currentTime;
 });
-vidPlayer.addEventListener('loadedmetadata', () => {
-  const nativeDuration = Number(vidPlayer.duration);
-  if (Number.isFinite(nativeDuration) && nativeDuration > 0) knownVideoDuration = nativeDuration;
-  if (!videoEdit.trimEnd) videoEdit.trimEnd = videoDuration();
+function handleVideoDurationReady() {
+  syncKnownVideoDuration(vidPlayer.duration);
   if (pendingVideoSeekRatio !== null && videoDuration() > 0) {
     vidScrubber.value = String(pendingVideoSeekRatio * 100);
     pendingVideoSeekRatio = null;
@@ -8727,7 +8783,11 @@ vidPlayer.addEventListener('loadedmetadata', () => {
     return;
   }
   renderVideoEditor();
-});
+}
+vidPlayer.addEventListener('loadedmetadata', handleVideoDurationReady);
+vidPlayer.addEventListener('durationchange', handleVideoDurationReady);
+vidPlayer.addEventListener('loadeddata', handleVideoDurationReady);
+vidPlayer.addEventListener('canplay', handleVideoDurationReady);
 vidPlayer.addEventListener('error', () => {
   // Storage itself does not expose CORS. Never switch to its direct URL:
   // retry the same-origin proxy once so playback and frame capture stay valid.

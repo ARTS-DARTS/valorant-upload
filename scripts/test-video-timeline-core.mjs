@@ -130,6 +130,13 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /saveVideoEdit\(\{ skipUndo:true \}\)/);
   assert.match(html, /class="video-editor-shortcuts"/);
   assert.match(app, /function splitVideoClipAtPlayhead\(\)/);
+  assert.match(app, /activeEditorMode === 'split'[\s\S]*splitVideoClipAt\(sourceTime\)/);
+  assert.match(app, /neighborId:sharedBoundary \? neighbor\.id : ''/);
+  assert.match(app, /if \(neighbor\) neighbor\.sourceEnd = clip\.sourceStart/);
+  assert.match(app, /if \(neighbor\) neighbor\.sourceStart = clip\.sourceEnd/);
+  assert.match(app, /timelineDrag\?\.kind === 'clip-reorder'[\s\S]*'moving'/);
+  assert.match(app, /function syncKnownVideoDuration\(value\)/);
+  assert.match(app, /video\.ondurationchange = finishWhenDurationIsReady/);
   assert.match(app, /e\.code === 'KeyB'/);
   assert.match(app, /data-clip-edge="start"/);
   assert.match(app, /kind:'clip-resize'/);
@@ -148,6 +155,6 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('effect_outside'/);
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
-  assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v2/);
-  assert.match(html, /app\.js\?v=2026-08-06-vlineups-cut-v2/);
+  assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v3/);
+  assert.match(html, /app\.js\?v=2026-08-06-vlineups-cut-v3/);
 });
