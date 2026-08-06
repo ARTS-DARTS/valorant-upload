@@ -209,6 +209,18 @@ export async function applyRobokassaPayment({ db, verified, provider, now }) {
       net_minor: FieldValue.increment(order.amount_minor),
       updated_at: nowTimestamp,
     }, { merge: true });
+    tx.set(
+      db.collection('subscription_stats').doc(
+        order.test_mode === true ? 'overview_test' : 'overview_live',
+      ),
+      {
+        purchases_total: FieldValue.increment(1),
+        gross_minor: FieldValue.increment(order.amount_minor),
+        net_minor: FieldValue.increment(order.amount_minor),
+        updated_at: nowTimestamp,
+      },
+      { merge: true },
+    );
     tx.set(db.collection('subscription_stats_daily').doc(day), {
       purchases: FieldValue.increment(1),
       gross_minor: FieldValue.increment(order.amount_minor),
@@ -448,6 +460,18 @@ export async function applyRobokassaReversal({
       net_minor: FieldValue.increment(-order.amount_minor),
       updated_at: nowTimestamp,
     }, { merge: true });
+    tx.set(
+      db.collection('subscription_stats').doc(
+        order.test_mode === true ? 'overview_test' : 'overview_live',
+      ),
+      {
+        reversals_total: FieldValue.increment(1),
+        refunded_minor: FieldValue.increment(order.amount_minor),
+        net_minor: FieldValue.increment(-order.amount_minor),
+        updated_at: nowTimestamp,
+      },
+      { merge: true },
+    );
     tx.set(db.collection('subscription_stats_daily').doc(day), {
       reversals: FieldValue.increment(1),
       reversals_minor: FieldValue.increment(order.amount_minor),

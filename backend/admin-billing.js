@@ -68,9 +68,10 @@ export function createAdminBillingHandler({
         ordersQuery = ordersQuery.startAfter(cursorSnap);
       }
       const scanLimit = status === 'all' ? limit + 1 : 100;
-      const [ordersSnap, overviewSnap, monitoringSnap] = await Promise.all([
+      const [ordersSnap, liveOverviewSnap, testOverviewSnap, monitoringSnap] = await Promise.all([
         ordersQuery.limit(scanLimit).get(),
-        store.collection('subscription_stats').doc('overview').get(),
+        store.collection('subscription_stats').doc('overview_live').get(),
+        store.collection('subscription_stats').doc('overview_test').get(),
         store.collection('billing_monitoring').doc('robokassa').get(),
       ]);
       const scannedDocs = ordersSnap.docs;
@@ -107,7 +108,10 @@ export function createAdminBillingHandler({
       const liveSuccessful = successfulRecent.filter(order => order.test_mode !== true);
 
       return res.status(200).json({
-        overview: overviewSnap.exists ? (overviewSnap.data() || {}) : {},
+        overview: {
+          live: liveOverviewSnap.exists ? (liveOverviewSnap.data() || {}) : {},
+          test: testOverviewSnap.exists ? (testOverviewSnap.data() || {}) : {},
+        },
         monitoring: {
           ...monitoringRaw,
           last_callback_at:toIso(monitoringRaw.last_callback_at),
