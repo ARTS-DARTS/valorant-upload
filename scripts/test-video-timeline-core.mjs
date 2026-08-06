@@ -134,4 +134,6 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /data-clip-edge="start"/);
   assert.match(app, /kind:'clip-resize'/);
   assert.match(app, /timelineDrag\.kind === 'clip-resize'/);
+  assert.match(app, /kind:'clip-reorder'/);
+  assert.match(app, /timelineDrag\.kind === 'clip-reorder'/);
 });

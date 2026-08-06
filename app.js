@@ -7454,6 +7454,10 @@ editorEls.shell?.addEventListener('pointerdown', event => {
       };
       safeSetPointerCapture(editorEls.shell, event.pointerId);
       editorEls.shell.classList.add('dragging');
+    } else if (clip) {
+      timelineDrag = { kind:'clip-reorder', id, moved:false, startX:event.clientX };
+      safeSetPointerCapture(editorEls.shell, event.pointerId);
+      editorEls.shell.classList.add('dragging');
     }
     suppressTimelineClick = true;
     renderVideoEditor();
@@ -7534,6 +7538,7 @@ editorEls.shell?.addEventListener('pointerdown', event => {
 });
 function moveTimelinePointer(event) {
   if (!timelineDrag) return;
+  if (timelineDrag.kind === 'clip-reorder' && !timelineDrag.moved && Math.abs(event.clientX - timelineDrag.startX) < 4) return;
   timelineDrag.moved = true;
   autoScrollTimelineWhileDragging(event);
   const rawTime = clampTime(timeFromTimelineEvent(event));
@@ -7570,6 +7575,31 @@ function moveTimelinePointer(event) {
           snapFrameTime(timelineDrag.startSourceEnd + delta),
           timelineDrag.startSourceStart + minimum,
         ));
+      }
+    }
+  } else if (timelineDrag.kind === 'clip-reorder') {
+    const clips = Array.isArray(videoEdit.clips) ? [...videoEdit.clips] : [];
+    const currentIndex = clips.findIndex(item => item.id === timelineDrag.id);
+    if (currentIndex >= 0 && clips.length > 1) {
+      const pointerOutput = Math.max(0, outputTimeFromTimelineEvent(event));
+      const groups = new Map();
+      buildTimelineSegments().forEach(segment => {
+        if (!segment.clipId) return;
+        const group = groups.get(segment.clipId) || { start:segment.outputStart, end:segment.outputStart };
+        group.start = Math.min(group.start, segment.outputStart);
+        group.end = Math.max(group.end, segment.outputStart + segment.duration);
+        groups.set(segment.clipId, group);
+      });
+      const withoutDragged = clips.filter(item => item.id !== timelineDrag.id);
+      let targetIndex = withoutDragged.length;
+      for (let index = 0; index < withoutDragged.length; index += 1) {
+        const group = groups.get(withoutDragged[index].id);
+        if (group && pointerOutput < (group.start + group.end) / 2) { targetIndex = index; break; }
+      }
+      withoutDragged.splice(targetIndex, 0, clips[currentIndex]);
+      if (withoutDragged.some((item, index) => item.id !== clips[index]?.id)) {
+        videoEdit.clips = withoutDragged;
+        timelineDrag.changed = true;
       }
     }
   } else if (timelineDrag.kind === 'freeze-resize') {
@@ -7645,16 +7675,17 @@ function moveTimelinePointer(event) {
 function finishTimelinePointer(event) {
   if (!timelineDrag) return;
   const wasTrim = timelineDrag.kind === 'start' || timelineDrag.kind === 'end';
-  const wasClip = timelineDrag.kind === 'clip-resize';
+  const wasClip = timelineDrag.kind === 'clip-resize' || timelineDrag.kind === 'clip-reorder';
   const wasFreeze = timelineDrag.kind === 'freeze' || timelineDrag.kind === 'freeze-resize';
   const wasZoom = timelineDrag.kind === 'zoom' || timelineDrag.kind === 'zoom-resize';
   const wasFootage = timelineDrag.kind === 'footage' || timelineDrag.kind === 'footage-resize';
+  const changed = timelineDrag.kind !== 'clip-reorder' || !!timelineDrag.changed;
   safeReleasePointerCapture(editorEls.shell, event.pointerId);
   editorEls.shell.classList.remove('dragging');
   const moved = timelineDrag.moved;
   timelineDrag = null;
   suppressTimelineClick = moved || wasClip || wasFreeze || wasZoom || wasFootage;
-  if ((wasTrim || wasClip || wasFreeze || wasZoom || wasFootage) && moved) saveVideoEdit();
+  if ((wasTrim || wasClip || wasFreeze || wasZoom || wasFootage) && moved && changed) saveVideoEdit();
 }
 function cancelTimelinePointer() {
   timelineDrag = null;
