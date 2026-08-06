@@ -66,6 +66,22 @@ test('upload editor delegates its player scrubber to the shared timeline core', 
   assert.match(app, /const playback = sharedPlaybackPosition\(outputPlaybackStartTime/);
 });
 
+test('upload editor requires an explicit confirmed montage revision', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const [app, html] = await Promise.all([
+    readFile(new URL('../app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+  ]);
+  assert.match(html, /id="edit-confirm"[^>]*>Подтвердить монтаж</);
+  assert.match(html, /id="editor-confirm-modal"/);
+  assert.match(app, /confirmation:\s*\{\s*status:\s*'pending'/);
+  assert.match(app, /videoUrl && videoEditConfirmationState\(\) !== 'confirmed'/);
+  assert.match(app, /confirmedRevision:\s*Math\.max\(0, Number\(videoEdit\.revision/);
+  assert.match(app, /draft\.videoEdit\?\.footageOverlays\?\.length/);
+  assert.match(html, /id="video-editor-fullscreen-open"[^>]*>Открыть редактор</);
+  assert.match(app, /function setVideoEditorFullscreen\(open\)/);
+});
+
 test('shared timeline resolves cached metadata fallback and effects', () => {
   assert.equal(resolveTimelineSourceDuration(Number.NaN, edit), 10);
   assert.equal(videoTimelineZoomStateAt(edit, 14, 4).mix, 1);

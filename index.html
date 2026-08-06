@@ -213,6 +213,14 @@
         <button class="btn-sm" id="vid-cancel-btn" style="margin-top:8px;">✕ Отмена</button>
       </div>
       <div id="vid-player-wrap" style="display:none;">
+        <header class="video-editor-commandbar" aria-label="Панель монтажного пространства">
+          <div class="video-editor-commandbar-title">
+            <span>VLINEUPS CUT</span>
+            <strong>Монтаж лайнапа</strong>
+          </div>
+          <div class="video-editor-commandbar-state" id="video-editor-commandbar-state">Черновик сохранён</div>
+          <button class="btn-sm" id="video-editor-fullscreen-close" type="button">Закрыть редактор</button>
+        </header>
         <div class="vid-stage" id="vid-stage">
           <div class="video-viewer-viewport" id="video-viewer-viewport">
             <video class="vid-player" id="vid-player" preload="metadata" crossorigin="anonymous" playsinline></video>
@@ -243,6 +251,7 @@
           <button class="btn-sm" id="vid-remove-btn">✕ Удалить</button>
         </div>
         <div class="video-editor-toggle-row">
+          <button class="btn-sm video-editor-launch" id="video-editor-fullscreen-open" type="button">Открыть редактор</button>
           <button class="btn-sm video-editor-toggle" id="video-editor-toggle" type="button" aria-expanded="true" aria-controls="video-editor">▾ Скрыть панель монтажа</button>
         </div>
         <div class="video-editor" id="video-editor">
@@ -315,6 +324,14 @@
                 <button class="btn-sm" id="edit-reset" type="button">Сбросить монтаж</button>
                 <span class="footage-status" id="edit-footage-status" aria-live="polite"></span>
               </div>
+              <div class="editor-confirmation" id="editor-confirmation" data-state="pending">
+                <div class="editor-confirmation-copy">
+                  <span class="editor-confirmation-kicker">Готовность монтажа</span>
+                  <strong id="editor-confirmation-title">Есть неподтверждённые изменения</strong>
+                  <small id="editor-confirmation-detail">Проверь результат и подтверди монтаж перед отправкой.</small>
+                </div>
+                <button class="editor-confirm-button" id="edit-confirm" type="button">Подтвердить монтаж</button>
+              </div>
               <div class="freeze-draw-panel" id="freeze-draw-panel" aria-hidden="true">
                 <div class="freeze-draw-head">
                   <span><i></i> Рисование на стоп-кадре</span>
@@ -385,6 +402,21 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div class="editor-confirm-modal" id="editor-confirm-modal" hidden>
+      <section class="editor-confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="editor-confirm-modal-title">
+        <button class="editor-confirm-close" id="editor-confirm-close" type="button" aria-label="Закрыть">×</button>
+        <span class="editor-confirm-eyebrow">Финальная проверка</span>
+        <h2 id="editor-confirm-modal-title">Монтаж завершён?</h2>
+        <p>Зафиксируем именно эту версию. Если после подтверждения что-то изменить, монтаж потребуется подтвердить заново.</p>
+        <div class="editor-confirm-facts" id="editor-confirm-facts"></div>
+        <div class="editor-confirm-checks" id="editor-confirm-checks" aria-live="polite"></div>
+        <div class="editor-confirm-modal-actions">
+          <button class="btn-sm" id="editor-confirm-back" type="button">Вернуться к монтажу</button>
+          <button class="editor-confirm-primary" id="editor-confirm-commit" type="button">Подтвердить монтаж</button>
+        </div>
+      </section>
     </div>
 
     <div class="section-title">🖼 СКРИНШОТЫ</div>

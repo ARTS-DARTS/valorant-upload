@@ -33,6 +33,10 @@ import {
   videoTimelineSegmentAt as sharedSegmentAt,
   videoTimelineZoomStateAt as sharedZoomStateAt,
 } from './video_timeline_core.mjs?v=2026-08-02-video-timeline-core-v1';
+import {
+  migrateVideoEditToProjectV3,
+  stableVideoItemId,
+} from './video_project_v3.mjs?v=2026-08-06-video-project-v3-foundation-v1';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -5629,6 +5633,7 @@ let lastCommittedVideoEditState = null;
 let resetConfirmTimer = null;
 let videoEditorHotkeysActive = false;
 let timelinePreviewOutputTime = null;
+let videoEditConfirmationReturnFocus = null;
 let outputPlaybackActive = false;
 let outputPlaybackRaf = null;
 let outputPlaybackStartedAt = 0;
@@ -5652,7 +5657,11 @@ const CHROMA_PREVIEW_MAX_HEIGHT = 360;
 const freezeFrameImages = new Map();
 const editorEls = {
   editor: document.getElementById('video-editor'),
+  playerWrap: document.getElementById('vid-player-wrap'),
   toggle: document.getElementById('video-editor-toggle'),
+  fullscreenOpen: document.getElementById('video-editor-fullscreen-open'),
+  fullscreenClose: document.getElementById('video-editor-fullscreen-close'),
+  commandbarState: document.getElementById('video-editor-commandbar-state'),
   scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
   stage: document.getElementById('vid-stage'),
@@ -5693,6 +5702,16 @@ const editorEls = {
   footageLibrary: document.getElementById('footage-library'),
   undo: document.getElementById('edit-undo'),
   reset: document.getElementById('edit-reset'),
+  confirmation: document.getElementById('editor-confirmation'),
+  confirmationTitle: document.getElementById('editor-confirmation-title'),
+  confirmationDetail: document.getElementById('editor-confirmation-detail'),
+  confirm: document.getElementById('edit-confirm'),
+  confirmModal: document.getElementById('editor-confirm-modal'),
+  confirmClose: document.getElementById('editor-confirm-close'),
+  confirmBack: document.getElementById('editor-confirm-back'),
+  confirmCommit: document.getElementById('editor-confirm-commit'),
+  confirmFacts: document.getElementById('editor-confirm-facts'),
+  confirmChecks: document.getElementById('editor-confirm-checks'),
   zoomScaleX: document.getElementById('edit-zoom-scale-x'),
   zoomScaleY: document.getElementById('edit-zoom-scale-y'),
   zoomPosX: document.getElementById('edit-zoom-pos-x'),
@@ -5707,6 +5726,18 @@ const editorEls = {
 };
 
 const VIDEO_EDITOR_COLLAPSED_KEY = 'valorant_upload_video_editor_collapsed_v1';
+function setVideoEditorFullscreen(open) {
+  if (!editorEls.playerWrap) return;
+  const enabled = !!open;
+  editorEls.playerWrap.classList.toggle('video-editor-fullscreen', enabled);
+  document.body.classList.toggle('video-editor-fullscreen-open', enabled);
+  if (enabled) setVideoEditorCollapsed(false, false);
+  requestAnimationFrame(() => {
+    renderVideoEditor();
+    if (enabled) editorEls.fullscreenClose?.focus();
+    else editorEls.fullscreenOpen?.focus();
+  });
+}
 function setVideoEditorCollapsed(collapsed, persist = true) {
   if (!editorEls.editor || !editorEls.toggle) return;
   editorEls.editor.hidden = collapsed;
@@ -5719,6 +5750,8 @@ function setVideoEditorCollapsed(collapsed, persist = true) {
 }
 try { setVideoEditorCollapsed(localStorage.getItem(VIDEO_EDITOR_COLLAPSED_KEY) === '1', false); } catch (_) {}
 editorEls.toggle?.addEventListener('click', () => setVideoEditorCollapsed(!editorEls.editor.hidden));
+editorEls.fullscreenOpen?.addEventListener('click', () => setVideoEditorFullscreen(true));
+editorEls.fullscreenClose?.addEventListener('click', () => setVideoEditorFullscreen(false));
 
 function renderVideoViewerZoom() {
   const viewport = editorEls.viewerViewport;
@@ -5762,6 +5795,8 @@ renderVideoViewerZoom();
 function createDefaultVideoEdit() {
   return {
     version: 2,
+    revision: 0,
+    confirmation: { status: 'pending', confirmedRevision: null, confirmedAt: null },
     trimStart: 0,
     trimEnd: 0,
     splits: [],
@@ -5923,24 +5958,34 @@ function normalizedVideoEdit() {
   return {
     ...videoEdit,
     version: 2,
+    revision: Math.max(0, Math.floor(Number(videoEdit.revision || 0))),
+    confirmation: {
+      status: videoEdit.confirmation?.status === 'confirmed' ? 'confirmed' : 'pending',
+      confirmedRevision: Number.isFinite(Number(videoEdit.confirmation?.confirmedRevision))
+        ? Math.max(0, Math.floor(Number(videoEdit.confirmation.confirmedRevision)))
+        : null,
+      confirmedAt: Number.isFinite(Number(videoEdit.confirmation?.confirmedAt))
+        ? Number(videoEdit.confirmation.confirmedAt)
+        : null,
+    },
     effectTracks,
     trimStart,
     trimEnd,
     splits: [...new Set((videoEdit.splits || []).map(clampTime).filter(t => t > 0 && (!duration || t < duration)))]
       .sort((a, b) => a - b),
-    freezeFrames: (videoEdit.freezeFrames || []).map(item => ({
-      id: item.id || `freeze_${Math.round(Number(item.at || 0) * 1000)}_${Math.random().toString(36).slice(2, 7)}`,
+    freezeFrames: (videoEdit.freezeFrames || []).map((item, index) => ({
+      id: stableVideoItemId('freeze', item, index),
       at: clampTime(item.at),
       duration: Math.max(0.2, Math.min(10, Number(item.duration || 2))),
       annotations: normalizeFreezeAnnotations(item.annotations || item.drawings),
     })).sort((a, b) => a.at - b.at),
-    zoomKeyframes: (videoEdit.zoomKeyframes || []).map(item => {
+    zoomKeyframes: (videoEdit.zoomKeyframes || []).map((item, index) => {
       const at = clampTime(item.at);
       const outputAt = Number.isFinite(Number(item.outputAt))
         ? clampOutputTime(Number(item.outputAt))
         : sourceToOutputTime(at);
       return {
-        id: item.id || `zoom_${Math.round(Number(item.at || 0) * 1000)}_${Math.random().toString(36).slice(2, 7)}`,
+        id: stableVideoItemId('zoom', item, index),
         at,
         outputAt,
         scale: Math.max(1, Math.min(EDITOR_MAX_ZOOM, Number(item.scale || 1.4))),
@@ -5955,14 +6000,14 @@ function normalizedVideoEdit() {
         track: Math.max(0, Math.min(effectTracks - 1, trackFor('zoom', item))),
       };
     }).sort((a, b) => effectOutputStart(a) - effectOutputStart(b)),
-    footageOverlays: (videoEdit.footageOverlays || []).map(item => {
+    footageOverlays: (videoEdit.footageOverlays || []).map((item, index) => {
       const legacyChroma = item.chromaKey || item.chroma || (videoEdit.chromaKey?.enabled ? videoEdit.chromaKey : {});
       const at = clampTime(item.at);
       const outputAt = Number.isFinite(Number(item.outputAt))
         ? clampOutputTime(Number(item.outputAt))
         : sourceToOutputTime(at);
       return {
-        id: item.id || `footage_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id: stableVideoItemId('footage', item, index),
         url: String(item.url || ''),
         name: String(item.name || 'Футаж').slice(0, 120),
         at,
@@ -5981,6 +6026,7 @@ function normalizedVideoEdit() {
       volume: Math.max(0, Math.min(2, Number(videoEdit.audio?.volume ?? 1))),
     },
     chromaKey: normalizeChromaKey(videoEdit.chromaKey),
+    projectV3: migrateVideoEditToProjectV3(videoEdit, duration),
   };
 }
 
@@ -6740,6 +6786,7 @@ function renderVideoEditor() {
     if (parts.length) parts.push(`итог: ${fmtTime(editedOutputDuration())}`);
     editorEls.summary.textContent = parts.length ? parts.join(' · ') : 'Видео без правок';
   }
+  renderVideoEditConfirmation();
 }
 
 function setEditorMode(mode) {
@@ -7105,7 +7152,7 @@ function undoVideoEdit() {
   toast('Монтаж восстановлен', 's');
 }
 
-function saveVideoEdit({ skipUndo = false } = {}) {
+function saveVideoEdit({ skipUndo = false, preserveConfirmation = false } = {}) {
   if (!skipUndo) clearResetConfirmation();
   if (!skipUndo && lastCommittedVideoEditState) {
     const currentBeforeNormalize = cloneVideoEditState(videoEdit);
@@ -7116,6 +7163,11 @@ function saveVideoEdit({ skipUndo = false } = {}) {
     }
   }
   videoEdit = normalizedVideoEdit();
+  videoEdit.revision = Math.max(0, Number(videoEdit.revision || 0)) + 1;
+  if (!preserveConfirmation) {
+    videoEdit.confirmation = { status: 'pending', confirmedRevision: null, confirmedAt: null };
+  }
+  videoEdit.projectV3 = migrateVideoEditToProjectV3(videoEdit, videoDuration());
   saveModeratorVideoEditBackup();
   rememberCommittedVideoEdit();
   renderVideoEditor();
@@ -7754,6 +7806,110 @@ function toggleFreezeAt(time) {
   previewFreezeForDrawing(freeze.id);
   toast('Стоп-кадр +2 сек добавлен — можно рисовать по кадру', 's');
 }
+
+function videoEditConfirmationState() {
+  const revision = Math.max(0, Number(videoEdit.revision || 0));
+  const confirmation = videoEdit.confirmation || {};
+  return confirmation.status === 'confirmed' && Number(confirmation.confirmedRevision) === revision
+    ? 'confirmed'
+    : 'pending';
+}
+
+function renderVideoEditConfirmation() {
+  if (!editorEls.confirmation) return;
+  const confirmed = videoEditConfirmationState() === 'confirmed';
+  editorEls.confirmation.dataset.state = confirmed ? 'confirmed' : 'pending';
+  if (editorEls.confirmationTitle) editorEls.confirmationTitle.textContent = confirmed
+    ? 'Монтаж подтверждён'
+    : 'Есть неподтверждённые изменения';
+  if (editorEls.confirmationDetail) editorEls.confirmationDetail.textContent = confirmed
+    ? `Зафиксирована версия ${Math.max(0, Number(videoEdit.revision || 0))}. Новые правки потребуют повторного подтверждения.`
+    : 'Проверь результат и подтверди монтаж перед отправкой.';
+  if (editorEls.confirm) editorEls.confirm.textContent = confirmed ? 'Проверить ещё раз' : 'Подтвердить монтаж';
+  if (editorEls.commandbarState) editorEls.commandbarState.textContent = confirmed
+    ? `Версия ${Math.max(0, Number(videoEdit.revision || 0))} подтверждена`
+    : 'Есть неподтверждённые изменения';
+}
+
+function videoEditConfirmationReport() {
+  const duration = editedOutputDuration();
+  const clips = Math.max(1, (videoEdit.splits || []).length + 1);
+  const effects = (videoEdit.freezeFrames || []).length +
+    (videoEdit.zoomKeyframes || []).length + (videoEdit.footageOverlays || []).length;
+  const warnings = [];
+  if (!videoUrl) warnings.push('Исходное видео пока недоступно.');
+  if (videoEdit.audio?.muted) warnings.push('Звук видео выключен.');
+  if ((videoEdit.footageOverlays || []).some(item => !item.url)) warnings.push('Есть футаж без доступного файла.');
+  if (timelineDrag || footageStageDrag || freezeDrawingPointer) warnings.push('Заверши текущее действие на монтажном столе.');
+  return { duration, clips, effects, warnings };
+}
+
+function closeVideoEditConfirmation() {
+  if (!editorEls.confirmModal) return;
+  editorEls.confirmModal.hidden = true;
+  document.body.classList.remove('editor-confirm-open');
+  videoEditConfirmationReturnFocus?.focus?.();
+  videoEditConfirmationReturnFocus = null;
+}
+
+function openVideoEditConfirmation() {
+  if (!editorEls.confirmModal) return;
+  stopOutputPlayback({ keepPreview: true });
+  clearFreezeHold();
+  const report = videoEditConfirmationReport();
+  videoEditConfirmationReturnFocus = document.activeElement;
+  if (editorEls.confirmFacts) editorEls.confirmFacts.innerHTML = `
+    <div class="editor-confirm-fact"><b>${fmtTime(report.duration)}</b><span>итоговая длительность</span></div>
+    <div class="editor-confirm-fact"><b>${report.clips}</b><span>фрагментов видео</span></div>
+    <div class="editor-confirm-fact"><b>${report.effects}</b><span>элементов монтажа</span></div>`;
+  if (editorEls.confirmChecks) editorEls.confirmChecks.innerHTML = [
+    '<div class="editor-confirm-check">Черновик монтажа сохранён локально.</div>',
+    '<div class="editor-confirm-check">Текущая ревизия будет зафиксирована для отправки.</div>',
+    ...report.warnings.map(text => `<div class="editor-confirm-check warning">${esc(text)}</div>`),
+  ].join('');
+  editorEls.confirmCommit.disabled = report.warnings.some(text => text.includes('Заверши текущее действие'));
+  editorEls.confirmModal.hidden = false;
+  document.body.classList.add('editor-confirm-open');
+  requestAnimationFrame(() => editorEls.confirmCommit?.focus());
+}
+
+function confirmVideoEdit() {
+  const report = videoEditConfirmationReport();
+  if (report.warnings.some(text => text.includes('Заверши текущее действие'))) {
+    toast('Сначала заверши текущее действие на таймлайне', 'w');
+    return;
+  }
+  videoEdit = normalizedVideoEdit();
+  videoEdit.confirmation = {
+    status: 'confirmed',
+    confirmedRevision: Math.max(0, Number(videoEdit.revision || 0)),
+    confirmedAt: Date.now(),
+  };
+  videoEdit.projectV3 = migrateVideoEditToProjectV3(videoEdit, videoDuration());
+  saveModeratorVideoEditBackup();
+  rememberCommittedVideoEdit();
+  renderVideoEditor();
+  _saveDraft();
+  closeVideoEditConfirmation();
+  toast('Монтаж подтверждён', 's');
+}
+
+editorEls.confirm?.addEventListener('click', openVideoEditConfirmation);
+editorEls.confirmClose?.addEventListener('click', closeVideoEditConfirmation);
+editorEls.confirmBack?.addEventListener('click', closeVideoEditConfirmation);
+editorEls.confirmCommit?.addEventListener('click', confirmVideoEdit);
+editorEls.confirmModal?.addEventListener('click', event => {
+  if (event.target === editorEls.confirmModal) closeVideoEditConfirmation();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && editorEls.confirmModal && !editorEls.confirmModal.hidden) {
+    event.preventDefault();
+    closeVideoEditConfirmation();
+  } else if (event.key === 'Escape' && editorEls.playerWrap?.classList.contains('video-editor-fullscreen')) {
+    event.preventDefault();
+    setVideoEditorFullscreen(false);
+  }
+});
 function deleteSelectedEditorItem() {
   if (!selectedEditorItem) { toast('Сначала выбери блок на таймлайне', 'i'); return; }
   if (selectedEditorItem.type === 'effectTrack') {
@@ -9893,6 +10049,10 @@ function hasDraftContent(draft) {
       draft.defenseSite || draft.defenseZoomArea || draft.defenseAbilities?.length ||
       draft.screenshots?.length || draft.videoEdit?.splits?.length ||
       draft.videoEdit?.freezeFrames?.length || draft.videoEdit?.zoomKeyframes?.length ||
+      draft.videoEdit?.footageOverlays?.length || Number(draft.videoEdit?.effectTracks || 1) > 1 ||
+      draft.videoEdit?.audio?.muted || Number(draft.videoEdit?.audio?.volume ?? 1) !== 1 ||
+      draft.videoEdit?.chromaKey?.enabled || Number(draft.videoEdit?.trimStart || 0) > 0 ||
+      Number(draft.videoEdit?.trimEnd || 0) > 0 ||
       draft.resubmissionSourceId)
   );
 }
@@ -10454,6 +10614,11 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     return;
   }
   if (!currentUser) { toast('Войди в аккаунт', 'e'); return; }
+  if (videoUrl && videoEditConfirmationState() !== 'confirmed') {
+    openVideoEditConfirmation();
+    toast('Подтверди монтаж перед отправкой', 'w');
+    return;
+  }
   await loadCurrentUserProfile(currentUser);
   updateUploadGate();
   if (!canCurrentUserUpload()) {
