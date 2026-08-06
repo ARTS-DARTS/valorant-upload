@@ -6888,7 +6888,11 @@ function renderVideoEditor() {
     const clipHtml = [...clipGroups.values()].map((clip, index) => `
       <span class="timeline-video-clip ${selectedEditorItem?.type === 'clip' && selectedEditorItem.id === clip.id ? 'selected' : ''}"
         data-clip-id="${esc(clip.id)}" style="${timelineBlockStyle(clip.start, clip.end - clip.start, 10)}"
-        title="Клип ${index + 1}: ${fmtTime(clip.sourceStart)}-${fmtTime(clip.sourceEnd)}">${index + 1}</span>`).join('');
+        title="Клип ${index + 1}: ${fmtTime(clip.sourceStart)}-${fmtTime(clip.sourceEnd)}">
+        ${selectedEditorItem?.type === 'clip' && selectedEditorItem.id === clip.id ? '<i class="clip-trim-handle start" data-clip-edge="start" aria-hidden="true"></i>' : ''}
+        <b>${index + 1}</b>
+        ${selectedEditorItem?.type === 'clip' && selectedEditorItem.id === clip.id ? '<i class="clip-trim-handle end" data-clip-edge="end" aria-hidden="true"></i>' : ''}
+      </span>`).join('');
     const splitHtml = Array.isArray(videoEdit.clips) ? '' : videoEdit.splits.map(t => `<span class="timeline-marker split ${selectedEditorItem?.type === 'split' && Math.abs(selectedEditorItem.at - t) < 0.11 ? 'selected' : ''}" data-split-at="${t}" title="Разрез ${fmtTime(t)}" style="left:${pct(sourceToOutputTime(t))}%"></span>`).join('');
     const freezeHtml = videoEdit.freezeFrames.map(f => {
       const freezeSegment = buildTimelineSegments().find(segment => segment.type === 'freeze' && segment.id === f.id);
@@ -7439,7 +7443,18 @@ editorEls.shell?.addEventListener('pointerdown', event => {
   }
   const clipBlock = event.target.closest('[data-clip-id]');
   if (clipBlock) {
-    selectedEditorItem = { type:'clip', id:clipBlock.dataset.clipId || '' };
+    const id = clipBlock.dataset.clipId || '';
+    const edge = event.target.closest('[data-clip-edge]')?.dataset.clipEdge || '';
+    const clip = (videoEdit.clips || []).find(item => item.id === id);
+    selectedEditorItem = { type:'clip', id };
+    if (edge && clip) {
+      timelineDrag = {
+        kind:'clip-resize', edge, id, moved:false, startX:event.clientX,
+        startSourceStart:Number(clip.sourceStart || 0), startSourceEnd:Number(clip.sourceEnd || 0),
+      };
+      safeSetPointerCapture(editorEls.shell, event.pointerId);
+      editorEls.shell.classList.add('dragging');
+    }
     suppressTimelineClick = true;
     renderVideoEditor();
     event.preventDefault();
@@ -7540,6 +7555,23 @@ function moveTimelinePointer(event) {
       const rawStart = clampTime(rawTime - (timelineDrag.offset || 0));
       freeze.at = clampTime(outputToSourceTime(snapOutputTime(sourceToOutputTime(rawStart))));
     }
+  } else if (timelineDrag.kind === 'clip-resize') {
+    const clip = (videoEdit.clips || []).find(item => item.id === timelineDrag.id);
+    if (clip) {
+      const delta = (event.clientX - timelineDrag.startX) / timelinePixelsPerSecond;
+      const minimum = Math.max(0.05, frameStep());
+      if (timelineDrag.edge === 'start') {
+        clip.sourceStart = Math.max(0, Math.min(
+          snapFrameTime(timelineDrag.startSourceStart + delta),
+          timelineDrag.startSourceEnd - minimum,
+        ));
+      } else {
+        clip.sourceEnd = Math.min(videoDuration(), Math.max(
+          snapFrameTime(timelineDrag.startSourceEnd + delta),
+          timelineDrag.startSourceStart + minimum,
+        ));
+      }
+    }
   } else if (timelineDrag.kind === 'freeze-resize') {
     const freeze = (videoEdit.freezeFrames || []).find(item => item.id === timelineDrag.id);
     if (freeze) {
@@ -7613,6 +7645,7 @@ function moveTimelinePointer(event) {
 function finishTimelinePointer(event) {
   if (!timelineDrag) return;
   const wasTrim = timelineDrag.kind === 'start' || timelineDrag.kind === 'end';
+  const wasClip = timelineDrag.kind === 'clip-resize';
   const wasFreeze = timelineDrag.kind === 'freeze' || timelineDrag.kind === 'freeze-resize';
   const wasZoom = timelineDrag.kind === 'zoom' || timelineDrag.kind === 'zoom-resize';
   const wasFootage = timelineDrag.kind === 'footage' || timelineDrag.kind === 'footage-resize';
@@ -7620,8 +7653,8 @@ function finishTimelinePointer(event) {
   editorEls.shell.classList.remove('dragging');
   const moved = timelineDrag.moved;
   timelineDrag = null;
-  suppressTimelineClick = moved || wasFreeze || wasZoom || wasFootage;
-  if ((wasTrim || wasFreeze || wasZoom || wasFootage) && moved) saveVideoEdit();
+  suppressTimelineClick = moved || wasClip || wasFreeze || wasZoom || wasFootage;
+  if ((wasTrim || wasClip || wasFreeze || wasZoom || wasFootage) && moved) saveVideoEdit();
 }
 function cancelTimelinePointer() {
   timelineDrag = null;

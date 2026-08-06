@@ -131,4 +131,7 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(html, /class="video-editor-shortcuts"/);
   assert.match(app, /function splitVideoClipAtPlayhead\(\)/);
   assert.match(app, /e\.code === 'KeyB'/);
+  assert.match(app, /data-clip-edge="start"/);
+  assert.match(app, /kind:'clip-resize'/);
+  assert.match(app, /timelineDrag\.kind === 'clip-resize'/);
 });
