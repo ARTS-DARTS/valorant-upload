@@ -3,3 +3,11 @@ node_modules/
 firebase-debug.log
 .env*
 !.env.example
+
+# Local visual QA screenshots and preview-server logs
+/payment-*.png
+/payment-*.log
+/preview*.png
+/preview*.log
+/tmp-*.png
+/tmp-offer-review/
