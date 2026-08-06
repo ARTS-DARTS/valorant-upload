@@ -54,8 +54,13 @@ export function createAdminBillingHandler({
       await requireAdmin(store, auth ?? adminAuth(), req);
       const limit = Math.min(Math.max(Number(req.query?.limit) || 40, 1), 100);
       const status = String(req.query?.status || 'all').trim();
+      const mode = String(req.query?.mode || 'live').trim();
+      if (!['live', 'test'].includes(mode)) throw fail(400, 'invalid_mode');
+      const testMode = mode === 'test';
       const cursor = String(req.query?.cursor || '').trim();
-      let ordersQuery = store.collection('billing_orders').orderBy('created_at', 'desc');
+      let ordersQuery = store.collection('billing_orders')
+        .where('test_mode', '==', testMode)
+        .orderBy('created_at', 'desc');
       if (status !== 'all') {
         if (!['pending', 'succeeded', 'failed', 'requires_review', 'reversed'].includes(status)) {
           throw fail(400, 'invalid_status');
@@ -65,6 +70,7 @@ export function createAdminBillingHandler({
         if (!/^\d{1,18}$/.test(cursor)) throw fail(400, 'invalid_cursor');
         const cursorSnap = await store.collection('billing_orders').doc(cursor).get();
         if (!cursorSnap.exists) throw fail(400, 'invalid_cursor');
+        if (cursorSnap.data()?.test_mode !== testMode) throw fail(400, 'invalid_cursor');
         ordersQuery = ordersQuery.startAfter(cursorSnap);
       }
       const scanLimit = status === 'all' ? limit + 1 : 100;
@@ -108,6 +114,7 @@ export function createAdminBillingHandler({
       const liveSuccessful = successfulRecent.filter(order => order.test_mode !== true);
 
       return res.status(200).json({
+        mode,
         overview: {
           live: liveOverviewSnap.exists ? (liveOverviewSnap.data() || {}) : {},
           test: testOverviewSnap.exists ? (testOverviewSnap.data() || {}) : {},

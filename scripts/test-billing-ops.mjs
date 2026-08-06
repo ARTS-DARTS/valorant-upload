@@ -50,6 +50,11 @@ class Query {
   orderBy(field, direction) {
     return new Query(this.db, this.path, { ...this.options, orderBy:field, direction });
   }
+  where(field, operator, value) {
+    if (operator !== '==') throw new Error(`Unsupported operator: ${operator}`);
+    const filters = [...(this.options.filters || []), { field, value }];
+    return new Query(this.db, this.path, { ...this.options, filters });
+  }
   startAfter(snapshot) {
     return new Query(this.db, this.path, { ...this.options, startAfter:snapshot.id });
   }
@@ -60,6 +65,9 @@ class Query {
     let docs = [...this.db.docs.entries()]
       .filter(([key]) => key.startsWith(`${this.path}/`) && !key.slice(this.path.length + 1).includes('/'))
       .map(([key, value]) => new Snap(new Ref(this.db, key), value));
+    for (const filter of this.options.filters || []) {
+      docs = docs.filter(doc => doc.data()?.[filter.field] === filter.value);
+    }
     if (this.options.orderBy) {
       const direction = this.options.direction === 'desc' ? -1 : 1;
       docs.sort((a, b) => {
@@ -369,15 +377,20 @@ test('admin billing paginates bounded orders and diagnoses stuck/review states',
     'users/u1': { name:'Player' },
     'billing_orders/700003': {
       uid:'u1', status:'requires_review', review_reason:'active_plan_conflict',
-      plan_id:'plus', amount_minor:16900, created_at:timestamp('2026-07-30T11:00:00Z'),
+      plan_id:'plus', amount_minor:16900, test_mode:false,
+      created_at:timestamp('2026-07-30T11:00:00Z'),
     },
     'billing_orders/700002': {
-      uid:'u1', status:'pending', plan_id:'plus', amount_minor:16900,
+      uid:'u1', status:'pending', plan_id:'plus', amount_minor:16900, test_mode:false,
       created_at:timestamp('2026-07-30T10:00:00Z'),
     },
     'billing_orders/700001': {
-      uid:'u1', status:'succeeded', plan_id:'plus', amount_minor:16900,
+      uid:'u1', status:'succeeded', plan_id:'plus', amount_minor:16900, test_mode:false,
       created_at:timestamp('2026-07-30T09:00:00Z'),
+    },
+    'billing_orders/700004': {
+      uid:'u1', status:'succeeded', plan_id:'sponsor', amount_minor:34900,
+      test_mode:true, created_at:timestamp('2026-07-30T11:30:00Z'),
     },
     'subscription_stats/overview': { purchases_total:1 },
     'billing_monitoring/robokassa': { result_callbacks_total:2 },
@@ -390,7 +403,7 @@ test('admin billing paginates bounded orders and diagnoses stuck/review states',
   const first = response();
   await handler({
     method:'GET', headers:{ authorization:'Bearer valid-token' },
-    query:{ limit:'2', status:'all' },
+    query:{ limit:'2', status:'all', mode:'live' },
   }, first);
   assert.equal(first.statusCode, 200);
   assert.equal(first.body.orders.length, 2);
@@ -402,10 +415,18 @@ test('admin billing paginates bounded orders and diagnoses stuck/review states',
   const second = response();
   await handler({
     method:'GET', headers:{ authorization:'Bearer valid-token' },
-    query:{ limit:'2', status:'all', cursor:first.body.next_cursor },
+    query:{ limit:'2', status:'all', mode:'live', cursor:first.body.next_cursor },
   }, second);
   assert.deepEqual(second.body.orders.map(order => order.id), ['700001']);
   assert.equal(second.body.next_cursor, null);
+
+  const testPage = response();
+  await handler({
+    method:'GET', headers:{ authorization:'Bearer valid-token' },
+    query:{ limit:'2', status:'all', mode:'test' },
+  }, testPage);
+  assert.deepEqual(testPage.body.orders.map(order => order.id), ['700004']);
+  assert.equal(testPage.body.mode, 'test');
 });
 
 test('account deletion identity is stable and endpoint requires confirmation plus recent sign-in', async () => {
