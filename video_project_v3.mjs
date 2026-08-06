@@ -48,6 +48,7 @@ export function migrateVideoEditToProjectV3(editValue = {}, sourceDuration = 0) 
       id:String(clip?.id || `clip_${index}`),
       sourceStart:clamp(clip?.sourceStart, trimStart, trimEnd),
       sourceEnd:clamp(clip?.sourceEnd, trimStart, trimEnd),
+      timelineStart:Number.isFinite(Number(clip?.timelineStart)) ? Math.max(0, Number(clip.timelineStart)) : null,
     })).filter(clip => clip.sourceEnd - clip.sourceStart >= 0.000001)
     : cuts.slice(0, -1).map((sourceStart, index) => ({
       id:`clip_${ticks(sourceStart)}_${ticks(cuts[index + 1])}`,
@@ -63,6 +64,7 @@ export function migrateVideoEditToProjectV3(editValue = {}, sourceDuration = 0) 
   sourceClips.forEach((sourceClip, index) => {
     const sourceStart = sourceClip.sourceStart;
     const sourceEnd = sourceClip.sourceEnd;
+    timelineCursor = Math.max(timelineCursor, sourceClip.timelineStart ?? timelineCursor);
     clips.push({
       id:sourceClip.id,
       sourceStartUs:ticks(sourceStart),
@@ -108,6 +110,10 @@ export function migrateVideoEditToProjectV3(editValue = {}, sourceDuration = 0) 
     ...(Array.isArray(edit.footageOverlays) ? edit.footageOverlays : []).map((item, index) => layer('footage', item, index)),
   ].sort((a, b) => a.timelineStartUs - b.timelineStartUs || a.track - b.track || a.id.localeCompare(b.id));
 
+  const sequenceDuration = clips.reduce((maximum, clip) => Math.max(
+    maximum,
+    seconds(clip.timelineStartUs) + seconds(clip.sourceEndUs - clip.sourceStartUs),
+  ), timelineCursor);
   return {
     schemaVersion:3,
     timebase:1_000_000,
@@ -115,7 +121,7 @@ export function migrateVideoEditToProjectV3(editValue = {}, sourceDuration = 0) 
     source:{ durationUs:ticks(duration), width:1920, height:1080 },
     sequence:{
       clips,
-      durationUs:ticks(timelineCursor),
+      durationUs:ticks(sequenceDuration),
     },
     tracks:{ count:Math.max(1, Math.floor(finite(edit.effectTracks, 1))), layers },
     audio:{ muted:!!edit.audio?.muted, volume:clamp(edit.audio?.volume ?? 1, 0, 2) },

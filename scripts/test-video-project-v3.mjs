@@ -45,3 +45,16 @@ test('freeze frames extend project duration and shift following clips', () => {
   assert.equal(project.sequence.clips[1].timelineStartUs, 3_000_000);
   assert.equal(project.tracks.layers.find(item => item.kind === 'freeze').timelineStartUs, 3_000_000);
 });
+
+test('migration preserves freely positioned clips and sequence duration', () => {
+  const project = migrateVideoEditToProjectV3({
+    trimStart:0,
+    trimEnd:10,
+    clips:[
+      { id:'first', sourceStart:0, sourceEnd:5, timelineStart:0 },
+      { id:'second', sourceStart:5, sourceEnd:10, timelineStart:8 },
+    ],
+  }, 10);
+  assert.deepEqual(project.sequence.clips.map(clip => clip.timelineStartUs), [0, 8_000_000]);
+  assert.equal(projectV3DurationSeconds(project), 13);
+});

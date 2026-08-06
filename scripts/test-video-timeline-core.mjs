@@ -110,6 +110,26 @@ test('explicit clips define playback order and close gaps after ripple deletion'
   assert.equal(videoTimelineOutputDuration({ ...reordered, clips:[reordered.clips[0]] }, 10), 5);
 });
 
+test('freely positioned clips create a real timeline gap', () => {
+  const positioned = {
+    trimStart:0,
+    trimEnd:10,
+    clips:[
+      { id:'first', sourceStart:0, sourceEnd:5, timelineStart:0 },
+      { id:'second', sourceStart:5, sourceEnd:10, timelineStart:8 },
+    ],
+  };
+  const segments = buildVideoTimelineSegments(positioned, 10);
+  assert.deepEqual(segments.map(item => [item.type, item.outputStart, item.duration]), [
+    ['video', 0, 5],
+    ['gap', 5, 3],
+    ['video', 8, 5],
+  ]);
+  assert.equal(videoTimelineOutputDuration(positioned, 10), 13);
+  assert.equal(videoTimelineSegmentAt(positioned, 10, 6).type, 'gap');
+  assert.equal(outputTimeToSourceTime(positioned, 10, 6), 5);
+});
+
 test('upload editor exposes a selection-aware inspector for real timeline items', async () => {
   const { readFile } = await import('node:fs/promises');
   const [app, html, css] = await Promise.all([
@@ -145,6 +165,8 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /timelineDrag\.kind === 'clip-resize'/);
   assert.match(app, /kind:'clip-reorder'/);
   assert.match(app, /timelineDrag\.kind === 'clip-reorder'/);
+  assert.match(app, /draggedClip\.timelineStart = nextTimelineStart/);
+  assert.match(app, /classList\.toggle\('timeline-gap', segment\.type === 'gap'\)/);
   assert.match(html, /id="edit-redo"/);
   assert.match(app, /const VIDEO_EDIT_REDO_KEY/);
   assert.match(app, /function redoVideoEdit\(\)/);
@@ -157,8 +179,8 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('effect_outside'/);
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
-  assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v4/);
-  assert.match(html, /app\.js\?v=2026-08-06-vlineups-cut-v4/);
+  assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v5/);
+  assert.match(html, /app\.js\?v=2026-08-06-vlineups-cut-v5/);
   assert.match(app, /editorEls\.editor\.dataset\.mode = activeEditorMode/);
   assert.match(app, /editorEls\.editor\.dataset\.selection = selectedEditorItem\?\.type \|\| 'none'/);
   assert.match(css, /grid-template-columns:82px minmax\(0,1fr\) 340px/);

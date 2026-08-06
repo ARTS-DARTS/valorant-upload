@@ -5959,6 +5959,7 @@ function normalizedVideoEdit() {
       id:String(clip?.id || `clip_${index}_${Math.round(Number(clip?.sourceStart || 0) * 1000)}`),
       sourceStart:clampTime(clip?.sourceStart),
       sourceEnd:clampTime(clip?.sourceEnd),
+      ...(Number.isFinite(Number(clip?.timelineStart)) ? { timelineStart:Math.max(0, Number(clip.timelineStart)) } : {}),
     })).filter(clip => clip.sourceEnd - clip.sourceStart >= 0.001)
     : null;
   const storedTrackCount = Math.max(1, Math.min(8, Number(videoEdit.effectTracks || 1)));
@@ -6582,6 +6583,7 @@ function stopOutputPlayback({ keepPreview = true } = {}) {
   outputPlaybackStartTime = 0;
   outputPlaybackTime = null;
   if (keepPreview && currentOut !== null) timelinePreviewOutputTime = currentOut;
+  if (!keepPreview) editorEls.stage?.classList.remove('timeline-gap');
   setFreezeOverlay('');
   if (!vidPlayer.paused) vidPlayer.pause();
   if (vidPlayBtn) vidPlayBtn.textContent = '▶';
@@ -6594,7 +6596,11 @@ function showOutputFrame(outputTime) {
   const segment = segmentForOutputTime(out);
   if (!segment) return;
   outputPlaybackTime = out;
-  if (segment.type === 'freeze') {
+  editorEls.stage?.classList.toggle('timeline-gap', segment.type === 'gap');
+  if (segment.type === 'gap') {
+    if (!vidPlayer.paused) vidPlayer.pause();
+    setFreezeOverlay('');
+  } else if (segment.type === 'freeze') {
     if (!vidPlayer.paused) vidPlayer.pause();
     if (Math.abs((vidPlayer.currentTime || 0) - segment.sourceAt) > 0.03) {
       vidPlayer.currentTime = segment.sourceAt;
@@ -7521,7 +7527,14 @@ editorEls.shell?.addEventListener('pointerdown', event => {
       safeSetPointerCapture(editorEls.shell, event.pointerId);
       editorEls.shell.classList.add('dragging');
     } else if (clip) {
-      timelineDrag = { kind:'clip-reorder', id, moved:false, startX:event.clientX };
+      const clipSegments = buildTimelineSegments().filter(item => item.clipId === id);
+      const clipOutputStart = clipSegments.length
+        ? Math.min(...clipSegments.map(item => item.outputStart))
+        : Number(clip.timelineStart || 0);
+      timelineDrag = {
+        kind:'clip-reorder', id, moved:false, changed:false, startX:event.clientX,
+        offset:outputTimeFromTimelineEvent(event) - clipOutputStart,
+      };
       safeSetPointerCapture(editorEls.shell, event.pointerId);
       editorEls.shell.classList.add('dragging');
     }
@@ -7655,8 +7668,14 @@ function moveTimelinePointer(event) {
   } else if (timelineDrag.kind === 'clip-reorder') {
     const clips = Array.isArray(videoEdit.clips) ? [...videoEdit.clips] : [];
     const currentIndex = clips.findIndex(item => item.id === timelineDrag.id);
-    if (currentIndex >= 0 && clips.length > 1) {
+    if (currentIndex >= 0) {
       const pointerOutput = Math.max(0, outputTimeFromTimelineEvent(event));
+      const draggedClip = clips[currentIndex];
+      const nextTimelineStart = snapOutputTime(Math.max(0, pointerOutput - Number(timelineDrag.offset || 0)));
+      if (Math.abs(Number(draggedClip.timelineStart || 0) - nextTimelineStart) > 0.001) {
+        draggedClip.timelineStart = nextTimelineStart;
+        timelineDrag.changed = true;
+      }
       const groups = new Map();
       buildTimelineSegments().forEach(segment => {
         if (!segment.clipId) return;
@@ -7671,7 +7690,7 @@ function moveTimelinePointer(event) {
         const group = groups.get(withoutDragged[index].id);
         if (group && pointerOutput < (group.start + group.end) / 2) { targetIndex = index; break; }
       }
-      withoutDragged.splice(targetIndex, 0, clips[currentIndex]);
+      withoutDragged.splice(targetIndex, 0, draggedClip);
       if (withoutDragged.some((item, index) => item.id !== clips[index]?.id)) {
         videoEdit.clips = withoutDragged;
         timelineDrag.changed = true;
@@ -8115,11 +8134,17 @@ function ensureExplicitVideoClips() {
   const end = clampTime(videoEdit.trimEnd || videoDuration());
   const boundaries = [...new Set([start, ...(videoEdit.splits || []), end]
     .map(clampTime).filter(value => value >= start && value <= end))].sort((a, b) => a - b);
-  videoEdit.clips = boundaries.slice(0, -1).map((sourceStart, index) => ({
-    id:`clip_${Math.round(sourceStart * 1000)}_${Math.round(boundaries[index + 1] * 1000)}`,
-    sourceStart,
-    sourceEnd:boundaries[index + 1],
-  })).filter(clip => clip.sourceEnd - clip.sourceStart >= 0.001);
+  let timelineStart = 0;
+  videoEdit.clips = boundaries.slice(0, -1).map((sourceStart, index) => {
+    const clip = {
+      id:`clip_${Math.round(sourceStart * 1000)}_${Math.round(boundaries[index + 1] * 1000)}`,
+      sourceStart,
+      sourceEnd:boundaries[index + 1],
+      timelineStart,
+    };
+    timelineStart += clip.sourceEnd - clip.sourceStart;
+    return clip;
+  }).filter(clip => clip.sourceEnd - clip.sourceStart >= 0.001);
   return videoEdit.clips;
 }
 
@@ -8129,9 +8154,10 @@ function splitVideoClipAt(time = vidPlayer.currentTime) {
   const clipIndex = currentClips.findIndex(clip => at > Number(clip.sourceStart) + 0.05 && at < Number(clip.sourceEnd) - 0.05);
   if (clipIndex < 0) { toast('Поставь курсор внутри клипа', 'w'); return; }
   const clip = currentClips[clipIndex];
+  const clipTimelineStart = Number(clip.timelineStart || 0);
   const next = [
-    { ...clip, id:`clip_${Math.round(Number(clip.sourceStart) * 1000)}_${Math.round(at * 1000)}`, sourceEnd:at },
-    { ...clip, id:`clip_${Math.round(at * 1000)}_${Math.round(Number(clip.sourceEnd) * 1000)}`, sourceStart:at },
+    { ...clip, id:`clip_${Math.round(Number(clip.sourceStart) * 1000)}_${Math.round(at * 1000)}`, sourceEnd:at, timelineStart:clipTimelineStart },
+    { ...clip, id:`clip_${Math.round(at * 1000)}_${Math.round(Number(clip.sourceEnd) * 1000)}`, sourceStart:at, timelineStart:clipTimelineStart + at - Number(clip.sourceStart) },
   ];
   videoEdit.clips = [...currentClips.slice(0, clipIndex), ...next, ...currentClips.slice(clipIndex + 1)];
   videoEdit.splits = addUniqueTime(videoEdit.splits || [], at);

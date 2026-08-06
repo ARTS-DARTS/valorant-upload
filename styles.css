@@ -1350,3 +1350,18 @@ body.category-form-guide-open{overflow:hidden}
   .video-editor[data-mode="zoom"] .zoom-panel.open,
   .video-editor[data-mode="effects"] .effects-panel.open { animation:none; }
 }
+
+.vid-stage.timeline-gap::after {
+  content:"Пустой участок";
+  position:absolute;
+  inset:0;
+  z-index:18;
+  display:grid;
+  place-items:center;
+  color:#687c91;
+  background:#000;
+  font:800 11px ui-monospace,SFMono-Regular,Menlo,monospace;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  pointer-events:none;
+}
