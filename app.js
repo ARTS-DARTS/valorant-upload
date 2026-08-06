@@ -5702,6 +5702,7 @@ const editorEls = {
   inspectorTitle: document.getElementById('editor-inspector-title'),
   inspectorBadge: document.getElementById('editor-inspector-badge'),
   inspectorSelection: document.getElementById('editor-inspector-selection'),
+  inspectorProperties: document.getElementById('editor-inspector-properties'),
   footageLibrary: document.getElementById('footage-library'),
   undo: document.getElementById('edit-undo'),
   reset: document.getElementById('edit-reset'),
@@ -6710,6 +6711,7 @@ function renderEditorInspectorSelection() {
   let badge = 'Видео';
   let name = 'Ничего не выбрано';
   let detail = 'Выбери клип или эффект на таймлайне, чтобы изменить его параметры.';
+  let properties = '';
   const selected = selectedEditorItem;
   if (selected?.type === 'clip') {
     const clips = videoEdit.clips || [];
@@ -6720,6 +6722,10 @@ function renderEditorInspectorSelection() {
       badge = 'Клип';
       name = `${fmtTime(clip.sourceStart)} — ${fmtTime(clip.sourceEnd)}`;
       detail = `Длительность ${fmtTime(clip.sourceEnd - clip.sourceStart)} · можно переставить или удалить со сдвигом.`;
+      properties = `
+        <label class="inspector-property">Начало в исходнике<input type="number" step="0.1" min="0" data-inspector-field="sourceStart" value="${Number(clip.sourceStart).toFixed(1)}"></label>
+        <label class="inspector-property">Конец в исходнике<input type="number" step="0.1" min="0" data-inspector-field="sourceEnd" value="${Number(clip.sourceEnd).toFixed(1)}"></label>
+        <div class="inspector-properties-actions"><button class="btn-sm" type="button" data-inspector-action="seek">Показать клип</button></div>`;
     }
   } else if (selected?.type === 'freeze') {
     const freeze = (videoEdit.freezeFrames || []).find(item => item.id === selected.id);
@@ -6728,6 +6734,9 @@ function renderEditorInspectorSelection() {
       badge = 'Кадр';
       name = `На ${fmtTime(freeze.at)} · ${fmtTime(freeze.duration)}`;
       detail = freeze.annotations?.length ? `Рисунок сохранён · штрихов: ${freeze.annotations.length}` : 'Можно изменить длительность или нарисовать подсказку поверх кадра.';
+      properties = `
+        <label class="inspector-property">Длительность<input type="number" step="0.1" min="0.2" max="10" data-inspector-field="duration" value="${Number(freeze.duration).toFixed(1)}"></label>
+        <div class="inspector-properties-actions"><button class="btn-sm" type="button" data-inspector-action="seek">Показать кадр</button></div>`;
     }
   } else if (selected?.type === 'zoom') {
     const zoom = (videoEdit.zoomKeyframes || []).find(item => item.id === selected.id);
@@ -6736,6 +6745,10 @@ function renderEditorInspectorSelection() {
       badge = 'Zoom';
       name = `${Number(zoom.scaleX ?? zoom.scale ?? 1.4).toFixed(2)}× · ${fmtTime(effectOutputStart(zoom))}`;
       detail = `Длительность ${fmtTime(Math.max(0.1, Number(zoom.duration || 1)))} · дорожка ${Number(zoom.track || 0) + 1}.`;
+      properties = `
+        <label class="inspector-property">Начало на таймлайне<input type="number" step="0.1" min="0" data-inspector-field="outputAt" value="${effectOutputStart(zoom).toFixed(1)}"></label>
+        <label class="inspector-property">Длительность<input type="number" step="0.1" min="0.1" max="60" data-inspector-field="duration" value="${Number(zoom.duration || 1).toFixed(1)}"></label>
+        <div class="inspector-properties-actions"><button class="btn-sm" type="button" data-inspector-action="seek">Показать эффект</button></div>`;
     }
   } else if (selected?.type === 'footage') {
     const footage = (videoEdit.footageOverlays || []).find(item => item.id === selected.id);
@@ -6744,6 +6757,10 @@ function renderEditorInspectorSelection() {
       badge = footage.chroma?.enabled ? 'Chroma' : 'Overlay';
       name = footage.name || 'Видео-наложение';
       detail = `${fmtTime(effectOutputStart(footage))} · ${fmtTime(Math.max(0.1, Number(footage.duration || 2)))} · дорожка ${Number(footage.track || 0) + 1}.`;
+      properties = `
+        <label class="inspector-property">Начало на таймлайне<input type="number" step="0.1" min="0" data-inspector-field="outputAt" value="${effectOutputStart(footage).toFixed(1)}"></label>
+        <label class="inspector-property">Длительность<input type="number" step="0.1" min="0.2" max="60" data-inspector-field="duration" value="${Number(footage.duration || 2).toFixed(1)}"></label>
+        <div class="inspector-properties-actions"><button class="btn-sm" type="button" data-inspector-action="seek">Показать футаж</button></div>`;
     }
   } else if (selected?.type === 'effectTrack') {
     title = `Дорожка ${Number(selected.track || 0) + 1}`;
@@ -6761,7 +6778,66 @@ function renderEditorInspectorSelection() {
   if (editorEls.inspectorSelection) {
     editorEls.inspectorSelection.innerHTML = `<strong>${esc(name)}</strong><span>${esc(detail)}</span>`;
   }
+  if (editorEls.inspectorProperties) {
+    editorEls.inspectorProperties.hidden = !properties;
+    editorEls.inspectorProperties.innerHTML = properties;
+  }
 }
+
+function selectedInspectorTarget() {
+  const selected = selectedEditorItem;
+  if (!selected) return null;
+  if (selected.type === 'clip') return (videoEdit.clips || []).find(item => item.id === selected.id) || null;
+  if (selected.type === 'freeze') return (videoEdit.freezeFrames || []).find(item => item.id === selected.id) || null;
+  if (selected.type === 'zoom') return (videoEdit.zoomKeyframes || []).find(item => item.id === selected.id) || null;
+  if (selected.type === 'footage') return (videoEdit.footageOverlays || []).find(item => item.id === selected.id) || null;
+  return null;
+}
+
+function selectedInspectorOutputStart() {
+  const target = selectedInspectorTarget();
+  if (!target) return 0;
+  if (selectedEditorItem.type === 'clip') {
+    return buildTimelineSegments().find(segment => segment.clipId === target.id)?.outputStart || 0;
+  }
+  if (selectedEditorItem.type === 'freeze') {
+    return buildTimelineSegments().find(segment => segment.type === 'freeze' && segment.id === target.id)?.outputStart
+      ?? sourceToOutputTime(target.at);
+  }
+  return effectOutputStart(target);
+}
+
+editorEls.inspectorProperties?.addEventListener('change', event => {
+  const input = event.target.closest('[data-inspector-field]');
+  const target = selectedInspectorTarget();
+  if (!input || !target) return;
+  const value = Number(input.value);
+  if (!Number.isFinite(value)) { renderVideoEditor(); return; }
+  const field = input.dataset.inspectorField;
+  pushVideoEditUndo();
+  if (selectedEditorItem.type === 'clip') {
+    const duration = videoDuration();
+    if (field === 'sourceStart') target.sourceStart = Math.max(0, Math.min(value, Number(target.sourceEnd) - 0.05, duration));
+    if (field === 'sourceEnd') target.sourceEnd = Math.max(Number(target.sourceStart) + 0.05, Math.min(value, duration));
+  } else if (field === 'duration') {
+    const minimum = selectedEditorItem.type === 'freeze' || selectedEditorItem.type === 'footage' ? 0.2 : 0.1;
+    target.duration = Math.max(minimum, Math.min(60, value));
+  } else if (field === 'outputAt' && (selectedEditorItem.type === 'zoom' || selectedEditorItem.type === 'footage')) {
+    target.outputAt = Math.max(0, Math.min(editedOutputDuration(), value));
+  }
+  saveVideoEdit({ skipUndo:true });
+});
+
+editorEls.inspectorProperties?.addEventListener('click', event => {
+  const action = event.target.closest('[data-inspector-action]')?.dataset.inspectorAction;
+  if (action !== 'seek' || !selectedInspectorTarget()) return;
+  stopOutputPlayback({ keepPreview:false });
+  const outputAt = selectedInspectorOutputStart();
+  timelinePreviewOutputTime = outputAt;
+  showOutputFrame(outputAt);
+  keepTimelinePlayheadVisible(timelineX(outputAt));
+  renderVideoEditor();
+});
 
 function renderVideoEditor() {
   const duration = videoDuration();

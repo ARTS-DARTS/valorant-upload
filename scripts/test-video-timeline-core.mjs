@@ -117,6 +117,7 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   ]);
   assert.match(html, /id="editor-inspector-title"/);
   assert.match(html, /id="editor-inspector-selection"/);
+  assert.match(html, /id="editor-inspector-properties"/);
   assert.match(html, /id="edit-clip-left"/);
   assert.match(html, /id="edit-clip-right"/);
   assert.match(app, /function renderEditorInspectorSelection\(\)/);
@@ -124,4 +125,7 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /selected\?\.type === 'freeze'/);
   assert.match(app, /selected\?\.type === 'zoom'/);
   assert.match(app, /selected\?\.type === 'footage'/);
+  assert.match(app, /function selectedInspectorTarget\(\)/);
+  assert.match(app, /data-inspector-field/);
+  assert.match(app, /saveVideoEdit\(\{ skipUndo:true \}\)/);
 });
