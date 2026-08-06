@@ -5626,9 +5626,11 @@ const EFFECT_TRACK_HEIGHT = 36;
 const MIN_TRIM_DURATION_SECONDS = 0.2;
 const MIN_TIMELINE_CLIP_WIDTH_PX = 24;
 const VIDEO_EDIT_UNDO_KEY = 'vlineups_video_edit_undo_v2';
+const VIDEO_EDIT_REDO_KEY = 'vlineups_video_edit_redo_v1';
 const MODERATOR_VIDEO_EDIT_BACKUP_KEY = 'vlineups_moderator_video_edit_backup_v1';
 const VIDEO_EDIT_UNDO_LIMIT = 12;
 let videoEditUndoStack = [];
+let videoEditRedoStack = [];
 let lastCommittedVideoEditState = null;
 let resetConfirmTimer = null;
 let videoEditorHotkeysActive = false;
@@ -5705,6 +5707,7 @@ const editorEls = {
   inspectorProperties: document.getElementById('editor-inspector-properties'),
   footageLibrary: document.getElementById('footage-library'),
   undo: document.getElementById('edit-undo'),
+  redo: document.getElementById('edit-redo'),
   reset: document.getElementById('edit-reset'),
   confirmation: document.getElementById('editor-confirmation'),
   confirmationTitle: document.getElementById('editor-confirmation-title'),
@@ -7294,9 +7297,11 @@ function serializedVideoEditState(edit) {
   catch (_) { return ''; }
 }
 
-function writeVideoEditUndoStack() {
+function writeVideoEditHistory() {
   try { localStorage.setItem(VIDEO_EDIT_UNDO_KEY, JSON.stringify(videoEditUndoStack)); } catch (_) {}
+  try { localStorage.setItem(VIDEO_EDIT_REDO_KEY, JSON.stringify(videoEditRedoStack)); } catch (_) {}
   if (editorEls.undo) editorEls.undo.disabled = !videoEditUndoStack.length;
+  if (editorEls.redo) editorEls.redo.disabled = !videoEditRedoStack.length;
 }
 
 function loadVideoEditUndoStack() {
@@ -7306,13 +7311,20 @@ function loadVideoEditUndoStack() {
   } catch (_) {
     videoEditUndoStack = [];
   }
-  writeVideoEditUndoStack();
+  try {
+    const parsed = JSON.parse(localStorage.getItem(VIDEO_EDIT_REDO_KEY) || '[]');
+    videoEditRedoStack = Array.isArray(parsed) ? parsed.slice(-VIDEO_EDIT_UNDO_LIMIT) : [];
+  } catch (_) {
+    videoEditRedoStack = [];
+  }
+  writeVideoEditHistory();
 }
 
 function pushVideoEditUndo() {
   videoEditUndoStack.push(cloneVideoEditState(normalizedVideoEdit()));
   if (videoEditUndoStack.length > VIDEO_EDIT_UNDO_LIMIT) videoEditUndoStack.shift();
-  writeVideoEditUndoStack();
+  videoEditRedoStack = [];
+  writeVideoEditHistory();
 }
 
 function rememberCommittedVideoEdit() {
@@ -7322,14 +7334,31 @@ function rememberCommittedVideoEdit() {
 function undoVideoEdit() {
   const previous = videoEditUndoStack.pop();
   if (!previous) { toast('Нечего отменять', 'i'); return; }
+  videoEditRedoStack.push(cloneVideoEditState(normalizedVideoEdit()));
+  if (videoEditRedoStack.length > VIDEO_EDIT_UNDO_LIMIT) videoEditRedoStack.shift();
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   timelinePreviewOutputTime = null;
   selectedEditorItem = null;
   videoEdit = { ...createDefaultVideoEdit(), ...previous };
-  writeVideoEditUndoStack();
+  writeVideoEditHistory();
   saveVideoEdit({ skipUndo: true });
   toast('Монтаж восстановлен', 's');
+}
+
+function redoVideoEdit() {
+  const next = videoEditRedoStack.pop();
+  if (!next) { toast('Нечего возвращать', 'i'); return; }
+  videoEditUndoStack.push(cloneVideoEditState(normalizedVideoEdit()));
+  if (videoEditUndoStack.length > VIDEO_EDIT_UNDO_LIMIT) videoEditUndoStack.shift();
+  stopOutputPlayback({ keepPreview:false });
+  clearFreezeHold();
+  timelinePreviewOutputTime = null;
+  selectedEditorItem = null;
+  videoEdit = { ...createDefaultVideoEdit(), ...next };
+  writeVideoEditHistory();
+  saveVideoEdit({ skipUndo:true });
+  toast('Отменённое изменение возвращено', 's');
 }
 
 function saveVideoEdit({ skipUndo = false, preserveConfirmation = false } = {}) {
@@ -7339,7 +7368,8 @@ function saveVideoEdit({ skipUndo = false, preserveConfirmation = false } = {}) 
     if (serializedVideoEditState(currentBeforeNormalize) !== serializedVideoEditState(lastCommittedVideoEditState)) {
       videoEditUndoStack.push(cloneVideoEditState(lastCommittedVideoEditState));
       if (videoEditUndoStack.length > VIDEO_EDIT_UNDO_LIMIT) videoEditUndoStack.shift();
-      writeVideoEditUndoStack();
+      videoEditRedoStack = [];
+      writeVideoEditHistory();
     }
   }
   videoEdit = normalizedVideoEdit();
@@ -8524,6 +8554,7 @@ function addZoomAt(time, { silent = false } = {}) {
   saveVideoEdit();
 }
 editorEls.undo?.addEventListener('click', undoVideoEdit);
+editorEls.redo?.addEventListener('click', redoVideoEdit);
 document.getElementById('edit-reset')?.addEventListener('click', resetVideoEdit);
 
 function isVideoFile(file) {
@@ -8602,7 +8633,8 @@ async function handleVideoFile(file) {
     document.getElementById('vid-player-wrap').style.display = '';
     videoEdit = createDefaultVideoEdit();
     videoEditUndoStack = [];
-    writeVideoEditUndoStack();
+    videoEditRedoStack = [];
+    writeVideoEditHistory();
     rememberCommittedVideoEdit();
     toast('Видео загружено ✅', 's');
     validateForm(); _saveDraft();
@@ -8922,6 +8954,14 @@ document.addEventListener('keydown', e => {
     e.stopPropagation();
     e.stopImmediatePropagation?.();
     splitVideoClipAtPlayhead();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyY' || (e.shiftKey && e.code === 'KeyZ')) &&
+      !isTextTypingTarget(target) && (insideEditor || videoEditorHotkeysActive)) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation?.();
+    redoVideoEdit();
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && (insideEditor || videoEditorHotkeysActive)) {
@@ -11233,7 +11273,8 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   if (!keepVideo) moderatorVideoRemovalRequested = false;
   rememberCommittedVideoEdit();
   videoEditUndoStack = [];
-  writeVideoEditUndoStack();
+  videoEditRedoStack = [];
+  writeVideoEditHistory();
   stopOutputPlayback({ keepPreview: false });
   clearFreezeHold();
   releaseFootagePreviewResources({ releaseCanvas: !keepVideo });
