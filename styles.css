@@ -1196,7 +1196,21 @@ body.category-form-guide-open{overflow:hidden}
 .video-editor .freeze-draw-panel { order:4; margin:0; padding:12px; border:1px solid #26394d; border-radius:10px; background:#07111d; }
 .video-editor .editor-grid { order:5; margin:0; }
 .video-editor .editor-actions { order:6; }
-.video-editor .editor-confirmation { order:7; margin:0; }
+.video-editor .editor-confirmation {
+  order:7;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:12px;
+  margin:0;
+}
+.video-editor .editor-confirmation-copy { width:100%; }
+.video-editor .editor-confirm-button {
+  position:static;
+  inset:auto;
+  width:100%;
+  flex:0 0 auto;
+}
 .video-editor[data-selection="zoom"] .inspector-selection,
 .video-editor[data-selection="footage"] .inspector-selection,
 .video-editor[data-selection="freeze"] .inspector-selection,
