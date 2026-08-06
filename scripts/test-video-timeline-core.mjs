@@ -143,4 +143,9 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /e\.shiftKey && e\.code === 'KeyZ'/);
   assert.match(html, /id="timeline-fit"/);
   assert.match(app, /function fitTimelineToViewport\(\)/);
+  assert.match(app, /severity:'error'/);
+  assert.match(app, /error\('invalid_clip'/);
+  assert.match(app, /error\('effect_outside'/);
+  assert.match(app, /error\('orphan_freeze'/);
+  assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
 });

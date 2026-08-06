@@ -8146,15 +8146,53 @@ function renderVideoEditConfirmation() {
 
 function videoEditConfirmationReport() {
   const duration = editedOutputDuration();
-  const clips = Array.isArray(videoEdit.clips) ? videoEdit.clips.length : Math.max(1, (videoEdit.splits || []).length + 1);
+  const sourceDuration = videoDuration();
+  const explicitClips = Array.isArray(videoEdit.clips) ? videoEdit.clips : null;
+  const clips = explicitClips ? explicitClips.length : Math.max(1, (videoEdit.splits || []).length + 1);
   const effects = (videoEdit.freezeFrames || []).length +
     (videoEdit.zoomKeyframes || []).length + (videoEdit.footageOverlays || []).length;
-  const warnings = [];
-  if (!videoUrl) warnings.push('Исходное видео пока недоступно.');
-  if (videoEdit.audio?.muted) warnings.push('Звук видео выключен.');
-  if ((videoEdit.footageOverlays || []).some(item => !item.url)) warnings.push('Есть футаж без доступного файла.');
-  if (timelineDrag || footageStageDrag || freezeDrawingPointer) warnings.push('Заверши текущее действие на монтажном столе.');
-  return { duration, clips, effects, warnings };
+  const issues = [];
+  const error = (code, text) => issues.push({ code, text, severity:'error' });
+  const warning = (code, text) => issues.push({ code, text, severity:'warning' });
+  if (!videoUrl) error('missing_video', 'Исходное видео недоступно. Загрузи его заново.');
+  if (!Number.isFinite(duration) || duration < 0.2) error('empty_timeline', 'На таймлайне не осталось воспроизводимого видео.');
+  if (!clips) error('missing_clips', 'На таймлайне нет ни одного клипа.');
+  if (videoEdit.audio?.muted) warning('muted_audio', 'Звук видео выключен. Проверь, что это сделано намеренно.');
+  if (explicitClips) {
+    const ids = new Set();
+    explicitClips.forEach((clip, index) => {
+      const start = Number(clip?.sourceStart);
+      const end = Number(clip?.sourceEnd);
+      if (!clip?.id || ids.has(clip.id)) error('duplicate_clip', `Клип ${index + 1} имеет повреждённый идентификатор.`);
+      ids.add(clip?.id);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end > sourceDuration || end - start < Math.max(0.05, frameStep())) {
+        error('invalid_clip', `Клип ${index + 1} имеет некорректные границы. Поправь его обрезку.`);
+      }
+    });
+  }
+  const timelineEffects = [
+    ...(videoEdit.zoomKeyframes || []).map(item => ({ ...item, label:'Зум' })),
+    ...(videoEdit.footageOverlays || []).map(item => ({ ...item, label:'Футаж' })),
+  ];
+  timelineEffects.forEach(item => {
+    const start = effectOutputStart(item);
+    const itemDuration = Number(item.duration || 0);
+    if (!Number.isFinite(start) || !Number.isFinite(itemDuration) || itemDuration <= 0 || start >= duration || start + itemDuration > duration + 0.001) {
+      error('effect_outside', `${item.label} выходит за пределы итогового ролика. Перемести или сократи эффект.`);
+    }
+  });
+  if ((videoEdit.footageOverlays || []).some(item => !item.url)) error('missing_footage', 'Есть футаж без доступного файла. Добавь его заново или удали блок.');
+  if (explicitClips) {
+    (videoEdit.freezeFrames || []).forEach(freeze => {
+      const at = Number(freeze.at);
+      const belongsToClip = explicitClips.some((clip, index) => at >= Number(clip.sourceStart) && (
+        at < Number(clip.sourceEnd) || (index === explicitClips.length - 1 && at <= Number(clip.sourceEnd))
+      ));
+      if (!belongsToClip) error('orphan_freeze', 'Стоп-кадр больше не относится ни к одному клипу. Перемести или удали его.');
+    });
+  }
+  if (timelineDrag || footageStageDrag || freezeDrawingPointer) error('active_edit', 'Заверши текущее действие на монтажном столе.');
+  return { duration, clips, effects, issues, blocking:issues.some(item => item.severity === 'error') };
 }
 
 function closeVideoEditConfirmation() {
@@ -8178,9 +8216,9 @@ function openVideoEditConfirmation() {
   if (editorEls.confirmChecks) editorEls.confirmChecks.innerHTML = [
     '<div class="editor-confirm-check">Черновик монтажа сохранён локально.</div>',
     '<div class="editor-confirm-check">Текущая ревизия будет зафиксирована для отправки.</div>',
-    ...report.warnings.map(text => `<div class="editor-confirm-check warning">${esc(text)}</div>`),
+    ...report.issues.map(issue => `<div class="editor-confirm-check ${issue.severity}">${esc(issue.text)}</div>`),
   ].join('');
-  editorEls.confirmCommit.disabled = report.warnings.some(text => text.includes('Заверши текущее действие'));
+  editorEls.confirmCommit.disabled = report.blocking;
   editorEls.confirmModal.hidden = false;
   document.body.classList.add('editor-confirm-open');
   requestAnimationFrame(() => editorEls.confirmCommit?.focus());
@@ -8188,8 +8226,8 @@ function openVideoEditConfirmation() {
 
 function confirmVideoEdit() {
   const report = videoEditConfirmationReport();
-  if (report.warnings.some(text => text.includes('Заверши текущее действие'))) {
-    toast('Сначала заверши текущее действие на таймлайне', 'w');
+  if (report.blocking) {
+    toast(report.issues.find(item => item.severity === 'error')?.text || 'Исправь ошибки монтажа перед подтверждением', 'w');
     return;
   }
   videoEdit = normalizedVideoEdit();

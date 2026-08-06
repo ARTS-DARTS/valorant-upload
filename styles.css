@@ -577,6 +577,8 @@
     .editor-confirm-check { display:flex; gap:9px; align-items:flex-start; padding:9px 10px; border-radius:9px; color:#b7c7d9; background:rgba(255,255,255,.025); font-size:11px; line-height:1.4; }
     .editor-confirm-check::before { content:"✓"; color:#51ddb0; font-weight:900; }
     .editor-confirm-check.warning::before { content:"!"; color:#ffc65c; }
+    .editor-confirm-check.error { color:#ffd5da; border:1px solid rgba(255,70,85,.18); background:rgba(255,70,85,.07); }
+    .editor-confirm-check.error::before { content:"×"; color:#ff6b78; }
     .editor-confirm-modal-actions { display:flex; justify-content:flex-end; gap:9px; }
     @media(max-width:720px){.editor-confirmation{grid-template-columns:1fr}.editor-confirm-button{width:100%}.editor-confirm-modal{align-items:end;padding:10px}.editor-confirm-sheet{padding:25px 18px 18px;border-radius:18px}.editor-confirm-facts{grid-template-columns:repeat(3,minmax(0,1fr))}.editor-confirm-modal-actions{display:grid;grid-template-columns:1fr}.editor-confirm-modal-actions button{width:100%;min-height:44px}}
     .editor-workbench { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; margin-top: 9px; }
