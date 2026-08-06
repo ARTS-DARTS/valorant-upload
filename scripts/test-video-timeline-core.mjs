@@ -181,7 +181,7 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
   assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v7/);
-  assert.match(html, /app\.js\?v=2026-08-06-vlineups-cut-v7/);
+  assert.match(html, /app\.js\?v=2026-08-06-video-duration-fix-v1/);
   assert.match(app, /editorEls\.editor\.dataset\.mode = activeEditorMode/);
   assert.match(app, /editorEls\.editor\.dataset\.selection = selectedEditorItem\?\.type \|\| 'none'/);
   assert.match(css, /grid-template-columns:82px minmax\(0,1fr\) 340px/);

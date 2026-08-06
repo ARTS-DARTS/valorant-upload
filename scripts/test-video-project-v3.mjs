@@ -5,6 +5,7 @@ import {
   migrateVideoEditToProjectV3,
   projectV3DurationSeconds,
   projectV3HasEdits,
+  reconcileVideoSourceDuration,
   stableVideoItemId,
 } from '../video_project_v3.mjs';
 
@@ -21,6 +22,40 @@ test('v2 migration creates deterministic real clips on a microsecond timebase', 
   ]);
   assert.equal(projectV3DurationSeconds(first), 8);
   assert.equal(projectV3HasEdits(first), true);
+});
+
+test('late metadata repairs a false one-second duration on an untouched video', () => {
+  const edit = {
+    revision:0,
+    trimStart:0,
+    trimEnd:1,
+    splits:[],
+    clips:null,
+    freezeFrames:[],
+    zoomKeyframes:[],
+    footageOverlays:[],
+    audio:{ muted:false, volume:1 },
+  };
+  const repaired = reconcileVideoSourceDuration(edit, 1, 100);
+  assert.equal(repaired.sourceDuration, 100);
+  assert.equal(repaired.trimEnd, 100);
+});
+
+test('late metadata preserves a deliberate trim', () => {
+  const edit = {
+    revision:2,
+    trimStart:0,
+    trimEnd:1,
+    splits:[],
+    clips:null,
+    freezeFrames:[],
+    zoomKeyframes:[],
+    footageOverlays:[],
+    audio:{ muted:false, volume:1 },
+  };
+  const reconciled = reconcileVideoSourceDuration(edit, 1, 100);
+  assert.equal(reconciled.sourceDuration, 100);
+  assert.equal(reconciled.trimEnd, 1);
 });
 
 test('legacy items without ids receive stable ids instead of random ids', () => {

@@ -35,8 +35,9 @@ import {
 } from './video_timeline_core.mjs?v=2026-08-02-video-timeline-core-v1';
 import {
   migrateVideoEditToProjectV3,
+  reconcileVideoSourceDuration,
   stableVideoItemId,
-} from './video_project_v3.mjs?v=2026-08-06-video-project-v3-foundation-v1';
+} from './video_project_v3.mjs?v=2026-08-06-video-duration-reconcile-v1';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -5870,8 +5871,8 @@ function syncKnownVideoDuration(value) {
   const duration = Number(value);
   if (!Number.isFinite(duration) || duration <= 0) return false;
   const changed = Math.abs(knownVideoDuration - duration) > 0.01;
+  videoEdit = reconcileVideoSourceDuration(videoEdit, knownVideoDuration, duration);
   knownVideoDuration = duration;
-  if (!videoEdit.trimEnd) videoEdit.trimEnd = duration;
   if (changed) renderVideoTransport();
   return true;
 }

@@ -30,6 +30,31 @@ export function stableVideoItemId(kind, item = {}, index = 0) {
   return `${kind}_${hashText(signature)}`;
 }
 
+export function reconcileVideoSourceDuration(editValue = {}, knownDuration = 0, discoveredDuration = 0) {
+  const edit = editValue && typeof editValue === 'object' ? editValue : {};
+  const duration = Math.max(0, finite(discoveredDuration));
+  if (!duration) return { ...edit };
+  const previousSourceDuration = Math.max(0, finite(edit.sourceDuration, knownDuration));
+  const trimEnd = Math.max(0, finite(edit.trimEnd));
+  const untouched =
+    Math.max(0, Math.floor(finite(edit.revision))) === 0 &&
+    edit.confirmation?.status !== 'confirmed' &&
+    finite(edit.trimStart) === 0 &&
+    (!Array.isArray(edit.splits) || edit.splits.length === 0) &&
+    (edit.clips === null || edit.clips === undefined) &&
+    (!Array.isArray(edit.freezeFrames) || edit.freezeFrames.length === 0) &&
+    (!Array.isArray(edit.zoomKeyframes) || edit.zoomKeyframes.length === 0) &&
+    (!Array.isArray(edit.footageOverlays) || edit.footageOverlays.length === 0) &&
+    !edit.audio?.muted && finite(edit.audio?.volume, 1) === 1;
+  const followedOldSource = previousSourceDuration > 0 &&
+    Math.abs(trimEnd - previousSourceDuration) <= 0.05;
+  return {
+    ...edit,
+    sourceDuration: duration,
+    trimEnd: !trimEnd || (untouched && followedOldSource) ? duration : trimEnd,
+  };
+}
+
 export function migrateVideoEditToProjectV3(editValue = {}, sourceDuration = 0) {
   const edit = editValue && typeof editValue === 'object' ? editValue : {};
   const duration = Math.max(0, finite(sourceDuration, finite(edit.trimEnd)));
