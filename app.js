@@ -8547,67 +8547,62 @@ function addFootageOverlay({ url, name, duration, chromaKey = null }) {
   toast('Футаж добавлен на таймлайн', 's');
   saveVideoEdit();
 }
+const BUILT_IN_FOOTAGE = Object.freeze([
+  { id:'pulse-circle', name:'Импульс способности', description:'Подсветить бросок или активацию умения.', tag:'Акцент', url:'/assets/footage/pulse-circle.mp4', preview:'/assets/footage/pulse-circle-preview.mp4', duration:2 },
+  { id:'tactical-scan', name:'Тактический скан', description:'Показать траекторию, позицию или участок карты.', tag:'Инфо', url:'/assets/footage/tactical-scan.mp4', preview:'/assets/footage/tactical-scan-preview.mp4', duration:2 },
+  { id:'target-lock', name:'Захват цели', description:'Зафиксировать точку прицела или место приземления.', tag:'Прицел', url:'/assets/footage/target-lock.mp4', preview:'/assets/footage/target-lock-preview.mp4', duration:2 },
+  { id:'danger-frame', name:'Опасная зона', description:'Выделить ошибку, угрозу или опасный тайминг.', tag:'Alert', url:'/assets/footage/danger-frame.mp4', preview:'/assets/footage/danger-frame-preview.mp4', duration:2 },
+  { id:'speed-streaks', name:'Рывок', description:'Подчеркнуть быстрый выход, пик или переход.', tag:'Motion', url:'/assets/footage/speed-streaks.mp4', preview:'/assets/footage/speed-streaks-preview.mp4', duration:2 },
+]);
+
+function footageLibraryShell(content) {
+  return `<div class="footage-library-backdrop" data-footage-close></div>
+    <section class="footage-library-dialog" role="dialog" aria-modal="true" aria-labelledby="footage-library-title">
+      <header class="footage-library-head">
+        <div><span class="footage-library-kicker">VLineups effects</span><h3 class="footage-library-title" id="footage-library-title">Выбери футаж</h3><p>Он появится на активной дорожке с позиции курсора.</p></div>
+        <div class="footage-library-actions"><button class="btn-sm" type="button" data-footage-upload-new>Загрузить свой</button><button class="footage-library-close" type="button" data-footage-close aria-label="Закрыть библиотеку">×</button></div>
+      </header>
+      <nav class="footage-library-tabs" aria-label="Разделы библиотеки"><button type="button" class="active" data-footage-tab="built-in">Встроенные</button><button type="button" data-footage-tab="materials">Мои материалы</button></nav>
+      <div class="footage-library-body">${content}</div>
+    </section>`;
+}
+
+function builtInFootageHtml() {
+  return `<div class="footage-library-section" data-footage-section="built-in"><div class="footage-library-list built-in-list">${BUILT_IN_FOOTAGE.map(item => `
+    <article class="footage-library-item built-in">
+      <div class="footage-library-preview"><video src="${item.preview}" muted loop autoplay playsinline preload="metadata"></video><span>${esc(item.tag)}</span></div>
+      <div class="footage-library-item-copy"><strong>${esc(item.name)}</strong><p>${esc(item.description)}</p><small>Анимация · ${item.duration} сек. · фон удалится автоматически</small></div>
+      <button class="footage-library-add" type="button" data-built-in-footage="${item.id}">+ Добавить</button>
+    </article>`).join('')}</div></div>`;
+}
+
 function renderFootageLibrary() {
   if (!editorEls.footageLibrary) return;
-  const uploadButton = '<button class="btn-sm" type="button" data-footage-upload-new>Загрузить новый файл</button>';
-  const builtInHtml = `<div class="footage-library-list">
-    <article class="footage-library-item built-in">
-      <strong>Пульсирующий круг</strong>
-      <span>Встроенная анимация · 2 секунды · фон удаляется автоматически</span>
-      <div class="footage-library-actions">
-        <button class="btn-sm" type="button" data-built-in-footage="pulse-circle">На таймлайн</button>
-      </div>
-    </article>
-  </div>`;
+  const builtInHtml = builtInFootageHtml();
+  let materialsHtml = '<div class="empty-state"><strong>Загрузка материалов…</strong>Сейчас подтянем опубликованные футажи.</div>';
   if (authorMaterialsError) {
-    editorEls.footageLibrary.innerHTML = `
-      <div class="footage-library-head">
-        <span class="footage-library-title">Материалы</span>
-        <div class="footage-library-actions">${uploadButton}</div>
-      </div>
-      ${builtInHtml}
-      <div class="empty-state"><strong>Не удалось загрузить остальные материалы</strong>${esc(authorMaterialsError)}</div>`;
-    return;
+    materialsHtml = `<div class="empty-state"><strong>Не удалось загрузить материалы</strong>${esc(authorMaterialsError)}</div>`;
+  } else if (authorMaterialsLoaded) {
+    const materials = (isCurrentUserAdmin() ? authorMaterials : authorMaterials.filter(item => item.is_published !== false)).filter(item => String(item.video_url || '').trim());
+    materialsHtml = materials.length ? `<div class="footage-library-material-head"><span>Опубликованные материалы</span><button class="btn-sm" type="button" data-footage-refresh>Обновить</button></div><div class="footage-library-list material-list">${materials.map(item => `
+      <article class="footage-library-item"><div class="footage-library-item-copy"><strong>${esc(firstText(item.title, item.video_file_name, 'Футаж'))}</strong><p>${esc(firstText(item.description, item.video_file_name, 'Готовый материал'))}</p></div><button class="footage-library-add" type="button" data-footage-material="${esc(item.id || '')}">+ Добавить</button></article>`).join('')}</div>` : '<div class="empty-state"><strong>Здесь пока пусто</strong>Загрузи свой файл — он сразу появится на таймлайне.</div>';
+  } else if (!authorMaterialsLoading) {
+    loadAuthorMaterials();
   }
-  if (!authorMaterialsLoaded) {
-    if (!authorMaterialsLoading) loadAuthorMaterials();
-    editorEls.footageLibrary.innerHTML = `
-      <div class="footage-library-head">
-        <span class="footage-library-title">Материалы</span>
-        <div class="footage-library-actions">${uploadButton}</div>
-      </div>
-      ${builtInHtml}
-      <div class="empty-state"><strong>Загрузка остальных материалов...</strong>Сейчас подтянем опубликованные футажи.</div>`;
-    return;
-  }
-  const materials = (isCurrentUserAdmin() ? authorMaterials : authorMaterials.filter(item => item.is_published !== false))
-    .filter(item => String(item.video_url || '').trim());
-  const listHtml = materials.length
-    ? `<div class="footage-library-list">${materials.map(item => `
-        <article class="footage-library-item">
-          <strong>${esc(firstText(item.title, item.video_file_name, 'Футаж'))}</strong>
-          <span>${esc(firstText(item.description, item.video_file_name, 'Готовый материал'))}</span>
-          <div class="footage-library-actions">
-            <button class="btn-sm" type="button" data-footage-material="${esc(item.id || '')}">На таймлайн</button>
-          </div>
-        </article>`).join('')}</div>`
-    : '<div class="empty-state"><strong>Футажей в материалах пока нет</strong>Загрузи материал в разделе «Материалы» или выбери новый файл здесь.</div>';
-  editorEls.footageLibrary.innerHTML = `
-    <div class="footage-library-head">
-      <span class="footage-library-title">Материалы</span>
-      <div class="footage-library-actions">
-        <button class="btn-sm" type="button" data-footage-refresh>Обновить</button>
-        ${uploadButton}
-      </div>
-    </div>
-    ${builtInHtml}
-    ${listHtml}`;
+  editorEls.footageLibrary.innerHTML = footageLibraryShell(`${builtInHtml}<div class="footage-library-section" data-footage-section="materials" hidden>${materialsHtml}</div>`);
+}
+function closeFootageLibrary() {
+  if (!editorEls.footageLibrary || editorEls.footageLibrary.hidden) return;
+  editorEls.footageLibrary.hidden = true;
+  editorEls.footageLibrary.querySelectorAll('video').forEach(video => video.pause());
+  document.body.classList.remove('footage-library-open');
 }
 function openFootageLibrary() {
   if (!videoUrl) { toast('Сначала загрузи основное видео', 'i'); return; }
   setEditorMode('effects');
   if (!editorEls.footageLibrary) return;
   editorEls.footageLibrary.hidden = false;
+  document.body.classList.add('footage-library-open');
   renderFootageLibrary();
 }
 async function addMaterialFootageToTimeline(id) {
@@ -8641,6 +8636,7 @@ async function handleFootageFile(file) {
       name: file.name.replace(/\.[^.]+$/, '') || 'Футаж',
       duration: meta.duration || 2,
     });
+    closeFootageLibrary();
   } catch (error) {
     if (editorEls.footageStatus) editorEls.footageStatus.textContent = '';
     if (error?.message !== 'canceled') toast('Ошибка загрузки футажа: ' + (error?.message || error), 'e');
@@ -8654,18 +8650,30 @@ editorEls.footageLibrary?.addEventListener('click', event => {
   const builtInBtn = event.target.closest('[data-built-in-footage]');
   const refreshBtn = event.target.closest('[data-footage-refresh]');
   const uploadBtn = event.target.closest('[data-footage-upload-new]');
-  if (builtInBtn?.dataset.builtInFootage === 'pulse-circle') {
+  const closeBtn = event.target.closest('[data-footage-close]');
+  const tabBtn = event.target.closest('[data-footage-tab]');
+  if (closeBtn) { closeFootageLibrary(); return; }
+  if (tabBtn) {
+    const tab = tabBtn.dataset.footageTab;
+    editorEls.footageLibrary.querySelectorAll('[data-footage-tab]').forEach(button => button.classList.toggle('active', button === tabBtn));
+    editorEls.footageLibrary.querySelectorAll('[data-footage-section]').forEach(section => { section.hidden = section.dataset.footageSection !== tab; });
+    return;
+  }
+  const builtIn = BUILT_IN_FOOTAGE.find(item => item.id === builtInBtn?.dataset.builtInFootage);
+  if (builtIn) {
     addFootageOverlay({
-      url: '/assets/footage/pulse-circle.mp4',
-      name: 'Пульсирующий круг',
-      duration: 2,
+      url: builtIn.url,
+      name: builtIn.name,
+      duration: builtIn.duration,
       chromaKey: { enabled: true, color: '#00ff00', strength: 0.35 },
     });
+    closeFootageLibrary();
   }
-  if (materialBtn) addMaterialFootageToTimeline(materialBtn.dataset.footageMaterial || '');
+  if (materialBtn) { addMaterialFootageToTimeline(materialBtn.dataset.footageMaterial || ''); closeFootageLibrary(); }
   if (refreshBtn) loadAuthorMaterials({ force: true });
   if (uploadBtn) editorEls.footageInput?.click();
 });
+document.addEventListener('keydown', event => { if (event.key === 'Escape') closeFootageLibrary(); });
 editorEls.footageInput?.addEventListener('change', () => {
   const file = editorEls.footageInput.files?.[0];
   if (file) handleFootageFile(file);

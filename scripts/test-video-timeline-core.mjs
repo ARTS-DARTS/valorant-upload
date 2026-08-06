@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 
 import {
   advanceVideoTimelinePlayback,
@@ -179,8 +180,8 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('effect_outside'/);
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
-  assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v6/);
-  assert.match(html, /app\.js\?v=2026-08-06-vlineups-cut-v6/);
+  assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v7/);
+  assert.match(html, /app\.js\?v=2026-08-06-vlineups-cut-v7/);
   assert.match(app, /editorEls\.editor\.dataset\.mode = activeEditorMode/);
   assert.match(app, /editorEls\.editor\.dataset\.selection = selectedEditorItem\?\.type \|\| 'none'/);
   assert.match(css, /grid-template-columns:82px minmax\(0,1fr\) 340px/);
@@ -189,4 +190,12 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(css, /\.video-editor-fullscreen \.editor-confirmation[\s\S]*position:sticky/);
   assert.match(css, /\.video-editor \.editor-confirmation \{[\s\S]*?display:flex;[\s\S]*?flex-direction:column;[\s\S]*?align-items:stretch;/);
   assert.match(css, /\.video-editor \.editor-confirm-button \{[\s\S]*?position:static;[\s\S]*?width:100%;/);
+  assert.match(app, /const BUILT_IN_FOOTAGE = Object\.freeze\(\[/);
+  assert.match(app, /function footageLibraryShell\(/);
+  assert.match(app, /data-footage-tab="built-in"/);
+  assert.match(app, /function closeFootageLibrary\(\)/);
+  for (const name of ['pulse-circle','tactical-scan','target-lock','danger-frame','speed-streaks']) {
+    assert.equal(existsSync(new URL(`../assets/footage/${name}.mp4`, import.meta.url)), true);
+    assert.equal(existsSync(new URL(`../assets/footage/${name}-preview.mp4`, import.meta.url)), true);
+  }
 });

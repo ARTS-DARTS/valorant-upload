@@ -1379,3 +1379,64 @@ body.category-form-guide-open{overflow:hidden}
   text-transform:uppercase;
   pointer-events:none;
 }
+
+/* Footage browser — a focused effect shelf, not another inspector block. */
+body.footage-library-open { overflow:hidden; }
+.footage-library {
+  position:fixed;
+  inset:0;
+  z-index:1400;
+  display:grid;
+  place-items:center;
+  padding:24px;
+}
+.footage-library[hidden],.footage-library-section[hidden] { display:none!important; }
+.footage-library-backdrop { position:absolute; inset:0; background:rgba(2,7,14,.82); backdrop-filter:blur(8px); }
+.footage-library-dialog {
+  position:relative;
+  width:min(1040px,calc(100vw - 32px));
+  max-height:min(780px,calc(100vh - 32px));
+  display:grid;
+  grid-template-rows:auto auto minmax(0,1fr);
+  overflow:hidden;
+  border:1px solid #29435b;
+  border-radius:18px;
+  background:#09131f;
+  box-shadow:0 30px 100px rgba(0,0,0,.7);
+}
+.footage-library-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:20px 22px 17px; border-bottom:1px solid #213449; background:linear-gradient(135deg,#102338,#0a1522); }
+.footage-library-kicker { display:block; margin-bottom:5px; color:#55d2ff; font:900 9px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.16em; text-transform:uppercase; }
+.footage-library-title { margin:0; color:#f4f8ff; font-size:22px; line-height:1.15; text-transform:none; }
+.footage-library-head p { margin:6px 0 0; color:#8fa7bf; font-size:12px; }
+.footage-library-actions { display:flex; align-items:center; gap:8px; }
+.footage-library-close { width:38px; height:38px; border:1px solid #32465b; border-radius:10px; background:#111f2e; color:#d9e8f7; font-size:23px; cursor:pointer; }
+.footage-library-close:hover { border-color:#59cefa; color:#fff; }
+.footage-library-tabs { display:flex; gap:6px; padding:10px 22px; border-bottom:1px solid #1c2c3d; background:#08111c; }
+.footage-library-tabs button { min-height:34px; padding:0 14px; border:1px solid transparent; border-radius:8px; background:transparent; color:#91a8c0; font:800 11px/1 inherit; cursor:pointer; }
+.footage-library-tabs button.active { border-color:#31617d; background:#12304a; color:#61d4ff; }
+.footage-library-body { min-height:0; overflow:auto; padding:18px 22px 24px; }
+.footage-library-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.footage-library-item { min-width:0; display:grid; grid-template-columns:152px minmax(0,1fr); grid-template-rows:1fr auto; gap:10px 13px; padding:10px; border:1px solid #24384d; border-radius:12px; background:#0c1927; transition:border-color .18s,transform .18s,background .18s; }
+.footage-library-item:hover { transform:translateY(-2px); border-color:#3a7292; background:#0e1e2f; }
+.footage-library-preview { position:relative; grid-row:1/3; min-height:104px; overflow:hidden; border:1px solid #25384a; border-radius:8px; background:#020803; }
+.footage-library-preview video { display:block; width:100%; height:100%; min-height:104px; object-fit:cover; }
+.footage-library-preview span { position:absolute; left:7px; top:7px; padding:3px 6px; border:1px solid rgba(86,212,255,.45); border-radius:5px; background:rgba(4,14,23,.86); color:#6edcff; font:900 8px/1 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.08em; text-transform:uppercase; }
+.footage-library-item-copy { min-width:0; align-self:center; }
+.footage-library-item-copy strong { display:block; color:#eff7ff; font-size:14px; }
+.footage-library-item-copy p { margin:5px 0 7px; color:#a5b8cb; font-size:11px; line-height:1.45; }
+.footage-library-item-copy small { color:#6f879f; font-size:9px; }
+.footage-library-add { min-height:34px; border:1px solid #3d7898; border-radius:8px; background:#12334c; color:#68d7ff; font:850 10px/1 inherit; cursor:pointer; }
+.footage-library-add:hover { background:#55cdf7; color:#06121b; }
+.footage-library-material-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; color:#b9cce0; font-size:11px; font-weight:800; }
+.material-list .footage-library-item { grid-template-columns:minmax(0,1fr) 110px; grid-template-rows:auto; }
+.footage-library .empty-state { min-height:180px; display:grid; place-content:center; text-align:center; }
+@media(max-width:760px) {
+  .footage-library { padding:8px; align-items:end; }
+  .footage-library-dialog { width:100%; max-height:calc(100vh - 16px); border-radius:16px; }
+  .footage-library-head { padding:16px; }
+  .footage-library-head p { display:none; }
+  .footage-library-actions .btn-sm { display:none; }
+  .footage-library-tabs,.footage-library-body { padding-left:14px; padding-right:14px; }
+  .footage-library-list { grid-template-columns:1fr; }
+}
+@media(prefers-reduced-motion:reduce) { .footage-library-item { transition:none; } .footage-library-item:hover { transform:none; } }
