@@ -70,9 +70,10 @@ test('upload editor delegates its player scrubber to the shared timeline core', 
 
 test('upload editor requires an explicit confirmed montage revision', async () => {
   const { readFile } = await import('node:fs/promises');
-  const [app, html] = await Promise.all([
+  const [app, html, css] = await Promise.all([
     readFile(new URL('../app.js', import.meta.url), 'utf8'),
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../styles.css', import.meta.url), 'utf8'),
   ]);
   assert.match(html, /id="edit-confirm"[^>]*>Подтвердить монтаж</);
   assert.match(html, /id="editor-confirm-modal"/);
@@ -111,9 +112,10 @@ test('explicit clips define playback order and close gaps after ripple deletion'
 
 test('upload editor exposes a selection-aware inspector for real timeline items', async () => {
   const { readFile } = await import('node:fs/promises');
-  const [app, html] = await Promise.all([
+  const [app, html, css] = await Promise.all([
     readFile(new URL('../app.js', import.meta.url), 'utf8'),
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../styles.css', import.meta.url), 'utf8'),
   ]);
   assert.match(html, /id="editor-inspector-title"/);
   assert.match(html, /id="editor-inspector-selection"/);
@@ -155,6 +157,12 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('effect_outside'/);
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
-  assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v3/);
-  assert.match(html, /app\.js\?v=2026-08-06-vlineups-cut-v3/);
+  assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v4/);
+  assert.match(html, /app\.js\?v=2026-08-06-vlineups-cut-v4/);
+  assert.match(app, /editorEls\.editor\.dataset\.mode = activeEditorMode/);
+  assert.match(app, /editorEls\.editor\.dataset\.selection = selectedEditorItem\?\.type \|\| 'none'/);
+  assert.match(css, /grid-template-columns:82px minmax\(0,1fr\) 340px/);
+  assert.match(css, /\.video-editor \.zoom-panel,[\s\S]*order:4/);
+  assert.match(css, /\.video-editor\[data-mode="effects"\] \.editor-actions #edit-add-footage/);
+  assert.match(css, /\.video-editor-fullscreen \.editor-confirmation[\s\S]*position:sticky/);
 });

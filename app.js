@@ -6854,6 +6854,10 @@ editorEls.inspectorProperties?.addEventListener('click', event => {
 });
 
 function renderVideoEditor() {
+  if (editorEls.editor) {
+    editorEls.editor.dataset.mode = activeEditorMode || 'trim';
+    editorEls.editor.dataset.selection = selectedEditorItem?.type || 'none';
+  }
   const duration = videoDuration();
   videoEdit = normalizedVideoEdit();
   const end = videoEdit.trimEnd || duration;
@@ -6985,6 +6989,7 @@ function renderVideoEditor() {
 
 function setEditorMode(mode) {
   activeEditorMode = mode || 'trim';
+  if (editorEls.editor) editorEls.editor.dataset.mode = activeEditorMode;
   document.querySelectorAll('[data-editor-mode]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.editorMode === activeEditorMode);
   });
