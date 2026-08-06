@@ -23,6 +23,7 @@ import engagementHandler from './backend/engagement.js';
 import billingPlansHandler from './backend/billing-plans.js';
 import billingCheckoutHandler from './backend/billing-checkout.js';
 import billingOrderStatusHandler from './backend/billing-order-status.js';
+import billingRefundRequestHandler from './backend/billing-refund-request.js';
 import adminBillingHandler from './backend/admin-billing.js';
 import accountDeleteHandler from './backend/account-delete.js';
 import adminExpirationsHandler from './backend/admin-expirations.js';
@@ -70,6 +71,8 @@ app.post('/api/internal/billing/reconcile/robokassa', robokassaReconciliationHan
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+app.all('/api/billing/refund-request', billingRefundRequestHandler);
 
 app.all('/api/engagement/:action', engagementHandler);
 app.all('/api/billing/checkout', billingCheckoutHandler);
