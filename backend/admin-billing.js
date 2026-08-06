@@ -102,6 +102,9 @@ export function createAdminBillingHandler({
       });
       const requiresReview = recentOrders.filter(order => order.status === 'requires_review');
       const monitoringRaw = monitoringSnap.exists ? (monitoringSnap.data() || {}) : {};
+      const successfulRecent = recentOrders.filter(order => order.status === 'succeeded');
+      const testSuccessful = successfulRecent.filter(order => order.test_mode === true);
+      const liveSuccessful = successfulRecent.filter(order => order.test_mode !== true);
 
       return res.status(200).json({
         overview: overviewSnap.exists ? (overviewSnap.data() || {}) : {},
@@ -115,6 +118,15 @@ export function createAdminBillingHandler({
           requires_review: requiresReview.length,
           oldest_stuck_order_id: stuckPending.at(-1)?.id || '',
           scanned_orders: recentOrders.length,
+        },
+        payment_totals: {
+          scanned_orders: recentOrders.length,
+          test_purchases: testSuccessful.length,
+          test_gross_minor: testSuccessful.reduce(
+            (sum, order) => sum + (Number(order.amount_minor) || 0), 0),
+          live_purchases: liveSuccessful.length,
+          live_gross_minor: liveSuccessful.reduce(
+            (sum, order) => sum + (Number(order.amount_minor) || 0), 0),
         },
         next_cursor: hasMore && cursorDoc ? cursorDoc.id : null,
         orders: orders.map(order => {
@@ -138,6 +150,7 @@ export function createAdminBillingHandler({
             entitlement_status: String(entitlement.status || ''),
             entitlement_plan_id: String(entitlement.plan_id || ''),
             access_until: toIso(entitlement.access_until),
+            order_access_until: toIso(order.period_end),
           };
         }),
       });
