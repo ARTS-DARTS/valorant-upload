@@ -62,7 +62,6 @@ async function check(user) {
       copy.textContent = 'Оплата подтверждена сервером. Новый уровень уже действует в приложении и кабинете.';
       clearTimeout(timer);
       checkButton.hidden = true;
-      document.getElementById('open-app').hidden = false;
       return;
     }
     if (data.order.status === 'requires_review') {
@@ -90,8 +89,8 @@ async function check(user) {
 
 onAuthStateChanged(auth, user => {
   if (!user) {
-    title.textContent = 'Войди в аккаунт';
-    copy.textContent = 'Чтобы безопасно проверить заказ, вернись в кабинет и войди в тот аккаунт, с которого была покупка.';
+    title.textContent = 'Вернись в приложение';
+    copy.textContent = 'Приложение безопасно проверит заказ в том аккаунте, с которого была покупка, и обновит уровень.';
     checkButton.hidden = true;
     return;
   }

@@ -125,6 +125,7 @@ h1 { margin:0; font-size:clamp(30px,7vw,46px); line-height:1.05; letter-spacing:
 [data-result="fail"] .primary-action { color:#fff; background:var(--red); }
 .secondary-action { border:1px solid var(--line); color:var(--ink); background:transparent; }
 .primary-action:focus-visible, .secondary-action:focus-visible { outline:3px solid rgba(80,214,255,.4); outline-offset:3px; }
+.support-link { display:inline-block; margin-top:18px; color:var(--cyan); font-size:12px; font-weight:700; }
 .security-note { margin:22px 0 0; color:#667d90; font-size:11px; line-height:1.5; }
 @keyframes orbit { to { transform:rotate(360deg); } }
 @media (max-width:520px) {

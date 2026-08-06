@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { createAdminBillingHandler } from '../backend/admin-billing.js';
@@ -105,6 +106,20 @@ const authFor = uid => ({ verifyIdToken:async token => {
   if (token !== 'valid-token') throw Object.assign(new Error('bad token'), { code:'auth/id-token-revoked' });
   return { uid };
 } });
+
+test('payment result pages always provide an order-bound app return', () => {
+  const successHtml = readFileSync(new URL('../payment-success.html', import.meta.url), 'utf8');
+  const successJs = readFileSync(new URL('../payment-result.js', import.meta.url), 'utf8');
+  const appLinkJs = readFileSync(new URL('../payment-app-link.js', import.meta.url), 'utf8');
+  const failHtml = readFileSync(new URL('../payment-fail.html', import.meta.url), 'utf8');
+  assert.match(successHtml, /id="open-app"/);
+  assert.match(successHtml, /payment-app-link\.js/);
+  assert.match(appLinkJs, /vlineupapp:\/\/billing\/\$\{outcome\}\?orderId=/);
+  assert.match(successJs, /Вернись в приложение/);
+  assert.match(failHtml, /id="open-app"/);
+  assert.match(failHtml, /payment-app-link\.js/);
+  assert.match(appLinkJs, /\^\\d\{1,18\}\$/);
+});
 
 test('order status returns only the authenticated owner order', async () => {
   const db = new MemoryDb({

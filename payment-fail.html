@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/app_icon3.png">
   <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
   <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/payment-result.css?v=2026-07-30-v1">
+  <link rel="stylesheet" href="/payment-result.css?v=2026-08-06-v2">
 </head>
 <body>
   <main class="result-shell">
@@ -25,11 +25,13 @@
         <span>Если деньги списались</span><strong>Подожди несколько минут и проверь уровень</strong>
       </div>
       <div class="result-actions">
-        <a class="primary-action" href="/">Вернуться в кабинет</a>
-        <a class="secondary-action" href="https://t.me/Vlineups" target="_blank" rel="noopener noreferrer">Связаться с нами</a>
+        <a class="primary-action" id="open-app" href="vlineupapp://billing/fail">Вернуться в приложение</a>
+        <a class="secondary-action" href="/">Вернуться в кабинет</a>
       </div>
+      <a class="support-link" href="https://t.me/Vlineups" target="_blank" rel="noopener noreferrer">Связаться с поддержкой</a>
       <p class="security-note">Не отправляй никому данные карты или код из SMS. Для проверки достаточно номера заказа.</p>
     </section>
   </main>
+  <script src="/payment-app-link.js?v=2026-08-06-v1"></script>
 </body>
 </html>

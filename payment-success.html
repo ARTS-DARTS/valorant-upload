@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/app_icon3.png">
   <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
   <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/payment-result.css?v=2026-07-30-v1">
+  <link rel="stylesheet" href="/payment-result.css?v=2026-08-06-v2">
 </head>
 <body>
   <main class="result-shell">
@@ -28,13 +28,14 @@
         <span>Доступ</span><strong id="order-access">—</strong>
       </div>
       <div class="result-actions">
-        <button class="primary-action" id="check-again" type="button">Проверить ещё раз</button>
-        <a class="primary-action" id="open-app" href="vlineupapp://billing/success" hidden>Открыть приложение</a>
+        <a class="primary-action" id="open-app" href="vlineupapp://billing/success" hidden>Вернуться в приложение</a>
+        <button class="secondary-action" id="check-again" type="button">Проверить на сайте</button>
         <a class="secondary-action" href="/">Вернуться в кабинет</a>
       </div>
       <p class="security-note">Доступ включается только после серверного подтверждения платежа.</p>
     </section>
   </main>
-  <script type="module" src="/payment-result.js?v=2026-07-30-v1"></script>
+  <script src="/payment-app-link.js?v=2026-08-06-v1"></script>
+  <script type="module" src="/payment-result.js?v=2026-08-06-v2"></script>
 </body>
 </html>
