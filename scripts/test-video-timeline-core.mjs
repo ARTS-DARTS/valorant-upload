@@ -148,4 +148,6 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('effect_outside'/);
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
+  assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v2/);
+  assert.match(html, /app\.js\?v=2026-08-06-vlineups-cut-v2/);
 });
