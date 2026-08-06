@@ -141,4 +141,6 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /function redoVideoEdit\(\)/);
   assert.match(app, /e\.code === 'KeyY'/);
   assert.match(app, /e\.shiftKey && e\.code === 'KeyZ'/);
+  assert.match(html, /id="timeline-fit"/);
+  assert.match(app, /function fitTimelineToViewport\(\)/);
 });

@@ -5908,7 +5908,8 @@ function timelinePct(value) {
 }
 
 function timelineWidthPx() {
-  return Math.max(900, Math.round(timelineFrameDuration() * timelinePixelsPerSecond));
+  const viewportWidth = Math.max(620, Number(editorEls.scroll?.clientWidth || 0));
+  return Math.max(viewportWidth, Math.round(timelineFrameDuration() * timelinePixelsPerSecond));
 }
 
 function timelineBlockStyle(start, duration, minWidthPx = MIN_TIMELINE_CLIP_WIDTH_PX) {
@@ -8040,10 +8041,20 @@ document.getElementById('timeline-zoom-in')?.addEventListener('click', () => {
   renderVideoEditor();
 });
 document.getElementById('timeline-zoom-out')?.addEventListener('click', () => {
-  timelinePixelsPerSecond = Math.max(28, timelinePixelsPerSecond - 8);
+  timelinePixelsPerSecond = Math.max(12, timelinePixelsPerSecond - 8);
   if (editorEls.timelineZoom) editorEls.timelineZoom.value = String(timelinePixelsPerSecond);
   renderVideoEditor();
 });
+function fitTimelineToViewport() {
+  const duration = timelineFrameDuration();
+  const width = Number(editorEls.scroll?.clientWidth || 0);
+  if (!duration || !width) return;
+  timelinePixelsPerSecond = Math.max(12, Math.min(120, (width - 4) / duration));
+  if (editorEls.timelineZoom) editorEls.timelineZoom.value = String(timelinePixelsPerSecond);
+  if (editorEls.scroll) editorEls.scroll.scrollLeft = 0;
+  renderVideoEditor();
+}
+document.getElementById('timeline-fit')?.addEventListener('click', fitTimelineToViewport);
 document.getElementById('edit-set-in')?.addEventListener('click', () => {
   videoEdit.trimStart = clampTime(vidPlayer.currentTime);
   if (videoEdit.trimEnd && videoEdit.trimStart > videoEdit.trimEnd) videoEdit.trimEnd = videoEdit.trimStart;
