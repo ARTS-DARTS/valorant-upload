@@ -108,3 +108,20 @@ test('explicit clips define playback order and close gaps after ripple deletion'
   assert.equal(sourceTimeToOutputTime(reordered, 10, 2), 7);
   assert.equal(videoTimelineOutputDuration({ ...reordered, clips:[reordered.clips[0]] }, 10), 5);
 });
+
+test('upload editor exposes a selection-aware inspector for real timeline items', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const [app, html] = await Promise.all([
+    readFile(new URL('../app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+  ]);
+  assert.match(html, /id="editor-inspector-title"/);
+  assert.match(html, /id="editor-inspector-selection"/);
+  assert.match(html, /id="edit-clip-left"/);
+  assert.match(html, /id="edit-clip-right"/);
+  assert.match(app, /function renderEditorInspectorSelection\(\)/);
+  assert.match(app, /selected\?\.type === 'clip'/);
+  assert.match(app, /selected\?\.type === 'freeze'/);
+  assert.match(app, /selected\?\.type === 'zoom'/);
+  assert.match(app, /selected\?\.type === 'footage'/);
+});

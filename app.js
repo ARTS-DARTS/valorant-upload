@@ -5699,6 +5699,9 @@ const editorEls = {
   footageScale: document.getElementById('edit-footage-scale'),
   footageInput: document.getElementById('edit-footage-input'),
   footageStatus: document.getElementById('edit-footage-status'),
+  inspectorTitle: document.getElementById('editor-inspector-title'),
+  inspectorBadge: document.getElementById('editor-inspector-badge'),
+  inspectorSelection: document.getElementById('editor-inspector-selection'),
   footageLibrary: document.getElementById('footage-library'),
   undo: document.getElementById('edit-undo'),
   reset: document.getElementById('edit-reset'),
@@ -6702,6 +6705,64 @@ function stopSmoothTimelineUi() {
   timelineSmoothLastAt = 0;
 }
 
+function renderEditorInspectorSelection() {
+  let title = 'Весь ролик';
+  let badge = 'Видео';
+  let name = 'Ничего не выбрано';
+  let detail = 'Выбери клип или эффект на таймлайне, чтобы изменить его параметры.';
+  const selected = selectedEditorItem;
+  if (selected?.type === 'clip') {
+    const clips = videoEdit.clips || [];
+    const index = clips.findIndex(clip => clip.id === selected.id);
+    const clip = clips[index];
+    if (clip) {
+      title = `Клип ${index + 1}`;
+      badge = 'Клип';
+      name = `${fmtTime(clip.sourceStart)} — ${fmtTime(clip.sourceEnd)}`;
+      detail = `Длительность ${fmtTime(clip.sourceEnd - clip.sourceStart)} · можно переставить или удалить со сдвигом.`;
+    }
+  } else if (selected?.type === 'freeze') {
+    const freeze = (videoEdit.freezeFrames || []).find(item => item.id === selected.id);
+    if (freeze) {
+      title = 'Стоп-кадр';
+      badge = 'Кадр';
+      name = `На ${fmtTime(freeze.at)} · ${fmtTime(freeze.duration)}`;
+      detail = freeze.annotations?.length ? `Рисунок сохранён · штрихов: ${freeze.annotations.length}` : 'Можно изменить длительность или нарисовать подсказку поверх кадра.';
+    }
+  } else if (selected?.type === 'zoom') {
+    const zoom = (videoEdit.zoomKeyframes || []).find(item => item.id === selected.id);
+    if (zoom) {
+      title = 'Приближение';
+      badge = 'Zoom';
+      name = `${Number(zoom.scaleX ?? zoom.scale ?? 1.4).toFixed(2)}× · ${fmtTime(effectOutputStart(zoom))}`;
+      detail = `Длительность ${fmtTime(Math.max(0.1, Number(zoom.duration || 1)))} · дорожка ${Number(zoom.track || 0) + 1}.`;
+    }
+  } else if (selected?.type === 'footage') {
+    const footage = (videoEdit.footageOverlays || []).find(item => item.id === selected.id);
+    if (footage) {
+      title = 'Футаж';
+      badge = footage.chroma?.enabled ? 'Chroma' : 'Overlay';
+      name = footage.name || 'Видео-наложение';
+      detail = `${fmtTime(effectOutputStart(footage))} · ${fmtTime(Math.max(0.1, Number(footage.duration || 2)))} · дорожка ${Number(footage.track || 0) + 1}.`;
+    }
+  } else if (selected?.type === 'effectTrack') {
+    title = `Дорожка ${Number(selected.track || 0) + 1}`;
+    badge = 'Эффекты';
+    name = 'Дорожка эффектов';
+    detail = 'Новые эффекты будут добавляться на выбранную дорожку.';
+  } else if (selected?.type === 'split') {
+    title = 'Точка разреза';
+    badge = 'Разрез';
+    name = fmtTime(selected.at);
+    detail = 'Старый маркер разреза. Его можно удалить или превратить в реальные клипы новым разрезом.';
+  }
+  if (editorEls.inspectorTitle) editorEls.inspectorTitle.textContent = title;
+  if (editorEls.inspectorBadge) editorEls.inspectorBadge.textContent = badge;
+  if (editorEls.inspectorSelection) {
+    editorEls.inspectorSelection.innerHTML = `<strong>${esc(name)}</strong><span>${esc(detail)}</span>`;
+  }
+}
+
 function renderVideoEditor() {
   const duration = videoDuration();
   videoEdit = normalizedVideoEdit();
@@ -6709,6 +6770,7 @@ function renderVideoEditor() {
   const outputDuration = editedOutputDuration();
   const frameDuration = timelineFrameDuration();
   activeEffectTrack = Math.max(0, Math.min((videoEdit.effectTracks || 1) - 1, activeEffectTrack));
+  renderEditorInspectorSelection();
   if (editorEls.shell && duration) {
     editorEls.shell.style.width = `${timelineWidthPx()}px`;
   }

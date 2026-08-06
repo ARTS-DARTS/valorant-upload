@@ -296,7 +296,17 @@
               </div>
             </div>
             <aside class="editor-inspector">
-              <div class="inspector-title">Настройки клипа</div>
+              <div class="inspector-heading">
+                <div>
+                  <span class="inspector-kicker">Инспектор</span>
+                  <div class="inspector-title" id="editor-inspector-title">Весь ролик</div>
+                </div>
+                <span class="inspector-selection-badge" id="editor-inspector-badge">Видео</span>
+              </div>
+              <div class="inspector-selection" id="editor-inspector-selection" aria-live="polite">
+                <strong>Ничего не выбрано</strong>
+                <span>Выбери клип или эффект на таймлайне, чтобы изменить его параметры.</span>
+              </div>
               <div class="editor-grid">
                 <label class="editor-field">Старт
                   <input class="finput" type="number" id="edit-trim-start" min="0" step="0.1" value="0">
