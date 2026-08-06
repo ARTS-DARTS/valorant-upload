@@ -536,6 +536,9 @@
     .video-editor-commandbar-title { display:flex; align-items:baseline; gap:10px; }
     .video-editor-commandbar-title span { color:#62d6ff; font-size:9px; font-weight:950; letter-spacing:.17em; }
     .video-editor-commandbar-title strong { color:#f2f7fc; font-size:14px; }
+    .video-editor-shortcuts { display:flex; align-items:center; justify-content:center; gap:10px; color:#718ba3; font-size:8px; white-space:nowrap; }
+    .video-editor-shortcuts span { display:flex; align-items:center; gap:3px; }
+    .video-editor-shortcuts kbd { min-width:18px; padding:2px 4px; border:1px solid rgba(137,176,204,.22); border-bottom-color:rgba(137,176,204,.38); border-radius:4px; color:#b8cad9; background:#0a1522; font:800 8px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; box-shadow:0 1px 0 rgba(255,255,255,.05); }
     .video-editor-commandbar-state { margin-left:auto; color:#8da4ba; font-size:10px; }
     .video-editor-fullscreen .vid-stage { min-height:0; height:100%; border:1px solid rgba(111,157,190,.22); border-radius:11px; background:#000; }
     .video-editor-fullscreen .video-viewer-viewport,.video-editor-fullscreen .vid-player { width:100%; height:100%; object-fit:contain; }
@@ -544,6 +547,7 @@
     .video-editor-fullscreen .video-editor-toggle-row { display:none; }
     .video-editor-fullscreen .video-editor { min-height:0; margin:0; overflow:auto; border-color:rgba(97,156,194,.25); background:#08111e; }
     .video-editor-fullscreen .editor-inspector { top:0; max-height:none; }
+    @media(max-width:980px){.video-editor-shortcuts{display:none}}
     @media(max-width:720px){#vid-player-wrap.video-editor-fullscreen{grid-template-rows:auto minmax(170px,34vh) auto auto minmax(0,1fr);padding:8px}.video-editor-commandbar-title span{display:none}.video-editor-commandbar-state{display:none}.video-editor-fullscreen .editor-workbench{grid-template-columns:1fr}.video-editor-fullscreen .editor-inspector{position:static;grid-column:1;grid-row:2}.video-editor-fullscreen .video-editor{padding:9px}}
     .video-editor-toggle { color:var(--primary); border-color:rgba(79,195,247,.38); font-weight:800; }
     .video-editor-toggle[aria-expanded="false"] { background:rgba(79,195,247,.10); }

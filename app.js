@@ -7974,7 +7974,7 @@ function ensureExplicitVideoClips() {
   return videoEdit.clips;
 }
 
-document.getElementById('edit-split')?.addEventListener('click', () => {
+function splitVideoClipAtPlayhead() {
   const at = Math.round(clampTime(vidPlayer.currentTime) * 10) / 10;
   const currentClips = ensureExplicitVideoClips();
   const clipIndex = currentClips.findIndex(clip => at > Number(clip.sourceStart) + 0.05 && at < Number(clip.sourceEnd) - 0.05);
@@ -7988,7 +7988,8 @@ document.getElementById('edit-split')?.addEventListener('click', () => {
   videoEdit.splits = addUniqueTime(videoEdit.splits || [], at);
   selectedEditorItem = { type:'clip', id:next[1].id };
   saveVideoEdit();
-});
+}
+document.getElementById('edit-split')?.addEventListener('click', splitVideoClipAtPlayhead);
 document.getElementById('edit-freeze')?.addEventListener('click', () => {
   toggleFreezeAt(vidPlayer.currentTime);
 });
@@ -8849,6 +8850,14 @@ document.addEventListener('keydown', e => {
       e.stopPropagation();
       window.undoTraj();
     }
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.code === 'KeyB' &&
+      !isTextTypingTarget(target) && (insideEditor || videoEditorHotkeysActive) && hasVideoForHotkeys()) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation?.();
+    splitVideoClipAtPlayhead();
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && (insideEditor || videoEditorHotkeysActive)) {

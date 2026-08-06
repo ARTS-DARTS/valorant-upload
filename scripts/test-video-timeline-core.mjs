@@ -128,4 +128,7 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /function selectedInspectorTarget\(\)/);
   assert.match(app, /data-inspector-field/);
   assert.match(app, /saveVideoEdit\(\{ skipUndo:true \}\)/);
+  assert.match(html, /class="video-editor-shortcuts"/);
+  assert.match(app, /function splitVideoClipAtPlayhead\(\)/);
+  assert.match(app, /e\.code === 'KeyB'/);
 });
