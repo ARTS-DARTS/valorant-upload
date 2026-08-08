@@ -62,7 +62,7 @@ export function createAdminBillingHandler({
         .where('test_mode', '==', testMode)
         .orderBy('created_at', 'desc');
       if (status !== 'all') {
-        if (!['pending', 'succeeded', 'failed', 'requires_review', 'reversed'].includes(status)) {
+        if (!['pending', 'succeeded', 'failed', 'expired', 'requires_review', 'reversed'].includes(status)) {
           throw fail(400, 'invalid_status');
         }
       }

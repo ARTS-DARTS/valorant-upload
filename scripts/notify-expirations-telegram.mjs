@@ -88,7 +88,7 @@ export async function runExpirationAlert({
   return { sent:true, count:actionable.length };
 }
 
-if (import.meta.url === `file://${process.argv[1].replaceAll('\\', '/')}`) {
+if (process.argv[1] && import.meta.url === `file://${process.argv[1].replaceAll('\\', '/')}`) {
   runExpirationAlert()
     .then(result => console.log(JSON.stringify(result)))
     .catch(error => {

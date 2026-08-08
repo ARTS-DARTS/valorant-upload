@@ -20,6 +20,7 @@ async function heartbeat(req, res, decoded) {
   const activityDay = moscowDayKey();
   const presenceRef = db.collection('site_presence').doc(decoded.uid);
   const dailyRef = db.collection('site_activity_daily').doc(activityDay);
+  const sessionRef = db.collection('user_sessions').doc(`${activityDay}_web_${decoded.uid}`);
   const payload = {
     uid:decoded.uid,
     page:short(req.body?.page || 'upload', 40),
@@ -53,6 +54,14 @@ async function heartbeat(req, res, decoded) {
     tx.set(presenceRef, payload, { merge:true });
     if (changed) {
       tx.set(dailyRef, { day:activityDay, unique_users:FieldValue.increment(1), updated_at:FieldValue.serverTimestamp() }, { merge:true });
+      tx.set(sessionRef, {
+        uid:decoded.uid,
+        date:activityDay,
+        platform:'web',
+        app_version:short(req.body?.app_version || 'upload-site', 40),
+        ts:FieldValue.serverTimestamp(),
+        schema_version:2,
+      }, { merge:false });
     }
   });
   res.status(200).json({ ok:true, changed, activity_day:activityDay });

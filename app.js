@@ -11398,6 +11398,13 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       last_lineup_at: serverTimestamp(),
       last_lineup_id: lineupRef.id,
     }, { merge: true });
+    batch.set(doc(db, 'analytics_events', `lineup_submit_${lineupRef.id}`), {
+      type: 'lineup_submitted',
+      lineup_id: lineupRef.id,
+      uid,
+      platform: 'web',
+      ts: serverTimestamp(),
+    });
     await batch.commit();
 
     showSuccess();

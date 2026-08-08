@@ -46,6 +46,23 @@ export async function reconcileRobokassaOrder({
     return { invoiceId, action: 'skipped' };
   }
   if (providerState.result_code !== 0) {
+    const createdMillis = typeof order.created_at?.toMillis === 'function'
+      ? order.created_at.toMillis()
+      : new Date(order.created_at || 0).getTime();
+    if (
+      order.status === 'pending' &&
+      Number.isFinite(createdMillis) &&
+      now.getTime() - createdMillis >= 60 * 60_000
+    ) {
+      await db.collection('billing_orders').doc(invoiceId).set({
+        status:'expired',
+        expired_at:Timestamp.fromDate(now),
+        updated_at:Timestamp.fromDate(now),
+        expiration_reason:'provider_invoice_missing',
+        provider_result_code:providerState.result_code,
+      }, { merge:true });
+      return { invoiceId, action:'expired', resultCode:providerState.result_code };
+    }
     return { invoiceId, action: 'provider_result', resultCode: providerState.result_code };
   }
   if (

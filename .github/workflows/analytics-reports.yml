@@ -1,0 +1,41 @@
+name: Analytics Telegram reports
+
+on:
+  schedule:
+    - cron: '15 6 * * *'
+    - cron: '30 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      period:
+        description: Report period
+        required: true
+        default: daily
+        type: choice
+        options: [daily, weekly]
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Send analytics report
+        shell: bash
+        run: |
+          PERIOD="${{ inputs.period }}"
+          if [[ -z "$PERIOD" ]]; then
+            if [[ "${{ github.event.schedule }}" == "30 6 * * 1" ]]; then PERIOD=weekly; else PERIOD=daily; fi
+          fi
+          if [[ "$PERIOD" == "weekly" ]]; then node scripts/analytics-telegram-report.mjs --weekly; else node scripts/analytics-telegram-report.mjs; fi
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ALERT_CHAT_ID: ${{ secrets.TELEGRAM_ALERT_CHAT_ID }}
