@@ -39,7 +39,7 @@ export function buildAlertText(items) {
   return lines.join('\n');
 }
 
-export async function sendTelegram(token, chatId, text) {
+export async function sendTelegram(token, chatId, text, { allowMigration = true } = {}) {
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },
@@ -48,6 +48,10 @@ export async function sendTelegram(token, chatId, text) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.ok) {
+    const migratedChatId = clean(payload?.parameters?.migrate_to_chat_id);
+    if (allowMigration && migratedChatId) {
+      return sendTelegram(token, migratedChatId, text, { allowMigration:false });
+    }
     const code = Number(payload.error_code) || response.status || 0;
     const description = clean(payload.description).replace(/[\r\n]+/g, ' ').slice(0, 180);
     throw new Error(`telegram_send_failed:${code}:${description || 'unknown_error'}`);
