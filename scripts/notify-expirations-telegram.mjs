@@ -47,7 +47,11 @@ export async function sendTelegram(token, chatId, text) {
     signal:AbortSignal.timeout(15_000),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload.ok) throw new Error('telegram_send_failed');
+  if (!response.ok || !payload.ok) {
+    const code = Number(payload.error_code) || response.status || 0;
+    const description = clean(payload.description).replace(/[\r\n]+/g, ' ').slice(0, 180);
+    throw new Error(`telegram_send_failed:${code}:${description || 'unknown_error'}`);
+  }
 }
 
 export async function runExpirationAlert({
