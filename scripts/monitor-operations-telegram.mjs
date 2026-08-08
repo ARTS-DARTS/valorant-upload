@@ -124,7 +124,7 @@ export async function runOperationalMonitor({
   if (problems.length) {
     await sender(token, chatId, ['🚨 VLineups: требуется внимание', '', ...problems.map(value => `• ${value}`)].join('\n'));
   } else if (previous.exists && previous.data()?.last_fingerprint) {
-    await sender(token, chatId, '✅ VLineups: API и платёжный контур снова в норме.');
+    await sender(token, chatId, '✅ VLineups: операционный мониторинг снова в норме.');
   }
   await stateRef.set({
     last_fingerprint:fingerprint,
