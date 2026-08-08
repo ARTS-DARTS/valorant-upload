@@ -35,9 +35,13 @@ export async function collectOperationalProblems({
     .orderBy('created_at', 'desc').limit(100).get();
   const stuck = orders.docs.filter(doc => {
     const data = doc.data() || {};
-    return data.status === 'pending' && now() - millis(data.created_at) > 35 * 60_000;
+    return data.test_mode === false && data.status === 'pending' &&
+      now() - millis(data.created_at) > 35 * 60_000;
   });
-  const review = orders.docs.filter(doc => doc.data()?.status === 'requires_review');
+  const review = orders.docs.filter(doc => {
+    const data = doc.data() || {};
+    return data.test_mode === false && data.status === 'requires_review';
+  });
   if (stuck.length) problems.push(`Зависшие платежи: ${stuck.length}`);
   if (review.length) problems.push(`Платежи требуют проверки: ${review.length}`);
   const monitoring = await db.collection('billing_monitoring').doc('robokassa').get();
