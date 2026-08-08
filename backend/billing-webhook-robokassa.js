@@ -460,6 +460,15 @@ export async function applyRobokassaReversal({
       net_minor: FieldValue.increment(-order.amount_minor),
       updated_at: nowTimestamp,
     }, { merge: true });
+    tx.set(db.collection(
+      order.test_mode === true ? 'subscription_stats_daily_test' : 'subscription_stats_daily_live',
+    ).doc(day), {
+      purchases: FieldValue.increment(1),
+      gross_minor: FieldValue.increment(order.amount_minor),
+      net_minor: FieldValue.increment(order.amount_minor),
+      currency: 'RUB',
+      updated_at: nowTimestamp,
+    }, { merge:true });
     if (order.test_mode === false) {
       tx.set(db.collection('analytics_events').doc(`purchase_${invoiceId}`), {
         type: 'purchase_succeeded',

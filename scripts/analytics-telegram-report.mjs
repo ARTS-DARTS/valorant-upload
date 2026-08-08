@@ -37,7 +37,7 @@ export async function buildAnalyticsReport({ db, period = 'daily', now = new Dat
     db.collection('app_errors').where('timestamp', '>=', since).count().get().catch(() => null),
     readDays(db, 'activity_daily', days),
     readDays(db, 'product_funnel_daily', days),
-    readDays(db, 'subscription_stats_daily', days),
+    readDays(db, 'subscription_stats_daily_live', days),
     readDays(db, 'ad_stats_daily', days),
     readDays(db, 'retention_cohorts', [shiftedDay(1), shiftedDay(7), shiftedDay(30)]),
   ]);
