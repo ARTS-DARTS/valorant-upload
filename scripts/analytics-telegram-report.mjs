@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { FieldValue } from 'firebase-admin/firestore';
 
 import { adminFirestore } from '../backend/_lib/firebase-admin.js';
 import { sendTelegram } from './notify-expirations-telegram.mjs';
@@ -55,6 +56,9 @@ export async function buildAnalyticsReport({ db, period = 'daily', now = new Dat
   const adShown = sum(ads, 'total_shown');
   const rewarded = sum(ads, 'rewarded_shown');
   const completed = sum(ads, 'rewarded_completed');
+  // Some legacy clients recorded completion without the matching shown event.
+  // A completion proves that a rewarded ad was shown, so it is the safe floor.
+  const effectiveRewarded = Math.max(rewarded, completed);
   const retention = [1, 7, 30].map((day, index) => {
     const cohort = cohorts[index] || {};
     return `D${day} ${percent(Number(cohort[`returned_d${day}`] || 0), Number(cohort.registrations || 0))}`;
@@ -71,7 +75,7 @@ export async function buildAnalyticsReport({ db, period = 'daily', now = new Dat
     `🧭 Воронка: просмотры ${views} → лайки ${likes} → избранное ${favorites} → отправки ${submissions} → покупки ${purchases}`,
     `Like/view: ${percent(likes, views)} · Favorite/view: ${percent(favorites, views)}`,
     `💳 Выручка: ${rub(gross)}`,
-    `📢 Реклама: ${adShown} показов · rewarded ${completed}/${rewarded} (${percent(completed, rewarded)})`,
+    `📢 Реклама: ${adShown} показов · rewarded ${completed}/${effectiveRewarded} (${percent(completed, effectiveRewarded)})`,
     `⚠️ Ошибки: ${Number(errors?.data()?.count || 0)}`,
     '',
     'Новые retention-метрики считаются только для когорт после запуска агрегатора.',
@@ -82,9 +86,31 @@ export async function runAnalyticsReport({ db = adminFirestore(), env = process.
   const token = clean(env.TELEGRAM_BOT_TOKEN);
   const chatId = clean(env.TELEGRAM_ALERT_CHAT_ID);
   if (!token || !chatId) throw new Error('telegram_alerts_not_configured');
-  const text = await buildAnalyticsReport({ db, period });
-  await sendTelegram(token, chatId, text);
-  return { sent:true, period };
+  const reportKey = period === 'weekly'
+    ? `${period}_${shiftedDay(7)}_${shiftedDay(1)}`
+    : `${period}_${shiftedDay(1)}`;
+  const deliveryRef = db.collection('telegram_report_deliveries').doc(reportKey);
+  const claimed = await db.runTransaction(async tx => {
+    const current = await tx.get(deliveryRef);
+    if (['sending', 'sent'].includes(current.data()?.status)) return false;
+    tx.set(deliveryRef, {
+      period,
+      report_key:reportKey,
+      status:'sending',
+      attempted_at:FieldValue.serverTimestamp(),
+    }, { merge:true });
+    return true;
+  });
+  if (!claimed) return { sent:false, period, reason:'already_sent' };
+  try {
+    const text = await buildAnalyticsReport({ db, period });
+    await sendTelegram(token, chatId, text);
+    await deliveryRef.set({ status:'sent', sent_at:FieldValue.serverTimestamp() }, { merge:true });
+    return { sent:true, period };
+  } catch (error) {
+    await deliveryRef.set({ status:'failed', error:String(error.message || error).slice(0, 180) }, { merge:true });
+    throw error;
+  }
 }
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1].replaceAll('\\', '/')}`) {

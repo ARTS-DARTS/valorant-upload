@@ -89,7 +89,7 @@ export async function collectOperationalProblems({
 
   const cron = await db.collection('cron_logs').orderBy('run_at', 'desc').limit(3).get().catch(() => null);
   const latestCron = cron?.docs?.[0]?.data?.() || null;
-  if (latestCron?.ok === false && now() - millis(latestCron.run_at) < 30 * 60 * 60_000) {
+  if (latestCron?.ok === false && now() - millis(latestCron.run_at) < 6 * 60 * 60_000) {
     problems.push(`Cron cleanup_bots завершился с ошибками: ${Number(latestCron.stats?.errors || 0)}`);
   } else if (!latestCron || now() - millis(latestCron.run_at) > 30 * 60 * 60_000) {
     problems.push('Cron cleanup_bots не запускался более 30 часов');
