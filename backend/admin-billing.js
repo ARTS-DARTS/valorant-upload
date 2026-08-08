@@ -1,4 +1,5 @@
 import { adminAuth, adminFirestore } from './_lib/firebase-admin.js';
+import { FieldValue } from 'firebase-admin/firestore';
 
 const ALLOWED_ORIGINS = new Set([
   'https://arts-darts.github.io',
@@ -45,13 +46,38 @@ export function createAdminBillingHandler({
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Vary', 'Origin');
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     }
     if (req.method === 'OPTIONS') return res.status(204).end();
-    if (req.method !== 'GET') return res.status(405).json({ error: 'method_not_allowed' });
+    if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'method_not_allowed' });
     try {
       const store = db ?? adminFirestore();
-      await requireAdmin(store, auth ?? adminAuth(), req);
+      const decoded = await requireAdmin(store, auth ?? adminAuth(), req);
+      if (req.method === 'POST') {
+        const action = String(req.body?.action || '').trim();
+        const orderId = String(req.body?.order_id || '').trim();
+        if (action !== 'expire_pending') throw fail(400, 'unsupported_action');
+        if (!/^\d{1,18}$/.test(orderId)) throw fail(400, 'invalid_order_id');
+        const orderRef = store.collection('billing_orders').doc(orderId);
+        await store.runTransaction(async tx => {
+          const snapshot = await tx.get(orderRef);
+          if (!snapshot.exists) throw fail(404, 'order_not_found');
+          const order = snapshot.data() || {};
+          if (order.status !== 'pending') throw fail(409, 'order_is_not_pending');
+          tx.set(orderRef, {
+            status:'expired',
+            expired_at:FieldValue.serverTimestamp(),
+            updated_at:FieldValue.serverTimestamp(),
+            expiration_reason:'admin_confirmed_not_found_in_robokassa',
+            changed_by:decoded.uid,
+          }, { merge:true });
+          tx.set(store.collection('admin_audit_logs').doc(), {
+            action:'billing_order_expired', order_id:orderId,
+            admin_uid:decoded.uid, created_at:FieldValue.serverTimestamp(),
+          });
+        });
+        return res.status(200).json({ ok:true, order_id:orderId, status:'expired' });
+      }
       const limit = Math.min(Math.max(Number(req.query?.limit) || 40, 1), 100);
       const status = String(req.query?.status || 'all').trim();
       const mode = String(req.query?.mode || 'live').trim();

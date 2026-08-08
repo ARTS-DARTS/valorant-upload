@@ -4,6 +4,18 @@ function clean(value) {
   return String(value || '').trim();
 }
 
+function millis(value) {
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  const parsed = new Date(value || 0).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function moscowDay(value = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone:'Europe/Moscow', year:'numeric', month:'2-digit', day:'2-digit',
+  }).format(value);
+}
+
 async function checkHttp(url, options = {}) {
   const started = Date.now();
   try {
@@ -56,7 +68,8 @@ export function createAdminHealthHandler({
         });
       }
 
-      const [api, oneSignal, alertState] = await Promise.all([
+      const yesterday = moscowDay(new Date(Date.now() - 86400000));
+      const [api, oneSignal, alertState, cronSnap, analyticsSnap, reportSnap, billingSnap] = await Promise.all([
         httpCheck('https://vlineups.ru/ready'),
         appId && restKey
           ? httpCheck(`https://api.onesignal.com/apps/${encodeURIComponent(appId)}`, {
@@ -64,19 +77,32 @@ export function createAdminHealthHandler({
             })
           : Promise.resolve({ ok:false, status:null, latency_ms:null }),
         store.collection('settings').doc('credential_expiration_alerts').get(),
+        store.collection('cron_logs').orderBy('run_at', 'desc').limit(1).get().catch(() => null),
+        store.collection('activity_daily').doc(yesterday).get().catch(() => null),
+        store.collection('telegram_report_deliveries').doc(`daily_${yesterday}`).get().catch(() => null),
+        store.collection('billing_monitoring').doc('robokassa').get().catch(() => null),
       ]);
       const alertData = alertState.data() || {};
+      const cronData = cronSnap?.docs?.[0]?.data?.() || {};
+      const cronAge = Date.now() - millis(cronData.run_at);
+      const analyticsData = analyticsSnap?.data?.() || {};
+      const reportData = reportSnap?.data?.() || {};
+      const billingData = billingSnap?.data?.() || {};
+      const robokassaConfigured = Boolean(clean(env.ROBOKASSA_MERCHANT_LOGIN) && clean(env.ROBOKASSA_PASSWORD_1) && clean(env.ROBOKASSA_PASSWORD_2));
       const checks = [
         { id:'api', name:'VPS API', ...api },
         { id:'firebase', name:'Firebase Admin', ok:true, status:200, latency_ms:null },
         { id:'onesignal', name:'OneSignal', ...oneSignal, configured:Boolean(appId && restKey) },
         { id:'yandex', name:'Яндекс OAuth', ok:Boolean(clean(env.YANDEX_CLIENT_ID) && clean(env.YANDEX_CLIENT_SECRET) && clean(env.YANDEX_STATE_SECRET)), configured:true },
-        { id:'telegram', name:'Telegram alerts', ok:Boolean(alertData.checked_at), configured:Boolean(clean(env.TELEGRAM_BOT_TOKEN) && clean(env.TELEGRAM_ALERT_CHAT_ID)), last_check:alertData.checked_at?.toDate?.()?.toISOString?.() || null },
-        { id:'robokassa', name:'Robokassa', ok:Boolean(clean(env.ROBOKASSA_MERCHANT_LOGIN) && clean(env.ROBOKASSA_PASSWORD_1) && clean(env.ROBOKASSA_PASSWORD_2)), configured:Boolean(clean(env.ROBOKASSA_MERCHANT_LOGIN)) },
+        { id:'telegram', name:'Telegram-уведомления', ok:Boolean(alertData.checked_at), configured:Boolean(clean(env.TELEGRAM_BOT_TOKEN) && clean(env.TELEGRAM_ALERT_CHAT_ID)), last_check:alertData.checked_at?.toDate?.()?.toISOString?.() || null },
+        { id:'cron', name:'Ежедневная очистка', ok:Boolean(cronData.run_at) && cronData.ok !== false && cronAge <= 30 * 60 * 60_000, status:cronData.ok === false ? 500 : 200, last_check:cronData.run_at?.toDate?.()?.toISOString?.() || null },
+        { id:'analytics', name:'Данные за вчера', ok:Boolean(analyticsSnap?.exists), status:analyticsSnap?.exists ? 200 : 404, date:yesterday, users:Number(analyticsData.unique_users) || 0 },
+        { id:'daily_report', name:'Ежедневный отчёт', ok:reportData.status === 'sent', status:reportData.status === 'sent' ? 200 : 404, date:yesterday },
+        { id:'robokassa', name:'Платежи Robokassa', ok:robokassaConfigured && (!billingData.last_webhook_error_at || Date.now() - millis(billingData.last_webhook_error_at) > 30 * 60_000), configured:robokassaConfigured, last_check:billingData.updated_at?.toDate?.()?.toISOString?.() || null },
       ];
       return res.status(200).json({
         checked_at:new Date().toISOString(),
-        ok:checks.filter(item => item.id !== 'robokassa').every(item => item.ok),
+        ok:checks.every(item => item.ok),
         checks,
       });
     } catch (error) {

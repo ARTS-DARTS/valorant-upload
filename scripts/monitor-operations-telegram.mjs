@@ -134,7 +134,7 @@ export async function runOperationalMonitor({
   return { sent:true, count:problems.length };
 }
 
-if (import.meta.url === `file://${process.argv[1].replaceAll('\\', '/')}`) {
+if (process.argv[1] && import.meta.url === `file://${process.argv[1].replaceAll('\\', '/')}`) {
   runOperationalMonitor()
     .then(result => console.log(JSON.stringify(result)))
     .catch(error => {

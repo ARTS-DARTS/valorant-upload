@@ -93,6 +93,12 @@ class MemoryDb {
   constructor(seed = {}) { this.docs = new Map(Object.entries(seed)); }
   collection(name) { return new Collection(this, name); }
   async getAll(...refs) { return Promise.all(refs.map(ref => ref.get())); }
+  async runTransaction(callback) {
+    return callback({
+      get:ref => ref.get(),
+      set:(ref, value, options) => ref.set(value, options),
+    });
+  }
 }
 
 function timestamp(iso) {
@@ -427,6 +433,34 @@ test('admin billing paginates bounded orders and diagnoses stuck/review states',
   }, testPage);
   assert.deepEqual(testPage.body.orders.map(order => order.id), ['700004']);
   assert.equal(testPage.body.mode, 'test');
+});
+
+test('admin can expire only a pending order and the action is audited', async () => {
+  const db = new MemoryDb({
+    'users/admin': { role:'admin' },
+    'billing_orders/700010': {
+      uid:'u1', status:'pending', plan_id:'plus', amount_minor:16900, test_mode:false,
+      created_at:timestamp('2026-07-30T10:00:00Z'),
+    },
+  });
+  const handler = createAdminBillingHandler({ db, auth:authFor('admin') });
+  const expired = response();
+  await handler({
+    method:'POST', headers:{ authorization:'Bearer valid-token' },
+    body:{ action:'expire_pending', order_id:'700010' },
+  }, expired);
+  assert.equal(expired.statusCode, 200);
+  assert.equal(db.docs.get('billing_orders/700010').status, 'expired');
+  assert.equal(db.docs.get('billing_orders/700010').expiration_reason, 'admin_confirmed_not_found_in_robokassa');
+  assert.equal([...db.docs.values()].some(value => value.action === 'billing_order_expired'), true);
+
+  const repeated = response();
+  await handler({
+    method:'POST', headers:{ authorization:'Bearer valid-token' },
+    body:{ action:'expire_pending', order_id:'700010' },
+  }, repeated);
+  assert.equal(repeated.statusCode, 409);
+  assert.equal(repeated.body.error, 'order_is_not_pending');
 });
 
 test('account deletion identity is stable and endpoint requires confirmation plus recent sign-in', async () => {

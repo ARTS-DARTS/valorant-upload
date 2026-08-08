@@ -59,26 +59,27 @@ export async function buildAnalyticsReport({ db, period = 'daily', now = new Dat
   // Some legacy clients recorded completion without the matching shown event.
   // A completion proves that a rewarded ad was shown, so it is the safe floor.
   const effectiveRewarded = Math.max(rewarded, completed);
-  const retention = [1, 7, 30].map((day, index) => {
+  const returns = [1, 7, 30].map((day, index) => {
     const cohort = cohorts[index] || {};
-    return `D${day} ${percent(Number(cohort[`returned_d${day}`] || 0), Number(cohort.registrations || 0))}`;
+    return `через ${day} ${day === 1 ? 'день' : 'дней'}: ${percent(Number(cohort[`returned_d${day}`] || 0), Number(cohort.registrations || 0))}`;
   }).join(' · ');
   const title = period === 'weekly' ? '📊 VLineups: недельный отчёт' : '📈 VLineups: ежедневный отчёт';
   return [
     title,
     `Период: ${days.at(-1)} — ${days[0]}`,
     '',
-    `👥 Пользователи: ${totalUsers} · DAU ${dauValue} · WAU ${wauValue} · MAU ${mauValue}`,
-    `Stickiness DAU/MAU: ${percent(dauValue, mauValue)}`,
-    `Retention: ${retention}`,
+    `👥 Всего пользователей: ${totalUsers}`,
+    `Активны: за сутки ${dauValue} · за 7 дней ${wauValue} · за 30 дней ${mauValue}`,
+    `Доля активных за сутки среди активных за месяц: ${percent(dauValue, mauValue)}`,
+    `Вернулись после регистрации: ${returns}`,
     '',
-    `🧭 Воронка: просмотры ${views} → лайки ${likes} → избранное ${favorites} → отправки ${submissions} → покупки ${purchases}`,
-    `Like/view: ${percent(likes, views)} · Favorite/view: ${percent(favorites, views)}`,
+    `🧭 Действия пользователей: просмотры ${views} → лайки ${likes} → избранное ${favorites} → отправки ${submissions} → покупки ${purchases}`,
+    `От просмотров: лайки ${percent(likes, views)} · избранное ${percent(favorites, views)}`,
     `💳 Выручка: ${rub(gross)}`,
     `📢 Реклама: ${adShown} показов · rewarded ${completed}/${effectiveRewarded} (${percent(completed, effectiveRewarded)})`,
     `⚠️ Ошибки: ${Number(errors?.data()?.count || 0)}`,
     '',
-    'Новые retention-метрики считаются только для когорт после запуска агрегатора.',
+    'Возвраты считаются только для пользователей, зарегистрировавшихся после запуска нового счётчика.',
   ].join('\n');
 }
 
