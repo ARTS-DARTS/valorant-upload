@@ -38,6 +38,11 @@ import {
   reconcileVideoSourceDuration,
   stableVideoItemId,
 } from './video_project_v3.mjs?v=2026-08-06-video-duration-reconcile-v1';
+import {
+  effectiveProgressPoints,
+  entitlementHasCooldownBypass,
+  remainingCooldownMs,
+} from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -2706,8 +2711,10 @@ function openPendingLineupDeepLink() {
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
 let _cooldownInterval = null;
-let _cooldownBadgeUnsub = null;
+let _cooldownAccessUnsubs = [];
 let _cooldownExempt = false;
+let _badgeCooldownExempt = false;
+let _entitlementCooldownExempt = false;
 let _profileUnsubs = [];
 let _profileParts = { public: {}, private: {}, stats: {}, auth: {} };
 
@@ -2723,9 +2730,11 @@ const LEVELS = [
 let _approvedLineups = 0;
 
 function effectiveApprovedLineups(factualApproved = 0) {
-  const storedApproved = Number(currentUserProfile?.approved_lineups || 0);
-  const bonusLineups = Number(currentUserProfile?.bonus_lineups || 0);
-  return Math.max(storedApproved, factualApproved) + bonusLineups;
+  return effectiveProgressPoints({
+    publicProfile: _profileParts.public,
+    stats: _profileParts.stats,
+    factualApproved,
+  });
 }
 
 function calculateLevel(approved) {
@@ -2868,20 +2877,39 @@ function _showCooldownReady() {
   }
 }
 
-async function _subscribeCooldownBadge(uid) {
-  if (_cooldownBadgeUnsub) { _cooldownBadgeUnsub(); _cooldownBadgeUnsub = null; }
-  try {
-    const badgeRef = doc(db, 'user_badges', uid);
-    const firstSnap = await getDoc(badgeRef);
-    _cooldownExempt = firstSnap.data()?.cooldown_exempt === true;
-    _cooldownBadgeUnsub = onSnapshot(badgeRef, snap => {
-      _cooldownExempt = snap.data()?.cooldown_exempt === true;
-      _updateLevelDisplay(_approvedLineups);
-      _updateCooldown(uid);
-    });
-  } catch (_) {
-    _cooldownExempt = false;
-  }
+function _publishCooldownAccess(uid) {
+  _cooldownExempt = _badgeCooldownExempt || _entitlementCooldownExempt;
+  _updateLevelDisplay(_approvedLineups);
+  _updateCooldown(uid);
+}
+
+async function _refreshCooldownAccess(uid) {
+  const [badgeResult, entitlementResult] = await Promise.allSettled([
+    getDoc(doc(db, 'user_badges', uid)),
+    getDoc(doc(db, 'account_entitlements', uid)),
+  ]);
+  if (badgeResult.status === 'fulfilled') _badgeCooldownExempt = badgeResult.value.data()?.cooldown_exempt === true;
+  if (entitlementResult.status === 'fulfilled') _entitlementCooldownExempt = entitlementHasCooldownBypass(entitlementResult.value.data() || {});
+  _publishCooldownAccess(uid);
+  return badgeResult.status === 'fulfilled' && entitlementResult.status === 'fulfilled';
+}
+
+async function _subscribeCooldownAccess(uid) {
+  _cooldownAccessUnsubs.forEach(unsubscribe => unsubscribe());
+  _cooldownAccessUnsubs = [];
+  _badgeCooldownExempt = false;
+  _entitlementCooldownExempt = false;
+  await _refreshCooldownAccess(uid);
+  _cooldownAccessUnsubs = [
+    onSnapshot(doc(db, 'user_badges', uid), snap => {
+      _badgeCooldownExempt = snap.data()?.cooldown_exempt === true;
+      _publishCooldownAccess(uid);
+    }, () => {}),
+    onSnapshot(doc(db, 'account_entitlements', uid), snap => {
+      _entitlementCooldownExempt = entitlementHasCooldownBypass(snap.data() || {});
+      _publishCooldownAccess(uid);
+    }, () => {}),
+  ];
 }
 
 function _startCooldownTimer(remainMs) {
@@ -2904,7 +2932,7 @@ async function _updateCooldown(uid) {
     const rateDoc = await getDoc(doc(db, 'rate_limits', uid));
     const lastAt  = rateDoc.data()?.last_lineup_at?.toDate?.();
     if (!lastAt) { _showCooldownReady(); return; }
-    const remainMs = cooldownMinutesFor(_approvedLineups) * 60000 - (Date.now() - lastAt.getTime());
+    const remainMs = remainingCooldownMs({ lastSubmittedAt:lastAt, cooldownMinutes:cooldownMinutesFor(_approvedLineups) });
     if (remainMs <= 0) { _showCooldownReady(); return; }
     _startCooldownTimer(remainMs);
   } catch { _showCooldownReady(); }
@@ -4965,7 +4993,7 @@ onAuthStateChanged(auth, async user => {
     if (headerNotifications) headerNotifications.hidden = false;
     if (headerSoundTest) headerSoundTest.hidden = false;
     await loadCurrentUserProfile(user);
-    await _subscribeCooldownBadge(user.uid);
+    await _subscribeCooldownAccess(user.uid);
     showTrainingReturnFeedback();
     await loadUploadCategoryConfig();
     updateAdminOnlyWorkspace();
@@ -5005,7 +5033,11 @@ onAuthStateChanged(auth, async user => {
     pauseAllSiteMedia();
     moderationController?.destroy?.();
     currentUserProfile = null;
-    if (_cooldownBadgeUnsub) { _cooldownBadgeUnsub(); _cooldownBadgeUnsub = null; }
+    _cooldownAccessUnsubs.forEach(unsubscribe => unsubscribe());
+    _cooldownAccessUnsubs = [];
+    _badgeCooldownExempt = false;
+    _entitlementCooldownExempt = false;
+    _cooldownExempt = false;
     _cooldownExempt = false;
     moderationController = null;
     moderationModulePromise = null;
@@ -11167,6 +11199,9 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   if (requestedContentType !== 'defense' && markerX === null) { toast('Поставь метку на карте', 'e'); return; }
 
   const uid = currentUser.uid;
+  // Refresh both legacy badges and paid capabilities before applying a local
+  // cooldown. If either read is unavailable, Firestore Rules decide instead.
+  const cooldownAccessKnown = await _refreshCooldownAccess(uid);
   let rateLimitDiagnostics = { read: false };
   try {
     const rateDoc = await getDoc(doc(db, 'rate_limits', uid));
@@ -11185,7 +11220,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         const cooldownMin = cooldownMinutesFor(_approvedLineups);
         rateLimitDiagnostics.minutes_since_last_lineup = Math.floor(diffMin * 10) / 10;
         rateLimitDiagnostics.remaining_minutes = Math.max(0, Math.ceil(cooldownMin - diffMin));
-        if (!moderatorDraftSourceId && diffMin < cooldownMin) {
+        if (!moderatorDraftSourceId && cooldownAccessKnown && diffMin < cooldownMin) {
           toast(`Подожди ещё ${Math.ceil(cooldownMin - diffMin)} мин.`, 'w');
           return;
         }
