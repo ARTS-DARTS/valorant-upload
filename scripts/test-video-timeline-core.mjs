@@ -85,6 +85,7 @@ test('upload editor requires an explicit confirmed montage revision', async () =
   assert.match(html, /id="video-player-fullscreen-open"[^>]*>⛶ Видео на весь экран</);
   assert.match(app, /function setVideoPlayerFullscreen\(open\)/);
   assert.match(css, /\.video-editor\[hidden\]\s*\{\s*display:none !important;/);
+  assert.match(css, /#vid-stage:fullscreen \.vid-player\s*\{[^}]*max-height:none;/);
   assert.match(html, /id="video-editor-fullscreen-open"[^>]*>Открыть редактор</);
   assert.match(app, /function setVideoEditorFullscreen\(open\)/);
 });
