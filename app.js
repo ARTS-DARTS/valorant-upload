@@ -5694,6 +5694,8 @@ const vidPlayBtn  = document.getElementById('vid-play-btn');
 const fullscreenVidScrubber = document.getElementById('video-player-fullscreen-scrubber');
 const fullscreenVidTimeEl = document.getElementById('video-player-fullscreen-time');
 const fullscreenVidPlayBtn = document.getElementById('video-player-fullscreen-play');
+const fullscreenVidMuteBtn = document.getElementById('video-player-fullscreen-mute');
+const fullscreenVidVolume = document.getElementById('video-player-fullscreen-volume');
 let activeEditorMode = 'trim';
 let timelineDrag = null;
 let scrubberDragging = false;
@@ -9042,6 +9044,12 @@ fullscreenVidScrubber?.addEventListener('input', () => {
   seekFromScrubberValue();
   renderVideoTransport();
 });
+fullscreenVidScrubber?.addEventListener('pointerdown', () => {
+  scrubberDragging = true;
+  scrubberResumePlayback = outputPlaybackActive || !vidPlayer.paused;
+  if (outputPlaybackActive) stopOutputPlayback({ keepPreview: true });
+  else if (scrubberResumePlayback) vidPlayer.pause();
+});
 vidScrubber.addEventListener('pointerdown', event => {
   scrubberDragging = true;
   scrubberResumePlayback = outputPlaybackActive || !vidPlayer.paused;
@@ -9056,6 +9064,7 @@ const finishScrubberDrag = () => {
   scrubberResumePlayback = false;
 };
 vidScrubber.addEventListener('pointerup', finishScrubberDrag);
+fullscreenVidScrubber?.addEventListener('pointerup', finishScrubberDrag);
 const cancelScrubberDrag = () => {
   scrubberDragging = false;
   scrubberResumePlayback = false;
@@ -9066,6 +9075,35 @@ window.addEventListener('pointerup', finishScrubberDrag);
 window.addEventListener('pointercancel', cancelScrubberDrag);
 vidPlayBtn.addEventListener('click', toggleEditorPlayback);
 fullscreenVidPlayBtn?.addEventListener('click', toggleEditorPlayback);
+fullscreenVidMuteBtn?.addEventListener('click', () => { vidPlayer.muted = !vidPlayer.muted; });
+fullscreenVidVolume?.addEventListener('input', () => {
+  vidPlayer.volume = Number(fullscreenVidVolume.value);
+  vidPlayer.muted = vidPlayer.volume === 0;
+});
+vidPlayer.addEventListener('volumechange', () => {
+  if (fullscreenVidVolume) fullscreenVidVolume.value = String(vidPlayer.muted ? 0 : vidPlayer.volume);
+  if (fullscreenVidMuteBtn) {
+    fullscreenVidMuteBtn.textContent = vidPlayer.muted || vidPlayer.volume === 0 ? '🔇' : vidPlayer.volume < .5 ? '🔉' : '🔊';
+    fullscreenVidMuteBtn.setAttribute('aria-label', vidPlayer.muted ? 'Включить звук' : 'Выключить звук');
+  }
+});
+editorEls.stage?.addEventListener('dblclick', event => {
+  if (event.target.closest('.video-player-fullscreen-controls,.video-player-fullscreen-close')) return;
+  setVideoPlayerFullscreen(document.fullscreenElement !== editorEls.stage);
+});
+document.addEventListener('keydown', event => {
+  if (document.fullscreenElement !== editorEls.stage || event.target.matches('input,textarea,select')) return;
+  if (event.code === 'Space') { event.preventDefault(); toggleEditorPlayback(); }
+  else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault();
+    const duration = editedOutputDuration() || videoDuration();
+    const target = Math.max(0, Math.min(duration, currentOutputTime() + (event.key === 'ArrowRight' ? 5 : -5)));
+    stopOutputPlayback({ keepPreview: false });
+    showOutputFrame(target);
+    renderVideoTransport();
+  } else if (event.key.toLowerCase() === 'm') vidPlayer.muted = !vidPlayer.muted;
+  else if (event.key.toLowerCase() === 'f') setVideoPlayerFullscreen(false);
+});
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     videoHiddenAt = Date.now();
