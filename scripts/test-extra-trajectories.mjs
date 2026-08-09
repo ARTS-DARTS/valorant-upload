@@ -25,7 +25,7 @@ test('each Sova extra trajectory keeps independent charge and bounces', () => {
   assert.match(app, /sova_charge:item\.sova_charge, sova_bounces:item\.sova_bounces/);
   assert.match(app, /ПАРАМЕТРЫ · ДОП\. \$\{index \+ 1\}/);
   assert.match(app, /heading\.textContent = '🏹 ПАРАМЕТРЫ · ОСНОВНАЯ'/);
-  assert.match(css, /grid-template-columns:185px minmax\(240px,1fr\) 70px/);
+  assert.match(css, /grid-template-columns:210px minmax\(240px,1fr\) 70px/);
 });
 
 test('extra trajectory handlers stay inside the extra trajectory renderer', () => {
