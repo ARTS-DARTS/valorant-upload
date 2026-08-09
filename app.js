@@ -5756,6 +5756,8 @@ const editorEls = {
   toggle: document.getElementById('video-editor-toggle'),
   fullscreenOpen: document.getElementById('video-editor-fullscreen-open'),
   fullscreenClose: document.getElementById('video-editor-fullscreen-close'),
+  playerFullscreenOpen: document.getElementById('video-player-fullscreen-open'),
+  playerFullscreenClose: document.getElementById('video-player-fullscreen-close'),
   commandbarState: document.getElementById('video-editor-commandbar-state'),
   scroll: document.getElementById('timeline-scroll'),
   shell: document.getElementById('timeline-shell'),
@@ -5852,6 +5854,21 @@ try { setVideoEditorCollapsed(localStorage.getItem(VIDEO_EDITOR_COLLAPSED_KEY) =
 editorEls.toggle?.addEventListener('click', () => setVideoEditorCollapsed(!editorEls.editor.hidden));
 editorEls.fullscreenOpen?.addEventListener('click', () => setVideoEditorFullscreen(true));
 editorEls.fullscreenClose?.addEventListener('click', () => setVideoEditorFullscreen(false));
+
+async function setVideoPlayerFullscreen(open) {
+  if (!editorEls.stage) return;
+  try {
+    if (open) {
+      if (!document.fullscreenElement) await editorEls.stage.requestFullscreen();
+    } else if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    }
+  } catch (error) {
+    toast(`Не удалось открыть видео на весь экран: ${error.message}`, 'e');
+  }
+}
+editorEls.playerFullscreenOpen?.addEventListener('click', () => setVideoPlayerFullscreen(true));
+editorEls.playerFullscreenClose?.addEventListener('click', () => setVideoPlayerFullscreen(false));
 
 function renderVideoViewerZoom() {
   const viewport = editorEls.viewerViewport;

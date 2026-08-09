@@ -82,7 +82,10 @@ test('upload editor requires an explicit confirmed montage revision', async () =
   assert.match(app, /videoUrl && videoEditConfirmationState\(\) !== 'confirmed'/);
   assert.match(app, /confirmedRevision:\s*Math\.max\(0, Number\(videoEdit\.revision/);
   assert.match(app, /draft\.videoEdit\?\.footageOverlays\?\.length/);
-  assert.match(html, /id="video-editor-fullscreen-open"[^>]*>⛶ На весь экран</);
+  assert.match(html, /id="video-player-fullscreen-open"[^>]*>⛶ Видео на весь экран</);
+  assert.match(app, /function setVideoPlayerFullscreen\(open\)/);
+  assert.match(css, /\.video-editor\[hidden\]\s*\{\s*display:none !important;/);
+  assert.match(html, /id="video-editor-fullscreen-open"[^>]*>Открыть редактор</);
   assert.match(app, /function setVideoEditorFullscreen\(open\)/);
 });
 
