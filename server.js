@@ -33,6 +33,7 @@ import adminCloudinaryUsageHandler from './backend/admin-cloudinary-usage.js';
 import robokassaWebhookHandler from './backend/billing-webhook-robokassa.js';
 import robokassaReconciliationHandler from './backend/billing-reconcile-robokassa.js';
 import clientErrorHandler from './backend/client-error.js';
+import lineupsAccessHandler from './backend/lineups-access.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,6 +78,9 @@ app.all('/api/billing/refund-request', billingRefundRequestHandler);
 app.all('/api/engagement/:action', engagementHandler);
 app.all('/api/billing/checkout', billingCheckoutHandler);
 app.all('/api/billing/order-status', billingOrderStatusHandler);
+app.all('/api/lineups', lineupsAccessHandler);
+app.all('/api/lineups/playback-token', lineupsAccessHandler);
+app.all('/api/lineups/video', lineupsAccessHandler);
 app.all('/api/admin/billing', adminBillingHandler);
 app.all('/api/account/delete', accountDeleteHandler);
 app.all('/api/admin/expirations', adminExpirationsHandler);

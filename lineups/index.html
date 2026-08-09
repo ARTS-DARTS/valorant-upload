@@ -3,91 +3,74 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VLineups — Смотреть лайнапы</title>
-  <meta name="description" content="Будущий веб-интерфейс просмотра лайнапов Valorant по карте, агенту и способности.">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data:; style-src 'self' 'unsafe-inline';">
+  <title>VLineups — Лайнапы в браузере</title>
+  <meta name="description" content="Тактическая база Valorant: карты, агенты, способности и видео лайнапов.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; style-src 'self' 'unsafe-inline'; media-src 'self' blob:;">
   <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png?v=2026-08-02-v1">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2026-08-02-v1">
-  <link rel="apple-touch-icon" href="/app_icon3.png">
-  <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
-  <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/styles.css?v=2026-07-30-site-sections-v1">
-  <link rel="stylesheet" href="/lineups/lineups.css?v=2026-07-30-site-sections-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-08-09-unified-player-v1">
+  <link rel="stylesheet" href="/lineups/lineups.css?v=2026-08-09-premium-v1">
 </head>
 <body class="viewer-page">
   <header class="header viewer-header">
-    <a class="logo viewer-logo" href="/" aria-label="VLineups">
-      <img src="/app_icon3.png" alt="">
-      VALORANT <span>LINEUPS</span>
-    </a>
-    <div class="site-update" id="site-update">Проверяем дату обновления…</div>
+    <a class="logo viewer-logo" href="/" aria-label="VLineups"><img src="/app_icon3.png" alt="">VALORANT <span>LINEUPS</span></a>
     <nav class="site-sections" aria-label="Главные разделы сайта">
-      <a class="active" href="/lineups/" aria-current="page">Лайнапы <span>Premium</span></a>
+      <a class="active" href="/lineups/" aria-current="page">Лайнапы <span>Plus</span></a>
       <a href="/">Кабинет автора</a>
     </nav>
-    <a class="viewer-community" href="https://t.me/Vlineups" target="_blank" rel="noopener noreferrer">Сообщество</a>
+    <div class="viewer-account" id="viewer-account">Проверяем вход…</div>
   </header>
 
-  <div class="site-update-banner" id="site-update-banner" role="status" aria-live="polite">
-    <span>Вышла новая версия сайта. Обновите страницу, чтобы получить изменения.</span>
-    <button type="button" id="btn-reload-site">Обновить сейчас</button>
-  </div>
-
   <main class="viewer-main">
-    <section class="viewer-intro">
-      <div>
-        <div class="viewer-eyebrow"><i></i> Новый раздел VLineups</div>
-        <h1>Тактическая база<br><span>добавляется в браузер</span></h1>
-        <p>Выбирай карту, агента и способность так же, как в приложении. Веб-просмотр станет частью Premium и будет работать на компьютере и телефоне.</p>
+    <section class="viewer-hero">
+      <div class="viewer-hero-copy">
+        <div class="viewer-eyebrow"><i></i> Тактическая база VLineups</div>
+        <h1>Нужный лайнап.<br><span>Без лишних раундов.</span></h1>
+        <p>Выбери карту, агента и способность — так же, как в приложении. Подписка действует одновременно на телефоне и сайте.</p>
       </div>
-      <div class="viewer-intro-status">
-        <span>Статус модуля</span>
-        <strong id="premium-account-status">Проверяем подписку…</strong>
+      <div class="viewer-access-card" id="viewer-access-card">
+        <span>Доступ</span><strong id="premium-account-status">Проверяем подписку…</strong><small>Один аккаунт · приложение и сайт</small>
       </div>
     </section>
 
-    <section class="tactical-desk" aria-label="Предварительный вид раздела лайнапов">
-      <aside class="tactical-controls">
-        <div class="tactical-step">
-          <span>Карта</span>
-          <strong>Выбор карты</strong>
-          <div class="tactical-chips"><i class="selected">Ascent</i><i>Bind</i><i>Haven</i></div>
-        </div>
-        <div class="tactical-step">
-          <span>Агент</span>
-          <strong>Выбор агента</strong>
-          <div class="agent-slots"><i>S</i><i>V</i><i>K</i><i>+</i></div>
-        </div>
-        <div class="tactical-step muted">
-          <span>Способность</span>
-          <strong>Откроется после агента</strong>
-        </div>
-        <div class="premium-lock">
-          <b>Premium</b>
-          <p>Веб-просмотр войдёт в премиум-функции. Условия доступа появятся перед запуском.</p>
-        </div>
+    <section class="viewer-loading" id="viewer-loading"><i></i><span>Собираем тактическую базу…</span></section>
+
+    <section class="viewer-paywall" id="viewer-paywall" hidden>
+      <div class="paywall-head">
+        <span>Поддержка проекта</span>
+        <h2>Все лайнапы бесплатны в приложении.<br>Подписка открывает их в браузере.</h2>
+        <p>Без автопродления. Один платёж за выбранный срок. Каждый следующий уровень включает предыдущий.</p>
+      </div>
+      <div class="term-row" id="term-row" aria-label="Срок подписки"></div>
+      <div class="plan-grid" id="plan-grid"></div>
+      <label class="terms-check"><input type="checkbox" id="billing-terms"><span>Принимаю <a href="/offer/" target="_blank" rel="noopener">условия использования и оплаты</a></span></label>
+      <div class="paywall-note">Платёж обрабатывает Robokassa. VLineups не получает и не хранит данные банковской карты.</div>
+    </section>
+
+    <section class="viewer-library" id="viewer-library" hidden>
+      <aside class="library-filters">
+        <div class="filter-heading"><span>01</span><div><b>Карта</b><small>Начни с поля боя</small></div></div>
+        <div class="filter-options" id="map-filter"></div>
+        <div class="filter-heading"><span>02</span><div><b>Агент</b><small>Затем выбери роль</small></div></div>
+        <div class="filter-options" id="agent-filter"></div>
+        <div class="filter-heading"><span>03</span><div><b>Способность</b><small>Финальный фильтр</small></div></div>
+        <div class="filter-options" id="ability-filter"></div>
       </aside>
-
-      <div class="map-stage">
-        <div class="map-grid" aria-hidden="true">
-          <span class="site-a">A</span><span class="site-b">B</span>
-          <i class="route route-one"></i><i class="route route-two"></i>
-          <b class="point point-one"></b><b class="point point-two"></b>
-        </div>
-        <div class="map-stage-copy">
-          <span>Интерактивная карта</span>
-          <h2>Здесь появятся точки лайнапов</h2>
-          <p>Фильтры слева будут менять карту без перехода на новую страницу.</p>
-        </div>
-        <div class="viewer-coming-soon">Скоро</div>
+      <div class="library-results">
+        <header><div><span id="result-kicker">База лайнапов</span><h2 id="result-title">Все материалы</h2></div><output id="result-count">0</output></header>
+        <div class="lineup-grid" id="lineup-grid"></div>
       </div>
     </section>
-
   </main>
-  <script type="module">
-    import { initSiteVersionWatcher } from '/site-version-watcher.js?v=2026-07-30-global-update-v1';
-    initSiteVersionWatcher();
-  </script>
-  <script type="module" src="/lineups/entitlement-status.js?v=2026-08-06-v1"></script>
+
+  <dialog class="lineup-player-dialog" id="lineup-player-dialog">
+    <button class="player-dialog-close" id="player-dialog-close" type="button" aria-label="Закрыть">×</button>
+    <div class="protected-player">
+      <video id="protected-video" playsinline controls controlslist="nodownload noremoteplayback" disablepictureinpicture></video>
+      <div class="viewer-watermark" id="viewer-watermark"></div>
+    </div>
+    <div class="player-dialog-copy"><span id="player-dialog-meta"></span><h2 id="player-dialog-title"></h2><p id="player-dialog-description"></p></div>
+  </dialog>
+
+  <script type="module" src="/lineups/lineups.js?v=2026-08-09-premium-v1"></script>
 </body>
 </html>
