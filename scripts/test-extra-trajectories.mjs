@@ -5,12 +5,13 @@ import { readFile } from 'node:fs/promises';
 const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
-test('primary ability can also be used for both extra trajectories', () => {
+test('primary ability can only be added as one extra trajectory', () => {
   assert.match(app, /const abilities = selectedAgentAbilities\(\);/);
-  assert.doesNotMatch(app, /filter\(ab => ab\.ability !== selectedAbility\)/);
-  assert.doesNotMatch(app, /Основная абилка уже выбрана выше/);
+  assert.match(app, /function limitPrimaryAbilityExtras/);
+  assert.match(app, /primaryCopies <= 1/);
+  assert.match(app, /Для основной способности доступна только одна дополнительная траектория/);
   assert.match(app, /extraAbilityTrajectories\.length >= 2/);
-  assert.match(html, /Одну абилку можно добавить дважды/);
+  assert.match(html, /Для основной способности можно добавить одну дополнительную траекторию/);
 });
 
 test('each Sova extra trajectory keeps independent charge and bounces', () => {

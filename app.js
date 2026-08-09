@@ -808,6 +808,15 @@ function trajectoryForSave(item = null) {
   return item ? points : trajectoryFromMarkerFor(points);
 }
 
+function limitPrimaryAbilityExtras(items = extraAbilityTrajectories) {
+  let primaryCopies = 0;
+  return (Array.isArray(items) ? items : []).filter(item => {
+    if (item?.ability !== selectedAbility) return true;
+    primaryCopies += 1;
+    return primaryCopies <= 1;
+  }).slice(0, 2).map((item, index) => ({ ...item, order: index + 1 }));
+}
+
 function extraSovaParametersHtml(item, index) {
   if (!isSovaArrowSelection(selectedAgent, item.ability)) return '';
   const charge = Math.max(0, Math.min(3, Number(item.sova_charge ?? 3)));
@@ -842,6 +851,7 @@ function renderExtraAbilityPanel() {
   const list = document.getElementById('extra-ability-list');
   const sovaPanels = document.getElementById('extra-sova-shot-panels');
   if (!panel || !picker || !list) return;
+  extraAbilityTrajectories = limitPrimaryAbilityExtras();
   const enabled = extraTrajectoriesEnabled() && !!selectedAgent && !!selectedAbility;
   panel.toggleAttribute('hidden', !enabled);
   toolbox?.toggleAttribute('hidden', !enabled);
@@ -864,9 +874,11 @@ function renderExtraAbilityPanel() {
   const atLimit = extraAbilityTrajectories.length >= 2;
   picker.innerHTML = abilities.length
     ? abilities.map(ab => {
+        const primaryCopyExists = ab.ability === selectedAbility &&
+          extraAbilityTrajectories.some(item => item.ability === selectedAbility);
         return `
           <button class="ability-btn extra-ability-pick" type="button"
-            data-extra-add="${esc(ab.ability)}" title="Добавить: ${esc(ab.ability)}" ${atLimit ? 'disabled' : ''}>
+            data-extra-add="${esc(ab.ability)}" title="${primaryCopyExists ? 'Основная и дополнительная траектории уже добавлены' : `Добавить: ${esc(ab.ability)}`}" ${(atLimit || primaryCopyExists) ? 'disabled' : ''}>
             <img src="${esc(ab.icon)}" alt="">
             <span>${esc(ab.ability.split(' ')[0])}</span>
           </button>
@@ -1058,6 +1070,10 @@ function renderSageWallOptions() {
   if (handlesToggle) {
     handlesToggle.textContent = sageWallHandlesHidden ? 'Показать точки' : 'Скрыть точки';
     handlesToggle.setAttribute('aria-pressed', String(sageWallHandlesHidden));
+  }
+  if (abilityName === selectedAbility && extraAbilityTrajectories.some(item => item.ability === selectedAbility)) {
+    toast('Для основной способности доступна только одна дополнительная траектория', 'w');
+    return;
   }
 }
 
