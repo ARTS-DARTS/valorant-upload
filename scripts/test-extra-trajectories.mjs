@@ -16,6 +16,9 @@ test('primary ability can also be used for both extra trajectories', () => {
 test('each Sova extra trajectory keeps independent charge and bounces', () => {
   assert.match(app, /data-extra-sova-charge/);
   assert.match(app, /data-extra-sova-bounce/);
+  assert.match(html, /id="extra-sova-shot-panels"/);
+  assert.match(app, /sovaPanels\.innerHTML = extraAbilityTrajectories/);
+  assert.doesNotMatch(app, /\$\{extraSovaParametersHtml\(item, idx\)\}\s*<\/div>/);
   assert.match(app, /sova_charge:item\.sova_charge, sova_bounces:item\.sova_bounces/);
   assert.match(app, /ПАРАМЕТРЫ · ДОП\. \$\{index \+ 1\}/);
   assert.match(app, /heading\.textContent = '🏹 ПАРАМЕТРЫ · ОСНОВНАЯ'/);
@@ -30,6 +33,6 @@ test('extra trajectory handlers stay inside the extra trajectory renderer', () =
   const rendererStart = app.indexOf('function renderExtraAbilityPanel()');
   const rendererEnd = app.indexOf('function addExtraAbilityByName', rendererStart);
   const renderer = app.slice(rendererStart, rendererEnd);
-  assert.match(renderer, /list\.querySelectorAll\('\[data-extra-sova-charge\]'\)/);
-  assert.match(renderer, /list\.querySelectorAll\('\[data-extra-sova-bounce\]'\)/);
+  assert.match(renderer, /sovaPanels\?\.querySelectorAll\('\[data-extra-sova-charge\]'\)/);
+  assert.match(renderer, /sovaPanels\?\.querySelectorAll\('\[data-extra-sova-bounce\]'\)/);
 });

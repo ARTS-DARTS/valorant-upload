@@ -813,16 +813,23 @@ function extraSovaParametersHtml(item, index) {
   const charge = Math.max(0, Math.min(3, Number(item.sova_charge ?? 3)));
   const bounces = Math.max(0, Math.min(2, Number(item.sova_bounces ?? 0)));
   return `
-    <div class="extra-sova-params">
-      <div class="extra-sova-param-title">🏹 ПАРАМЕТРЫ · ДОП. ${index + 1}</div>
-      <label class="extra-sova-charge">
-        <span>СИЛА НАТЯЖЕНИЯ</span>
-        <input type="range" min="0" max="3" step="0.05" value="${charge}"
-          data-extra-sova-charge="${index}" style="--sova-charge-pct:${charge / 3 * 100}%" aria-label="Сила натяжения дополнительной стрелы ${index + 1}">
+    <div class="sova-shot-panel extra-sova-shot-panel">
+      <div class="sova-shot-heading">🏹 ПАРАМЕТРЫ · ДОП. ${index + 1}</div>
+      <label class="sova-shot-control">
+        <span class="sova-shot-label">Сила натяжения</span>
+        <div class="sova-charge-slider ${charge >= 3 ? 'is-max' : ''}">
+          <input type="range" min="0" max="3" step="0.05" value="${charge}"
+            data-extra-sova-charge="${index}" style="--sova-charge-pct:${charge / 3 * 100}%" aria-label="Сила натяжения дополнительной стрелы ${index + 1}">
+          <div class="sova-charge-ticks" aria-hidden="true"><span></span><span></span></div>
+          <span class="sova-charge-caption">ЗАРЯД</span>
+        </div>
       </label>
-      <div class="extra-sova-bounces"><span>ОТСКОКИ</span>
-        <button type="button" class="${bounces >= 1 ? 'active' : ''}" data-extra-sova-bounce="${index}" data-bounce="1" aria-label="Первый отскок"><i></i></button>
-        <button type="button" class="${bounces >= 2 ? 'active' : ''}" data-extra-sova-bounce="${index}" data-bounce="2" aria-label="Второй отскок"><i></i></button>
+      <div class="sova-bounce-row">
+        <span class="sova-bounce-label">ОТСКОКИ</span>
+        <div class="sova-bounce-picker">
+          <button type="button" class="${bounces >= 1 ? 'active' : ''}" data-extra-sova-bounce="${index}" data-bounce="1" aria-label="Первый отскок"><span class="bounce-diamond"></span></button>
+          <button type="button" class="${bounces >= 2 ? 'active' : ''}" data-extra-sova-bounce="${index}" data-bounce="2" aria-label="Второй отскок"><span class="bounce-diamond"></span></button>
+        </div>
       </div>
     </div>`;
 }
@@ -833,6 +840,7 @@ function renderExtraAbilityPanel() {
   const mapContainer = document.getElementById('map-container');
   const picker = document.getElementById('extra-ability-picker');
   const list = document.getElementById('extra-ability-list');
+  const sovaPanels = document.getElementById('extra-sova-shot-panels');
   if (!panel || !picker || !list) return;
   const enabled = extraTrajectoriesEnabled() && !!selectedAgent && !!selectedAbility;
   panel.toggleAttribute('hidden', !enabled);
@@ -841,7 +849,13 @@ function renderExtraAbilityPanel() {
   if (!enabled) {
     picker.innerHTML = '';
     list.innerHTML = '';
+    if (sovaPanels) sovaPanels.innerHTML = '';
     return;
+  }
+  if (sovaPanels) {
+    sovaPanels.innerHTML = extraAbilityTrajectories
+      .map((item, idx) => extraSovaParametersHtml(item, idx))
+      .join('');
   }
   // The same ability may have several independent throws (for example,
   // Sova's two Shock Darts). Keep the primary ability available so it can be
@@ -895,7 +909,6 @@ function renderExtraAbilityPanel() {
               <button class="extra-ability-action" type="button" data-extra-down="${idx}" title="Ниже">↓</button>
               <button class="extra-ability-action" type="button" data-extra-remove="${idx}" title="Удалить">×</button>
             </span>
-            ${extraSovaParametersHtml(item, idx)}
           </div>
         `;
       }).join('')
@@ -953,7 +966,7 @@ function renderExtraAbilityPanel() {
       _saveDraft();
     });
   });
-  list.querySelectorAll('[data-extra-sova-charge]').forEach(input => {
+  sovaPanels?.querySelectorAll('[data-extra-sova-charge]').forEach(input => {
     input.addEventListener('input', () => {
       const item = extraAbilityTrajectories[Number(input.dataset.extraSovaCharge)];
       if (!item) return;
@@ -962,7 +975,7 @@ function renderExtraAbilityPanel() {
       _saveDraft();
     });
   });
-  list.querySelectorAll('[data-extra-sova-bounce]').forEach(button => {
+  sovaPanels?.querySelectorAll('[data-extra-sova-bounce]').forEach(button => {
     button.addEventListener('click', event => {
       event.stopPropagation();
       const item = extraAbilityTrajectories[Number(button.dataset.extraSovaBounce)];
