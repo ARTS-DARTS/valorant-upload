@@ -14,8 +14,9 @@ test('primary ability can also be used for both extra trajectories', () => {
 });
 
 test('each Sova extra trajectory keeps independent charge and bounces', () => {
-  assert.match(app, /if \(extra\) extra\.sova_charge = value/);
-  assert.match(app, /if \(extra\) extra\.sova_bounces =/);
+  assert.match(app, /data-extra-sova-charge/);
+  assert.match(app, /data-extra-sova-bounce/);
   assert.match(app, /sova_charge:item\.sova_charge, sova_bounces:item\.sova_bounces/);
-  assert.match(app, /ПАРАМЕТРЫ · \$\{extra \? `ДОП\. \$\{selectedExtraAbilityIndex \+ 1\}` : 'ОСНОВНАЯ'\}/);
+  assert.match(app, /ПАРАМЕТРЫ · ДОП\. \$\{index \+ 1\}/);
+  assert.match(app, /heading\.textContent = '🏹 ПАРАМЕТРЫ · ОСНОВНАЯ'/);
 });

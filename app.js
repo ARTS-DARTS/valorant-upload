@@ -808,6 +808,25 @@ function trajectoryForSave(item = null) {
   return item ? points : trajectoryFromMarkerFor(points);
 }
 
+function extraSovaParametersHtml(item, index) {
+  if (!isSovaArrowSelection(selectedAgent, item.ability)) return '';
+  const charge = Math.max(0, Math.min(3, Number(item.sova_charge ?? 3)));
+  const bounces = Math.max(0, Math.min(2, Number(item.sova_bounces ?? 0)));
+  return `
+    <div class="extra-sova-params">
+      <div class="extra-sova-param-title">🏹 ПАРАМЕТРЫ · ДОП. ${index + 1}</div>
+      <label class="extra-sova-charge">
+        <span>СИЛА НАТЯЖЕНИЯ</span>
+        <input type="range" min="0" max="3" step="0.05" value="${charge}"
+          data-extra-sova-charge="${index}" style="--sova-charge-pct:${charge / 3 * 100}%" aria-label="Сила натяжения дополнительной стрелы ${index + 1}">
+      </label>
+      <div class="extra-sova-bounces"><span>ОТСКОКИ</span>
+        <button type="button" class="${bounces >= 1 ? 'active' : ''}" data-extra-sova-bounce="${index}" data-bounce="1" aria-label="Первый отскок"><i></i></button>
+        <button type="button" class="${bounces >= 2 ? 'active' : ''}" data-extra-sova-bounce="${index}" data-bounce="2" aria-label="Второй отскок"><i></i></button>
+      </div>
+    </div>`;
+}
+
 function renderExtraAbilityPanel() {
   const panel = document.getElementById('extra-abilities-panel');
   const toolbox = document.getElementById('lineup-toolbox');
@@ -876,6 +895,7 @@ function renderExtraAbilityPanel() {
               <button class="extra-ability-action" type="button" data-extra-down="${idx}" title="Ниже">↓</button>
               <button class="extra-ability-action" type="button" data-extra-remove="${idx}" title="Удалить">×</button>
             </span>
+            ${extraSovaParametersHtml(item, idx)}
           </div>
         `;
       }).join('')
@@ -1995,6 +2015,26 @@ function initGlobalSiteVersionWatcher() {
       return true;
     },
   });
+  list.querySelectorAll('[data-extra-sova-charge]').forEach(input => {
+    input.addEventListener('input', () => {
+      const item = extraAbilityTrajectories[Number(input.dataset.extraSovaCharge)];
+      if (!item) return;
+      item.sova_charge = Math.max(0, Math.min(3, Number(input.value) || 0));
+      input.style.setProperty('--sova-charge-pct', `${item.sova_charge / 3 * 100}%`);
+      _saveDraft();
+    });
+  });
+  list.querySelectorAll('[data-extra-sova-bounce]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      const item = extraAbilityTrajectories[Number(button.dataset.extraSovaBounce)];
+      if (!item) return;
+      const bounce = Number(button.dataset.bounce);
+      item.sova_bounces = item.sova_bounces === bounce ? bounce - 1 : bounce;
+      renderExtraAbilityPanel();
+      _saveDraft();
+    });
+  });
 }
 
 window.addEventListener('pagehide', () => {
@@ -2364,13 +2404,11 @@ function isSovaArrowSelection(agent = selectedAgent, ability = selectedAbility) 
 function renderSovaShotPanel() {
   const panel = document.getElementById('sova-shot-panel');
   if (!panel) return;
-  const extra = activeExtraAbility();
-  const ability = extra?.ability || selectedAbility;
-  panel.hidden = !isSovaArrowSelection(selectedAgent, ability);
-  const charge = extra ? extra.sova_charge : sovaCharge;
-  const bounces = extra ? extra.sova_bounces : sovaBounces;
+  panel.hidden = !isSovaArrowSelection();
+  const charge = sovaCharge;
+  const bounces = sovaBounces;
   const heading = document.getElementById('sova-shot-heading');
-  if (heading) heading.textContent = `🏹 ПАРАМЕТРЫ · ${extra ? `ДОП. ${selectedExtraAbilityIndex + 1}` : 'ОСНОВНАЯ'}`;
+  if (heading) heading.textContent = '🏹 ПАРАМЕТРЫ · ОСНОВНАЯ';
   const range = document.getElementById('sova-charge-range');
   if (range) {
     range.value = String(charge);
@@ -2383,19 +2421,14 @@ function renderSovaShotPanel() {
 }
 
 document.getElementById('sova-charge-range')?.addEventListener('input', event => {
-  const value = Math.max(0, Math.min(3, Number(event.target.value) || 0));
-  const extra = activeExtraAbility();
-  if (extra) extra.sova_charge = value;
-  else sovaCharge = value;
+  sovaCharge = Math.max(0, Math.min(3, Number(event.target.value) || 0));
   renderSovaShotPanel(); _saveDraft();
 });
 document.getElementById('sova-bounce-picker')?.addEventListener('click', event => {
   const button = event.target.closest('[data-sova-bounce-index]');
   if (!button) return;
   const index = Math.max(1, Math.min(2, Number(button.dataset.sovaBounceIndex) || 1));
-  const extra = activeExtraAbility();
-  if (extra) extra.sova_bounces = extra.sova_bounces === index ? index - 1 : index;
-  else sovaBounces = sovaBounces === index ? index - 1 : index;
+  sovaBounces = sovaBounces === index ? index - 1 : index;
   renderSovaShotPanel(); _saveDraft();
 });
 let selectedCategory = null;
