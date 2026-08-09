@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const css = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
 
 test('primary ability can only be added as one extra trajectory', () => {
   assert.match(app, /const abilities = selectedAgentAbilities\(\);/);
@@ -24,6 +25,7 @@ test('each Sova extra trajectory keeps independent charge and bounces', () => {
   assert.match(app, /sova_charge:item\.sova_charge, sova_bounces:item\.sova_bounces/);
   assert.match(app, /ПАРАМЕТРЫ · ДОП\. \$\{index \+ 1\}/);
   assert.match(app, /heading\.textContent = '🏹 ПАРАМЕТРЫ · ОСНОВНАЯ'/);
+  assert.match(css, /grid-template-columns:185px minmax\(240px,1fr\) 70px/);
 });
 
 test('extra trajectory handlers stay inside the extra trajectory renderer', () => {
