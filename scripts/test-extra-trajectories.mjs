@@ -17,6 +17,7 @@ test('primary ability can only be added as one extra trajectory', () => {
 test('each Sova extra trajectory keeps independent charge and bounces', () => {
   assert.match(app, /data-extra-sova-charge/);
   assert.match(app, /data-extra-sova-bounce/);
+  assert.match(app, /closest\('\.sova-charge-slider'\)\?\.classList\.toggle\('is-max', item\.sova_charge >= 3\)/);
   assert.match(html, /id="extra-sova-shot-panels"/);
   assert.match(app, /sovaPanels\.innerHTML = extraAbilityTrajectories/);
   assert.doesNotMatch(app, /\$\{extraSovaParametersHtml\(item, idx\)\}\s*<\/div>/);

@@ -984,6 +984,7 @@ function renderExtraAbilityPanel() {
       if (!item) return;
       item.sova_charge = Math.max(0, Math.min(3, Number(input.value) || 0));
       input.style.setProperty('--sova-charge-pct', `${item.sova_charge / 3 * 100}%`);
+      input.closest('.sova-charge-slider')?.classList.toggle('is-max', item.sova_charge >= 3);
       _saveDraft();
     });
   });
