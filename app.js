@@ -11362,6 +11362,7 @@ function collectFormValidationErrors() {
   const errors = [];
   const add = (message, target, input = null) => errors.push({ message, target, input });
   const mapCard = validationCard('sel-map');
+  const mapEditorCard = validationCard('map-wrap');
 
   if (!document.getElementById('sel-map').value) add('Выбери карту.', mapCard, document.getElementById('sel-map'));
   if (!selectedCategory) add('Выбери категорию материала.', validationCard('cat-row'));
@@ -11372,11 +11373,11 @@ function collectFormValidationErrors() {
   if (!selectedRoundSide) add('Выбери сторону раунда.', validationCard('side-row'));
   if (!document.getElementById('inp-title').value.trim()) add('Напиши название материала.', validationCard('inp-title'), document.getElementById('inp-title'));
 
-  if (category === 'lineup' && markerX === null) add('Поставь позицию броска на карте.', mapCard);
+  if (category === 'lineup' && markerX === null) add('Поставь позицию броска на карте.', mapEditorCard);
   if (category === 'wallbang') {
     if (!selectedWallbangWeapons().length) add('Выбери оружие для прострела.', validationCard('wallbang-weapons'));
-    if (markerX === null) add('Поставь позицию выстрела на карте.', mapCard);
-    if (wallbangTargetX === null) add('Поставь точку попадания на карте.', mapCard);
+    if (markerX === null) add('Поставь позицию выстрела на карте.', mapEditorCard);
+    if (wallbangTargetX === null) add('Поставь точку попадания на карте.', mapEditorCard);
   }
   if (category === 'defense') {
     if (!defenseSiteValue()) add('Выбери плент для защитного сетапа.', validationCard('defense-site'), document.getElementById('defense-site'));
