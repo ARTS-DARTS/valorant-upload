@@ -20,3 +20,16 @@ test('each Sova extra trajectory keeps independent charge and bounces', () => {
   assert.match(app, /ПАРАМЕТРЫ · ДОП\. \$\{index \+ 1\}/);
   assert.match(app, /heading\.textContent = '🏹 ПАРАМЕТРЫ · ОСНОВНАЯ'/);
 });
+
+test('extra trajectory handlers stay inside the extra trajectory renderer', () => {
+  const watcherStart = app.indexOf('function initGlobalSiteVersionWatcher()');
+  const watcherEnd = app.indexOf("window.addEventListener('pagehide'", watcherStart);
+  const watcher = app.slice(watcherStart, watcherEnd);
+  assert.doesNotMatch(watcher, /data-extra-sova-(?:charge|bounce)/);
+
+  const rendererStart = app.indexOf('function renderExtraAbilityPanel()');
+  const rendererEnd = app.indexOf('function addExtraAbilityByName', rendererStart);
+  const renderer = app.slice(rendererStart, rendererEnd);
+  assert.match(renderer, /list\.querySelectorAll\('\[data-extra-sova-charge\]'\)/);
+  assert.match(renderer, /list\.querySelectorAll\('\[data-extra-sova-bounce\]'\)/);
+});

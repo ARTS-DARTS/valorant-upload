@@ -953,6 +953,26 @@ function renderExtraAbilityPanel() {
       _saveDraft();
     });
   });
+  list.querySelectorAll('[data-extra-sova-charge]').forEach(input => {
+    input.addEventListener('input', () => {
+      const item = extraAbilityTrajectories[Number(input.dataset.extraSovaCharge)];
+      if (!item) return;
+      item.sova_charge = Math.max(0, Math.min(3, Number(input.value) || 0));
+      input.style.setProperty('--sova-charge-pct', `${item.sova_charge / 3 * 100}%`);
+      _saveDraft();
+    });
+  });
+  list.querySelectorAll('[data-extra-sova-bounce]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      const item = extraAbilityTrajectories[Number(button.dataset.extraSovaBounce)];
+      if (!item) return;
+      const bounce = Number(button.dataset.bounce);
+      item.sova_bounces = item.sova_bounces === bounce ? bounce - 1 : bounce;
+      renderExtraAbilityPanel();
+      _saveDraft();
+    });
+  });
 }
 
 function addExtraAbilityByName(abilityName) {
@@ -2008,32 +2028,12 @@ function initGlobalSiteVersionWatcher() {
   initSiteVersionWatcher({
     onUpdate:() => playSiteSound('update'),
     beforeReload:async () => {
-    if (moderatorDraftSourceId) {
-      const saved = await flushModeratorAutosave({ reportError:true });
-      if (!saved) return false;
-    }
+      if (moderatorDraftSourceId) {
+        const saved = await flushModeratorAutosave({ reportError:true });
+        if (!saved) return false;
+      }
       return true;
     },
-  });
-  list.querySelectorAll('[data-extra-sova-charge]').forEach(input => {
-    input.addEventListener('input', () => {
-      const item = extraAbilityTrajectories[Number(input.dataset.extraSovaCharge)];
-      if (!item) return;
-      item.sova_charge = Math.max(0, Math.min(3, Number(input.value) || 0));
-      input.style.setProperty('--sova-charge-pct', `${item.sova_charge / 3 * 100}%`);
-      _saveDraft();
-    });
-  });
-  list.querySelectorAll('[data-extra-sova-bounce]').forEach(button => {
-    button.addEventListener('click', event => {
-      event.stopPropagation();
-      const item = extraAbilityTrajectories[Number(button.dataset.extraSovaBounce)];
-      if (!item) return;
-      const bounce = Number(button.dataset.bounce);
-      item.sova_bounces = item.sova_bounces === bounce ? bounce - 1 : bounce;
-      renderExtraAbilityPanel();
-      _saveDraft();
-    });
   });
 }
 
