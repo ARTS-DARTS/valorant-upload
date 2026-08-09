@@ -5691,6 +5691,8 @@ const vidPlayer   = document.getElementById('vid-player');
 const vidScrubber = document.getElementById('vid-scrubber');
 const vidTimeEl   = document.getElementById('vid-time');
 const vidPlayBtn  = document.getElementById('vid-play-btn');
+const vidMuteBtn = document.getElementById('vid-mute-btn');
+const vidVolume = document.getElementById('vid-volume');
 const fullscreenVidScrubber = document.getElementById('video-player-fullscreen-scrubber');
 const fullscreenVidTimeEl = document.getElementById('video-player-fullscreen-time');
 const fullscreenVidPlayBtn = document.getElementById('video-player-fullscreen-play');
@@ -6811,6 +6813,7 @@ function renderVideoTransport() {
   const current = editorExpanded ? currentOutputTime() : vidPlayer.currentTime;
   if (vidScrubber && duration) {
     vidScrubber.value = String(sharedOutputToScrubberValue(current, Number(vidScrubber.max || 100), duration));
+    vidScrubber.style.setProperty('--uvp-progress', `${Math.max(0, Math.min(100, current / duration * 100))}%`);
   }
   if (vidTimeEl) vidTimeEl.textContent = fmtTime(current) + ' / ' + fmtTime(duration);
   if (fullscreenVidScrubber && duration) fullscreenVidScrubber.value = String(sharedOutputToScrubberValue(current, Number(fullscreenVidScrubber.max || 100), duration));
@@ -9075,18 +9078,140 @@ window.addEventListener('pointerup', finishScrubberDrag);
 window.addEventListener('pointercancel', cancelScrubberDrag);
 vidPlayBtn.addEventListener('click', toggleEditorPlayback);
 fullscreenVidPlayBtn?.addEventListener('click', toggleEditorPlayback);
+vidMuteBtn?.addEventListener('click', () => { vidPlayer.muted = !vidPlayer.muted; });
+vidVolume?.addEventListener('input', () => {
+  vidPlayer.volume = Number(vidVolume.value);
+  vidPlayer.muted = vidPlayer.volume === 0;
+});
 fullscreenVidMuteBtn?.addEventListener('click', () => { vidPlayer.muted = !vidPlayer.muted; });
 fullscreenVidVolume?.addEventListener('input', () => {
   vidPlayer.volume = Number(fullscreenVidVolume.value);
   vidPlayer.muted = vidPlayer.volume === 0;
 });
 vidPlayer.addEventListener('volumechange', () => {
+  if (vidVolume) vidVolume.value = String(vidPlayer.muted ? 0 : vidPlayer.volume);
+  if (vidMuteBtn) {
+    vidMuteBtn.textContent = vidPlayer.muted || vidPlayer.volume === 0 ? '🔇' : vidPlayer.volume < .5 ? '🔉' : '🔊';
+    vidMuteBtn.setAttribute('aria-label', vidPlayer.muted ? 'Включить звук' : 'Выключить звук');
+  }
   if (fullscreenVidVolume) fullscreenVidVolume.value = String(vidPlayer.muted ? 0 : vidPlayer.volume);
   if (fullscreenVidMuteBtn) {
     fullscreenVidMuteBtn.textContent = vidPlayer.muted || vidPlayer.volume === 0 ? '🔇' : vidPlayer.volume < .5 ? '🔉' : '🔊';
     fullscreenVidMuteBtn.setAttribute('aria-label', vidPlayer.muted ? 'Включить звук' : 'Выключить звук');
   }
 });
+
+// One player language for published lineups and author materials. The editor
+// uses the same controls above, while keeping its timeline-specific behavior.
+const unifiedVideoPlayers = new WeakMap();
+
+function unifiedVideoTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = String(total % 60).padStart(2, '0');
+  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${secs}` : `${minutes}:${secs}`;
+}
+
+function enhanceUnifiedVideo(video) {
+  if (!(video instanceof HTMLVideoElement) || unifiedVideoPlayers.has(video)) return;
+  if (video.id === 'vid-player' || video.classList.contains('footage-preview-overlay')) return;
+  const shell = document.createElement('div');
+  shell.className = 'unified-video-player';
+  shell.tabIndex = 0;
+  shell.setAttribute('aria-label', 'Видеоплеер');
+  video.parentNode.insertBefore(shell, video);
+  shell.appendChild(video);
+  video.controls = false;
+  video.playsInline = true;
+  video.classList.add('uvp-media');
+  shell.insertAdjacentHTML('beforeend', `
+    <button class="uvp-center-play" type="button" aria-label="Воспроизвести"><span>▶</span></button>
+    <div class="uvp-buffer" hidden><i></i></div>
+    <div class="uvp-controls">
+      <input class="uvp-progress" type="range" min="0" max="1000" step="1" value="0" aria-label="Позиция видео">
+      <div class="uvp-transport">
+        <button class="uvp-icon-button uvp-play" type="button" aria-label="Воспроизвести">▶</button>
+        <button class="uvp-skip" type="button" data-skip="-10" aria-label="Назад на 10 секунд">−10</button>
+        <button class="uvp-skip" type="button" data-skip="10" aria-label="Вперёд на 10 секунд">+10</button>
+        <output class="uvp-time">0:00 / 0:00</output>
+        <span class="uvp-spacer"></span>
+        <button class="uvp-icon-button uvp-mute" type="button" aria-label="Выключить звук">🔊</button>
+        <input class="uvp-volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Громкость">
+        <button class="uvp-icon-button uvp-fullscreen" type="button" aria-label="На весь экран">⛶</button>
+      </div>
+    </div>`);
+  const play = shell.querySelector('.uvp-play');
+  const centerPlay = shell.querySelector('.uvp-center-play');
+  const progress = shell.querySelector('.uvp-progress');
+  const time = shell.querySelector('.uvp-time');
+  const mute = shell.querySelector('.uvp-mute');
+  const volume = shell.querySelector('.uvp-volume');
+  const buffer = shell.querySelector('.uvp-buffer');
+  const toggle = () => video.paused ? video.play().catch(() => {}) : video.pause();
+  const render = () => {
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const ratio = duration ? video.currentTime / duration : 0;
+    progress.value = String(Math.round(ratio * 1000));
+    progress.style.setProperty('--uvp-progress', `${ratio * 100}%`);
+    time.textContent = `${unifiedVideoTime(video.currentTime)} / ${unifiedVideoTime(duration)}`;
+    const paused = video.paused || video.ended;
+    play.textContent = paused ? '▶' : '❚❚';
+    play.setAttribute('aria-label', paused ? 'Воспроизвести' : 'Пауза');
+    centerPlay.classList.toggle('is-hidden', !paused);
+    mute.textContent = video.muted || video.volume === 0 ? '🔇' : video.volume < .5 ? '🔉' : '🔊';
+    volume.value = String(video.muted ? 0 : video.volume);
+  };
+  play.addEventListener('click', toggle);
+  centerPlay.addEventListener('click', toggle);
+  video.addEventListener('click', toggle);
+  progress.addEventListener('input', () => {
+    if (Number.isFinite(video.duration)) video.currentTime = Number(progress.value) / 1000 * video.duration;
+    render();
+  });
+  shell.querySelectorAll('[data-skip]').forEach(button => button.addEventListener('click', () => {
+    video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + Number(button.dataset.skip)));
+  }));
+  mute.addEventListener('click', () => { video.muted = !video.muted; });
+  volume.addEventListener('input', () => {
+    video.volume = Number(volume.value);
+    video.muted = video.volume === 0;
+  });
+  shell.querySelector('.uvp-fullscreen').addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement === shell) await document.exitFullscreen();
+      else if (shell.requestFullscreen) await shell.requestFullscreen();
+      else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+    } catch (_) {
+      // Fullscreen may be denied by the browser or embedded context.
+    }
+  });
+  shell.addEventListener('keydown', event => {
+    if (event.target.matches('input')) return;
+    if (event.code === 'Space') { event.preventDefault(); toggle(); }
+    else if (event.key === 'ArrowLeft') video.currentTime = Math.max(0, video.currentTime - 5);
+    else if (event.key === 'ArrowRight') video.currentTime = Math.min(video.duration || 0, video.currentTime + 5);
+    else if (event.key.toLowerCase() === 'm') video.muted = !video.muted;
+    else if (event.key.toLowerCase() === 'f') shell.querySelector('.uvp-fullscreen').click();
+  });
+  ['loadedmetadata', 'timeupdate', 'play', 'pause', 'ended', 'volumechange'].forEach(name => video.addEventListener(name, render));
+  ['waiting', 'stalled'].forEach(name => video.addEventListener(name, () => { buffer.hidden = false; }));
+  ['playing', 'canplay', 'seeked'].forEach(name => video.addEventListener(name, () => { buffer.hidden = true; }));
+  unifiedVideoPlayers.set(video, { shell, render });
+  render();
+}
+
+function enhanceUnifiedVideos(root = document) {
+  root.querySelectorAll?.('video.detail-video, video.material-video').forEach(enhanceUnifiedVideo);
+}
+
+enhanceUnifiedVideos();
+new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => {
+  if (!(node instanceof Element)) return;
+  if (node.matches?.('video.detail-video, video.material-video')) enhanceUnifiedVideo(node);
+  enhanceUnifiedVideos(node);
+}))).observe(document.body, { childList: true, subtree: true });
 editorEls.stage?.addEventListener('dblclick', event => {
   if (event.target.closest('.video-player-fullscreen-controls,.video-player-fullscreen-close')) return;
   setVideoPlayerFullscreen(document.fullscreenElement !== editorEls.stage);

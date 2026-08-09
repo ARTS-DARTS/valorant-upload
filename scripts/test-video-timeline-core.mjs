@@ -82,7 +82,7 @@ test('upload editor requires an explicit confirmed montage revision', async () =
   assert.match(app, /videoUrl && videoEditConfirmationState\(\) !== 'confirmed'/);
   assert.match(app, /confirmedRevision:\s*Math\.max\(0, Number\(videoEdit\.revision/);
   assert.match(app, /draft\.videoEdit\?\.footageOverlays\?\.length/);
-  assert.match(html, /id="video-player-fullscreen-open"[^>]*>⛶ Видео на весь экран</);
+  assert.match(html, /id="video-player-fullscreen-open"[^>]*aria-label="Видео на весь экран"[^>]*>⛶</);
   assert.match(app, /function setVideoPlayerFullscreen\(open\)/);
   assert.match(css, /\.video-editor\[hidden\]\s*\{\s*display:none !important;/);
   assert.match(css, /#vid-stage:fullscreen \.vid-player\s*\{[^}]*max-height:none;/);
@@ -189,8 +189,8 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('effect_outside'/);
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
-  assert.match(html, /styles\.css\?v=2026-08-06-vlineups-cut-v7/);
-  assert.match(html, /app\.js\?v=2026-08-06-video-duration-fix-v1/);
+  assert.match(html, /styles\.css\?v=2026-08-09-unified-player-v1/);
+  assert.match(html, /app\.js\?v=2026-08-09-unified-player-v1/);
   assert.match(app, /editorEls\.editor\.dataset\.mode = activeEditorMode/);
   assert.match(app, /editorEls\.editor\.dataset\.selection = selectedEditorItem\?\.type \|\| 'none'/);
   assert.match(css, /grid-template-columns:82px minmax\(0,1fr\) 340px/);

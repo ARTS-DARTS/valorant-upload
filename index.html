@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/app_icon3.png">
   <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
   <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/styles.css?v=2026-08-06-vlineups-cut-v7">
+  <link rel="stylesheet" href="/styles.css?v=2026-08-09-unified-player-v1">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-08-01-immunity-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-08-01-persistent-guide-border-v1">
 </head>
@@ -262,13 +262,15 @@
           <span><kbd>Колесо</kbd> зум</span>
           <span><kbd>Z</kbd> сброс</span>
         </div>
-        <div class="vid-controls">
-          <button class="btn-sm" id="vid-play-btn">▶</button>
-          <input type="range" class="scrubber" id="vid-scrubber" min="0" max="100" step="0.05" value="0" aria-label="Позиция видео">
-          <span class="time-display" id="vid-time">0:00 / 0:00</span>
-          <button class="btn-frame" id="vid-frame-btn">📷 Кадр</button>
-          <button class="btn-sm" id="vid-remove-btn">✕ Удалить</button>
-          <button class="btn-sm video-player-fullscreen-open" id="video-player-fullscreen-open" type="button">⛶ Видео на весь экран</button>
+        <div class="vid-controls unified-editor-controls" aria-label="Управление видео">
+          <button class="uvp-icon-button uvp-play" id="vid-play-btn" type="button" aria-label="Воспроизвести">▶</button>
+          <input type="range" class="scrubber uvp-progress" id="vid-scrubber" min="0" max="100" step="0.05" value="0" aria-label="Позиция видео">
+          <span class="time-display uvp-time" id="vid-time">0:00 / 0:00</span>
+          <button class="uvp-icon-button" id="vid-mute-btn" type="button" aria-label="Выключить звук">🔊</button>
+          <input class="uvp-volume" id="vid-volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Громкость">
+          <button class="btn-frame uvp-editor-action" id="vid-frame-btn" type="button">📷 Кадр</button>
+          <button class="btn-sm uvp-editor-action" id="vid-remove-btn" type="button">✕ Удалить</button>
+          <button class="uvp-icon-button video-player-fullscreen-open" id="video-player-fullscreen-open" type="button" aria-label="Видео на весь экран">⛶</button>
         </div>
         <div class="video-editor-toggle-row">
           <button class="btn-sm video-editor-launch" id="video-editor-fullscreen-open" type="button">Открыть редактор</button>
@@ -1002,7 +1004,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-08-06-video-duration-fix-v1"></script>
+<script type="module" src="/app.js?v=2026-08-09-unified-player-v1"></script>
 <script defer src="/workspace-redesign.js?v=2026-08-02-map-gallery-sync-v1"></script>
 </body>
 </html>
