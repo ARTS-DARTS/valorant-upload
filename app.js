@@ -822,7 +822,10 @@ function renderExtraAbilityPanel() {
     list.innerHTML = '';
     return;
   }
-  const abilities = selectedAgentAbilities().filter(ab => ab.ability !== selectedAbility);
+  // The same ability may have several independent throws (for example,
+  // Sova's two Shock Darts). Keep the primary ability available so it can be
+  // added as Extra 1 and Extra 2 with its own trajectory each time.
+  const abilities = selectedAgentAbilities();
   const atLimit = extraAbilityTrajectories.length >= 2;
   picker.innerHTML = abilities.length
     ? abilities.map(ab => {
@@ -936,10 +939,6 @@ function addExtraAbilityByName(abilityName) {
   const ab = selectedAgentAbilities().find(item => item.ability === abilityName);
   if (!ab) {
     toast('Выбери дополнительную абилку', 'w');
-    return;
-  }
-  if (abilityName === selectedAbility) {
-    toast('Основная абилка уже выбрана выше', 'w');
     return;
   }
   const effect = abilityEffectShape(selectedAgent, ab.ability, ab.slot);
