@@ -12,3 +12,10 @@ test('primary ability can also be used for both extra trajectories', () => {
   assert.match(app, /extraAbilityTrajectories\.length >= 2/);
   assert.match(html, /Одну абилку можно добавить дважды/);
 });
+
+test('each Sova extra trajectory keeps independent charge and bounces', () => {
+  assert.match(app, /if \(extra\) extra\.sova_charge = value/);
+  assert.match(app, /if \(extra\) extra\.sova_bounces =/);
+  assert.match(app, /sova_charge:item\.sova_charge, sova_bounces:item\.sova_bounces/);
+  assert.match(app, /ПАРАМЕТРЫ · \$\{extra \? `ДОП\. \$\{selectedExtraAbilityIndex \+ 1\}` : 'ОСНОВНАЯ'\}/);
+});

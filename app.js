@@ -770,6 +770,8 @@ function normalizeExtraAbilityItem(item, index = 0) {
     slot: item?.slot || catalog?.slot || '',
     icon: item?.icon || catalog?.icon || '',
     trajectory: normalizeTrajectoryPoints(item?.trajectory),
+    sova_charge: Math.max(0, Math.min(3, Number(item?.sova_charge ?? item?.sovaCharge ?? 3))),
+    sova_bounces: Math.max(0, Math.min(2, Number(item?.sova_bounces ?? item?.sovaBounces ?? 0))),
     range_radius: Number(item?.range_radius || 0),
     effect_shape: effect.effect_shape || item?.effect_shape || 'circle',
     effect_width: Number(effect.effect_width ?? item?.effect_width ?? 0),
@@ -884,6 +886,7 @@ function renderExtraAbilityPanel() {
     updateMarkerIcon();
     setMapMode('trajectory');
     renderExtraAbilityPanel();
+    renderSovaShotPanel();
     renderTrajectory();
     _saveDraft();
   });
@@ -895,6 +898,7 @@ function renderExtraAbilityPanel() {
       updateMarkerIcon();
       setMapMode(start ? 'trajectory' : 'position');
       renderExtraAbilityPanel();
+      renderSovaShotPanel();
       renderTrajectory();
       _saveDraft();
     });
@@ -908,6 +912,7 @@ function renderExtraAbilityPanel() {
       if (selectedExtraAbilityIndex === idx) selectedExtraAbilityIndex = null;
       else if (selectedExtraAbilityIndex > idx) selectedExtraAbilityIndex -= 1;
       renderExtraAbilityPanel();
+      renderSovaShotPanel();
       renderTrajectory();
       validateForm(); _saveDraft();
     });
@@ -948,6 +953,8 @@ function addExtraAbilityByName(abilityName) {
     slot: ab.slot || '',
     icon: ab.icon || '',
     trajectory: [],
+    sova_charge: 3,
+    sova_bounces: 0,
     range_radius: 0,
     effect_shape: effect.effect_shape,
     effect_width: effect.effect_width,
@@ -956,6 +963,7 @@ function addExtraAbilityByName(abilityName) {
   selectedExtraAbilityIndex = extraAbilityTrajectories.length - 1;
   setMapMode('position');
   renderExtraAbilityPanel();
+  renderSovaShotPanel();
   renderTrajectory();
   validateForm(); _saveDraft();
 }
@@ -2356,27 +2364,38 @@ function isSovaArrowSelection(agent = selectedAgent, ability = selectedAbility) 
 function renderSovaShotPanel() {
   const panel = document.getElementById('sova-shot-panel');
   if (!panel) return;
-  panel.hidden = !isSovaArrowSelection();
+  const extra = activeExtraAbility();
+  const ability = extra?.ability || selectedAbility;
+  panel.hidden = !isSovaArrowSelection(selectedAgent, ability);
+  const charge = extra ? extra.sova_charge : sovaCharge;
+  const bounces = extra ? extra.sova_bounces : sovaBounces;
+  const heading = document.getElementById('sova-shot-heading');
+  if (heading) heading.textContent = `🏹 ПАРАМЕТРЫ · ${extra ? `ДОП. ${selectedExtraAbilityIndex + 1}` : 'ОСНОВНАЯ'}`;
   const range = document.getElementById('sova-charge-range');
   if (range) {
-    range.value = String(sovaCharge);
-    range.style.setProperty('--sova-charge-pct', `${Math.max(0, Math.min(100, sovaCharge / 3 * 100))}%`);
-    range.closest('.sova-charge-slider')?.classList.toggle('is-max', sovaCharge >= 3);
+    range.value = String(charge);
+    range.style.setProperty('--sova-charge-pct', `${Math.max(0, Math.min(100, charge / 3 * 100))}%`);
+    range.closest('.sova-charge-slider')?.classList.toggle('is-max', charge >= 3);
   }
   panel.querySelectorAll('[data-sova-bounce-index]').forEach(button => {
-    button.classList.toggle('active', Number(button.dataset.sovaBounceIndex) <= sovaBounces);
+    button.classList.toggle('active', Number(button.dataset.sovaBounceIndex) <= bounces);
   });
 }
 
 document.getElementById('sova-charge-range')?.addEventListener('input', event => {
-  sovaCharge = Math.max(0, Math.min(3, Number(event.target.value) || 0));
+  const value = Math.max(0, Math.min(3, Number(event.target.value) || 0));
+  const extra = activeExtraAbility();
+  if (extra) extra.sova_charge = value;
+  else sovaCharge = value;
   renderSovaShotPanel(); _saveDraft();
 });
 document.getElementById('sova-bounce-picker')?.addEventListener('click', event => {
   const button = event.target.closest('[data-sova-bounce-index]');
   if (!button) return;
   const index = Math.max(1, Math.min(2, Number(button.dataset.sovaBounceIndex) || 1));
-  sovaBounces = sovaBounces === index ? index - 1 : index;
+  const extra = activeExtraAbility();
+  if (extra) extra.sova_bounces = extra.sova_bounces === index ? index - 1 : index;
+  else sovaBounces = sovaBounces === index ? index - 1 : index;
   renderSovaShotPanel(); _saveDraft();
 });
 let selectedCategory = null;
@@ -10664,8 +10683,10 @@ function moderatorAutosavePayload() {
     extra_abilities: contentType === 'lineup' ? extraAbilityTrajectories.map((item, index) => ({
       ability: item.ability || '', icon: item.icon || '', order:index + 1,
       trajectory: trajectoryForSave(item), range_radius:Number(item.range_radius) || 0,
+      ...(isSovaArrowSelection(selectedAgent, item.ability) ? { sova_charge:Number(item.sova_charge), sova_bounces:Number(item.sova_bounces) } : {}),
       effect_shape: item.effect_shape || 'circle',
     })) : [],
+    sova_shots: contentType === 'lineup' ? buildSovaShotsPayload(ability) : [],
     category: contentType,
     content_type: contentType,
     screenshots: screenshots.filter(item => item.cloudUrl).map(item => item.cloudUrl),
@@ -11400,6 +11421,7 @@ async function buildExtraAbilitiesPayload(map, agentName) {
       slot: item.slot || '',
       icon: item.icon || '',
       trajectory: trajectoryForSave(item),
+      ...(isSovaArrowSelection(agentName, normalizedAbility) ? { sova_charge:item.sova_charge, sova_bounces:item.sova_bounces } : {}),
       range_radius: range || 0,
       effect_shape: effect.effect_shape || item.effect_shape || 'circle',
       effect_width: Number(effect.effect_width ?? item.effect_width ?? 0),
@@ -11407,6 +11429,23 @@ async function buildExtraAbilitiesPayload(map, agentName) {
     });
   }
   return payload;
+}
+
+function buildSovaShotsPayload(mainAbility, extras = extraAbilityTrajectories) {
+  const shots = [];
+  if (isSovaArrowSelection(selectedAgent, mainAbility)) {
+    shots.push({ order:1, ability:mainAbility, charge:sovaCharge, bounces:sovaBounces });
+  }
+  extras.forEach((item, index) => {
+    if (!isSovaArrowSelection(selectedAgent, item.ability)) return;
+    shots.push({
+      order:index + 2,
+      ability:item.ability,
+      charge:Math.max(0, Math.min(3, Number(item.sova_charge ?? 3))),
+      bounces:Math.max(0, Math.min(2, Number(item.sova_bounces ?? 0))),
+    });
+  });
+  return shots;
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────
@@ -11559,6 +11598,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
             position_y: contentType === 'defense' ? 0 : markerY,
             trajectory: contentType === 'defense' ? [] : trajectoryFromMarker(),
             extra_abilities: contentType === 'lineup' ? extraAbilitiesPayload : [], range_radius: rangeRadius,
+            sova_shots: contentType === 'lineup' ? buildSovaShotsPayload(normalizedAbility, extraAbilitiesPayload) : [],
             ...(isSovaArrowSelection(selectedAgent, normalizedAbility) ? { sova_charge: sovaCharge, sova_bounces: sovaBounces } : {}),
             category: contentType, content_type: contentType,
             ...(contentType === 'defense' ? defenseSubmissionPayload() : {}),
@@ -11625,6 +11665,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       position_y: contentType === 'defense' ? 0 : markerY,
       trajectory: contentType === 'defense' ? [] : trajectoryFromMarker(),
       extra_abilities: contentType === 'lineup' ? extraAbilitiesPayload : [],
+      sova_shots: contentType === 'lineup' ? buildSovaShotsPayload(normalizedAbility, extraAbilitiesPayload) : [],
       range_radius:  rangeRadius,
       category:      contentType,
       content_type:  contentType,
