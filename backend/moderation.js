@@ -227,16 +227,17 @@ function safeLineup(doc, viewerUid = '') {
 
 async function searchAuthors(req, res) {
   const q = clean(req.query?.q).slice(0, 80);
-  if (q.length < 2) return res.status(200).json({ users: [] });
   const db = getFirestore();
-  const variants = [...new Set([
+  const variants = q ? [...new Set([
     q,
     q.toLocaleLowerCase('ru-RU'),
     q.charAt(0).toLocaleUpperCase('ru-RU') + q.slice(1).toLocaleLowerCase('ru-RU'),
-  ])];
+  ])] : [''];
   const fields = ['display_name', 'name', 'username', 'displayName'];
   const snapshots = await Promise.all(fields.flatMap(field => variants.map(value =>
-    db.collection('users').orderBy(field).startAt(value).endAt(`${value}\uf8ff`).limit(20).get()
+    (value
+      ? db.collection('users').orderBy(field).startAt(value).endAt(`${value}\uf8ff`).limit(20)
+      : db.collection('users').orderBy(field).limit(12)).get()
       .catch(() => null),
   )));
   const found = new Map();
@@ -249,7 +250,7 @@ async function searchAuthors(req, res) {
   }
   const needle = q.toLocaleLowerCase('ru-RU');
   const users = [...found.values()]
-    .filter(user => user.name.toLocaleLowerCase('ru-RU').includes(needle))
+    .filter(user => !needle || user.name.toLocaleLowerCase('ru-RU').includes(needle))
     .sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity:'base' }))
     .slice(0, 20);
   res.status(200).json({ users });

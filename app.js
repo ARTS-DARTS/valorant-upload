@@ -2426,6 +2426,7 @@ let moderatorResumeAttempted = false;
 let moderatorSelectedAuthor = null;
 let moderatorAuthorMatches = [];
 let moderatorAuthorTimer = null;
+let moderatorAuthorSearchSequence = 0;
 let moderationController = null;
 let moderationModulePromise = null;
 let pendingLineupDeepLink = new URLSearchParams(window.location.search).get('lineup') || '';
@@ -4064,25 +4065,62 @@ function showModeratorAuthorPicker(author = null) {
   if (status) status.textContent = moderatorSelectedAuthor
     ? `Выбран автор: ${moderatorSelectedAuthor.name}`
     : 'Начни вводить ник и выбери автора из списка.';
+  if (section && !section.hidden) searchModeratorAuthors(input?.value || '');
   renderModeratorScreenshotRail();
+}
+
+function renderModeratorAuthorOptions({ loading = false } = {}) {
+  const options = document.getElementById('moderator-author-options');
+  if (!options) return;
+  if (loading) {
+    options.innerHTML = '<div class="moderator-author-empty">Загрузка авторов…</div>';
+    return;
+  }
+  if (!moderatorAuthorMatches.length) {
+    options.innerHTML = '<div class="moderator-author-empty">Авторы не найдены</div>';
+    return;
+  }
+  options.innerHTML = moderatorAuthorMatches.map(user => {
+    const selected = moderatorSelectedAuthor?.uid === user.uid;
+    const initials = user.name.trim().slice(0, 2).toLocaleUpperCase('ru-RU');
+    return `<button type="button" class="moderator-author-option${selected ? ' selected' : ''}" data-author-uid="${esc(user.uid)}" role="option" aria-selected="${selected}">
+      <b class="moderator-author-avatar">${esc(initials)}</b>
+      <span><strong>${esc(user.name)}</strong><small>UID: ${esc(user.uid.slice(0, 12))}</small></span>
+    </button>`;
+  }).join('');
+  options.querySelectorAll('[data-author-uid]').forEach(button => {
+    button.addEventListener('click', () => {
+      const selected = moderatorAuthorMatches.find(user => user.uid === button.dataset.authorUid);
+      if (!selected) return;
+      moderatorSelectedAuthor = selected;
+      const input = document.getElementById('moderator-author-search');
+      const status = document.getElementById('moderator-author-status');
+      if (input) input.value = selected.name;
+      if (status) status.textContent = `Выбран автор: ${selected.name}`;
+      renderModeratorAuthorOptions();
+      scheduleModeratorAutosave();
+    });
+  });
 }
 
 async function searchModeratorAuthors(queryText) {
   const q = String(queryText || '').trim();
-  const options = document.getElementById('moderator-author-options');
-  if (q.length < 2) { if (options) options.innerHTML = ''; return; }
+  const sequence = ++moderatorAuthorSearchSequence;
+  renderModeratorAuthorOptions({ loading:true });
   try {
     const token = await currentUser.getIdToken();
     const response = await fetch(`/api/moderation?q=${encodeURIComponent(q)}`, { headers: { Authorization: `Bearer ${token}` } });
     const body = await response.json();
     if (!response.ok) throw new Error(body.error || `Ошибка ${response.status}`);
+    if (sequence !== moderatorAuthorSearchSequence) return;
     moderatorAuthorMatches = Array.isArray(body.users) ? body.users : [];
-    if (options) options.innerHTML = moderatorAuthorMatches.map(user =>
-      `<option value="${esc(`${user.name} · ${user.uid.slice(0, 8)}`)}">${esc(user.name)}</option>`,
-    ).join('');
     applyModeratorAuthorInput(document.getElementById('moderator-author-search')?.value || '');
+    renderModeratorAuthorOptions();
   } catch (error) {
+    if (sequence !== moderatorAuthorSearchSequence) return;
     document.getElementById('moderator-author-status').textContent = `Поиск не выполнен: ${error.message}`;
+    moderatorAuthorMatches = [];
+    renderModeratorAuthorOptions();
   }
 }
 
@@ -4108,6 +4146,10 @@ document.getElementById('moderator-author-search')?.addEventListener('input', ev
   const match = applyModeratorAuthorInput(value);
   clearTimeout(moderatorAuthorTimer);
   moderatorAuthorTimer = setTimeout(() => searchModeratorAuthors(match?.name || value), 250);
+});
+document.getElementById('moderator-author-search')?.addEventListener('focus', event => {
+  clearTimeout(moderatorAuthorTimer);
+  moderatorAuthorTimer = setTimeout(() => searchModeratorAuthors(event.target.value), 0);
 });
 
 async function loadModerationWorkspace({ background = false } = {}) {
