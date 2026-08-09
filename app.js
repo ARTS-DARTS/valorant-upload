@@ -4077,19 +4077,37 @@ async function searchModeratorAuthors(queryText) {
     const body = await response.json();
     if (!response.ok) throw new Error(body.error || `Ошибка ${response.status}`);
     moderatorAuthorMatches = Array.isArray(body.users) ? body.users : [];
-    if (options) options.innerHTML = moderatorAuthorMatches.map(user => `<option value="${esc(user.name)}"></option>`).join('');
+    if (options) options.innerHTML = moderatorAuthorMatches.map(user =>
+      `<option value="${esc(`${user.name} · ${user.uid.slice(0, 8)}`)}">${esc(user.name)}</option>`,
+    ).join('');
+    applyModeratorAuthorInput(document.getElementById('moderator-author-search')?.value || '');
   } catch (error) {
     document.getElementById('moderator-author-status').textContent = `Поиск не выполнен: ${error.message}`;
   }
 }
 
+function applyModeratorAuthorInput(rawValue) {
+  const value = String(rawValue || '').trim();
+  const normalized = value.toLocaleLowerCase('ru-RU');
+  const exact = moderatorAuthorMatches.filter(user =>
+    user.name.toLocaleLowerCase('ru-RU') === normalized ||
+    `${user.name} · ${user.uid.slice(0, 8)}`.toLocaleLowerCase('ru-RU') === normalized,
+  );
+  moderatorSelectedAuthor = exact.length === 1 ? exact[0] : null;
+  const status = document.getElementById('moderator-author-status');
+  if (status) status.textContent = moderatorSelectedAuthor
+    ? `Выбран автор: ${moderatorSelectedAuthor.name}`
+    : exact.length > 1
+      ? 'Найдено несколько пользователей с таким ником. Выбери вариант с UID.'
+      : 'Выбери точное имя из найденных вариантов.';
+  return moderatorSelectedAuthor;
+}
+
 document.getElementById('moderator-author-search')?.addEventListener('input', event => {
   const value = event.target.value.trim();
-  const match = moderatorAuthorMatches.find(user => user.name.toLocaleLowerCase('ru-RU') === value.toLocaleLowerCase('ru-RU'));
-  moderatorSelectedAuthor = match || null;
-  document.getElementById('moderator-author-status').textContent = match ? `Выбран автор: ${match.name}` : 'Выбери точное имя из найденных вариантов.';
+  const match = applyModeratorAuthorInput(value);
   clearTimeout(moderatorAuthorTimer);
-  moderatorAuthorTimer = setTimeout(() => searchModeratorAuthors(value), 250);
+  moderatorAuthorTimer = setTimeout(() => searchModeratorAuthors(match?.name || value), 250);
 });
 
 async function loadModerationWorkspace({ background = false } = {}) {

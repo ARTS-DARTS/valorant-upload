@@ -229,11 +229,29 @@ async function searchAuthors(req, res) {
   const q = clean(req.query?.q).slice(0, 80);
   if (q.length < 2) return res.status(200).json({ users: [] });
   const db = getFirestore();
-  const snap = await db.collection('users').orderBy('name').startAt(q).endAt(`${q}\uf8ff`).limit(20).get();
-  const users = snap.docs.map(doc => ({
-    uid: doc.id,
-    name: clean(doc.data()?.name || doc.data()?.username || doc.data()?.displayName).slice(0, 80),
-  })).filter(user => user.name);
+  const variants = [...new Set([
+    q,
+    q.toLocaleLowerCase('ru-RU'),
+    q.charAt(0).toLocaleUpperCase('ru-RU') + q.slice(1).toLocaleLowerCase('ru-RU'),
+  ])];
+  const fields = ['display_name', 'name', 'username', 'displayName'];
+  const snapshots = await Promise.all(fields.flatMap(field => variants.map(value =>
+    db.collection('users').orderBy(field).startAt(value).endAt(`${value}\uf8ff`).limit(20).get()
+      .catch(() => null),
+  )));
+  const found = new Map();
+  for (const snap of snapshots) {
+    for (const doc of snap?.docs || []) {
+      const data = doc.data() || {};
+      const name = clean(data.display_name || data.name || data.username || data.displayName).slice(0, 80);
+      if (name && !found.has(doc.id)) found.set(doc.id, { uid: doc.id, name });
+    }
+  }
+  const needle = q.toLocaleLowerCase('ru-RU');
+  const users = [...found.values()]
+    .filter(user => user.name.toLocaleLowerCase('ru-RU').includes(needle))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity:'base' }))
+    .slice(0, 20);
   res.status(200).json({ users });
 }
 
