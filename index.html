@@ -246,6 +246,13 @@
           </div>
           <output class="video-viewer-zoom-hud" id="video-viewer-zoom-hud" aria-live="polite">100%</output>
           <button class="video-player-fullscreen-close" id="video-player-fullscreen-close" type="button">✕ Выйти</button>
+          <div class="video-player-fullscreen-controls" id="video-player-fullscreen-controls">
+            <input class="video-player-fullscreen-scrubber" id="video-player-fullscreen-scrubber" type="range" min="0" max="100" step="0.05" value="0" aria-label="Позиция видео на полном экране">
+            <div class="video-player-fullscreen-transport">
+              <button class="video-player-fullscreen-play" id="video-player-fullscreen-play" type="button" aria-label="Воспроизвести">▶</button>
+              <output class="video-player-fullscreen-time" id="video-player-fullscreen-time">0:00 / 0:00</output>
+            </div>
+          </div>
         </div>
         <div class="video-viewer-tip" id="video-viewer-tip">
           <span>🔍 Просмотр кадра</span>

@@ -5691,6 +5691,9 @@ const vidPlayer   = document.getElementById('vid-player');
 const vidScrubber = document.getElementById('vid-scrubber');
 const vidTimeEl   = document.getElementById('vid-time');
 const vidPlayBtn  = document.getElementById('vid-play-btn');
+const fullscreenVidScrubber = document.getElementById('video-player-fullscreen-scrubber');
+const fullscreenVidTimeEl = document.getElementById('video-player-fullscreen-time');
+const fullscreenVidPlayBtn = document.getElementById('video-player-fullscreen-play');
 let activeEditorMode = 'trim';
 let timelineDrag = null;
 let scrubberDragging = false;
@@ -6697,6 +6700,7 @@ function stopOutputPlayback({ keepPreview = true } = {}) {
   setFreezeOverlay('');
   if (!vidPlayer.paused) vidPlayer.pause();
   if (vidPlayBtn) vidPlayBtn.textContent = '▶';
+  if (fullscreenVidPlayBtn) fullscreenVidPlayBtn.textContent = '▶';
   updateTimelinePlaybackUi({ keepVisible: true });
 }
 
@@ -6766,6 +6770,7 @@ function startOutputPlayback(startOutput = null) {
   outputPlaybackStartedAt = performance.now();
   outputPlaybackActive = true;
   if (vidPlayBtn) vidPlayBtn.textContent = '⏸';
+  if (fullscreenVidPlayBtn) fullscreenVidPlayBtn.textContent = '⏸';
   showOutputFrame(outputPlaybackStartTime);
   outputPlaybackRaf = requestAnimationFrame(tickOutputPlayback);
 }
@@ -6806,6 +6811,8 @@ function renderVideoTransport() {
     vidScrubber.value = String(sharedOutputToScrubberValue(current, Number(vidScrubber.max || 100), duration));
   }
   if (vidTimeEl) vidTimeEl.textContent = fmtTime(current) + ' / ' + fmtTime(duration);
+  if (fullscreenVidScrubber && duration) fullscreenVidScrubber.value = String(sharedOutputToScrubberValue(current, Number(fullscreenVidScrubber.max || 100), duration));
+  if (fullscreenVidTimeEl) fullscreenVidTimeEl.textContent = fmtTime(current) + ' / ' + fmtTime(duration);
 }
 
 function updateTimelinePlaybackUi({ keepVisible = false } = {}) {
@@ -8968,11 +8975,13 @@ vidPlayer.addEventListener('play',  () => {
     outputPlaybackTime = null;
   }
   vidPlayBtn.textContent = '⏸';
+  if (fullscreenVidPlayBtn) fullscreenVidPlayBtn.textContent = '⏸';
   lastVideoTime = vidPlayer.currentTime;
   if (!outputPlaybackActive) startSmoothTimelineUi();
 });
 vidPlayer.addEventListener('pause', () => {
   if (!outputPlaybackActive) vidPlayBtn.textContent = '▶';
+  if (!outputPlaybackActive && fullscreenVidPlayBtn) fullscreenVidPlayBtn.textContent = '▶';
   stopSmoothTimelineUi();
   updateTimelinePlaybackUi();
 });
@@ -9028,6 +9037,11 @@ function videoEditorSourceUrl(url) {
 }
 
 vidScrubber.addEventListener('input', seekFromScrubberValue);
+fullscreenVidScrubber?.addEventListener('input', () => {
+  vidScrubber.value = fullscreenVidScrubber.value;
+  seekFromScrubberValue();
+  renderVideoTransport();
+});
 vidScrubber.addEventListener('pointerdown', event => {
   scrubberDragging = true;
   scrubberResumePlayback = outputPlaybackActive || !vidPlayer.paused;
@@ -9051,6 +9065,7 @@ vidScrubber.addEventListener('pointercancel', cancelScrubberDrag);
 window.addEventListener('pointerup', finishScrubberDrag);
 window.addEventListener('pointercancel', cancelScrubberDrag);
 vidPlayBtn.addEventListener('click', toggleEditorPlayback);
+fullscreenVidPlayBtn?.addEventListener('click', toggleEditorPlayback);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     videoHiddenAt = Date.now();
