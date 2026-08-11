@@ -567,7 +567,9 @@
     .footage-resize-handle.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
     .freeze-frame-overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; display: none; pointer-events: none; z-index: 6; }
     .freeze-frame-overlay.show { display: block; }
-    .freeze-drawing-canvas { position:absolute; inset:0; z-index:10; width:100%; height:100%; display:none; pointer-events:none; touch-action:none; cursor:crosshair; }
+    .freeze-drawing-vector { position:absolute; inset:0; z-index:10; width:100%; height:100%; display:none; overflow:visible; pointer-events:none; }
+    .freeze-drawing-vector.show { display:block; }
+    .freeze-drawing-canvas { position:absolute; inset:0; z-index:11; width:100%; height:100%; display:none; pointer-events:none; touch-action:none; cursor:crosshair; opacity:0; }
     .freeze-drawing-canvas.show { display:block; }
     .freeze-drawing-canvas.interactive { pointer-events:auto; }
     .freeze-drawing-canvas:focus-visible { outline:2px solid var(--primary); outline-offset:-2px; }

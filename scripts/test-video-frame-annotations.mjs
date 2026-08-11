@@ -6,9 +6,19 @@ import {
   MAX_FREEZE_ANNOTATION_POINTS,
   createFreezeAnnotation,
   drawFreezeAnnotations,
+  freezeAnnotationsSvg,
   normalizeFreezeAnnotations,
   updateFreezeAnnotation,
 } from '../video-frame-annotations.mjs';
+
+test('serializes drawings as resolution-independent SVG paths and circles', () => {
+  const svg = freezeAnnotationsSvg([
+    { type:'line', color:'#ff4655', width:0.01, points:[{x:0.1,y:0.2},{x:0.9,y:0.8}] },
+    { type:'brush', color:'#ffffff', width:0.006, points:[{x:0.5,y:0.5}] },
+  ]);
+  assert.match(svg, /<path d="M 100 200 L 900 800"/);
+  assert.match(svg, /<circle cx="500" cy="500"/);
+});
 
 test('normalizes freeze-frame strokes into bounded relative coordinates', () => {
   const annotations = normalizeFreezeAnnotations([{
@@ -65,6 +75,7 @@ test('upload editor persists and previews drawing data on freeze-frame clips', a
     readFile(new URL('index.html', root), 'utf8'),
     readFile(new URL('styles.css', root), 'utf8'),
   ]);
+  assert.match(html, /id="freeze-drawing-vector"/);
   assert.match(html, /id="freeze-drawing-canvas"/);
   assert.match(html, /data-freeze-draw-tool="brush"/);
   assert.match(html, /data-freeze-draw-tool="line"/);

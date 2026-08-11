@@ -13,9 +13,10 @@ import {
   MAX_FREEZE_ANNOTATION_STROKES,
   createFreezeAnnotation,
   drawFreezeAnnotations,
+  freezeAnnotationsSvg,
   normalizeFreezeAnnotations,
   updateFreezeAnnotation,
-} from './video-frame-annotations.mjs?v=2026-08-02-freeze-drawing-v1';
+} from './video-frame-annotations.mjs?v=2026-08-11-vector-drawing-v1';
 import {
   clampVideoViewerZoom,
   zoomVideoViewerAtPoint,
@@ -38,6 +39,7 @@ import {
   reconcileVideoSourceDuration,
   stableVideoItemId,
 } from './video_project_v3.mjs?v=2026-08-06-video-duration-reconcile-v1';
+import { parseIsoBmffDuration } from './video_metadata_core.mjs?v=2026-08-11-duration-fallback-v1';
 import {
   effectiveProgressPoints,
   entitlementHasCooldownBypass,
@@ -5860,6 +5862,7 @@ const editorEls = {
   footageFrame: document.getElementById('footage-transform-frame'),
   freezeOverlay: document.getElementById('freeze-frame-overlay'),
   freezeDrawingCanvas: document.getElementById('freeze-drawing-canvas'),
+  freezeDrawingVector: document.getElementById('freeze-drawing-vector'),
   freezeDrawingPanel: document.getElementById('freeze-draw-panel'),
   freezeDrawingUndo: document.getElementById('freeze-draw-undo'),
   freezeDrawingClear: document.getElementById('freeze-draw-clear'),
@@ -6322,6 +6325,60 @@ function selectedFreezeClip() {
   return (videoEdit.freezeFrames || []).find(item => item.id === selectedEditorItem.id) || null;
 }
 
+function withPreviewTransform(ctx, canvas, draw) {
+  const stageRect = editorEls.stage?.getBoundingClientRect();
+  if (!stageRect?.width || !stageRect?.height) return;
+  const matrix = new DOMMatrix(getComputedStyle(vidPlayer).transform === 'none' ? undefined : getComputedStyle(vidPlayer).transform);
+  ctx.save();
+  ctx.scale(canvas.width / stageRect.width, canvas.height / stageRect.height);
+  ctx.translate(stageRect.width / 2, stageRect.height / 2);
+  ctx.transform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
+  ctx.translate(-stageRect.width / 2, -stageRect.height / 2);
+  draw(stageRect.width, stageRect.height);
+  ctx.restore();
+}
+
+function captureEditedVideoFrameBlob() {
+  const width = vidPlayer.videoWidth || 1920;
+  const height = vidPlayer.videoHeight || 1080;
+  if (!width || !height) return Promise.resolve(null);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return Promise.resolve(null);
+
+  const freeze = (videoEdit.freezeFrames || []).find(item => item.id === freezeDrawingVisibleId) || null;
+  const freezeImage = editorEls.freezeOverlay?.classList.contains('show') && editorEls.freezeOverlay.complete
+    ? editorEls.freezeOverlay
+    : null;
+  withPreviewTransform(ctx, canvas, (stageWidth, stageHeight) => {
+    ctx.drawImage(freezeImage || vidPlayer, 0, 0, stageWidth, stageHeight);
+  });
+
+  const footage = activeFootageClipAtOutput(currentOutputTime());
+  if (footage?.url) {
+    const chromaVisible = editorEls.footageCanvas?.classList.contains('show');
+    const source = chromaVisible ? editorEls.footageCanvas : editorEls.footagePreview;
+    const sourceWidth = source?.videoWidth || source?.width || 0;
+    const sourceHeight = source?.videoHeight || source?.height || 0;
+    if (source && sourceWidth && sourceHeight) {
+      const overlayWidth = canvas.width * Math.max(0.05, Math.min(2, Number(footage.scale ?? 0.35)));
+      const overlayHeight = overlayWidth * sourceHeight / sourceWidth;
+      const centerX = canvas.width * Math.max(0, Math.min(100, Number(footage.posX ?? 50))) / 100;
+      const centerY = canvas.height * Math.max(0, Math.min(100, Number(footage.posY ?? 50))) / 100;
+      ctx.drawImage(source, centerX - overlayWidth / 2, centerY - overlayHeight / 2, overlayWidth, overlayHeight);
+    }
+  }
+
+  if (freeze?.annotations?.length) {
+    withPreviewTransform(ctx, canvas, (stageWidth, stageHeight) => {
+      drawFreezeAnnotations(ctx, freeze.annotations, stageWidth, stageHeight);
+    });
+  }
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+}
+
 function resizeFreezeDrawingCanvas() {
   const canvas = editorEls.freezeDrawingCanvas;
   const rect = editorEls.stage?.getBoundingClientRect();
@@ -6348,11 +6405,12 @@ function renderFreezeDrawing() {
   const interactive = visible && selected?.id === freeze.id && !outputPlaybackActive;
   canvas.classList.toggle('show', visible);
   canvas.classList.toggle('interactive', interactive);
+  editorEls.freezeDrawingVector?.classList.toggle('show', visible);
   canvas.setAttribute('aria-hidden', String(!visible));
   const renderKey = visible ? `${freeze.id}|${canvas.width}x${canvas.height}|${JSON.stringify(annotations)}` : '';
   if (resized || renderKey !== freezeDrawingRenderKey) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (visible) drawFreezeAnnotations(ctx, annotations, canvas.width, canvas.height);
+    if (editorEls.freezeDrawingVector) editorEls.freezeDrawingVector.innerHTML = visible ? freezeAnnotationsSvg(annotations) : '';
     freezeDrawingRenderKey = renderKey;
   }
 }
@@ -7336,6 +7394,10 @@ function applyVideoEditPreview() {
   if (editorEls.freezeDrawingCanvas) {
     if (editorEls.freezeDrawingCanvas.style.transformOrigin !== transformOrigin) editorEls.freezeDrawingCanvas.style.transformOrigin = transformOrigin;
     if (editorEls.freezeDrawingCanvas.style.transform !== transform) editorEls.freezeDrawingCanvas.style.transform = transform;
+  }
+  if (editorEls.freezeDrawingVector) {
+    if (editorEls.freezeDrawingVector.style.transformOrigin !== transformOrigin) editorEls.freezeDrawingVector.style.transformOrigin = transformOrigin;
+    if (editorEls.freezeDrawingVector.style.transform !== transform) editorEls.freezeDrawingVector.style.transform = transform;
   }
   const activeFootage = activeFootageClipAtOutput(previewOutputTime);
   if (editorEls.footagePreview) {
@@ -8678,6 +8740,7 @@ function readVideoMetadata(file) {
     let settled = false;
     let timeout;
     let dimensions = { width: 0, height: 0 };
+    let containerDuration = 0;
     const done = value => {
       if (settled) return;
       settled = true;
@@ -8692,11 +8755,20 @@ function readVideoMetadata(file) {
         width: Number(video.videoWidth || dimensions.width || 0),
         height: Number(video.videoHeight || dimensions.height || 0),
       };
-      const duration = Number(video.duration);
+      const nativeDuration = Number(video.duration);
+      const duration = Number.isFinite(nativeDuration) && nativeDuration > 0
+        ? nativeDuration
+        : containerDuration;
       if (!Number.isFinite(duration) || duration <= 0) return false;
       done({ duration, ...dimensions });
       return true;
     };
+    file.arrayBuffer()
+      .then(buffer => {
+        containerDuration = parseIsoBmffDuration(buffer);
+        finishWhenDurationIsReady();
+      })
+      .catch(() => {});
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
       if (finishWhenDurationIsReady()) return;
@@ -8707,7 +8779,7 @@ function readVideoMetadata(file) {
     video.ondurationchange = finishWhenDurationIsReady;
     video.oncanplay = finishWhenDurationIsReady;
     video.onerror = () => done({ duration: 0, width: 0, height: 0 });
-    timeout = setTimeout(() => done({ duration: 0, ...dimensions }), 8000);
+    timeout = setTimeout(() => done({ duration: containerDuration, ...dimensions }), 8000);
     video.src = url;
     video.load();
   });
@@ -9359,11 +9431,8 @@ document.getElementById('vid-frame-btn').addEventListener('click', async () => {
   try {
     vidPlayer.pause();
     await new Promise(r => setTimeout(r, 50));
-    const canvas = document.createElement('canvas');
-    canvas.width  = vidPlayer.videoWidth;
-    canvas.height = vidPlayer.videoHeight;
-    canvas.getContext('2d').drawImage(vidPlayer, 0, 0);
-    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+    applyVideoEditPreview();
+    const blob = await captureEditedVideoFrameBlob();
     if (!blob) throw new Error('Не удалось захватить кадр');
     const compressed = await compressImage(blob);
     const localUrl = URL.createObjectURL(blob);

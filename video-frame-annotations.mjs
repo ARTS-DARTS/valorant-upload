@@ -97,3 +97,18 @@ export function drawFreezeAnnotations(ctx, value, width, height) {
     ctx.restore();
   });
 }
+
+function escapeAttribute(value) {
+  return String(value).replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
+}
+
+export function freezeAnnotationsSvg(value) {
+  return normalizeFreezeAnnotations(value).map(annotation => {
+    const points = annotation.points;
+    const width = annotation.width * 1000;
+    const isDot = points.length === 1 || (points.length === 2 && points[0].x === points[1].x && points[0].y === points[1].y);
+    if (isDot) return `<circle cx="${points[0].x * 1000}" cy="${points[0].y * 1000}" r="${width / 2}" fill="${escapeAttribute(annotation.color)}"/>`;
+    const path = points.map((point, index) => `${index ? 'L' : 'M'} ${point.x * 1000} ${point.y * 1000}`).join(' ');
+    return `<path d="${path}" fill="none" stroke="${escapeAttribute(annotation.color)}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }).join('');
+}
