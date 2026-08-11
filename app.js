@@ -43,6 +43,7 @@ import {
   entitlementHasCooldownBypass,
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
+import { createSocialWebsite } from './social-communication.mjs?v=2026-08-11-social-v1';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',
@@ -57,6 +58,7 @@ const app  = initializeApp(cfg);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 const functions = getFunctions(app, 'us-central1');
+const socialWebsite = createSocialWebsite({ db, functions, toast: (...args) => toast(...args) });
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
 const syncAuthorTrainingCriteriaNotifications = httpsCallable(
   functions,
@@ -5122,6 +5124,7 @@ function mergeUserLibraryParts(parts) {
 
 onAuthStateChanged(auth, async user => {
   currentUser = user;
+  socialWebsite.setUser(user);
   if (user) {
     activeAdminChatId = adminChatId(user.uid);
     adminChatItems = [];
@@ -10458,12 +10461,12 @@ function trajectoryFromMarker(points = trajectoryPoints) {
 
 function rejectMapInteractionWhileLoading() {
   if (mapInteractionReady) return false;
-  logUploadError(new Error('Map interaction attempted before ready'), {
-    action: 'map_interaction_before_ready', map: document.getElementById('sel-map')?.value || '',
-    side: selectedRoundSide || '', orientation_ready: mapAnnotationsReady,
-    image_complete: !!document.getElementById('map-img')?.complete,
-  });
-  toast('Карта ещё загружается. Подожди секунду.', 'i');
+  // Clicking the placeholder (including before a map was selected) is normal
+  // user input, not an application error. Actual image failures are reported
+  // by loadMapMinimap(), with the URL attempt and failure reason attached.
+  if (document.getElementById('sel-map')?.value) {
+    toast('Карта ещё загружается. Подожди секунду.', 'i');
+  }
   return true;
 }
 

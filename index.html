@@ -124,6 +124,8 @@
       <button class="workspace-tab" data-workspace-tab="materials">Материалы</button>
       <button class="workspace-tab" data-workspace-tab="notifications">🔔 Уведомления <span id="notifications-tab-badge" class="chat-tab-badge" hidden></span></button>
       <button class="workspace-tab" data-workspace-tab="admin-chat">💬 Чаты <span id="admin-chat-badge" class="chat-tab-badge" hidden></span></button>
+      <button class="workspace-tab" data-workspace-tab="profile">Профиль</button>
+      <button class="workspace-tab" data-workspace-tab="messages">Личные сообщения</button>
     </nav>
   </div>
 
@@ -847,6 +849,25 @@
     </section>
   </div>
 
+  <div class="workspace-panel" id="workspace-profile">
+    <section class="social-page-shell">
+      <header class="social-page-head"><div><div class="workspace-kicker">Игровое сообщество</div><h1>Профиль пользователя</h1><p>Публичная версия профиля доступна по ссылке на компьютере и телефоне.</p></div>
+        <form id="social-profile-search-form"><input id="social-profile-search" maxlength="128" placeholder="UID пользователя" aria-label="UID пользователя"><button type="submit">Открыть</button></form>
+      </header>
+      <div id="social-profile-root"><div class="social-empty">Загружаем профиль…</div></div>
+    </section>
+  </div>
+
+  <div class="workspace-panel" id="workspace-messages">
+    <section class="social-page-shell social-messenger">
+      <aside id="social-dialog-list" class="social-dialog-list"><div class="social-empty">Загружаем диалоги…</div></aside>
+      <div class="social-thread-shell"><div class="social-thread-note">Незнакомому пользователю можно отправить только одно сообщение-запрос. Продолжение станет доступно после принятия.<span id="social-request-actions" hidden><button type="button" data-request-decision="accept">Принять</button><button type="button" data-request-decision="decline">Отклонить</button></span></div>
+        <div id="social-message-thread" class="social-message-thread"><div class="social-empty">Выберите диалог.</div></div>
+        <form id="social-message-form" class="social-message-compose"><textarea id="social-message-input" maxlength="4000" rows="2" placeholder="Сообщение"></textarea><button type="submit">Отправить</button></form>
+      </div>
+    </section>
+  </div>
+
   <div class="workspace-panel" id="workspace-mine">
     <div class="author-list-shell">
       <div class="section-title">МОИ ЛАЙНАПЫ</div>
@@ -1005,7 +1026,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-08-09-map-validation-scroll-v5"></script>
+<script type="module" src="/app.js?v=2026-08-11-social-v1"></script>
 <script defer src="/workspace-redesign.js?v=2026-08-02-map-gallery-sync-v1"></script>
 </body>
 </html>
