@@ -43,7 +43,7 @@ import {
   entitlementHasCooldownBypass,
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
-import { createSocialWebsite } from './social-communication.mjs?v=2026-08-11-social-v1';
+import { createSocialWebsite } from './social-communication.mjs?v=2026-08-11-social-v2';
 
 const cfg = {
   apiKey:            'AIzaSyA1ya7fO5ZSeeokEfRHikWwpBXeXYhm9ww',

@@ -12,7 +12,7 @@ const clientId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Mat
 export function createSocialWebsite({ db, functions, toast }) {
   const calls = Object.fromEntries([
     'createMessageRequest', 'acceptMessageRequest', 'declineMessageRequest',
-    'sendDirectMessage', 'markConversationRead',
+    'sendDirectMessage', 'markConversationRead', 'getCommunicationAvailability',
   ].map(name => [name, httpsCallable(functions, name)]));
   let user = null;
   let memberUnsubscribe = null;
@@ -157,12 +157,20 @@ export function createSocialWebsite({ db, functions, toast }) {
   });
 
   return {
-    setUser(nextUser) {
+    async setUser(nextUser) {
       user = nextUser || null;
       activeConversation = null;
       messageUnsubscribe?.(); messageUnsubscribe = null;
-      subscribeMembers();
-      if (user) showProfile(new URL(location.href).searchParams.get('profile') || user.uid).catch(() => {});
+      const messagesTab = document.getElementById('social-messages-tab');
+      if (messagesTab) messagesTab.hidden = true;
+      if (!user) { subscribeMembers(); return; }
+      try {
+        const availability = await calls.getCommunicationAvailability({});
+        if (messagesTab) messagesTab.hidden = availability.data?.messaging !== true;
+        if (availability.data?.messaging === true) subscribeMembers();
+        else { memberUnsubscribe?.(); members = []; renderMembers(); }
+      } catch (_) { memberUnsubscribe?.(); members = []; renderMembers(); }
+      showProfile(new URL(location.href).searchParams.get('profile') || user.uid).catch(() => {});
     },
   };
 }
