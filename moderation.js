@@ -13,6 +13,9 @@ let queueLoadAbortController = null;
 let lockAbortController = null;
 let refreshButton = null;
 let moderationList = null;
+let authorFilter = null;
+let selectedAuthorKey = '';
+let queueAuthors = [];
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
@@ -121,6 +124,24 @@ async function api(path = '', options = {}) {
 function updateQueueStatus() {
   const status = document.getElementById('moderation-status');
   if (status) status.textContent = `В очереди: ${loadedItems.length} · Всего: ${totalQueueItems}`;
+}
+
+function renderAuthorFilter() {
+  if (!authorFilter) return;
+  const options = ['<option value="">Все авторы</option>', ...queueAuthors.map(author =>
+    `<option value="${esc(author.key)}">${esc(author.name)} · ${Number(author.count) || 0}</option>`
+  )].join('');
+  if (authorFilter.innerHTML !== options) authorFilter.innerHTML = options;
+  if (![...authorFilter.options].some(option => option.value === selectedAuthorKey)) selectedAuthorKey = '';
+  authorFilter.value = selectedAuthorKey;
+  authorFilter.disabled = queueAuthors.length === 0;
+}
+
+async function handleAuthorFilterChange() {
+  selectedAuthorKey = authorFilter?.value || '';
+  renderedQueueSignature = '';
+  if (authorFilter) authorFilter.disabled = true;
+  await load();
 }
 
 function removeQueueItems(ids) {
@@ -455,9 +476,12 @@ async function load({ silent = false, allowInactive = false, renderQueue = true 
       await api('', { method: 'POST', body: JSON.stringify({ action: 'seed_metadata_queue' }), signal: requestController.signal });
       sessionStorage.setItem('metadata-review-seeded-v2', '1');
     }
-    const body = await api('', { signal: requestController.signal });
+    const queuePath = selectedAuthorKey ? `?author=${encodeURIComponent(selectedAuthorKey)}` : '';
+    const body = await api(queuePath, { signal: requestController.signal });
     if (!active && !allowInactive) return;
     const items = Array.isArray(body.items) ? body.items : [];
+    queueAuthors = Array.isArray(body.authors) ? body.authors : [];
+    renderAuthorFilter();
     const nextSignature = queueSignature(items);
     if (!active || !renderQueue) {
       loadedItems = items;
@@ -676,8 +700,12 @@ function destroy() {
   refreshButton?.removeEventListener('click', load);
   moderationList?.removeEventListener('click', handleModerationListClick);
   moderationList?.removeEventListener('input', handleModerationListInput);
+  authorFilter?.removeEventListener('change', handleAuthorFilterChange);
   refreshButton = null;
   moderationList = null;
+  authorFilter = null;
+  selectedAuthorKey = '';
+  queueAuthors = [];
   loadedItems = [];
   totalQueueItems = 0;
   context = null;
@@ -687,9 +715,11 @@ export function initModeration(nextContext) {
   context = nextContext;
   refreshButton = document.getElementById('moderation-refresh');
   moderationList = document.getElementById('moderation-list');
+  authorFilter = document.getElementById('moderation-author-filter');
   refreshButton?.addEventListener('click', load);
   moderationList?.addEventListener('click', handleModerationListClick);
   moderationList?.addEventListener('input', handleModerationListInput);
+  authorFilter?.addEventListener('change', handleAuthorFilterChange);
   async function releaseClaim(lineupId) {
     if (!lineupId) return;
     await api('', { method: 'POST', body: JSON.stringify({ lineupId, action: 'release_claim' }) });

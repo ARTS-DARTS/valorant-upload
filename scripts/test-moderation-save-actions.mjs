@@ -5,6 +5,17 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const appSource = await readFile(new URL('app.js', root), 'utf8');
 const backendSource = await readFile(new URL('backend/moderation.js', root), 'utf8');
+const moderationSource = await readFile(new URL('moderation.js', root), 'utf8');
+const htmlSource = await readFile(new URL('index.html', root), 'utf8');
+
+test('moderation queue can be filtered by authors present in the queue', () => {
+  assert.match(htmlSource, /id="moderation-author-filter"/);
+  assert.match(backendSource, /const authors = \[\.\.\.queue\.reduce/);
+  assert.match(backendSource, /selectedQueue = requestedAuthor \? queue\.filter/);
+  assert.match(backendSource, /authors \}/);
+  assert.match(moderationSource, /\?author=\$\{encodeURIComponent\(selectedAuthorKey\)\}/);
+  assert.match(moderationSource, /queueAuthors = Array\.isArray\(body\.authors\)/);
+});
 
 test('moderator save and completion use different API actions', () => {
   const saveClickHandler = appSource.match(

@@ -4240,7 +4240,7 @@ document.getElementById('moderator-author-search')?.addEventListener('focus', ev
 async function loadModerationWorkspace({ background = false } = {}) {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-08-02-video-delivery-v1');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-08-11-author-filter-v1');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({

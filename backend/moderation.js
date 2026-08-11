@@ -512,7 +512,14 @@ async function autosaveDraft(req, res, moderator) {
   res.status(200).json({ ok: true, id: lineupId, expires_at: expiresAt.getTime() });
 }
 
-async function listQueue(res, moderator) {
+function queueAuthorKey(item) {
+  const uid = clean(item?.user_id).slice(0, 128);
+  if (uid) return `uid:${uid}`;
+  const name = clean(item?.submitted_by).slice(0, 80);
+  return name ? `name:${name.toLocaleLowerCase('ru')}` : 'unknown';
+}
+
+async function listQueue(req, res, moderator) {
   const db = getFirestore();
   const [pendingSnap, moderatorSnap, metadataSnap, staffCountSnap] = await Promise.all([
     // Admin-created pending lineups can have created_at without submitted_at.
@@ -545,16 +552,25 @@ async function listQueue(res, moderator) {
     })
     .map(doc => safeLineup(doc, moderator.uid))
     .sort((a, b) => a.submitted_at - b.submitted_at);
-  const total = queue.length;
+  const authors = [...queue.reduce((result, item) => {
+    const key = queueAuthorKey(item);
+    const current = result.get(key);
+    if (current) current.count += 1;
+    else result.set(key, { key, name: clean(item.submitted_by) || 'Автор не указан', count: 1 });
+    return result;
+  }, new Map()).values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  const requestedAuthor = clean(req.query?.author).slice(0, 160);
+  const selectedQueue = requestedAuthor ? queue.filter(item => queueAuthorKey(item) === requestedAuthor) : queue;
+  const total = selectedQueue.length;
   const staffCount = Number(staffCountSnap.data().count) || 1;
   const capacity = staffCount * 2;
   // Other people's claimed work is not offered as part of the shared window.
   // The owner's task stays visible and atomic claim transactions remain the
   // final protection against two people taking the same lineup simultaneously.
-  const items = queue
+  const items = selectedQueue
     .filter(item => !item.moderation_lock_active || item.moderation_lock_owned)
     .slice(0, capacity);
-  res.status(200).json({ items, total, capacity, staff_count: staffCount });
+  res.status(200).json({ items, total, capacity, staff_count: staffCount, authors });
 }
 
 async function listLocks(req, res, moderator) {
@@ -829,7 +845,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       if (req.query?.q !== undefined) return await searchAuthors(req, res);
       if (req.query?.locks !== undefined) return await listLocks(req, res, moderator);
-      return await listQueue(res, moderator);
+      return await listQueue(req, res, moderator);
     }
     return await moderate(req, res, moderator);
   } catch (error) {

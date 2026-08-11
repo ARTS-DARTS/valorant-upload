@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/app_icon3.png">
   <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
   <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/styles.css?v=2026-08-11-vector-drawing-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-08-11-moderation-author-filter-v1">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-08-01-immunity-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-08-01-persistent-guide-border-v1">
 </head>
@@ -758,7 +758,15 @@
         <button class="copy-id-btn" id="moderation-refresh" type="button">Обновить очередь</button>
       </header>
       <div class="moderation-security-note">Доступ ограничен ролью. Удаление, редактирование и публикация лайнапов здесь недоступны.</div>
-      <div id="moderation-status" class="moderation-status" role="status" aria-live="polite">Открой раздел, чтобы загрузить очередь.</div>
+      <div class="moderation-queue-toolbar">
+        <label class="moderation-author-filter" for="moderation-author-filter">
+          <span>Автор в очереди</span>
+          <select id="moderation-author-filter" aria-label="Показать лайнапы выбранного автора" disabled>
+            <option value="">Все авторы</option>
+          </select>
+        </label>
+        <div id="moderation-status" class="moderation-status" role="status" aria-live="polite">Открой раздел, чтобы загрузить очередь.</div>
+      </div>
       <div id="moderation-list" class="moderation-list"></div>
     </div>
   </div>
@@ -1027,7 +1035,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-08-11-video-duration-v1"></script>
+<script type="module" src="/app.js?v=2026-08-11-moderation-author-filter-v1"></script>
 <script defer src="/workspace-redesign.js?v=2026-08-02-map-gallery-sync-v1"></script>
 </body>
 </html>
