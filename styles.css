@@ -862,7 +862,16 @@
     .moderator-shot-rail-item:focus-visible { outline:2px solid var(--primary);outline-offset:2px; }
     .moderator-shot-rail-item img { display:block;width:100%;aspect-ratio:16/9;object-fit:cover; }
     .moderator-shot-rail-index { position:absolute;left:7px;top:7px;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:rgba(5,10,18,.86);border:1px solid rgba(255,255,255,.42);color:#fff;font-size:11px;font-weight:900;box-shadow:0 3px 10px rgba(0,0,0,.45); }
-    @media (max-width:1799px) { .moderator-shot-rail { display:none !important; } }
+    @media (max-width:1799px) {
+      .moderator-shot-rail {
+        left:0;
+        width:min(248px,calc(100vw - 54px));
+        border-left:1px solid rgba(79,195,247,.34);
+        border-radius:0 12px 12px 0;
+      }
+      .moderator-shot-rail.is-collapsed { transform:translateX(-100%); }
+    }
+    @media (max-width:899px) { .moderator-shot-rail { display:none !important; } }
     @media (prefers-reduced-motion:reduce) { .moderator-shot-rail { transition:none; } }
     .shot-item .rm { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 50%; background: var(--red); border: none; color: #fff; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
     .btn-add-shot { width: 80px; height: 80px; border: 2px dashed var(--border); border-radius: 6px; background: var(--surface2); color: var(--text2); font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: border-color .15s; }

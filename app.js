@@ -9877,6 +9877,8 @@ function renderScreenshots() {
 
 let moderatorShotRailFrame = 0;
 let moderatorShotRailTimer = 0;
+const MODERATOR_SHOT_RAIL_AUTO_CLOSE_MS = 30_000;
+const MODERATOR_SHOT_RAIL_MIN_VIEWPORT_WIDTH = 900;
 
 function updateModeratorShotRailToggle() {
   const rail = document.getElementById('moderator-shot-rail');
@@ -9902,7 +9904,7 @@ function scheduleModeratorShotRailClose() {
     if (rail.hidden || rail.matches(':hover') || rail.contains(document.activeElement)) return;
     rail.classList.add('is-collapsed');
     updateModeratorShotRailToggle();
-  }, 5000);
+  }, MODERATOR_SHOT_RAIL_AUTO_CLOSE_MS);
 }
 
 function openModeratorShotRail() {
@@ -9952,7 +9954,7 @@ function updateModeratorScreenshotRailVisibility() {
     if (!rail || !editor || !form) return;
     const editorRect = editor.getBoundingClientRect();
     const formRect = form.getBoundingClientRect();
-    const visible = !!moderatorDraftSourceId && screenshots.length > 0 && window.innerWidth >= 1680 &&
+    const visible = !!moderatorDraftSourceId && screenshots.length > 0 && window.innerWidth >= MODERATOR_SHOT_RAIL_MIN_VIEWPORT_WIDTH &&
       uploadPanel?.classList.contains('active') && editorRect.top < window.innerHeight * .58 && formRect.bottom > 82;
     const wasHidden = rail.hidden;
     rail.hidden = !visible;

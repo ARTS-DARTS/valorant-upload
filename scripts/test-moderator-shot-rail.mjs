@@ -35,3 +35,13 @@ test('moderator screenshot rail supports persistent reordering', () => {
   assert.match(appSource, /screenshots\.splice\(toIndex, 0, entry\)/);
   assert.match(appSource, /renderScreenshots\(\);\s*_saveDraft\(\)/);
 });
+
+test('moderator screenshot rail is available in desktop-width windows and stays open for 30 seconds', () => {
+  assert.match(appSource, /MODERATOR_SHOT_RAIL_AUTO_CLOSE_MS\s*=\s*30_000/);
+  assert.match(appSource, /MODERATOR_SHOT_RAIL_MIN_VIEWPORT_WIDTH\s*=\s*900/);
+  assert.match(appSource, /setTimeout\([\s\S]*?MODERATOR_SHOT_RAIL_AUTO_CLOSE_MS/);
+  assert.match(
+    appSource,
+    /window\.innerWidth\s*>=\s*MODERATOR_SHOT_RAIL_MIN_VIEWPORT_WIDTH/,
+  );
+});
