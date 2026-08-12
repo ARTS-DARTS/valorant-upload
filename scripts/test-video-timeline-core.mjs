@@ -206,7 +206,10 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
   assert.match(html, /styles\.css\?v=2026-08-11-moderation-author-filter-v1/);
-  assert.match(html, /app\.js\?v=2026-08-12-full-video-buffer-v1/);
+  assert.match(html, /app\.js\?v=2026-08-12-required-screenshot-v1/);
+  assert.match(html, /Минимум 1 кадр обязателен/);
+  assert.match(app, /Добавь хотя бы один обязательный кадр из видео/);
+  assert.match(app, /screenshots\.some\(item => item\.cloudUrl\)/);
   assert.match(app, /editorEls\.editor\.dataset\.mode = activeEditorMode/);
   assert.match(app, /editorEls\.editor\.dataset\.selection = selectedEditorItem\?\.type \|\| 'none'/);
   assert.match(css, /grid-template-columns:82px minmax\(0,1fr\) 340px/);

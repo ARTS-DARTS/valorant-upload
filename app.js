@@ -11532,6 +11532,12 @@ function collectFormValidationErrors() {
   if (!selectedDifficulty) add('Укажи сложность.', validationCard('diff-row'));
   if (!selectedRoundSide) add('Выбери сторону раунда.', validationCard('side-row'));
   if (!document.getElementById('inp-title').value.trim()) add('Напиши название материала.', validationCard('inp-title'), document.getElementById('inp-title'));
+  const readyScreenshots = screenshots.filter(item => item.cloudUrl && !item.uploading);
+  if (!readyScreenshots.length) {
+    add(screenshots.some(item => item.uploading)
+      ? 'Дождись окончания загрузки хотя бы одного кадра.'
+      : 'Добавь хотя бы один обязательный кадр из видео.', validationCard('shots-row'));
+  }
 
   if (category === 'lineup' && markerX === null) add('Поставь позицию броска на карте.', mapEditorCard);
   if (category === 'wallbang') {
@@ -11753,6 +11759,11 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
 
   if (screenshots.some(s => s.uploading)) {
     toast('Подожди — фото ещё загружаются…', 'i'); return;
+  }
+  if (!screenshots.some(item => item.cloudUrl)) {
+    document.getElementById('shots-row')?.scrollIntoView({ behavior:'smooth', block:'center' });
+    toast('Добавь хотя бы один кадр из видео перед отправкой', 'e');
+    return;
   }
 
   const btn = document.getElementById('btn-submit');
