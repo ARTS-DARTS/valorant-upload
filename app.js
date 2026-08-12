@@ -2581,6 +2581,7 @@ const CATEGORY_FORM_GUIDES = {
     color: '#ff5e91',
   },
 };
+const LINEUP_FORM_GUIDE_FIRST_VIEW_KEY = 'vl_lineup_form_guide_b8c491d_seen';
 let categoryTrainingGateActive = false;
 let activeCategoryFormGuide = null;
 
@@ -2614,7 +2615,7 @@ function closeCategoryFormGuide() {
   document.body.classList.remove('category-form-guide-open');
 }
 
-function openCategoryFormGuide() {
+function openCategoryFormGuide({ autoplay = false } = {}) {
   const category = normalizeContentCategory(selectedCategory || '');
   const config = CATEGORY_FORM_GUIDES[category];
   const modal = document.getElementById('category-form-guide-modal');
@@ -2647,9 +2648,26 @@ function openCategoryFormGuide() {
   video.load();
   modal.hidden = false;
   document.body.classList.add('category-form-guide-open');
+  if (autoplay) {
+    video.addEventListener('canplay', () => {
+      video.play().catch(() => {});
+    }, { once: true });
+  }
 }
 
-document.getElementById('category-form-guide-launch')?.addEventListener('click', openCategoryFormGuide);
+function showLineupFormGuideOnFirstCategoryChoice() {
+  if (normalizeContentCategory(selectedCategory || '') !== 'lineup') return;
+  try {
+    if (localStorage.getItem(LINEUP_FORM_GUIDE_FIRST_VIEW_KEY) === '1') return;
+    localStorage.setItem(LINEUP_FORM_GUIDE_FIRST_VIEW_KEY, '1');
+  } catch (_) {
+    // Storage can be unavailable in private/restricted browser contexts. The
+    // guide should still open for the current category choice.
+  }
+  openCategoryFormGuide({ autoplay: true });
+}
+
+document.getElementById('category-form-guide-launch')?.addEventListener('click', () => openCategoryFormGuide());
 document.getElementById('category-form-guide-important-toggle')?.addEventListener('click', event => {
   const panel = document.getElementById('category-form-guide-important');
   if (!panel) return;
@@ -5720,6 +5738,7 @@ document.getElementById('cat-row').querySelectorAll('.pill-btn').forEach(b => {
     }
     updateCategoryUi(); _saveDraft();
     updateCategoryTrainingGate();
+    showLineupFormGuideOnFirstCategoryChoice();
   });
 });
 document.getElementById('diff-row').querySelectorAll('.pill-btn').forEach(b => {
