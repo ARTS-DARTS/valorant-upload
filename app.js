@@ -9822,6 +9822,7 @@ function bindScreenshotSorting(row) {
         window.removeEventListener('blur', cancelDrag);
         if (moved) {
           suppressScreenshotPreviewUntil = performance.now() + 350;
+          renderModeratorScreenshotRail();
           _saveDraft();
           finishEvent?.preventDefault?.();
         }
@@ -9933,6 +9934,7 @@ function bindModeratorShotRailDrawer() {
     }
     const shotButton = event.target.closest('[data-moderator-shot]');
     if (!shotButton) return;
+    if (performance.now() < suppressScreenshotPreviewUntil) return;
     const shot = screenshots[Number(shotButton.dataset.moderatorShot)];
     const src = shot?.localUrl || shot?.cloudUrl || '';
     if (src) openScreenshotPreview(src, `Скриншот ${Number(shotButton.dataset.moderatorShot) + 1}`);
@@ -9971,13 +9973,53 @@ function renderModeratorScreenshotRail() {
     return;
   }
   rail.innerHTML = `<button class="moderator-shot-rail-toggle" type="button" data-moderator-rail-toggle aria-expanded="true" aria-label="Скрыть панель кадров">‹</button><div class="moderator-shot-rail-head">Кадры лайнапа <span>${screenshots.length}</span></div><div class="moderator-shot-rail-list">${screenshots.map((shot, index) => `
-    <button class="moderator-shot-rail-item" type="button" data-moderator-shot="${index}" aria-label="Открыть скриншот ${index + 1}">
+    <button class="moderator-shot-rail-item" type="button" draggable="true" data-moderator-shot="${index}" aria-label="Открыть скриншот ${index + 1}. Можно перетащить для изменения порядка">
       <img src="${esc(shot.localUrl || shot.cloudUrl || '')}" alt="Скриншот ${index + 1}">
       <b class="moderator-shot-rail-index">${index + 1}</b>
     </button>`).join('')}</div>`;
   bindModeratorShotRailDrawer();
+  bindModeratorScreenshotSorting(rail.querySelector('.moderator-shot-rail-list'));
   updateModeratorShotRailToggle();
   updateModeratorScreenshotRailVisibility();
+}
+
+function bindModeratorScreenshotSorting(list) {
+  if (!list) return;
+  let fromIndex = -1;
+  let dropped = false;
+  list.querySelectorAll('.moderator-shot-rail-item').forEach(item => {
+    item.addEventListener('dragstart', event => {
+      fromIndex = Number(item.dataset.moderatorShot);
+      dropped = false;
+      item.classList.add('is-dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(fromIndex));
+    });
+    item.addEventListener('dragover', event => {
+      if (fromIndex < 0) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      list.querySelectorAll('.is-drop-target').forEach(node => node.classList.remove('is-drop-target'));
+      item.classList.add('is-drop-target');
+    });
+    item.addEventListener('drop', event => {
+      event.preventDefault();
+      const toIndex = Number(item.dataset.moderatorShot);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+      const [entry] = screenshots.splice(fromIndex, 1);
+      screenshots.splice(toIndex, 0, entry);
+      dropped = true;
+      suppressScreenshotPreviewUntil = performance.now() + 350;
+      renderScreenshots();
+      _saveDraft();
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('is-dragging');
+      list.querySelectorAll('.is-drop-target').forEach(node => node.classList.remove('is-drop-target'));
+      fromIndex = -1;
+      if (dropped) dropped = false;
+    });
+  });
 }
 
 window.addEventListener('scroll', updateModeratorScreenshotRailVisibility, { passive:true });

@@ -27,3 +27,11 @@ test('moderator screenshot rail remains available through the rest of the form',
   assert.match(visibilityBlock, /formRect\.bottom > 82/);
   assert.doesNotMatch(visibilityBlock, /editorRect\.bottom > 82/);
 });
+
+test('moderator screenshot rail supports persistent reordering', () => {
+  assert.match(appSource, /draggable="true" data-moderator-shot/);
+  assert.match(appSource, /function bindModeratorScreenshotSorting\(list\)/);
+  assert.match(appSource, /screenshots\.splice\(fromIndex, 1\)/);
+  assert.match(appSource, /screenshots\.splice\(toIndex, 0, entry\)/);
+  assert.match(appSource, /renderScreenshots\(\);\s*_saveDraft\(\)/);
+});
