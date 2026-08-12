@@ -45,3 +45,16 @@ test('moderator screenshot rail is available in desktop-width windows and stays 
     /window\.innerWidth\s*>=\s*MODERATOR_SHOT_RAIL_MIN_VIEWPORT_WIDTH/,
   );
 });
+
+test('screenshot rail also renders for an author draft without a moderator source id', () => {
+  const visibilityBlock = appSource.match(
+    /function updateModeratorScreenshotRailVisibility\(\)[\s\S]*?function renderModeratorScreenshotRail/,
+  )?.[0] || '';
+  const renderBlock = appSource.match(
+    /function renderModeratorScreenshotRail\(\)[\s\S]*?function bindModeratorScreenshotSorting/,
+  )?.[0] || '';
+  assert.match(visibilityBlock, /const visible = screenshots\.length > 0/);
+  assert.doesNotMatch(visibilityBlock, /visible = !!moderatorDraftSourceId/);
+  assert.match(renderBlock, /if \(!screenshots\.length\)/);
+  assert.doesNotMatch(renderBlock, /if \(!moderatorDraftSourceId/);
+});

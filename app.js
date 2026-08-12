@@ -9954,7 +9954,7 @@ function updateModeratorScreenshotRailVisibility() {
     if (!rail || !editor || !form) return;
     const editorRect = editor.getBoundingClientRect();
     const formRect = form.getBoundingClientRect();
-    const visible = !!moderatorDraftSourceId && screenshots.length > 0 && window.innerWidth >= MODERATOR_SHOT_RAIL_MIN_VIEWPORT_WIDTH &&
+    const visible = screenshots.length > 0 && window.innerWidth >= MODERATOR_SHOT_RAIL_MIN_VIEWPORT_WIDTH &&
       uploadPanel?.classList.contains('active') && editorRect.top < window.innerHeight * .58 && formRect.bottom > 82;
     const wasHidden = rail.hidden;
     rail.hidden = !visible;
@@ -9969,7 +9969,7 @@ function updateModeratorScreenshotRailVisibility() {
 function renderModeratorScreenshotRail() {
   const rail = document.getElementById('moderator-shot-rail');
   if (!rail) return;
-  if (!moderatorDraftSourceId || !screenshots.length) {
+  if (!screenshots.length) {
     rail.innerHTML = '';
     rail.hidden = true;
     return;
