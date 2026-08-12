@@ -163,12 +163,9 @@ export function videoTimelineZoomStateAt(editValue = {}, sourceDuration = 0, out
       return time >= start && time <= start + duration;
     }) || null;
   if (!clip) return { clip:null, mix:0 };
-  const start = videoTimelineEffectOutputStart(clip, edit, sourceDuration);
-  const duration = clampTimelineNumber(clip.duration || 2, 0.2, 10);
-  const local = clampTimelineNumber(time - start, 0, duration);
-  const ramp = Math.max(0.08, Math.min(0.4, duration / 2));
-  const linear = clampTimelineNumber(Math.min(local / ramp, (duration - local) / ramp), 0, 1);
-  return { clip, mix:linear * linear * (3 - 2 * linear) };
+  // A zoom clip represents a fixed framing choice. Animating its scale made
+  // playback look as if the video element itself was still loading/growing.
+  return { clip, mix:1 };
 }
 
 export function videoTimelineActiveFootageAt(editValue = {}, sourceDuration = 0, outputTime = 0) {

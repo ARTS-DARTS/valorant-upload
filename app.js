@@ -33,7 +33,7 @@ import {
   videoTimelineOutputDuration as sharedOutputDuration,
   videoTimelineSegmentAt as sharedSegmentAt,
   videoTimelineZoomStateAt as sharedZoomStateAt,
-} from './video_timeline_core.mjs?v=2026-08-02-video-timeline-core-v1';
+} from './video_timeline_core.mjs?v=2026-08-12-fixed-zoom-v1';
 import {
   migrateVideoEditToProjectV3,
   reconcileVideoSourceDuration,

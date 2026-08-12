@@ -42,6 +42,14 @@ test('shared timeline converts source and output time across freeze frames', () 
   assert.equal(outputTimeToSourceTime(edit, 14, 3), 5);
 });
 
+test('zoom framing is applied at full scale for its entire timeline interval', () => {
+  const zoomEdit = { trimStart:0, trimEnd:5, zoomKeyframes:[{ at:1, duration:2, scale:2.2 }] };
+  assert.equal(videoTimelineZoomStateAt(zoomEdit, 5, 1).mix, 1);
+  assert.equal(videoTimelineZoomStateAt(zoomEdit, 5, 1.05).mix, 1);
+  assert.equal(videoTimelineZoomStateAt(zoomEdit, 5, 2.95).mix, 1);
+  assert.equal(videoTimelineZoomStateAt(zoomEdit, 5, 3.01).mix, 0);
+});
+
 test('shared timeline ignores freeze frames outside the trimmed interval', () => {
   const withOutsideFreeze = { ...edit, freezeFrames:[{ id:'outside', at:1, duration:5 }, ...edit.freezeFrames] };
   assert.equal(videoTimelineOutputDuration(withOutsideFreeze, 14), 10);
@@ -190,7 +198,7 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
   assert.match(html, /styles\.css\?v=2026-08-11-moderation-author-filter-v1/);
-  assert.match(html, /app\.js\?v=2026-08-12-composited-frame-v2/);
+  assert.match(html, /app\.js\?v=2026-08-12-fixed-zoom-v1/);
   assert.match(app, /editorEls\.editor\.dataset\.mode = activeEditorMode/);
   assert.match(app, /editorEls\.editor\.dataset\.selection = selectedEditorItem\?\.type \|\| 'none'/);
   assert.match(css, /grid-template-columns:82px minmax\(0,1fr\) 340px/);
