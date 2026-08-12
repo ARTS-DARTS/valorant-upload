@@ -6325,16 +6325,29 @@ function selectedFreezeClip() {
   return (videoEdit.freezeFrames || []).find(item => item.id === selectedEditorItem.id) || null;
 }
 
-function withPreviewTransform(ctx, canvas, draw) {
-  const stageRect = editorEls.stage?.getBoundingClientRect();
-  if (!stageRect?.width || !stageRect?.height) return;
-  const matrix = new DOMMatrix(getComputedStyle(vidPlayer).transform === 'none' ? undefined : getComputedStyle(vidPlayer).transform);
+function withTimelineTransform(ctx, canvas, outputTime, draw) {
+  const { clip: zoom, mix } = zoomPreviewStateAtOutput(outputTime);
+  const scaleX = 1 + (Number(zoom?.scaleX ?? zoom?.scale ?? 1) - 1) * mix;
+  const scaleY = 1 + (Number(zoom?.scaleY ?? zoom?.scale ?? 1) - 1) * mix;
+  const scale = Math.max(scaleX, scaleY, 1);
+  const anchorX = 50 + (Number(zoom?.anchorX ?? 50) - 50) * mix;
+  const anchorY = 50 + (Number(zoom?.anchorY ?? 50) - 50) * mix;
+  const targetX = anchorX / 100 * canvas.width;
+  const targetY = anchorY / 100 * canvas.height;
+  const maxPanX = canvas.width * (scale - 1) / (2 * scale);
+  const maxPanY = canvas.height * (scale - 1) / (2 * scale);
+  const panX = Math.max(-maxPanX, Math.min(maxPanX, canvas.width / 2 - targetX));
+  const panY = Math.max(-maxPanY, Math.min(maxPanY, canvas.height / 2 - targetY));
+  const offsetX = Number(zoom?.posX || 0) * mix * canvas.width / Math.max(1, editorEls.stage?.clientWidth || canvas.width);
+  const offsetY = Number(zoom?.posY || 0) * mix * canvas.height / Math.max(1, editorEls.stage?.clientHeight || canvas.height);
+  const rotation = Number(zoom?.rotation || 0) * mix * Math.PI / 180;
   ctx.save();
-  ctx.scale(canvas.width / stageRect.width, canvas.height / stageRect.height);
-  ctx.translate(stageRect.width / 2, stageRect.height / 2);
-  ctx.transform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
-  ctx.translate(-stageRect.width / 2, -stageRect.height / 2);
-  draw(stageRect.width, stageRect.height);
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.scale(scaleX, scaleY);
+  ctx.translate(panX + offsetX, panY + offsetY);
+  ctx.rotate(rotation);
+  ctx.translate(-canvas.width / 2, -canvas.height / 2);
+  draw(canvas.width, canvas.height);
   ctx.restore();
 }
 
@@ -6347,16 +6360,17 @@ function captureEditedVideoFrameBlob() {
   canvas.height = height;
   const ctx = canvas.getContext('2d');
   if (!ctx) return Promise.resolve(null);
+  const outputTime = currentOutputTime();
 
   const freeze = (videoEdit.freezeFrames || []).find(item => item.id === freezeDrawingVisibleId) || null;
   const freezeImage = editorEls.freezeOverlay?.classList.contains('show') && editorEls.freezeOverlay.complete
     ? editorEls.freezeOverlay
     : null;
-  withPreviewTransform(ctx, canvas, (stageWidth, stageHeight) => {
+  withTimelineTransform(ctx, canvas, outputTime, (stageWidth, stageHeight) => {
     ctx.drawImage(freezeImage || vidPlayer, 0, 0, stageWidth, stageHeight);
   });
 
-  const footage = activeFootageClipAtOutput(currentOutputTime());
+  const footage = activeFootageClipAtOutput(outputTime);
   if (footage?.url) {
     const chromaVisible = editorEls.footageCanvas?.classList.contains('show');
     const source = chromaVisible ? editorEls.footageCanvas : editorEls.footagePreview;
@@ -6372,7 +6386,7 @@ function captureEditedVideoFrameBlob() {
   }
 
   if (freeze?.annotations?.length) {
-    withPreviewTransform(ctx, canvas, (stageWidth, stageHeight) => {
+    withTimelineTransform(ctx, canvas, outputTime, (stageWidth, stageHeight) => {
       drawFreezeAnnotations(ctx, freeze.annotations, stageWidth, stageHeight);
     });
   }

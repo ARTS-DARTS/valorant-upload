@@ -82,5 +82,9 @@ test('upload editor persists and previews drawing data on freeze-frame clips', a
   assert.match(app, /annotations: normalizeFreezeAnnotations\(item\.annotations \|\| item\.drawings\)/);
   assert.match(app, /setFreezeOverlay\(freezeFrameImages\.get\(segment\.id\) \|\| '', segment\.id\)/);
   assert.match(app, /previewFreezeForDrawing\(freeze\.id\)/);
+  assert.match(app, /function withTimelineTransform\(ctx, canvas, outputTime, draw\)/);
+  assert.match(app, /zoomPreviewStateAtOutput\(outputTime\)/);
+  assert.doesNotMatch(app, /getComputedStyle\(vidPlayer\)\.transform/);
+  assert.match(app, /captureEditedVideoFrameBlob\(\)/);
   assert.match(css, /\.freeze-drawing-canvas\.interactive \{ pointer-events:auto; \}/);
 });
