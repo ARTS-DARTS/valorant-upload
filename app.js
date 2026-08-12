@@ -33,7 +33,7 @@ import {
   videoTimelineOutputDuration as sharedOutputDuration,
   videoTimelineSegmentAt as sharedSegmentAt,
   videoTimelineZoomStateAt as sharedZoomStateAt,
-} from './video_timeline_core.mjs?v=2026-08-12-fixed-zoom-v1';
+} from './video_timeline_core.mjs?v=2026-08-12-stable-duration-v1';
 import {
   migrateVideoEditToProjectV3,
   reconcileVideoSourceDuration,
@@ -2488,6 +2488,8 @@ let mapMode = 'position';
 let videoUrl = null;
 let localVideoPreviewUrl = '';
 let knownVideoDuration = 0;
+let fullVideoLoadController = null;
+let fullVideoLoadSequence = 0;
 let moderatorVideoRemovalRequested = false;
 let videoXhr = null;
 let videoEdit = createDefaultVideoEdit();
@@ -6066,23 +6068,91 @@ function normalizeChromaKey(value = {}) {
 
 function videoDuration() {
   const nativeDuration = Number(vidPlayer.duration);
-  if (Number.isFinite(nativeDuration) && nativeDuration > 0) return nativeDuration;
-  return Number.isFinite(knownVideoDuration) && knownVideoDuration > 0 ? knownVideoDuration : 0;
+  const native = Number.isFinite(nativeDuration) && nativeDuration > 0 ? nativeDuration : 0;
+  const known = Number.isFinite(knownVideoDuration) && knownVideoDuration > 0 ? knownVideoDuration : 0;
+  // Chromium can expose the end of the currently buffered fragment as the
+  // duration (1s, 4s, ...), even when the full file duration is already known.
+  return Math.max(native, known);
 }
 
 function syncKnownVideoDuration(value) {
   const duration = Number(value);
   if (!Number.isFinite(duration) || duration <= 0) return false;
-  const changed = Math.abs(knownVideoDuration - duration) > 0.01;
-  videoEdit = reconcileVideoSourceDuration(videoEdit, knownVideoDuration, duration);
-  knownVideoDuration = duration;
+  const nextDuration = Math.max(knownVideoDuration, duration);
+  const changed = Math.abs(knownVideoDuration - nextDuration) > 0.01;
+  videoEdit = reconcileVideoSourceDuration(videoEdit, knownVideoDuration, nextDuration);
+  knownVideoDuration = nextDuration;
   if (changed) renderVideoTransport();
   return true;
 }
 
 function releaseLocalVideoPreview() {
+  fullVideoLoadController?.abort();
+  fullVideoLoadController = null;
   if (localVideoPreviewUrl) URL.revokeObjectURL(localVideoPreviewUrl);
   localVideoPreviewUrl = '';
+}
+
+async function loadCompleteVideoForEditor(remoteUrl) {
+  const sequence = ++fullVideoLoadSequence;
+  fullVideoLoadController?.abort();
+  const controller = new AbortController();
+  fullVideoLoadController = controller;
+  const progress = document.getElementById('vid-upload-progress');
+  const percent = document.getElementById('vid-pct');
+  const bar = document.getElementById('vid-prog');
+  const wrap = document.getElementById('vid-player-wrap');
+  if (wrap) wrap.style.display = 'none';
+  if (progress) progress.style.display = '';
+  if (percent) percent.textContent = 'Подготовка видео…';
+  if (bar) bar.style.width = '0%';
+  try {
+    const response = await fetch(videoEditorSourceUrl(remoteUrl), { signal:controller.signal, cache:'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const total = Math.max(0, Number(response.headers.get('content-length') || 0));
+    const reader = response.body?.getReader();
+    const chunks = [];
+    let received = 0;
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.byteLength;
+        if (total > 0) {
+          const valuePercent = Math.min(100, Math.round(received / total * 100));
+          if (percent) percent.textContent = `Подготовка ${valuePercent}%`;
+          if (bar) bar.style.width = `${valuePercent}%`;
+        } else if (percent) {
+          percent.textContent = `Загружено ${(received / 1048576).toFixed(1)} МБ`;
+        }
+      }
+    } else {
+      chunks.push(new Uint8Array(await response.arrayBuffer()));
+    }
+    if (sequence !== fullVideoLoadSequence) return false;
+    const blob = new Blob(chunks, { type:response.headers.get('content-type') || 'video/mp4' });
+    releaseLocalVideoPreview();
+    localVideoPreviewUrl = URL.createObjectURL(blob);
+    const metadata = await readVideoMetadata(blob);
+    syncKnownVideoDuration(metadata.duration);
+    vidPlayer.removeAttribute('crossorigin');
+    vidPlayer.src = localVideoPreviewUrl;
+    vidPlayer.load();
+    if (percent) percent.textContent = '100%';
+    if (bar) bar.style.width = '100%';
+    if (progress) progress.style.display = 'none';
+    if (wrap) wrap.style.display = '';
+    renderVideoEditor();
+    return true;
+  } catch (error) {
+    if (error?.name === 'AbortError') return false;
+    if (progress) progress.style.display = 'none';
+    toast(`Не удалось полностью загрузить видео: ${error.message}`, 'e');
+    return false;
+  } finally {
+    if (fullVideoLoadController === controller) fullVideoLoadController = null;
+  }
 }
 
 function clampTime(value) {
@@ -6907,12 +6977,15 @@ function tickOutputPlayback() {
 
 function startOutputPlayback(startOutput = null) {
   if (!videoDuration()) return;
-  clearFreezeHold();
-  playedFreezeHolds.clear();
-  timelinePreviewOutputTime = null;
+  // Capture the requested playhead before clearing preview state. During a
+  // scrub the native video seek may still be pending, while the timeline
+  // preview already contains the exact position selected by the user.
   const nextOutputTime = startOutput === null
     ? (outputPlaybackTime ?? currentOutputTime())
     : Math.max(0, Math.min(editedOutputDuration(), startOutput));
+  clearFreezeHold();
+  playedFreezeHolds.clear();
+  timelinePreviewOutputTime = null;
   if (!(videoEdit.freezeFrames || []).length) {
     if (outputPlaybackRaf) cancelAnimationFrame(outputPlaybackRaf);
     outputPlaybackRaf = null;
@@ -9231,9 +9304,10 @@ vidScrubber.addEventListener('pointerdown', event => {
 });
 const finishScrubberDrag = () => {
   if (!scrubberDragging) return;
+  const resumeAt = currentOutputTime();
   scrubberDragging = false;
   updateTimelinePlaybackUi();
-  if (scrubberResumePlayback) startOutputPlayback(currentOutputTime());
+  if (scrubberResumePlayback) startOutputPlayback(resumeAt);
   scrubberResumePlayback = false;
 };
 vidScrubber.addEventListener('pointerup', finishScrubberDrag);
@@ -11413,15 +11487,15 @@ function _restoreDraft(sourceDraft = null) {
     const wrap  = document.getElementById('vid-player-wrap');
     const vid   = document.getElementById('vid-player');
     if (dropZ) dropZ.style.display = 'none';
-    if (wrap)  wrap.style.display = '';
+    if (wrap)  wrap.style.display = 'none';
     if (vid)   {
       vid.dataset.corsFallback = '0';
       vid.dataset.proxyRetry = '0';
       vid.dataset.videoErrorReported = '0';
-      vid.crossOrigin = 'anonymous';
-      vid.src = videoEditorSourceUrl(d.videoUrl);
+      vid.removeAttribute('src');
+      vid.load();
     }
-    renderVideoEditor();
+    loadCompleteVideoForEditor(d.videoUrl);
   } else {
     videoEdit = createDefaultVideoEdit();
     rememberCommittedVideoEdit();
