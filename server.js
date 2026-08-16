@@ -34,6 +34,7 @@ import robokassaWebhookHandler from './backend/billing-webhook-robokassa.js';
 import robokassaReconciliationHandler from './backend/billing-reconcile-robokassa.js';
 import clientErrorHandler from './backend/client-error.js';
 import lineupsAccessHandler from './backend/lineups-access.js';
+import yandexAdStatsHandler, { syncYandexAdStats } from './backend/yandex-ad-stats.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -87,6 +88,7 @@ app.all('/api/admin/expirations', adminExpirationsHandler);
 app.all('/api/admin/health', adminHealthHandler);
 app.all('/api/admin/config-backup', adminConfigBackupHandler);
 app.all('/api/admin/cloudinary-usage', adminCloudinaryUsageHandler);
+app.all('/api/admin/yandex-ad-stats', yandexAdStatsHandler);
 app.post('/api/client-error', clientErrorHandler);
 
 app.use(
@@ -202,6 +204,11 @@ if (!process.env.VERCEL_RUNTIME) {
     setTimeout(() => notifySiteUpdateOnce()
       .then(result => console.log('Site update push:', result))
       .catch(error => console.error('site update push:', error)), 25000);
+    const syncAdRevenue = () => syncYandexAdStats({ days:60 })
+      .then(result => console.log(`Yandex ad statistics synced: ${result.rows.length} days`))
+      .catch(error => console.error('Yandex ad statistics sync:', error.message));
+    setTimeout(syncAdRevenue, 45000);
+    setInterval(syncAdRevenue, 3 * 60 * 60 * 1000);
   });
 }
 
