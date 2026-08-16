@@ -5,7 +5,7 @@ const API_URL = 'https://partner.yandex.ru/api/statistics2/get.json';
 const CACHE_COLLECTION = 'ad_revenue_daily';
 const META_PATH = 'admin_stats/yandex_ad_revenue';
 const DEFAULT_DAYS = 60;
-const MAX_DAYS = 90;
+const MAX_DAYS = 730;
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000;
 const FORMAT_KEYS = Object.freeze({
   'App: Баннер':'banner',
