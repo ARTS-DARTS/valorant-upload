@@ -24,6 +24,7 @@
     .site-sections a.active { color:#07131c; background:var(--primary); }
     .site-sections a span { padding:2px 5px; border:1px solid rgba(245,158,11,.34); border-radius:999px; color:#fbbf24; font-size:7px; letter-spacing:.5px; text-transform:uppercase; }
     .site-sections a.active span { border-color:rgba(7,19,28,.28); color:#26313a; }
+    .site-sections .site-section-icon { font-style:normal; font-size:13px; line-height:1; }
     .header-moderation-wrap { position:relative; flex:0 0 auto; margin-right:10px; }
     .header-moderation { display:inline-flex; align-items:center; gap:7px; min-height:38px; padding:7px 11px; border:1px solid rgba(255,70,85,.38); border-radius:10px; background:rgba(255,70,85,.07); color:#ff8490; font:inherit; font-size:11px; font-weight:900; cursor:pointer; transition:border-color .16s,background .16s,transform .16s; }
     .header-moderation:hover,.header-moderation.active { border-color:#ff4655; background:rgba(255,70,85,.14); transform:translateY(-1px); }
