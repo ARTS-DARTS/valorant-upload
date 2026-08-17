@@ -287,12 +287,12 @@ test('legacy admin endpoints require Firebase admin authentication and exact ori
       method:'POST',
       headers:{
         authorization:'Bearer valid-token',
-        origin:'https://arts-darts.github.io',
+        origin:'https://vlineups.ru',
       },
       body:{},
     }, accepted);
     assert.equal(accepted.statusCode, 400);
-    assert.equal(accepted.headers.get('Access-Control-Allow-Origin'), 'https://arts-darts.github.io');
+    assert.equal(accepted.headers.get('Access-Control-Allow-Origin'), 'https://vlineups.ru');
   }
 });
 

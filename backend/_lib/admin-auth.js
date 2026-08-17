@@ -1,6 +1,8 @@
 import { adminAuth, adminFirestore } from './firebase-admin.js';
 
 const ALLOWED_ADMIN_ORIGINS = new Set([
+  'https://vlineups.ru',
+  'https://www.vlineups.ru',
   'https://arts-darts.github.io',
   'http://localhost:3000',
 ]);
