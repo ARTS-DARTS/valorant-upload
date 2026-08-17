@@ -19,10 +19,32 @@ export function createSocialWebsite({ db, functions, toast }) {
   let messageUnsubscribe = null;
   let members = [];
   let activeConversation = null;
+  const profileNames = new Map();
 
   const profileRoot = () => document.getElementById('social-profile-root');
   const dialogList = () => document.getElementById('social-dialog-list');
   const thread = () => document.getElementById('social-message-thread');
+
+  async function resolveMemberNames(items) {
+    return Promise.all(items.map(async item => {
+      const known = String(item.other_username || '').trim();
+      if (known && known !== item.other_uid) return item;
+      const uid = String(item.other_uid || '').trim();
+      if (!uid) return item;
+      let name = profileNames.get(uid);
+      if (name === undefined) {
+        try {
+          const profile = await getDoc(doc(db, 'public_profiles', uid));
+          const data = profile.data() || {};
+          name = String(data.username || data.display_name || data.displayName || 'Пользователь').trim() || 'Пользователь';
+        } catch (_) {
+          name = 'Пользователь';
+        }
+        profileNames.set(uid, name);
+      }
+      return { ...item, other_username: name };
+    }));
+  }
 
   async function showProfile(uid) {
     const root = profileRoot();
@@ -106,9 +128,10 @@ export function createSocialWebsite({ db, functions, toast }) {
     members = [];
     renderMembers();
     if (!user) return;
-    memberUnsubscribe = onSnapshot(collection(db, 'conversation_members', user.uid, 'items'), snapshot => {
-      members = snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
+    memberUnsubscribe = onSnapshot(collection(db, 'conversation_members', user.uid, 'items'), async snapshot => {
+      const rawMembers = snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
         .sort((a, b) => timestampMs(b.last_message_at) - timestampMs(a.last_message_at));
+      members = await resolveMemberNames(rawMembers);
       renderMembers();
       if (activeConversation && members.some(item => item.conversation_id === activeConversation.conversation_id)) openConversation(activeConversation.conversation_id);
     }, error => { if (dialogList()) dialogList().innerHTML = `<div class="social-empty">${escapeHtml(error.message)}</div>`; });
