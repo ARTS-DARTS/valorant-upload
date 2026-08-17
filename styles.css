@@ -28,6 +28,9 @@
     .header-moderation-wrap { position:relative; flex:0 0 auto; margin-right:10px; }
     .header-moderation { display:inline-flex; align-items:center; gap:7px; min-height:38px; padding:7px 11px; border:1px solid rgba(255,70,85,.38); border-radius:10px; background:rgba(255,70,85,.07); color:#ff8490; font:inherit; font-size:11px; font-weight:900; cursor:pointer; transition:border-color .16s,background .16s,transform .16s; }
     .header-moderation:hover,.header-moderation.active { border-color:#ff4655; background:rgba(255,70,85,.14); transform:translateY(-1px); }
+    .header-admin { display:inline-flex;align-items:center;gap:7px;min-height:38px;margin-right:10px;padding:7px 11px;border:1px solid rgba(80,214,255,.34);border-radius:10px;background:rgba(80,214,255,.07);color:#71dcff;font-size:11px;font-weight:900;text-decoration:none;white-space:nowrap;transition:border-color .16s,background .16s,transform .16s; }
+    .header-admin:hover { border-color:#50d6ff;background:rgba(80,214,255,.14);transform:translateY(-1px); }
+    .header-admin:focus-visible { outline:2px solid #50d6ff;outline-offset:2px; }
     .moderation-moved-hint { position:absolute; z-index:120; top:48px; right:0; width:260px; padding:14px 34px 14px 15px; border:1px solid rgba(255,70,85,.52); border-radius:11px; background:#151b2b; box-shadow:0 18px 50px rgba(0,0,0,.5); animation:moderation-hint-in .24s ease-out; }
     .moderation-moved-hint[hidden] { display:none; }
     .moderation-moved-hint::before { content:""; position:absolute; right:22px; top:-6px; width:10px; height:10px; border-left:1px solid rgba(255,70,85,.52); border-top:1px solid rgba(255,70,85,.52); background:#151b2b; transform:rotate(45deg); }
@@ -296,6 +299,8 @@
       .site-sections a span { display:none; }
       .header-moderation b { display:none; }
       .header-moderation { width:36px; padding:0; justify-content:center; }
+      .header-admin { width:36px;padding:0;justify-content:center; }
+      .header-admin b { display:none; }
     }
     @media (max-width:620px) {
       .header { padding-inline:10px; }

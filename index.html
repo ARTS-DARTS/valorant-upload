@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/app_icon3.png">
   <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
   <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/styles.css?v=2026-08-11-moderation-author-filter-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-08-17-admin-header-link-v1">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-08-01-immunity-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-08-01-persistent-guide-border-v1">
 </head>
@@ -54,6 +54,9 @@
       <span>Теперь очередь проверок всегда доступна из верхнего меню.</span>
     </div>
   </div>
+  <a class="header-admin" href="/admin/" data-admin-only="true" style="display:none;" aria-label="Открыть админку" title="Открыть админку">
+    <span aria-hidden="true">⚙</span><b>Админка</b>
+  </a>
   <div class="moderation-lease-timer" id="moderation-lease-timer" hidden aria-live="polite">
     <span>🔒 В работе</span><strong id="moderation-lease-time">0:00</strong>
   </div>
