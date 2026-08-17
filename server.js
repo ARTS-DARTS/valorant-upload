@@ -35,6 +35,7 @@ import robokassaReconciliationHandler from './backend/billing-reconcile-robokass
 import clientErrorHandler from './backend/client-error.js';
 import lineupsAccessHandler from './backend/lineups-access.js';
 import yandexAdStatsHandler, { syncYandexAdStats } from './backend/yandex-ad-stats.js';
+import partnerInquiriesHandler from './backend/partner-inquiries.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,6 +90,7 @@ app.all('/api/admin/health', adminHealthHandler);
 app.all('/api/admin/config-backup', adminConfigBackupHandler);
 app.all('/api/admin/cloudinary-usage', adminCloudinaryUsageHandler);
 app.all('/api/admin/yandex-ad-stats', yandexAdStatsHandler);
+app.all('/api/partner-inquiries', partnerInquiriesHandler);
 app.post('/api/client-error', clientErrorHandler);
 
 app.use(
