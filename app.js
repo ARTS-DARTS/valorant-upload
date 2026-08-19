@@ -10913,6 +10913,7 @@ const _DRAFT_KEY = 'vl_lineup_draft';
 const _DRAFTS_KEY = 'vl_lineup_drafts';
 const _ACTIVE_DRAFT_ID_KEY = 'vl_active_lineup_draft_id';
 const _DRAFT_MIGRATED_KEY = 'vl_lineup_draft_migrated_v2';
+const MAX_SAVED_DRAFTS = 5;
 let moderatorAutosaveTimer = null;
 let moderatorAutosaveDirty = false;
 let moderatorAutosaveRequest = null;
@@ -11197,7 +11198,7 @@ function getSavedDrafts() {
 
 function writeSavedDrafts(drafts) {
   try {
-    localStorage.setItem(_DRAFTS_KEY, JSON.stringify(drafts.filter(hasDraftContent).slice(0, 30)));
+    localStorage.setItem(_DRAFTS_KEY, JSON.stringify(drafts.filter(hasDraftContent).slice(0, MAX_SAVED_DRAFTS)));
   } catch (_) {
     toast('Не удалось сохранить черновик: память браузера заполнена', 'e');
   }
@@ -11211,6 +11212,10 @@ function saveCurrentDraftSnapshot() {
   const draft = collectDraftData();
   if (!hasDraftContent(draft)) {
     toast('Черновик пустой', 'w');
+    return;
+  }
+  if (getSavedDrafts().length >= MAX_SAVED_DRAFTS) {
+    toast(`Можно хранить не больше ${MAX_SAVED_DRAFTS} черновиков. Удали один из старых.`, 'w');
     return;
   }
   const now = Date.now();
@@ -11231,6 +11236,10 @@ function saveCurrentDraftCopy(message = 'Черновик сохранён') {
   if (moderatorDraftSourceId) return false;
   const draft = collectDraftData();
   if (!hasDraftContent(draft)) return false;
+  if (getSavedDrafts().length >= MAX_SAVED_DRAFTS) {
+    toast(`Можно хранить не больше ${MAX_SAVED_DRAFTS} черновиков. Удали один из старых.`, 'w');
+    return false;
+  }
   const now = Date.now();
   const id = `draft_${now}_${Math.random().toString(36).slice(2, 8)}`;
   const saved = { ...draft, id, createdAt: now, updatedAt: now };
