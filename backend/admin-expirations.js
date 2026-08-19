@@ -4,7 +4,8 @@ import tls from 'node:tls';
 import { adminAuth, adminFirestore } from './_lib/firebase-admin.js';
 
 const ALLOWED_ORIGINS = new Set([
-  'https://arts-darts.github.io',
+  'https://vlineups.ru',
+  'https://www.vlineups.ru',
   'http://localhost:3000',
 ]);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}(?:T[\d:.+-]+Z?)?$/;

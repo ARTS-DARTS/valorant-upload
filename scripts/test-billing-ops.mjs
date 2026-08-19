@@ -185,10 +185,10 @@ test('admin billing enforces role and exact browser origin', async () => {
 
   const preflight = response();
   await createAdminBillingHandler({ db, auth:authFor('admin') })({
-    method:'OPTIONS', headers:{ origin:'https://arts-darts.github.io' }, query:{},
+    method:'OPTIONS', headers:{ origin:'https://vlineups.ru' }, query:{},
   }, preflight);
   assert.equal(preflight.statusCode, 204);
-  assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), 'https://arts-darts.github.io');
+  assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), 'https://vlineups.ru');
 });
 
 test('admin expirations reports only metadata and preserves sibling records on update', async () => {
@@ -221,7 +221,7 @@ test('admin expirations reports only metadata and preserves sibling records on u
   const first = response();
   await handler({
     method:'GET',
-    headers:{ authorization:'Bearer valid-token', origin:'https://arts-darts.github.io' },
+    headers:{ authorization:'Bearer valid-token', origin:'https://vlineups.ru' },
   }, first);
   assert.equal(first.statusCode, 200);
   assert.equal(first.body.items.find(item => item.id === 'domain_vlineups').days_left, 334);
@@ -319,7 +319,7 @@ test('admin health checks providers and config backup contains presence but no s
     httpCheck:async () => ({ ok:true, status:200, latency_ms:12 }),
   })({
     method:'GET',
-    headers:{ authorization:'Bearer valid-token', origin:'https://arts-darts.github.io' },
+    headers:{ authorization:'Bearer valid-token', origin:'https://vlineups.ru' },
   }, health);
   assert.equal(health.statusCode, 200);
   assert.equal(health.body.checks.find(item => item.id === 'onesignal').ok, true);

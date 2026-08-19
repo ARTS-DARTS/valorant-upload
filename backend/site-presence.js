@@ -6,7 +6,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
 dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
-const ALLOWED_ORIGINS = new Set(['https://vlineups.ru', 'https://www.vlineups.ru', 'https://arts-darts.github.io', 'http://localhost:3000']);
+const ALLOWED_ORIGINS = new Set(['https://vlineups.ru', 'https://www.vlineups.ru', 'http://localhost:3000']);
 function clean(value) { return String(value ?? '').replace(/п»ї/g, '').trim(); }
 function initFirebase() { if (getApps().length) return; const raw = clean(process.env.FIREBASE_SERVICE_ACCOUNT); if (!raw) throw new Error('Firebase service account env is empty'); initializeApp({ credential: cert(JSON.parse(raw)) }); }
 function headers(req, res) { const origin = clean(req.headers.origin); if (ALLOWED_ORIGINS.has(origin)) res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); res.setHeader('Cache-Control', 'no-store'); res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'); res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type'); }

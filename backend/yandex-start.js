@@ -11,7 +11,7 @@ const YANDEX_CLIENT_ID = (process.env.YANDEX_CLIENT_ID ?? '').replace(/﻿/g, ''
 const REDIRECT_URI = 'https://vlineups.ru/api/yandex-callback';
 
 const WEB_RETURN = 'https://vlineups.ru/';
-const ADMIN_RETURN = 'https://arts-darts.github.io/valorant-admin/admin_panel.html';
+const ADMIN_RETURN = 'https://vlineups.ru/admin/';
 
 function initFirebase() {
   if (getApps().length) return;
