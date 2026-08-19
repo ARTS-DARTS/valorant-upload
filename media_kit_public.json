@@ -1,0 +1,30 @@
+{
+  "schema": 2,
+  "generated_at": "2026-08-19T09:14:08.266Z",
+  "audience": { "dau": 56, "wau": 58, "mau": 58 },
+  "activity": [
+    { "date": "2026-08-13", "active_users": 1 },
+    { "date": "2026-08-14", "active_users": 1 },
+    { "date": "2026-08-17", "active_users": 2 },
+    { "date": "2026-08-18", "active_users": 56 }
+  ],
+  "appmetrica": {
+    "configured": true,
+    "application_id": "6342544",
+    "verified_at": "2026-08-19T09:14:08.266Z",
+    "completed_through": "2026-08-18",
+    "activity": [
+      { "date": "2026-08-13", "users": 1 },
+      { "date": "2026-08-14", "users": 1 },
+      { "date": "2026-08-17", "users": 2 },
+      { "date": "2026-08-18", "users": 56 }
+    ],
+    "audience": { "dau": 56, "wau": 58, "mau": 58 }
+  },
+  "methodology": {
+    "audience_source": "AppMetrica Reporting API, unique users",
+    "reporting_period": "Calendar day and rolling 7/30-day unique-user windows",
+    "advertising_source": "Yandex Advertising Network Statistics API and aggregate in-app events",
+    "privacy": "Only aggregate statistics are published; no UID, IP address or raw event is included."
+  }
+}
