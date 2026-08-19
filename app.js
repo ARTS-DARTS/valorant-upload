@@ -9,6 +9,7 @@ import { getFirestore, doc, collection, getDoc, setDoc, deleteDoc, writeBatch,
 import { getFunctions, httpsCallable }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
 import { initSiteVersionWatcher }             from './site-version-watcher.js?v=2026-07-30-global-update-v1';
+import { undefinedPaths, withoutUndefined }   from './firestore-data.mjs?v=2026-08-19-firestore-safe-v1';
 import {
   MAX_FREEZE_ANNOTATION_STROKES,
   createFreezeAnnotation,
@@ -11949,7 +11950,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     };
     submitStage = 'lineup_create_batch';
     const batch = writeBatch(db);
-    batch.set(lineupRef, {
+    const lineupPayload = {
       map,
       agent:         contentType === 'wallbang' ? '' : selectedAgent,
       ability:       normalizedAbility,
@@ -11986,7 +11987,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       likes_count:   0,
       source:        'web',
       ...(resubmissionSourceId ? { resubmitted_from: resubmissionSourceId } : {}),
-    });
+    };
     batch.set(doc(db, 'rate_limits', uid), {
       last_lineup_at: serverTimestamp(),
       last_lineup_id: lineupRef.id,
@@ -11998,6 +11999,11 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       platform: 'web',
       ts: serverTimestamp(),
     });
+    const invalidPayloadPaths = undefinedPaths(lineupPayload);
+    if (invalidPayloadPaths.length) {
+      submittedPayloadDiagnostics.removed_undefined_paths = invalidPayloadPaths.slice(0, 25);
+    }
+    batch.set(lineupRef, withoutUndefined(lineupPayload));
     await batch.commit();
 
     showSuccess();
