@@ -1,8 +1,14 @@
 import { createHmac } from 'node:crypto';
 
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 
-import { adminAuth, adminFirestore } from './_lib/firebase-admin.js';
+import { adminApp, adminAuth, adminFirestore } from './_lib/firebase-admin.js';
+import {
+  ACCOUNT_DELETION_GRACE_MS,
+  deletionRequestFingerprint,
+  evaluateDeletionRisk,
+  verifyDeletionAppCheck,
+} from './account-deletion-workflow.js';
 
 function fail(status, message) {
   return Object.assign(new Error(message), { status });
@@ -130,6 +136,7 @@ export async function deleteAccountData({
 export function createAccountDeleteHandler({
   db = null,
   auth = null,
+  appCheck = null,
   now = () => new Date(),
   pepper = process.env.ACCOUNT_DELETION_PEPPER,
 } = {}) {
@@ -137,22 +144,48 @@ export function createAccountDeleteHandler({
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'POST') return res.status(405).json({ error:'method_not_allowed' });
     try {
-      if (req.body?.confirm !== true) throw fail(400, 'confirmation_required');
       const authService = auth ?? adminAuth();
       const decoded = await authService.verifyIdToken(bearerToken(req), true);
+      const firestore = db ?? adminFirestore();
+      const requestRef = firestore.collection('account_deletion_requests').doc(decoded.uid);
+      if (req.body?.action === 'cancel') {
+        const pending = await requestRef.get();
+        if (!pending.exists || pending.data()?.status !== 'scheduled') {
+          throw fail(409, 'deletion_not_cancellable');
+        }
+        await requestRef.set({ status:'cancelled', cancelled_at:FieldValue.serverTimestamp() }, { merge:true });
+        return res.status(200).json({ cancelled:true });
+      }
+      if (req.body?.confirm !== true) throw fail(400, 'confirmation_required');
       const currentSeconds = Math.floor(now().getTime() / 1000);
       if (!Number.isFinite(decoded.auth_time) || currentSeconds - decoded.auth_time > 10 * 60) {
         throw fail(401, 'recent_sign_in_required');
       }
-      const subjectId = deletedSubjectId(decoded.uid, pepper);
-      const result = await deleteAccountData({
-        db:db ?? adminFirestore(),
-        auth:authService,
-        uid:decoded.uid,
-        subjectId,
-        now:now(),
+      const pending = await requestRef.get();
+      if (pending.exists && pending.data()?.status === 'scheduled') {
+        return res.status(200).json({
+          scheduled:true, execute_after:pending.data().execute_after.toDate().toISOString(),
+        });
+      }
+      const serverNow = now();
+      const userRecord = await authService.getUser(decoded.uid);
+      const appCheckVerified = await verifyDeletionAppCheck(
+        appCheck ?? adminApp().appCheck(), req.headers?.['x-firebase-appcheck'],
+      );
+      const risk = evaluateDeletionRisk({
+        decoded, userRecord, appCheckVerified,
+        priorRequests:Number(pending.data()?.request_count || 0), now:serverNow,
       });
-      return res.status(200).json({ deleted:true, ...result });
+      const executeAfter = new Date(serverNow.getTime() + ACCOUNT_DELETION_GRACE_MS);
+      await requestRef.set({
+        uid:decoded.uid, subject_id:deletedSubjectId(decoded.uid, pepper), status:'scheduled',
+        requested_at:Timestamp.fromDate(serverNow), execute_after:Timestamp.fromDate(executeAfter),
+        risk_score:risk.score, risk_reasons:risk.reasons, suspicious:risk.suspicious,
+        app_check_verified:appCheckVerified,
+        ...deletionRequestFingerprint(req, pepper),
+        request_count:Number(pending.data()?.request_count || 0) + 1,
+      });
+      return res.status(202).json({ scheduled:true, execute_after:executeAfter.toISOString() });
     } catch (error) {
       const status = Number(error.status) || (String(error.code || '').startsWith('auth/') ? 401 : 500);
       if (status >= 500) console.error('account-delete error:', error);

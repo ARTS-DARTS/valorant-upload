@@ -25,7 +25,8 @@ import billingCheckoutHandler from './backend/billing-checkout.js';
 import billingOrderStatusHandler from './backend/billing-order-status.js';
 import billingRefundRequestHandler from './backend/billing-refund-request.js';
 import adminBillingHandler from './backend/admin-billing.js';
-import accountDeleteHandler from './backend/account-delete.js';
+import accountDeleteHandler, { deleteAccountData } from './backend/account-delete.js';
+import { finalizeDueAccountDeletions } from './backend/account-deletion-workflow.js';
 import adminExpirationsHandler from './backend/admin-expirations.js';
 import adminHealthHandler from './backend/admin-health.js';
 import adminConfigBackupHandler from './backend/admin-config-backup.js';
@@ -154,6 +155,11 @@ app.get(['/upload-redesign-preview', '/upload-redesign-preview/'], (req, res) =>
   res.sendFile(path.join(__dirname, 'upload-redesign-preview', 'index.html'));
 });
 
+app.get(['/rewards', '/rewards/'], (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.sendFile(path.join(__dirname, 'rewards', 'index.html'));
+});
+
 app.get(['/offer', '/offer/'], (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
   res.sendFile(path.join(__dirname, 'offer.html'));
@@ -203,6 +209,13 @@ if (!process.env.VERCEL_RUNTIME) {
     }).catch(error => console.error('duel finalizer:', error));
     setTimeout(runDuelFinalizer, 15000);
     setInterval(runDuelFinalizer, 60000);
+    const runAccountDeletionFinalizer = () => finalizeDueAccountDeletions({ deleteAccountData })
+      .then(results => {
+        if (results.length) console.log(`Account deletion jobs: ${JSON.stringify(results)}`);
+      })
+      .catch(error => console.error('account deletion finalizer:', error));
+    setTimeout(runAccountDeletionFinalizer, 20000);
+    setInterval(runAccountDeletionFinalizer, 60000);
     setTimeout(() => notifySiteUpdateOnce()
       .then(result => console.log('Site update push:', result))
       .catch(error => console.error('site update push:', error)), 25000);

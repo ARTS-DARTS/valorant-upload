@@ -197,6 +197,8 @@ function safeLineup(doc, viewerUid = '') {
     missing_fields: missingMetadata(d),
     content_type: clean(d.content_type || d.category).slice(0, 20),
     moderator_only: d.moderator_only === true,
+    reward_program_opt_in: d.reward_program_opt_in === true,
+    reward_terms_version: clean(d.reward_terms_version).slice(0, 60),
     user_id: clean(d.user_id || d.uid || d.author_uid).slice(0, 128),
     submitted_by: clean(d.submitted_by || d.author).slice(0, 80),
     video_url: clean(d.video_url).slice(0, 1000),

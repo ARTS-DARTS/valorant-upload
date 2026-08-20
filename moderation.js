@@ -365,7 +365,7 @@ function render(items, total = totalQueueItems) {
           <h3 class="moderation-title">${metadataTask ? 'Проверить параметры лайнапа' : esc(item.title || 'Без названия')}</h3>
           ${metadataTask
             ? (ownedByCurrentModerator ? metadataFields(item) : '<p class="moderation-description">Сначала возьми задание в работу. После этого откроются параметры для проверки.</p>')
-            : `<p class="moderation-description">${esc(item.description || 'Описание отсутствует')}</p><div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>`}
+            : `<p class="moderation-description">${esc(item.description || 'Описание отсутствует')}</p><div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>${item.reward_program_opt_in ? `<fieldset class="moderation-reward-review"><legend>🎁 Оценка награды</legend><label><input type="checkbox" data-reward-eligible checked> Оригинальный материал допускается к награде</label><label><input type="checkbox" data-reward-quality> По видео сразу понятно, как повторить лайнап</label><textarea class="finput" data-reward-comment maxlength="500" placeholder="Что проверено и почему"></textarea><button class="moderation-action" type="button" data-moderation-action="review-reward">Сохранить оценку</button></fieldset>` : ''}`}
         </div>
       </div>
       <div class="moderation-lock-status" data-moderation-lock-status></div>
@@ -508,6 +508,26 @@ async function load({ silent = false, allowInactive = false, renderQueue = true 
 }
 
 async function act(card, action) {
+  if (action === 'review-reward') {
+    if (!context.reviewReward) return;
+    const button = card.querySelector('[data-moderation-action="review-reward"]');
+    const comment = card.querySelector('[data-reward-comment]')?.value.trim() || '';
+    if (!comment) return context.toast('Напиши, что именно проверено', 'e');
+    button.disabled = true;
+    try {
+      const eligible = card.querySelector('[data-reward-eligible]')?.checked === true;
+      const qualityClear = card.querySelector('[data-reward-quality]')?.checked === true;
+      const rewardContext = context.getRewardContext ? await context.getRewardContext(card.dataset.moderationId) : null;
+      if (rewardContext?.duplicate_lineup_id && !confirm(`Найден похожий материал ${rewardContext.duplicate_lineup_id}. Сохранить оценку как заблокированную?`)) return;
+      const projected = Math.min(11, 7 + (rewardContext?.deficit?.global ? 1 : 0) + (rewardContext?.deficit?.map_pool ? 2 : 0) + (qualityClear ? 1 : 0) + (rewardContext?.matched_task ? 1 : 0));
+      const summary = `Предварительная награда: ${projected} VP\nОбщий дефицит: ${rewardContext?.deficit?.global ? '+1' : 'нет'}\nДефицит карты маппула: ${rewardContext?.deficit?.map_pool ? '+2' : 'нет'}\nКачество: ${qualityClear ? '+1' : 'нет'}\nЗадание: ${rewardContext?.matched_task ? '+1' : 'нет'}`;
+      if (!confirm(`${summary}\n\nСохранить эту оценку?`)) return;
+      const result = await context.reviewReward({ lineup_id:card.dataset.moderationId, eligible, quality_clear:qualityClear, comment });
+      context.toast(result.duplicate_lineup_id ? 'Найден дубликат: награда заблокирована' : 'Оценка награды сохранена', result.duplicate_lineup_id ? 'e' : 's');
+    } catch(error) { context.toast(error.message, 'e'); }
+    finally { button.disabled=false; }
+    return;
+  }
   if (action === 'release-metadata') {
     const item = loadedItems.find(entry => entry.id === card.dataset.moderationId);
     if (!item) return;

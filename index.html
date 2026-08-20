@@ -725,6 +725,10 @@
         </div>
         <strong class="sidebar-training-open">Открыть инструктаж →</strong>
       </a>
+      <button class="author-reward-card" id="author-reward-open" type="button">
+        <span><small>НАГРАДЫ ЗА ЛАЙНАПЫ</small><strong id="author-reward-balance">Загрузка…</strong></span>
+        <b>Открыть →</b>
+      </button>
       <button class="btn-out" id="btn-become-mod"
         style="width:100%;margin-top:14px;padding:11px;border-radius:var(--r);border:1px solid var(--border);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">
         🛡 Стать модератором
@@ -740,6 +744,7 @@
       <section class="sidebar-actions" aria-label="Действия с формой">
         <div class="sidebar-actions-title">ДЕЙСТВИЯ С ЛАЙНАПОМ</div>
         <div class="form-validation-summary" id="form-validation-summary" role="alert" aria-live="polite" hidden></div>
+        <label class="reward-submit-optin" id="reward-submit-optin" hidden><input type="checkbox" id="reward-submit-checkbox"><span><b>Участвует в наградах</b><small>После проверки можно получить 7–11 баллов</small></span></label>
         <button class="btn-submit" id="btn-submit">⬆ Отправить лайнап</button>
         <button class="sidebar-action" id="btn-save-draft" type="button">💾 Сохранить черновик</button>
         <button class="sidebar-action moderation-reject-action" id="btn-reject-moderation" type="button" hidden>⛔ Отклонить лайнап</button>
@@ -1010,6 +1015,13 @@
   </div>
 </div>
 
+<div class="reward-modal" id="reward-modal" hidden>
+  <section class="reward-dialog" role="dialog" aria-modal="true" aria-labelledby="reward-dialog-title">
+    <header><div><span>VLINEUPS · ПРОГРАММА АВТОРОВ</span><h2 id="reward-dialog-title">Награды за лайнапы</h2></div><button class="modal-close" id="reward-close" type="button">✕</button></header>
+    <div id="reward-dialog-body"><div class="reward-loading">Загружаем защищённый баланс…</div></div>
+  </section>
+</div>
+
 <footer style="padding:18px 20px 28px;text-align:center;color:var(--text2);font-size:12px;display:flex;justify-content:center;gap:16px;flex-wrap:wrap;">
   <a href="/offer.html" target="_blank" rel="noopener" style="color:var(--text2);text-decoration:none;">Подписка, цены и возврат</a>
   <a href="/privacy_policy.html" target="_blank" rel="noopener" style="color:var(--text2);text-decoration:none;">Политика конфиденциальности</a>
@@ -1041,7 +1053,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-08-12-screenshot-order-v1"></script>
+<script type="module" src="/app.js?v=2026-08-20-rewards-v2"></script>
 <script defer src="/workspace-redesign.js?v=2026-08-02-map-gallery-sync-v1"></script>
 </body>
 </html>

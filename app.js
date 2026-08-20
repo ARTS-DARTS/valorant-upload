@@ -1,7 +1,8 @@
 import { initializeApp }                    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth,
          signInWithEmailAndPassword, signInWithCustomToken,
-         signOut, onAuthStateChanged }
+         signOut, onAuthStateChanged, reauthenticateWithPopup,
+         reauthenticateWithCredential, GoogleAuthProvider, EmailAuthProvider }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, doc, collection, getDoc, setDoc, deleteDoc, writeBatch,
           serverTimestamp, onSnapshot, updateDoc, arrayUnion,
@@ -63,6 +64,15 @@ const db   = getFirestore(app);
 const functions = getFunctions(app, 'us-central1');
 const socialWebsite = createSocialWebsite({ db, functions, toast: (...args) => toast(...args) });
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
+const getRewardsDashboard = httpsCallable(functions, 'getRewardsDashboard');
+const joinRewardProgram = httpsCallable(functions, 'joinRewardProgram');
+const requestRewardPayout = httpsCallable(functions, 'requestRewardPayout');
+const cancelRewardPayout = httpsCallable(functions, 'cancelRewardPayout');
+const revealRewardCode = httpsCallable(functions, 'revealRewardCode');
+const confirmRewardCodeReceipt = httpsCallable(functions, 'confirmRewardCodeReceipt');
+const openRewardCodeDispute = httpsCallable(functions, 'openRewardCodeDispute');
+const staffReviewRewardLineup = httpsCallable(functions, 'staffReviewRewardLineup');
+const getRewardReviewContext = httpsCallable(functions, 'getRewardReviewContext');
 const syncAuthorTrainingCriteriaNotifications = httpsCallable(
   functions,
   'syncAuthorTrainingCriteriaNotifications',
@@ -70,6 +80,79 @@ const syncAuthorTrainingCriteriaNotifications = httpsCallable(
 const UPLOAD_REQUIRED_VIEWS = 5;
 const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
 const EDITOR_MAX_ZOOM = 2.2;
+let rewardDashboard = null;
+let rewardBusy = false;
+
+async function reauthenticateForRewardCode() {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Сессия завершена. Войди в аккаунт снова.');
+  const providers = new Set((user.providerData || []).map(item => item.providerId));
+  if (providers.has(GoogleAuthProvider.PROVIDER_ID)) {
+    await reauthenticateWithPopup(user, new GoogleAuthProvider());
+    return;
+  }
+  if (providers.has(EmailAuthProvider.PROVIDER_ID) && user.email) {
+    const password = prompt('Подтверди пароль, чтобы безопасно показать код:');
+    if (!password) throw new Error('Подтверждение входа отменено.');
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+    return;
+  }
+  throw new Error('Для безопасного показа кода выйди и войди через Яндекс снова. После входа заявка и код останутся на месте.');
+}
+
+function rewardStatusLabel(status) {
+  return ({pending:'На проверке',approved:'Проверена',ready:'Код готов',revealed:'Код открыт',confirmed:'Завершена',rejected:'Отклонена',canceled:'Отменена',disputed:'Открыт спор'})[status] || status || '—';
+}
+function rewardHoldLabel(reason) {
+  return ({duplicate_asset:'Найден похожий материал',fund_exhausted:'Фонд временно исчерпан',author_monthly_limit:'Достигнут месячный лимит автора',task_limit:'Лимит задания исчерпан'})[reason] || 'Требуется ручная проверка';
+}
+function rewardDate(value) {
+  const seconds = Number(value?.seconds ?? value?._seconds ?? 0);
+  return seconds ? new Date(seconds * 1000).toLocaleDateString('ru-RU') : '—';
+}
+function updateRewardSubmitOptIn() {
+  const host = document.getElementById('reward-submit-optin');
+  const active = rewardDashboard?.membership?.status === 'active' && rewardDashboard?.membership?.terms_current === true;
+  if (host) host.hidden = !active || !!moderatorDraftSourceId;
+  if (!active) { const input=document.getElementById('reward-submit-checkbox'); if(input) input.checked=false; }
+}
+function renderRewardDialog() {
+  const host = document.getElementById('reward-dialog-body'); if(!host) return;
+  const data = rewardDashboard;
+  if (!data) { host.innerHTML='<div class="reward-loading">Загружаем защищённый баланс…</div>'; return; }
+  const membership=data.membership||{}, settings=data.settings||{};
+  if (membership.status !== 'active' || membership.terms_current !== true) {
+    host.innerHTML=`<div class="reward-join"><div><h3>${membership.status === 'active' ? 'Условия обновились' : 'Вступить в программу'}</h3><p>Участие добровольное. Награда начисляется только за лайнапы, которые ты сам отметишь при отправке.</p></div><label>Регион Riot-аккаунта<select class="finput" id="reward-region"><option value="RU">RU / CIS</option><option value="EU">EU</option><option value="NA">NA</option><option value="AP">AP</option><option value="BR">BR</option><option value="LATAM">LATAM</option></select></label><label class="reward-terms-check"><input type="checkbox" id="reward-terms-accepted"><span>Я прочитал и принимаю <a href="${esc(settings.terms_url||'/rewards')}" target="_blank" rel="noopener">условия ${esc(settings.terms_version||'')}</a></span></label><button class="reward-action primary" type="button" data-reward-action="join">Принять и участвовать</button></div>`;
+    return;
+  }
+  const balance=data.balance||{}, payouts=data.payouts||[], ledger=data.ledger||[], held=data.held_claims||[];
+  const denominations=(settings.denominations||[475]).filter(value=>Number(value)<=Number(balance.available_vp||0));
+  host.innerHTML=`<div class="reward-dashboard"><section class="reward-balance"><div><strong>${Number(balance.available_vp||0)} баллов</strong><small>Доступно · ${Number(balance.reserved_vp||0)} в заявках · ${Number(balance.earned_vp||0)} заработано</small></div><a class="reward-action" href="/rewards" target="_blank" rel="noopener">Условия</a></section><section class="reward-panel"><h3>ПОЛУЧИТЬ КОД</h3>${denominations.length?`<div class="reward-actions"><select class="finput" id="reward-payout-amount">${denominations.map(value=>`<option value="${Number(value)}">${Number(value)} VP</option>`).join('')}</select><button class="reward-action primary" data-reward-action="payout">Создать заявку</button></div>`:`<div class="reward-empty">До минимального доступного номинала пока не хватает баллов.</div>`}</section>${held.length?`<section class="reward-panel"><h3>ОЖИДАЮТ ПРОВЕРКИ</h3><div class="reward-list">${held.map(item=>`<div class="reward-item"><div><b>${Number(item.amount_vp||0)} VP · ${esc(item.lineup_id||'')}</b><small>${esc(rewardHoldLabel(item.reason))}</small></div></div>`).join('')}</div></section>`:''}<section class="reward-panel"><h3>ЗАЯВКИ</h3><div class="reward-list">${payouts.map(item=>`<div class="reward-item"><div><b>${Number(item.amount_vp||0)} VP · ${esc(item.region||'')}</b><small>${rewardStatusLabel(item.status)} · ${rewardDate(item.created_at)}${item.code_last4?` · •••• ${esc(item.code_last4)}`:''}${item.review_reason?` · ${esc(item.review_reason)}`:''}${item.dispute_resolution?` · ${esc(item.dispute_resolution)}`:''}</small></div><div class="reward-actions">${item.status==='pending'?`<button class="reward-action" data-reward-action="cancel" data-payout-id="${esc(item.id)}">Отменить</button>`:''}${['ready','revealed'].includes(item.status)?`<button class="reward-action primary" data-reward-action="reveal" data-payout-id="${esc(item.id)}">Показать код</button>`:''}</div></div>`).join('')||'<div class="reward-empty">Заявок пока нет</div>'}</div></section><section class="reward-panel"><h3>ИСТОРИЯ НАЧИСЛЕНИЙ</h3><div class="reward-list">${ledger.map(item=>`<div class="reward-item"><div><b>${esc(item.title||'Лайнап')}</b><small>${rewardDate(item.created_at)} · база ${Number(item.components?.base||0)}, дефицит +${Number(item.components?.global_deficit||0)+Number(item.components?.map_pool_deficit||0)}, качество +${Number(item.components?.quality||0)}, задание +${Number(item.components?.task||0)}</small></div><strong>${Number(item.amount_vp||0)>=0?'+':''}${Number(item.amount_vp||0)}</strong></div>`).join('')||'<div class="reward-empty">Первое начисление появится после одобрения отмеченного лайнапа.</div>'}</div></section></div>`;
+}
+async function loadRewardDashboard({render=false}={}) {
+  if(!currentUser) return;
+  try { rewardDashboard=(await getRewardsDashboard()).data; const balance=document.getElementById('author-reward-balance'); if(balance) balance.textContent=`${Number(rewardDashboard?.balance?.available_vp||0)} баллов · открыть`; }
+  catch(error){ console.warn('rewards dashboard',error); const balance=document.getElementById('author-reward-balance'); if(balance) balance.textContent='Баланс временно недоступен'; }
+  updateRewardSubmitOptIn(); if(render) renderRewardDialog();
+}
+
+document.getElementById('author-reward-open')?.addEventListener('click', async()=>{ document.getElementById('reward-modal').hidden=false; renderRewardDialog(); await loadRewardDashboard({render:true}); });
+document.getElementById('reward-close')?.addEventListener('click',()=>{document.getElementById('reward-modal').hidden=true;});
+document.getElementById('reward-modal')?.addEventListener('click',async event=>{
+  if(event.target.id==='reward-modal'){event.currentTarget.hidden=true;return;}
+  const button=event.target.closest('[data-reward-action]'); if(!button||rewardBusy)return; rewardBusy=true; button.disabled=true;
+  try {
+    const action=button.dataset.rewardAction, payoutId=button.dataset.payoutId;
+    if(action==='join'){ if(!document.getElementById('reward-terms-accepted')?.checked) throw new Error('Сначала прими условия программы'); await joinRewardProgram({accepted:true,terms_version:rewardDashboard.settings.terms_version,region:document.getElementById('reward-region').value}); toast('Участие в программе включено','s'); }
+    if(action==='payout'){ await requestRewardPayout({amount_vp:Number(document.getElementById('reward-payout-amount').value),idempotency_key:crypto.randomUUID()}); toast('Заявка создана','s'); }
+    if(action==='cancel'){ await cancelRewardPayout({payout_id:payoutId}); toast('Заявка отменена, баллы возвращены','s'); }
+    if(action==='reveal'){ await reauthenticateForRewardCode(); const result=(await revealRewardCode({payout_id:payoutId})).data; button.closest('.reward-item').insertAdjacentHTML('afterend',`<div class="reward-code">${esc(result.code)}<div class="reward-actions" style="margin-top:10px"><button class="reward-action primary" data-reward-action="confirm" data-payout-id="${esc(payoutId)}">Код сохранён</button><button class="reward-action" data-reward-action="dispute" data-payout-id="${esc(payoutId)}">Код не работает</button></div></div>`); return; }
+    if(action==='confirm'){ await confirmRewardCodeReceipt({payout_id:payoutId}); toast('Получение подтверждено','s'); }
+    if(action==='dispute'){ const reason=prompt('Опиши, что произошло при активации кода:'); if(!reason)return; await openRewardCodeDispute({payout_id:payoutId,reason}); toast('Спор открыт','s'); }
+    await loadRewardDashboard({render:true});
+  } catch(error){ toast('Операция не выполнена: '+toSafeErrorMessage(error),'e'); }
+  finally{rewardBusy=false;button.disabled=false;}
+});
 
 const siteSounds = {
   notification: new Audio('/assets/audio/notification.mp3?v=1'),
@@ -4261,7 +4344,7 @@ document.getElementById('moderator-author-search')?.addEventListener('focus', ev
 async function loadModerationWorkspace({ background = false } = {}) {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-08-11-author-filter-v1');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-08-20-reward-review-v2');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({
@@ -4270,6 +4353,8 @@ async function loadModerationWorkspace({ background = false } = {}) {
         reportError:logUploadError,
         openDraft: openModeratorDraft,
         getRole: () => String(currentUserProfile?.role || '').toLowerCase(),
+        reviewReward: async payload => (await staffReviewRewardLineup(payload)).data,
+        getRewardContext: async lineupId => (await getRewardReviewContext({lineup_id:lineupId})).data,
       });
     }
     const panelActive = activeWorkspaceTab === 'moderation' && !background && !document.hidden;
@@ -5160,6 +5245,7 @@ onAuthStateChanged(auth, async user => {
     if (headerNotifications) headerNotifications.hidden = false;
     if (headerSoundTest) headerSoundTest.hidden = false;
     await loadCurrentUserProfile(user);
+    await loadRewardDashboard();
     await _subscribeCooldownAccess(user.uid);
     showTrainingReturnFeedback();
     await loadUploadCategoryConfig();
@@ -11995,6 +12081,10 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       is_outdated:   false,
       likes_count:   0,
       source:        'web',
+      reward_program_opt_in: document.getElementById('reward-submit-checkbox')?.checked === true,
+      ...(document.getElementById('reward-submit-checkbox')?.checked === true ? {
+        reward_terms_version: rewardDashboard?.settings?.terms_version || '',
+      } : {}),
       ...(resubmissionSourceId ? { resubmitted_from: resubmissionSourceId } : {}),
     };
     batch.set(doc(db, 'rate_limits', uid), {
@@ -12053,6 +12143,8 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   const retainedVideoEdit = keepVideo ? normalizedVideoEdit() : null;
   if (!keepDraft) _clearDraft();
   selectedAgent = null; selectedAbility = null;
+  const rewardCheckbox = document.getElementById('reward-submit-checkbox');
+  if (rewardCheckbox) rewardCheckbox.checked = false;
   sovaCharge = 3; sovaBounces = 0;
   selectedCategory = null; selectedDifficulty = null; selectedRoundSide = null;
   markerX = null; markerY = null;

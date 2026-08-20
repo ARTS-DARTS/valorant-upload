@@ -1,4 +1,4 @@
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -17,6 +17,11 @@ export function ensureFirebaseAdmin() {
 export function adminAuth() {
   ensureFirebaseAdmin();
   return getAuth();
+}
+
+export function adminApp() {
+  ensureFirebaseAdmin();
+  return getApp();
 }
 
 export function adminFirestore() {
