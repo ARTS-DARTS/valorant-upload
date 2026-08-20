@@ -39,17 +39,18 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       if (!YANDEX_CLIENT_ID) return res.status(503).json({ error: 'service_unavailable' });
-      if (req.body?.mode !== 'link') return res.status(400).json({ error: 'invalid_mode' });
+      const mode = String(req.body?.mode || '');
+      if (!['link', 'reauth'].includes(mode)) return res.status(400).json({ error: 'invalid_mode' });
       const authorization = String(req.headers.authorization || '');
       const idToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
       if (!idToken) return res.status(401).json({ error: 'authentication_required' });
       initFirebase();
       const decoded = await getAuth().verifyIdToken(idToken, true);
-      const state = createYandexLinkState(decoded.uid);
+      const state = createYandexLinkState(decoded.uid, 600, mode);
       const [, , expiresRaw, nonce] = state.split('.');
       await getFirestore().collection('oauth_link_states').doc(nonce).set({
         uid: decoded.uid,
-        provider: 'yandex',
+        provider: 'yandex', mode,
         expires_at: Timestamp.fromMillis(Number(expiresRaw) * 1000),
         consumed: false,
         created_at: FieldValue.serverTimestamp(),
@@ -71,7 +72,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (state.startsWith('link_') || state.startsWith('link.')) {
+  if (state.startsWith('link_') || state.startsWith('link.') || state.startsWith('reauth.')) {
     return res.status(400).json({ error: 'signed_link_handshake_required' });
   }
   res.writeHead(302, { Location: oauthUrl(state) });

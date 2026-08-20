@@ -87,6 +87,7 @@ async function consumeLinkState(db, linkState) {
     if (
       data.uid !== linkState.uid ||
       data.provider !== 'yandex' ||
+      String(data.mode || 'link') !== linkState.kind ||
       data.consumed === true ||
       expiresAt < Date.now()
     ) return false;
@@ -234,14 +235,24 @@ export default async function handler(req, res) {
 
     // Режим привязки использует только короткоживущий HMAC-signed state,
     // выданный после проверки Firebase ID token в /api/yandex-start.
-    const linkState = state.startsWith('link.') ? verifyYandexLinkState(state) : null;
-    if (state.startsWith('link.') && !linkState) {
+    const signedState = (state.startsWith('link.') || state.startsWith('reauth.')) ? verifyYandexLinkState(state) : null;
+    if ((state.startsWith('link.') || state.startsWith('reauth.')) && !signedState) {
       return appRedirect(res, `${APP_SCHEME}?error=invalid_link_state`);
     }
-    if (linkState) {
-      const firebaseUid = linkState.uid;
+    if (signedState?.kind === 'reauth') {
+      const firebaseUid = signedState.uid;
       const firebaseUser = await getAuth().getUser(firebaseUid);
-      if (firebaseUser.disabled || !(await consumeLinkState(db, linkState))) {
+      const existingUid = await resolveYandexUid(db, yandexId);
+      if (firebaseUser.disabled || existingUid !== firebaseUid || !(await consumeLinkState(db, signedState))) {
+        return appRedirect(res, `${APP_SCHEME}?error=reauth_account_mismatch`);
+      }
+      const customToken = await getAuth().createCustomToken(firebaseUid, { yandex_id:yandexId, reauthenticated:true });
+      return appRedirect(res, `${APP_SCHEME}?reauth=true&token=${encodeURIComponent(customToken)}`);
+    }
+    if (signedState?.kind === 'link') {
+      const firebaseUid = signedState.uid;
+      const firebaseUser = await getAuth().getUser(firebaseUid);
+      if (firebaseUser.disabled || !(await consumeLinkState(db, signedState))) {
         return appRedirect(res, `${APP_SCHEME}?error=invalid_link_state`);
       }
       const existingUid = await resolveYandexUid(db, yandexId);
