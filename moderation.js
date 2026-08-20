@@ -365,7 +365,7 @@ function render(items, total = totalQueueItems) {
           <h3 class="moderation-title">${metadataTask ? 'Проверить параметры лайнапа' : esc(item.title || 'Без названия')}</h3>
           ${metadataTask
             ? (ownedByCurrentModerator ? metadataFields(item) : '<p class="moderation-description">Сначала возьми задание в работу. После этого откроются параметры для проверки.</p>')
-            : `<p class="moderation-description">${esc(item.description || 'Описание отсутствует')}</p><div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>${item.reward_program_opt_in ? `<fieldset class="moderation-reward-review"><legend>🎁 Оценка награды</legend><label><input type="checkbox" data-reward-eligible checked> Оригинальный материал допускается к награде</label><label><input type="checkbox" data-reward-quality> По видео сразу понятно, как повторить лайнап</label><textarea class="finput" data-reward-comment maxlength="500" placeholder="Что проверено и почему"></textarea><button class="moderation-action" type="button" data-moderation-action="review-reward">Сохранить оценку</button></fieldset>` : ''}`}
+            : `<p class="moderation-description">${esc(item.description || 'Описание отсутствует')}</p><div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>${item.reward_program_opt_in ? `<fieldset class="moderation-reward-review"><legend>🎁 Оценка награды</legend><label><input type="checkbox" data-reward-eligible> Оригинальный материал допускается к награде</label><label><input type="checkbox" data-reward-quality> По видео сразу понятно, как повторить лайнап</label><textarea class="finput" data-reward-comment maxlength="500" placeholder="Что проверено и почему"></textarea><button class="moderation-action" type="button" data-moderation-action="review-reward">Сохранить оценку</button></fieldset>` : ''}`}
         </div>
       </div>
       <div class="moderation-lock-status" data-moderation-lock-status></div>
@@ -517,6 +517,7 @@ async function act(card, action) {
     try {
       const eligible = card.querySelector('[data-reward-eligible]')?.checked === true;
       const qualityClear = card.querySelector('[data-reward-quality]')?.checked === true;
+      if (!eligible && qualityClear) return context.toast('Бонус за качество можно дать только допущенному лайнапу', 'e');
       const rewardContext = context.getRewardContext ? await context.getRewardContext(card.dataset.moderationId) : null;
       if (rewardContext?.duplicate_lineup_id && !confirm(`Найден похожий материал ${rewardContext.duplicate_lineup_id}. Сохранить оценку как заблокированную?`)) return;
       const projected = Math.min(11, 7 + (rewardContext?.deficit?.global ? 1 : 0) + (rewardContext?.deficit?.map_pool ? 2 : 0) + (qualityClear ? 1 : 0) + (rewardContext?.matched_task ? 1 : 0));
