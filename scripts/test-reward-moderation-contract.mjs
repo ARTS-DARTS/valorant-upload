@@ -2,21 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const source = readFileSync(new URL('../moderation.js', import.meta.url), 'utf8');
+const queueSource = readFileSync(new URL('../moderation.js', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
-test('reward eligibility requires an explicit moderator choice', () => {
-  assert.match(source, /data-reward-eligible/);
-  assert.doesNotMatch(source, /data-reward-eligible checked/);
-  assert.match(source, /Выбери «Да» или «Нет» для каждого ручного критерия/);
+test('reward eligibility is decided explicitly at final moderation submit', () => {
+  assert.match(queueSource, /итоговая оценка появится при завершении проверки/);
+  assert.match(appSource, /requestModeratorRewardDecision\(moderatorDraftSourceId\)/);
+  assert.match(appSource, /name="final-reward-eligible" value="yes"/);
+  assert.match(appSource, /name="final-reward-eligible" value="no"/);
+  assert.doesNotMatch(appSource, /name="final-reward-eligible" value="(?:yes|no)" checked/);
+  assert.match(appSource, /Выбери «Да» или «Нет» для каждого критерия/);
 });
 
 test('quality bonus cannot be selected for an ineligible lineup', () => {
-  assert.match(source, /!eligible && qualityClear/);
+  assert.match(appSource, /eligibleChoice === 'no' && qualityChoice === 'yes'/);
 });
 
 test('automatic deficit and task criteria are shown separately from moderator choices', () => {
-  assert.match(source, /data-reward-auto/);
-  assert.match(source, /Общий дефицит/);
-  assert.match(source, /Дефицит маппула/);
-  assert.match(source, /Активное задание/);
+  assert.match(appSource, /reward-review-auto/);
+  assert.match(appSource, /Общий дефицит/);
+  assert.match(appSource, /Дефицит маппула/);
+  assert.match(appSource, /Активное задание/);
+});
+
+test('reward review is saved before the moderator lineup completion request', () => {
+  const branch = appSource.match(/if \(moderatorRewardOptIn\) \{[\s\S]*?const token = await currentUser\.getIdToken\(\);/)?.[0] || '';
+  assert.match(branch, /staffReviewRewardLineup/);
+  assert.match(branch, /const token = await currentUser\.getIdToken/);
 });

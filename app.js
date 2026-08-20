@@ -2583,6 +2583,7 @@ let myLineupsStatusFilter = 'all';
 let myLineupsSearch = '';
 let resubmissionSourceId = '';
 let moderatorDraftSourceId = '';
+let moderatorRewardOptIn = false;
 const MODERATOR_EDIT_SESSION_KEY = 'vl_active_moderator_edit_id';
 let moderatorResumeAttempted = false;
 let moderatorSelectedAuthor = null;
@@ -4225,6 +4226,7 @@ function openModeratorDraft(item) {
   draft.resubmissionSourceId = '';
   draft.moderatorDraftSourceId = item.id || '';
   draft.moderatorAuthor = { uid: item.user_id || '', name: item.submitted_by || '' };
+  draft.moderatorRewardOptIn = item.reward_program_opt_in === true;
   try { sessionStorage.setItem(MODERATOR_EDIT_SESSION_KEY, draft.moderatorDraftSourceId); } catch (_) {}
   moderatorVideoRemovalRequested = false;
   resetUploadForm({ keepDraft: true });
@@ -4233,6 +4235,46 @@ function openModeratorDraft(item) {
   switchWorkspaceTab('upload');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   toast('Видео открыто в форме. Заполни агента, способность и карту, затем отправь на проверку.', 's');
+}
+
+async function requestModeratorRewardDecision(lineupId) {
+  const rewardContext = (await getRewardReviewContext({ lineup_id:lineupId })).data || {};
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'reward-review-dialog-backdrop';
+    overlay.innerHTML = `<section class="reward-review-dialog" role="dialog" aria-modal="true" aria-labelledby="reward-review-title">
+      <h2 id="reward-review-title">Итоговая оценка награды</h2>
+      <p>Перед завершением проверки отметь оба ручных критерия. Ничего не выбрано заранее.</p>
+      <div class="reward-review-row"><span>Материал оригинальный и допускается к награде?</span><div class="reward-review-choice"><label class="yes"><input type="radio" name="final-reward-eligible" value="yes">✓ Да</label><label class="no"><input type="radio" name="final-reward-eligible" value="no">✕ Нет</label></div></div>
+      <div class="reward-review-row"><span>По материалу понятно, как повторить лайнап?</span><div class="reward-review-choice"><label class="yes"><input type="radio" name="final-reward-quality" value="yes">✓ Да</label><label class="no"><input type="radio" name="final-reward-quality" value="no">✕ Нет</label></div></div>
+      <div class="reward-review-auto"><span>Общий дефицит</span><b class="${rewardContext.deficit?.global ? 'yes' : 'no'}">${rewardContext.deficit?.global ? '✓ Да · +1 VP' : '✕ Нет'}</b><span>Дефицит маппула</span><b class="${rewardContext.deficit?.map_pool ? 'yes' : 'no'}">${rewardContext.deficit?.map_pool ? '✓ Да · +2 VP' : '✕ Нет'}</b><span>Активное задание</span><b class="${rewardContext.matched_task ? 'yes' : 'no'}">${rewardContext.matched_task ? '✓ Да · +1 VP' : '✕ Нет'}</b><span>Предварительный итог</span><b class="total" data-final-reward-total>—</b></div>
+      ${rewardContext.duplicate_lineup_id ? `<div class="reward-review-warning">Найден похожий материал: ${esc(rewardContext.duplicate_lineup_id)}. Сервер не допустит автоматическое начисление.</div>` : ''}
+      <textarea class="finput" maxlength="500" data-final-reward-comment placeholder="Что проверено и почему принято такое решение"></textarea>
+      <div class="reward-review-dialog-actions"><button type="button" class="moderation-action" data-final-reward-cancel>Вернуться</button><button type="button" class="moderation-action moderation-complete" data-final-reward-save>Сохранить и завершить</button></div>
+      <div class="reward-review-dialog-error" data-final-reward-error></div>
+    </section>`;
+    const close = value => { overlay.remove(); resolve(value); };
+    const refreshTotal = () => {
+      const eligible = overlay.querySelector('input[name="final-reward-eligible"]:checked')?.value;
+      const quality = overlay.querySelector('input[name="final-reward-quality"]:checked')?.value;
+      const total = overlay.querySelector('[data-final-reward-total]');
+      if (!eligible || !quality) total.textContent = '—';
+      else total.textContent = eligible === 'no' ? '0 VP' : `${Math.min(11, 7 + (quality === 'yes' ? 1 : 0) + (rewardContext.deficit?.global ? 1 : 0) + (rewardContext.deficit?.map_pool ? 2 : 0) + (rewardContext.matched_task ? 1 : 0))} VP`;
+    };
+    overlay.addEventListener('change', refreshTotal);
+    overlay.querySelector('[data-final-reward-cancel]').addEventListener('click', () => close(null));
+    overlay.querySelector('[data-final-reward-save]').addEventListener('click', () => {
+      const eligibleChoice = overlay.querySelector('input[name="final-reward-eligible"]:checked')?.value || '';
+      const qualityChoice = overlay.querySelector('input[name="final-reward-quality"]:checked')?.value || '';
+      const comment = overlay.querySelector('[data-final-reward-comment]').value.trim();
+      const error = overlay.querySelector('[data-final-reward-error]');
+      if (!eligibleChoice || !qualityChoice) { error.textContent = 'Выбери «Да» или «Нет» для каждого критерия.'; return; }
+      if (eligibleChoice === 'no' && qualityChoice === 'yes') { error.textContent = 'Недопущенный материал не может получить бонус качества.'; return; }
+      if (!comment) { error.textContent = 'Напиши, что именно проверено.'; return; }
+      close({ eligible:eligibleChoice === 'yes', quality_clear:qualityChoice === 'yes', comment });
+    });
+    document.body.appendChild(overlay);
+  });
 }
 
 function showModeratorAuthorPicker(author = null) {
@@ -4335,7 +4377,7 @@ document.getElementById('moderator-author-search')?.addEventListener('focus', ev
 async function loadModerationWorkspace({ background = false } = {}) {
   if (!canCurrentUserModerate() || !currentUser) return;
   try {
-    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-08-20-reward-review-v2');
+    if (!moderationModulePromise) moderationModulePromise = import('./moderation.js?v=2026-08-21-final-reward-review-v1');
     if (!moderationController) {
       const module = await moderationModulePromise;
       moderationController = module.initModeration({
@@ -11434,6 +11476,7 @@ function _clearDraft() {
   try { localStorage.removeItem(_ACTIVE_DRAFT_ID_KEY); } catch(_) {}
   resubmissionSourceId = '';
   moderatorDraftSourceId = '';
+  moderatorRewardOptIn = false;
   renderResubmissionBanner();
 }
 
@@ -11448,6 +11491,7 @@ function _restoreDraft(sourceDraft = null) {
   }
   resubmissionSourceId = d.resubmissionSourceId || '';
   moderatorDraftSourceId = d.moderatorDraftSourceId || '';
+  moderatorRewardOptIn = d.moderatorRewardOptIn === true;
   moderatorSelectedAuthor = d.moderatorAuthor?.uid ? d.moderatorAuthor : null;
   sageWallHandlesHidden = d.sageWallHandlesHidden === true;
   showModeratorAuthorPicker(moderatorSelectedAuthor);
@@ -11969,6 +12013,15 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       moderatorAutosaveTimer = null;
       if (moderatorAutosaveRequest) await moderatorAutosaveRequest.catch(() => {});
       moderatorAutosaveDirty = false;
+      if (moderatorRewardOptIn) {
+        submitStage = 'moderator_reward_review';
+        const rewardDecision = await requestModeratorRewardDecision(moderatorDraftSourceId);
+        if (!rewardDecision) throw new Error('Оценка награды не сохранена. Проверка остаётся открытой.');
+        const reviewResult = (await staffReviewRewardLineup({ lineup_id:moderatorDraftSourceId, ...rewardDecision })).data;
+        if (rewardDecision.eligible && reviewResult?.eligible !== true) {
+          toast('Сервер обнаружил дубликат: лайнап можно обработать, но награда будет 0 VP.', 'w');
+        }
+      }
       const token = await currentUser.getIdToken();
       const response = await fetch('/api/moderation', {
         method: 'POST',
@@ -11999,6 +12052,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       clearModeratorVideoEditBackup(moderatorDraftSourceId);
       moderationController?.clearClaim?.();
       moderatorDraftSourceId = '';
+      moderatorRewardOptIn = false;
       try { sessionStorage.removeItem(MODERATOR_EDIT_SESSION_KEY); } catch (_) {}
       moderatorSelectedAuthor = null;
       showModeratorAuthorPicker();
@@ -12133,6 +12187,7 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   const retainedVideoUrl = keepVideo ? videoUrl : null;
   const retainedVideoEdit = keepVideo ? normalizedVideoEdit() : null;
   if (!keepDraft) _clearDraft();
+  if (!keepDraft) moderatorRewardOptIn = false;
   selectedAgent = null; selectedAbility = null;
   const rewardCheckbox = document.getElementById('reward-submit-checkbox');
   if (rewardCheckbox) rewardCheckbox.checked = false;
