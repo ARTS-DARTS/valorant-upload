@@ -205,7 +205,7 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('effect_outside'/);
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
-  assert.match(html, /styles\.css\?v=2026-08-21-profile-catalog-v1/);
+  assert.match(html, /styles\.css\?v=2026-08-21-profile-catalog-v2/);
   assert.match(html, /app\.js\?v=2026-08-21-profile-catalog-v1/);
   assert.match(html, /Минимум 1 кадр обязателен/);
   assert.match(app, /Добавь хотя бы один обязательный кадр из видео/);
