@@ -16,7 +16,7 @@ test('attack lineup requires an explicit Spike decision', () => {
 });
 
 test('Spike uses the game-shaped marker at reduced map size', () => {
-  assert.match(html, /media\.valorant-api\.com\/buddies\/0ec28d81-498c-af58-722c-baa60a84151c\/displayicon\.png/);
+  assert.match(html, /static\.wikia\.nocookie\.net\/valorant\/images\/d\/de\/Spike\.png\/revision\/latest/);
   assert.match(css, /\.spike-map-marker\{[^}]*width:20px;height:20px/);
 });
 
