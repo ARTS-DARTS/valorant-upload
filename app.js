@@ -86,7 +86,7 @@ let rewardDashboard = null;
 let rewardBusy = false;
 let rewardDemandAgent = '';
 let rewardDemandMap = '';
-let rewardDemandMapMode = 'deficit';
+let rewardDemandRanking = 'map_pool';
 
 function rewardStatusLabel(status) {
   return ({pending:'На проверке',approved:'Проверена',ready:'Код готов',revealed:'Код открыт',confirmed:'Завершена',rejected:'Отклонена',canceled:'Отменена'})[status] || status || '—';
@@ -110,7 +110,7 @@ function updateRewardSubmitOptIn() {
   }
 }
 function rewardDemandRows(value) {
-  return Object.values(value || {}).filter(row => row && row.deficit === true);
+  return Object.values(value || {}).filter(row => row && typeof row === 'object');
 }
 function rewardDemandIcon(agentName) {
   const agent = agentsList.find(item => item.displayName === agentName);
@@ -119,6 +119,7 @@ function rewardDemandIcon(agentName) {
 function renderRewardDemand(deficits) {
   const globalRows = rewardDemandRows(deficits?.global);
   const mapRows = rewardDemandRows(deficits?.map_pool);
+  const subscriberCounts = deficits?.agent_notification_subscribers || {};
   if (!globalRows.length && !mapRows.length) return '';
   const groups = new Map();
   mapRows.forEach(row => {
@@ -127,28 +128,46 @@ function renderRewardDemand(deficits) {
     if (!groups.has(agent)) groups.set(agent, []);
     groups.get(agent).push(row);
   });
+  const globalByAgent = new Map();
+  globalRows.forEach(row => {
+    const agent = String(row.agent || '').trim();
+    if (!agent) return;
+    if (!globalByAgent.has(agent)) globalByAgent.set(agent, []);
+    globalByAgent.get(agent).push(row);
+    if (!groups.has(agent)) groups.set(agent, []);
+  });
+  const agentPriority = agent => {
+    const rows = rewardDemandRanking === 'global' ? (globalByAgent.get(agent) || []) : (groups.get(agent) || []);
+    return {
+      deficitCount: rows.filter(row => row.deficit === true).length,
+      minCount: rows.length ? Math.min(...rows.map(row => Number(row.count || 0))) : 9999,
+      subscribers: Number(subscriberCounts[String(agent).trim().toLowerCase()] ?? subscriberCounts[agent] ?? 0),
+    };
+  };
   const agents = [...groups.keys()].sort((a,b) => {
-    const aRows=groups.get(a), bRows=groups.get(b);
-    const aMin=Math.min(...aRows.map(row=>Number(row.count||0))), bMin=Math.min(...bRows.map(row=>Number(row.count||0)));
-    return aMin-bMin || bRows.length-aRows.length || a.localeCompare(b,'ru');
+    const ap=agentPriority(a), bp=agentPriority(b);
+    return bp.deficitCount-ap.deficitCount || ap.minCount-bp.minCount || bp.subscribers-ap.subscribers || a.localeCompare(b,'ru');
   });
   if (!agents.includes(rewardDemandAgent)) rewardDemandAgent=agents[0]||'';
   const agentRows=groups.get(rewardDemandAgent)||[];
-  const deficitMaps=[...new Set(agentRows.map(row=>String(row.map||'')).filter(Boolean))].sort((a,b)=>{
-    const min=map=>Math.min(...agentRows.filter(row=>row.map===map).map(row=>Number(row.count||0)));
-    return min(a)-min(b)||a.localeCompare(b,'ru');
-  });
   const allMaps=[...document.querySelectorAll('#sel-map option')].map(option=>String(option.value||option.textContent||'').trim()).filter(Boolean);
-  const maps=rewardDemandMapMode==='all' ? allMaps : deficitMaps;
+  const mapPriority=map=>{
+    const rows=agentRows.filter(row=>row.map===map);
+    return {deficitCount:rows.filter(row=>row.deficit===true).length,minCount:rows.length?Math.min(...rows.map(row=>Number(row.count||0))):9999};
+  };
+  const maps=[...new Set([...allMaps,...agentRows.map(row=>String(row.map||'').trim()).filter(Boolean)])].sort((a,b)=>{
+    const ap=mapPriority(a),bp=mapPriority(b);
+    return bp.deficitCount-ap.deficitCount || ap.minCount-bp.minCount || a.localeCompare(b,'ru');
+  });
   if (!maps.includes(rewardDemandMap)) rewardDemandMap=maps[0]||'';
   const abilities=agentRows.filter(row=>row.map===rewardDemandMap).sort((a,b)=>Number(a.count||0)-Number(b.count||0));
   const agentButtons=agents.map((agent,index)=>{
     const icon=rewardDemandIcon(agent), selected=agent===rewardDemandAgent;
     const opacity=Math.max(.34,1-(index/Math.max(1,agents.length-1))*.66);
-    return `<button class="reward-demand-agent${selected?' selected':''}${index===0?' hottest':''}" type="button" data-demand-agent="${esc(agent)}" title="${esc(agent)}" aria-label="${esc(agent)}" aria-pressed="${selected}" style="--demand-opacity:${opacity.toFixed(2)}">${icon?`<img src="${esc(icon)}" alt="">`:`<span>${esc(agent.slice(0,1)||'?')}</span>`}</button>`;
+    const subscribers=agentPriority(agent).subscribers;
+    return `<button class="reward-demand-agent${selected?' selected':''}" type="button" data-demand-agent="${esc(agent)}" title="${esc(agent)} · уведомления: ${subscribers}" aria-label="${esc(agent)}, уведомления: ${subscribers}" aria-pressed="${selected}" style="--demand-opacity:${opacity.toFixed(2)}">${icon?`<img src="${esc(icon)}" alt="">`:`<span>${esc(agent.slice(0,1)||'?')}</span>`}</button>`;
   }).join('');
-  const deficitMapSet=new Set(deficitMaps);
-  const mapButtons=maps.map(map=>`<button class="reward-demand-map${map===rewardDemandMap?' selected':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${deficitMapSet.has(map)?'<span>◆</span>':''}${esc(map)}</button>`).join('');
+  const mapButtons=maps.map((map,index)=>`<button class="reward-demand-map${map===rewardDemandMap?' selected':''}${mapPriority(map).deficitCount?' priority':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${esc(map)}${mapPriority(map).deficitCount?`<small>приоритет ${index+1}</small>`:''}</button>`).join('');
   const abilityCard=row=>{
     const count=Number(row.count||0), urgent=count===0;
     return `<article class="reward-demand-ability${urgent?' urgent':''}"><span class="reward-demand-count">${count}</span><div><strong>${esc(row.ability||'Способность')}</strong><small>${esc(row.side||'any')}</small></div><b>${urgent?'МАКС. ПРИОРИТЕТ':`Уже есть: ${count}`}</b></article>`;
@@ -160,7 +179,7 @@ function renderRewardDemand(deficits) {
   ].map(group=>({ ...group, rows:abilities.filter(row=>String(row.side||'any').toLowerCase()===group.key) }))
     .filter(group=>group.key!=='any'||group.rows.length);
   const abilityGroups=sideGroups.map(group=>`<section class="reward-demand-side-group${group.key==='any'?' neutral':''}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${group.rows.length}</b></header><div>${group.rows.map(abilityCard).join('')||'<p>Дефицитных способностей нет</p>'}</div></section>`).join('');
-  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals"><b>${mapRows.length}<small>маппул</small></b><b>${globalRows.length}<small>общий</small></b></div></header><div class="reward-demand-stage"><label>1 · АГЕНТ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · КАРТА</label><div class="reward-demand-map-modes"><button type="button" data-demand-map-mode="deficit" class="${rewardDemandMapMode==='deficit'?'selected':''}">С дефицитом · ${deficitMaps.length}</button><button type="button" data-demand-map-mode="all" class="${rewardDemandMapMode==='all'?'selected':''}">Все карты · ${allMaps.length}</button></div></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ</label><div class="reward-demand-side-columns">${abilityGroups||'<div class="reward-empty">На этой карте дефицитных способностей выбранного агента нет.</div>'}</div></div></section>`;
+  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals" role="group" aria-label="Рейтинг агентов"><button type="button" data-demand-ranking="map_pool" class="${rewardDemandRanking==='map_pool'?'selected':''}"><b>${mapRows.filter(row=>row.deficit===true).length}</b><small>маппул</small></button><button type="button" data-demand-ranking="global" class="${rewardDemandRanking==='global'?'selected':''}"><b>${globalRows.filter(row=>row.deficit===true).length}</b><small>общий</small></button></div></header><div class="reward-demand-stage"><label>1 · АГЕНТ · ПО ПРИОРИТЕТУ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · ВСЕ КАРТЫ · ПРИОРИТЕТНЫЕ ПЕРВЫМИ</label></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ</label><div class="reward-demand-side-columns">${abilityGroups||'<div class="reward-empty">Для этой карты пока нет данных по способностям выбранного агента.</div>'}</div></div></section>`;
 }
 function renderRewardDialog() {
   const host = document.getElementById('reward-dialog-body'); if(!host) return;
@@ -198,8 +217,8 @@ document.getElementById('reward-modal')?.addEventListener('click',async event=>{
   if(demandAgent){rewardDemandAgent=demandAgent.dataset.demandAgent||'';rewardDemandMap='';renderRewardDialog();return;}
   const demandMap=event.target.closest('[data-demand-map]');
   if(demandMap){rewardDemandMap=demandMap.dataset.demandMap||'';renderRewardDialog();return;}
-  const demandMapMode=event.target.closest('[data-demand-map-mode]');
-  if(demandMapMode){rewardDemandMapMode=demandMapMode.dataset.demandMapMode==='all'?'all':'deficit';rewardDemandMap='';renderRewardDialog();return;}
+  const demandRanking=event.target.closest('[data-demand-ranking]');
+  if(demandRanking){rewardDemandRanking=demandRanking.dataset.demandRanking==='global'?'global':'map_pool';rewardDemandAgent='';rewardDemandMap='';renderRewardDialog();return;}
   const button=event.target.closest('[data-reward-action]'); if(!button||rewardBusy)return; rewardBusy=true; button.disabled=true;
   try {
     const action=button.dataset.rewardAction, payoutId=button.dataset.payoutId;
