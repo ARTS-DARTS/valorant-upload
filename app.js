@@ -120,6 +120,8 @@ function renderRewardDemand(deficits) {
   const globalRows = rewardDemandRows(deficits?.global);
   const mapRows = rewardDemandRows(deficits?.map_pool);
   const subscriberCounts = deficits?.agent_notification_subscribers || {};
+  const activeMaps = (rewardDashboard?.settings?.active_map_pool || [])
+    .map(value => String(value || '').trim()).filter(Boolean);
   if (!globalRows.length && !mapRows.length) return '';
   const groups = new Map();
   mapRows.forEach(row => {
@@ -139,28 +141,32 @@ function renderRewardDemand(deficits) {
   const agentPriority = agent => {
     const rows = rewardDemandRanking === 'global' ? (globalByAgent.get(agent) || []) : (groups.get(agent) || []);
     return {
+      score: rows.length ? Math.max(...rows.map(row => Number(row.priority_score || 0))) : 0,
       deficitCount: rows.filter(row => row.deficit === true).length,
       minCount: rows.length ? Math.min(...rows.map(row => Number(row.count || 0))) : 9999,
-      subscribers: Number(subscriberCounts[String(agent).trim().toLowerCase()] ?? subscriberCounts[agent] ?? 0),
+      subscribers: Number(rows[0]?.agent_subscribers ?? subscriberCounts[String(agent).trim().toLowerCase()] ?? subscriberCounts[agent] ?? 0),
     };
   };
   const agents = [...groups.keys()].sort((a,b) => {
     const ap=agentPriority(a), bp=agentPriority(b);
-    return bp.deficitCount-ap.deficitCount || ap.minCount-bp.minCount || bp.subscribers-ap.subscribers || a.localeCompare(b,'ru');
+    return bp.score-ap.score || bp.subscribers-ap.subscribers || bp.deficitCount-ap.deficitCount || ap.minCount-bp.minCount || a.localeCompare(b,'ru');
   });
   if (!agents.includes(rewardDemandAgent)) rewardDemandAgent=agents[0]||'';
   const agentRows=groups.get(rewardDemandAgent)||[];
-  const allMaps=[...document.querySelectorAll('#sel-map option')].map(option=>String(option.value||option.textContent||'').trim()).filter(Boolean);
   const mapPriority=map=>{
     const rows=agentRows.filter(row=>row.map===map);
-    return {deficitCount:rows.filter(row=>row.deficit===true).length,minCount:rows.length?Math.min(...rows.map(row=>Number(row.count||0))):9999};
+    return {
+      score:rows.length?Math.max(...rows.map(row=>Number(row.priority_score||0))):0,
+      deficitCount:rows.filter(row=>row.deficit===true).length,
+      minCount:rows.length?Math.min(...rows.map(row=>Number(row.count||0))):9999,
+    };
   };
-  const maps=[...new Set([...allMaps,...agentRows.map(row=>String(row.map||'').trim()).filter(Boolean)])].sort((a,b)=>{
+  const maps=[...new Set([...activeMaps,...agentRows.map(row=>String(row.map||'').trim()).filter(Boolean)])].sort((a,b)=>{
     const ap=mapPriority(a),bp=mapPriority(b);
-    return bp.deficitCount-ap.deficitCount || ap.minCount-bp.minCount || a.localeCompare(b,'ru');
+    return bp.score-ap.score || bp.deficitCount-ap.deficitCount || ap.minCount-bp.minCount || a.localeCompare(b,'ru');
   });
   if (!maps.includes(rewardDemandMap)) rewardDemandMap=maps[0]||'';
-  const abilities=agentRows.filter(row=>row.map===rewardDemandMap).sort((a,b)=>Number(a.count||0)-Number(b.count||0));
+  const abilities=agentRows.filter(row=>row.map===rewardDemandMap).sort((a,b)=>Number(b.priority_score||0)-Number(a.priority_score||0)||Number(a.count||0)-Number(b.count||0));
   const agentButtons=agents.map((agent,index)=>{
     const icon=rewardDemandIcon(agent), selected=agent===rewardDemandAgent;
     const opacity=Math.max(.34,1-(index/Math.max(1,agents.length-1))*.66);
@@ -179,7 +185,7 @@ function renderRewardDemand(deficits) {
   ].map(group=>({ ...group, rows:abilities.filter(row=>String(row.side||'any').toLowerCase()===group.key) }))
     .filter(group=>group.key!=='any'||group.rows.length);
   const abilityGroups=sideGroups.map(group=>`<section class="reward-demand-side-group${group.key==='any'?' neutral':''}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${group.rows.length}</b></header><div>${group.rows.map(abilityCard).join('')||'<p>Дефицитных способностей нет</p>'}</div></section>`).join('');
-  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals" role="group" aria-label="Рейтинг агентов"><button type="button" data-demand-ranking="map_pool" class="${rewardDemandRanking==='map_pool'?'selected':''}"><b>${mapRows.filter(row=>row.deficit===true).length}</b><small>маппул</small></button><button type="button" data-demand-ranking="global" class="${rewardDemandRanking==='global'?'selected':''}"><b>${globalRows.filter(row=>row.deficit===true).length}</b><small>общий</small></button></div></header><div class="reward-demand-stage"><label>1 · АГЕНТ · ПО ПРИОРИТЕТУ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · ВСЕ КАРТЫ · ПРИОРИТЕТНЫЕ ПЕРВЫМИ</label></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ</label><div class="reward-demand-side-columns">${abilityGroups||'<div class="reward-empty">Для этой карты пока нет данных по способностям выбранного агента.</div>'}</div></div></section>`;
+  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals" role="group" aria-label="Режим оценки дефицита"><button type="button" data-demand-ranking="map_pool" class="${rewardDemandRanking==='map_pool'?'selected':''}" aria-pressed="${rewardDemandRanking==='map_pool'}"><b>${mapRows.filter(row=>row.deficit===true).length}</b><small>на картах</small></button><button type="button" data-demand-ranking="global" class="${rewardDemandRanking==='global'?'selected':''}" aria-pressed="${rewardDemandRanking==='global'}"><b>${globalRows.filter(row=>row.deficit===true).length}</b><small>в целом</small></button></div></header><div class="reward-demand-mode-note">${rewardDemandRanking==='map_pool'?'Порядок учитывает дефицит агента и способности на каждой карте.':'Порядок учитывает общий дефицит способности без привязки к карте.'}</div><div class="reward-demand-stage"><label>1 · АГЕНТ · ПО ПРИОРИТЕТУ И ПОДПИСКАМ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · ВЕСЬ АКТИВНЫЙ МАППУЛ · ПРИОРИТЕТНЫЕ КАРТЫ ПЕРВЫМИ</label></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ</label><div class="reward-demand-side-columns">${abilityGroups||'<div class="reward-empty">Для этой карты пока нет данных по способностям выбранного агента.</div>'}</div></div></section>`;
 }
 function renderRewardDialog() {
   const host = document.getElementById('reward-dialog-body'); if(!host) return;

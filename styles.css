@@ -1670,6 +1670,7 @@ body.footage-library-open { overflow:hidden; }
 .reward-demand-totals button small{display:block;margin-top:2px;color:#7893aa;font-size:8px;font-weight:700}
 .reward-demand-totals button.selected{border-color:#55e7ff;background:#14334a;box-shadow:inset 0 0 0 1px rgba(85,231,255,.18)}
 .reward-demand-totals button:hover{border-color:#55e7ff}
+.reward-demand-mode-note{padding:9px 16px;border-top:1px solid rgba(126,158,187,.12);background:rgba(85,231,255,.035);color:#8ba5ba;font-size:10px;line-height:1.45}
 .reward-demand-map{display:grid;grid-template-columns:auto;align-content:center;gap:2px;text-align:left}
 .reward-demand-map small{display:block;color:#ffbd4a;font-size:7px;line-height:1;text-transform:uppercase;letter-spacing:.05em}
 .reward-demand-map.priority{border-color:rgba(255,176,46,.38)}
