@@ -84,6 +84,8 @@ const USER_TRACKING_START = new Date('2026-06-20T00:00:00Z');
 const EDITOR_MAX_ZOOM = 2.2;
 let rewardDashboard = null;
 let rewardBusy = false;
+let rewardDemandAgent = '';
+let rewardDemandMap = '';
 
 function rewardStatusLabel(status) {
   return ({pending:'На проверке',approved:'Проверена',ready:'Код готов',revealed:'Код открыт',confirmed:'Завершена',rejected:'Отклонена',canceled:'Отменена'})[status] || status || '—';
@@ -100,6 +102,49 @@ function updateRewardSubmitOptIn() {
   const active = canSubmitForRewards(rewardDashboard);
   if (host) host.hidden = !active || !!moderatorDraftSourceId;
   if (!active) { const input=document.getElementById('reward-submit-checkbox'); if(input) input.checked=false; }
+}
+function rewardDemandRows(value) {
+  return Object.values(value || {}).filter(row => row && row.deficit === true);
+}
+function rewardDemandIcon(agentName) {
+  const agent = agentsList.find(item => item.displayName === agentName);
+  return proxiedValorantUrl(agent?.displayIconSmall || agent?.displayIcon || '');
+}
+function renderRewardDemand(deficits) {
+  const globalRows = rewardDemandRows(deficits?.global);
+  const mapRows = rewardDemandRows(deficits?.map_pool);
+  if (!globalRows.length && !mapRows.length) return '';
+  const groups = new Map();
+  mapRows.forEach(row => {
+    const agent = String(row.agent || '').trim();
+    if (!agent) return;
+    if (!groups.has(agent)) groups.set(agent, []);
+    groups.get(agent).push(row);
+  });
+  const agents = [...groups.keys()].sort((a,b) => {
+    const aRows=groups.get(a), bRows=groups.get(b);
+    const aMin=Math.min(...aRows.map(row=>Number(row.count||0))), bMin=Math.min(...bRows.map(row=>Number(row.count||0)));
+    return aMin-bMin || bRows.length-aRows.length || a.localeCompare(b,'ru');
+  });
+  if (!agents.includes(rewardDemandAgent)) rewardDemandAgent=agents[0]||'';
+  const agentRows=groups.get(rewardDemandAgent)||[];
+  const maps=[...new Set(agentRows.map(row=>String(row.map||'')).filter(Boolean))].sort((a,b)=>{
+    const min=map=>Math.min(...agentRows.filter(row=>row.map===map).map(row=>Number(row.count||0)));
+    return min(a)-min(b)||a.localeCompare(b,'ru');
+  });
+  if (!maps.includes(rewardDemandMap)) rewardDemandMap=maps[0]||'';
+  const abilities=agentRows.filter(row=>row.map===rewardDemandMap).sort((a,b)=>Number(a.count||0)-Number(b.count||0));
+  const agentButtons=agents.map((agent,index)=>{
+    const icon=rewardDemandIcon(agent), selected=agent===rewardDemandAgent;
+    const opacity=Math.max(.34,1-(index/Math.max(1,agents.length-1))*.66);
+    return `<button class="reward-demand-agent${selected?' selected':''}${index===0?' hottest':''}" type="button" data-demand-agent="${esc(agent)}" title="${esc(agent)}" aria-label="${esc(agent)}" aria-pressed="${selected}" style="--demand-opacity:${opacity.toFixed(2)}">${icon?`<img src="${esc(icon)}" alt="">`:`<span>${esc(agent.slice(0,1)||'?')}</span>`}</button>`;
+  }).join('');
+  const mapButtons=maps.map((map,index)=>`<button class="reward-demand-map${map===rewardDemandMap?' selected':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${index===0?'<span>◆</span>':''}${esc(map)}</button>`).join('');
+  const abilityCards=abilities.map(row=>{
+    const count=Number(row.count||0), urgent=count===0;
+    return `<article class="reward-demand-ability${urgent?' urgent':''}"><span class="reward-demand-count">${count}</span><div><strong>${esc(row.ability||'Способность')}</strong><small>${esc(row.side||'any')}</small></div><b>${urgent?'МАКС. ПРИОРИТЕТ':`Уже есть: ${count}`}</b></article>`;
+  }).join('');
+  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals"><b>${mapRows.length}<small>маппул</small></b><b>${globalRows.length}<small>общий</small></b></div></header><div class="reward-demand-stage"><label>1 · АГЕНТ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><label>2 · КАРТА</label><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ</label><div class="reward-demand-abilities">${abilityCards||'<div class="reward-empty">Для этой карты дефицитных способностей нет.</div>'}</div></div></section>`;
 }
 function renderRewardDialog() {
   const host = document.getElementById('reward-dialog-body'); if(!host) return;
@@ -120,7 +165,7 @@ function renderRewardDialog() {
     : denominations.length
       ? `<div class="reward-actions"><select class="finput" id="reward-payout-amount">${denominations.map(value=>`<option value="${Number(value)}">${Number(value)} VP</option>`).join('')}</select><button class="reward-action primary" data-reward-action="payout">Создать заявку</button></div><div class="reward-empty">После проверки мы покупаем подходящий код под заявку. Обычно это занимает до ${Number(settings.fulfillment_sla_hours||24)} часов. Открыть готовый код можно только один раз в Android-приложении.</div>`
       : '<div class="reward-empty">До минимального доступного номинала пока не хватает баллов.</div>';
-  host.innerHTML=`<div class="reward-dashboard"><section class="reward-balance"><div><strong>${Number(balance.available_vp||0)} баллов</strong><small>Доступно · ${Number(balance.reserved_vp||0)} в заявках · ${Number(balance.earned_vp||0)} заработано</small></div><a class="reward-action" href="/rewards" target="_blank" rel="noopener">Условия</a></section><section class="reward-panel"><h3>ПОЛУЧИТЬ КОД</h3>${payoutAction}</section>${held.length?`<section class="reward-panel"><h3>ОЖИДАЮТ ПРОВЕРКИ</h3><div class="reward-list">${held.map(item=>`<div class="reward-item"><div><b>${Number(item.amount_vp||0)} VP · ${esc(item.lineup_id||'')}</b><small>${esc(rewardHoldLabel(item.reason))}</small></div></div>`).join('')}</div></section>`:''}<section class="reward-panel"><h3>ЗАЯВКИ</h3><div class="reward-list">${payouts.map(item=>`<div class="reward-item"><div><b>${Number(item.amount_vp||0)} VP · ${esc(item.region||'')}</b><small>${rewardStatusLabel(item.status)} · ${rewardDate(item.created_at)}${item.status==='approved'&&item.fulfillment_due_at?` · ожидаем код до ${rewardDate(item.fulfillment_due_at)}`:''}${item.review_reason?` · ${esc(item.review_reason)}`:''}</small>${['ready','revealed'].includes(item.status)?'<small>Код готов. Откройте его в Android-приложении VLineups.</small>':''}</div><div class="reward-actions">${item.status==='pending'?`<button class="reward-action" data-reward-action="cancel" data-payout-id="${esc(item.id)}">Отменить</button>`:''}</div></div>`).join('')||'<div class="reward-empty">Заявок пока нет</div>'}</div></section><section class="reward-panel"><h3>ИСТОРИЯ НАЧИСЛЕНИЙ</h3><div class="reward-list">${ledger.map(item=>`<div class="reward-item"><div><b>${esc(item.title||'Лайнап')}</b><small>${rewardDate(item.created_at)} · база ${Number(item.components?.base||0)}, дефицит +${Number(item.components?.global_deficit||0)+Number(item.components?.map_pool_deficit||0)}, качество +${Number(item.components?.quality||0)}, задание +${Number(item.components?.task||0)}</small></div><strong>${Number(item.amount_vp||0)>=0?'+':''}${Number(item.amount_vp||0)}</strong></div>`).join('')||'<div class="reward-empty">Первое начисление появится после одобрения отмеченного лайнапа.</div>'}</div></section></div>`;
+  host.innerHTML=`<div class="reward-dashboard"><section class="reward-balance"><div><strong>${Number(balance.available_vp||0)} баллов</strong><small>Доступно · ${Number(balance.reserved_vp||0)} в заявках · ${Number(balance.earned_vp||0)} заработано</small></div><a class="reward-action" href="/rewards" target="_blank" rel="noopener">Условия</a></section><section class="reward-panel"><h3>ПОЛУЧИТЬ КОД</h3>${payoutAction}</section>${renderRewardDemand(data.deficits)}${held.length?`<section class="reward-panel"><h3>ОЖИДАЮТ ПРОВЕРКИ</h3><div class="reward-list">${held.map(item=>`<div class="reward-item"><div><b>${Number(item.amount_vp||0)} VP · ${esc(item.lineup_id||'')}</b><small>${esc(rewardHoldLabel(item.reason))}</small></div></div>`).join('')}</div></section>`:''}<section class="reward-panel"><h3>ЗАЯВКИ</h3><div class="reward-list">${payouts.map(item=>`<div class="reward-item"><div><b>${Number(item.amount_vp||0)} VP · ${esc(item.region||'')}</b><small>${rewardStatusLabel(item.status)} · ${rewardDate(item.created_at)}${item.status==='approved'&&item.fulfillment_due_at?` · ожидаем код до ${rewardDate(item.fulfillment_due_at)}`:''}${item.review_reason?` · ${esc(item.review_reason)}`:''}</small>${['ready','revealed'].includes(item.status)?'<small>Код готов. Откройте его в Android-приложении VLineups.</small>':''}</div><div class="reward-actions">${item.status==='pending'?`<button class="reward-action" data-reward-action="cancel" data-payout-id="${esc(item.id)}">Отменить</button>`:''}</div></div>`).join('')||'<div class="reward-empty">Заявок пока нет</div>'}</div></section><section class="reward-panel"><h3>ИСТОРИЯ НАЧИСЛЕНИЙ</h3><div class="reward-list">${ledger.map(item=>`<div class="reward-item"><div><b>${esc(item.title||'Лайнап')}</b><small>${rewardDate(item.created_at)} · база ${Number(item.components?.base||0)}, дефицит +${Number(item.components?.global_deficit||0)+Number(item.components?.map_pool_deficit||0)}, качество +${Number(item.components?.quality||0)}, задание +${Number(item.components?.task||0)}</small></div><strong>${Number(item.amount_vp||0)>=0?'+':''}${Number(item.amount_vp||0)}</strong></div>`).join('')||'<div class="reward-empty">Первое начисление появится после одобрения отмеченного лайнапа.</div>'}</div></section></div>`;
 }
 async function loadRewardDashboard({render=false}={}) {
   if(!currentUser) return;
@@ -133,6 +178,10 @@ document.getElementById('author-reward-open')?.addEventListener('click', async()
 document.getElementById('reward-close')?.addEventListener('click',()=>{document.getElementById('reward-modal').hidden=true;});
 document.getElementById('reward-modal')?.addEventListener('click',async event=>{
   if(event.target.id==='reward-modal'){event.currentTarget.hidden=true;return;}
+  const demandAgent=event.target.closest('[data-demand-agent]');
+  if(demandAgent){rewardDemandAgent=demandAgent.dataset.demandAgent||'';rewardDemandMap='';renderRewardDialog();return;}
+  const demandMap=event.target.closest('[data-demand-map]');
+  if(demandMap){rewardDemandMap=demandMap.dataset.demandMap||'';renderRewardDialog();return;}
   const button=event.target.closest('[data-reward-action]'); if(!button||rewardBusy)return; rewardBusy=true; button.disabled=true;
   try {
     const action=button.dataset.rewardAction, payoutId=button.dataset.payoutId;
