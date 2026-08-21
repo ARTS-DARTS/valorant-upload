@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizePartnerInquiry, validatePartnerInquiry } from './partner-inquiries.js';
+import { normalizePartnerInquiry, sendPartnerInquiryTelegram, validatePartnerInquiry } from './partner-inquiries.js';
 
 test('normalizes and accepts a complete partner inquiry', () => {
   const inquiry = normalizePartnerInquiry({
@@ -20,4 +20,24 @@ test('rejects short messages and invalid links', () => {
 test('silently identifies the honeypot field', () => {
   const inquiry = normalizePartnerInquiry({ name:'Bot', contact:'bot@example.com', message:'Automated advertising inquiry message', website_confirm:'spam' });
   assert.equal(validatePartnerInquiry(inquiry), 'spam_detected');
+});
+
+test('telegram alert contains inquiry context and escapes user html', async () => {
+  let request;
+  const result = await sendPartnerInquiryTelegram({
+    name:'Анна <script>', company:'Aim Lab', contact:'@anna', website:'https://example.com',
+    message:'Хотим продвигать тренировочный сервис для игроков Valorant.', budget:'50 000 ₽', timeline:'сентябрь',
+  }, { token:'secret', chatId:'123', fetchImpl:async (url, options) => {
+    request={url,body:JSON.parse(options.body)}; return {ok:true};
+  }});
+  assert.equal(result.sent, true);
+  assert.equal(request.url.includes('secret'), true);
+  assert.match(request.body.text, /Aim Lab/);
+  assert.match(request.body.text, /тренировочный сервис/);
+  assert.equal(request.body.text.includes('<script>'), false);
+  assert.match(request.body.text, /&lt;script&gt;/);
+});
+
+test('telegram alert is optional when secrets are absent', async () => {
+  assert.deepEqual(await sendPartnerInquiryTelegram({message:'test'}, {token:'',chatId:''}), {sent:false,reason:'not_configured'});
 });

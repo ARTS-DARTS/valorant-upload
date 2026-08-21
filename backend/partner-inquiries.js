@@ -10,6 +10,31 @@ function text(value, maxLength) {
   return String(value ?? '').trim().replace(/\r\n?/g, '\n').slice(0, maxLength);
 }
 
+function telegramHtml(value) {
+  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+export async function sendPartnerInquiryTelegram(input, {
+  token = process.env.TELEGRAM_BOT_TOKEN,
+  chatId = process.env.TELEGRAM_ALERT_CHAT_ID,
+  fetchImpl = fetch,
+} = {}) {
+  if (!text(token, 300) || !text(chatId, 100)) return { sent:false, reason:'not_configured' };
+  const line = (label, value) => value ? `<b>${label}:</b> ${telegramHtml(value)}` : '';
+  const message = [
+    '<b>📨 Новое рекламное предложение VLineups</b>',
+    line('Имя', input.name), line('Компания', input.company), line('Контакт', input.contact),
+    line('Продукт', input.website), line('Бюджет', input.budget), line('Сроки', input.timeline),
+    '', '<b>Что хотят продвигать:</b>', telegramHtml(text(input.message, 2600)),
+  ].filter((value, index, values) => value || (index > 0 && values[index - 1])).join('\n');
+  const response = await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method:'POST', headers:{ 'content-type':'application/json' },
+    body:JSON.stringify({ chat_id:chatId, text:message, parse_mode:'HTML', disable_web_page_preview:true }),
+  });
+  if (!response.ok) throw new Error(`telegram_send_failed:${response.status}`);
+  return { sent:true };
+}
+
 export function normalizePartnerInquiry(body = {}) {
   return {
     name: text(body.name, 80),
@@ -64,7 +89,7 @@ function serialize(doc) {
   };
 }
 
-export function createPartnerInquiriesHandler({ db, requireAdmin = requireAdminRequest } = {}) {
+export function createPartnerInquiriesHandler({ db, requireAdmin = requireAdminRequest, notifyTelegram = sendPartnerInquiryTelegram } = {}) {
   return async function partnerInquiriesHandler(req, res) {
     try {
       const store = db || adminFirestore();
@@ -83,6 +108,13 @@ export function createPartnerInquiriesHandler({ db, requireAdmin = requireAdminR
           created_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp(),
         });
+        try {
+          const delivery = await notifyTelegram(input);
+          await ref.set({ telegram_alert_sent:delivery.sent === true, telegram_alert_at:delivery.sent ? FieldValue.serverTimestamp() : null }, { merge:true });
+        } catch (error) {
+          console.error('partner inquiry telegram alert failed', error);
+          await ref.set({ telegram_alert_sent:false, telegram_alert_error:text(error?.message || error, 160) }, { merge:true }).catch(() => {});
+        }
         return res.status(201).json({ ok: true, id: ref.id });
       }
 
