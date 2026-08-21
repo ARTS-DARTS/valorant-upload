@@ -206,7 +206,10 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
   assert.match(html, /styles\.css\?v=2026-08-21-profile-catalog-v7/);
-  assert.match(html, /app\.js\?v=2026-08-21-reward-priority-v2/);
+  assert.match(html, /app\.js\?v=2026-08-21-reward-priority-v3/);
+  assert.match(app, /function isRealRewardMap\(value\)/);
+  assert.match(app, /function setRewardModalOpen\(open\)/);
+  assert.match(app, /document\.body\.style\.position = 'fixed'/);
   assert.match(html, /Минимум 1 кадр обязателен/);
   assert.match(app, /Добавь хотя бы один обязательный кадр из видео/);
   assert.match(app, /screenshots\.some\(item => item\.cloudUrl\)/);

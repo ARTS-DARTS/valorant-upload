@@ -223,10 +223,40 @@ async function loadRewardDashboard({render=false}={}) {
   updateRewardSubmitOptIn(); if(render) renderRewardDialog();
 }
 
-document.getElementById('author-reward-open')?.addEventListener('click', async()=>{ document.getElementById('reward-modal').hidden=false; renderRewardDialog(); await loadRewardDashboard({render:true}); });
-document.getElementById('reward-close')?.addEventListener('click',()=>{document.getElementById('reward-modal').hidden=true;});
+let rewardModalScrollY = 0;
+let rewardModalBodyStyle = null;
+function setRewardModalOpen(open) {
+  const modal = document.getElementById('reward-modal');
+  if (!modal) return;
+  if (open && modal.hidden) {
+    rewardModalScrollY = window.scrollY;
+    rewardModalBodyStyle = {
+      position:document.body.style.position, top:document.body.style.top,
+      left:document.body.style.left, right:document.body.style.right,
+      width:document.body.style.width, overflow:document.body.style.overflow,
+    };
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${rewardModalScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
+    modal.hidden = false;
+    return;
+  }
+  if (!open && !modal.hidden) {
+    modal.hidden = true;
+    Object.assign(document.body.style, rewardModalBodyStyle || {
+      position:'', top:'', left:'', right:'', width:'', overflow:'',
+    });
+    rewardModalBodyStyle = null;
+    window.scrollTo(0, rewardModalScrollY);
+  }
+}
+document.getElementById('author-reward-open')?.addEventListener('click', async()=>{ setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
+document.getElementById('reward-close')?.addEventListener('click',()=>setRewardModalOpen(false));
 document.getElementById('reward-modal')?.addEventListener('click',async event=>{
-  if(event.target.id==='reward-modal'){event.currentTarget.hidden=true;return;}
+  if(event.target.id==='reward-modal'){setRewardModalOpen(false);return;}
   const demandAgent=event.target.closest('[data-demand-agent]');
   if(demandAgent){rewardDemandAgent=demandAgent.dataset.demandAgent||'';rewardDemandMap='';renderRewardDialog();return;}
   const demandMap=event.target.closest('[data-demand-map]');
@@ -243,6 +273,9 @@ document.getElementById('reward-modal')?.addEventListener('click',async event=>{
     await loadRewardDashboard({render:true});
   } catch(error){ toast('Операция не выполнена: '+rewardActionErrorMessage(error),'e'); }
   finally{rewardBusy=false;button.disabled=false;}
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !document.getElementById('reward-modal')?.hidden) setRewardModalOpen(false);
 });
 
 const siteSounds = {
