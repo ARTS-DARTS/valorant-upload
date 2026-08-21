@@ -1640,6 +1640,11 @@ body.footage-library-open { overflow:hidden; }
 .reward-review-dialog{display:grid;gap:13px;width:min(560px,100%);max-height:calc(100dvh - 40px);overflow:auto;padding:22px;border:1px solid rgba(85,231,255,.42);border-radius:16px;background:#0d182a;box-shadow:0 24px 80px rgba(0,0,0,.5);color:#e8f2ff}
 .reward-review-dialog h2{margin:0;color:#75e5f7;font-size:20px}.reward-review-dialog>p{margin:0;color:#aebed0;font-size:12px;line-height:1.5}.reward-review-dialog textarea{min-height:84px;resize:vertical}.reward-review-dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.reward-review-warning{padding:10px;border:1px solid rgba(255,176,50,.4);border-radius:9px;background:rgba(255,176,50,.09);color:#ffc66a;font-size:11px}.reward-review-dialog-error{min-height:16px;color:#ff7d88;font-size:11px;font-weight:800}
 @media(max-width:560px){.reward-review-dialog-backdrop{padding:10px}.reward-review-dialog{max-height:calc(100dvh - 20px);padding:16px}.reward-review-dialog-actions{grid-template-columns:1fr}}
-.reward-demand-agents,.reward-demand-maps{padding:6px 7px 7px;scrollbar-width:none}
-.reward-demand-agents::-webkit-scrollbar,.reward-demand-maps::-webkit-scrollbar{display:none}
+.reward-demand-agents,.reward-demand-maps{padding:6px 7px 9px;scrollbar-width:thin;scrollbar-color:#348eab #081421}
 .reward-demand-agent{box-sizing:border-box}
+*{scrollbar-width:thin;scrollbar-color:#2d819d #08131f}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-track{background:#08131f;border-radius:999px}
+*::-webkit-scrollbar-thumb{min-height:36px;border:2px solid #08131f;border-radius:999px;background:linear-gradient(180deg,#43b9d5,#276d89)}
+*::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#69d9ee,#3494b2)}
+*::-webkit-scrollbar-corner{background:#08131f}
