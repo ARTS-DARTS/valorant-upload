@@ -1032,13 +1032,6 @@
     .stats-sidebar { padding-top: 24px; position: sticky; top: 66px; align-self:start; }
     .stats-sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--primary); margin-bottom: 10px; }
     .sidebar-row { display: flex; flex-direction: column; gap: 8px; }
-    .sidebar-telegram { display:grid;grid-template-columns:34px minmax(0,1fr) 18px;align-items:center;gap:10px;margin-top:8px;padding:12px;border:1px solid rgba(79,195,247,.45);border-radius:var(--r);background:linear-gradient(135deg,rgba(34,158,217,.18),rgba(79,195,247,.07));color:#fff;text-decoration:none;transition:border-color .16s,transform .16s,background .16s; }
-    .sidebar-telegram:hover { border-color:#4fc3f7;background:linear-gradient(135deg,rgba(34,158,217,.27),rgba(79,195,247,.11));transform:translateY(-1px); }
-    .sidebar-telegram-icon { display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#229ed9;color:#fff;font-size:18px;transform:rotate(-12deg); }
-    .sidebar-telegram strong,.sidebar-telegram small { display:block; }
-    .sidebar-telegram strong { color:#4fc3f7;font-size:13px;line-height:1.2; }
-    .sidebar-telegram small { margin-top:3px;color:var(--text2);font-size:10px;line-height:1.25; }
-    .sidebar-telegram-open { color:#4fc3f7;font-size:16px; }
     .sidebar-actions { width:100%;min-width:0;box-sizing:border-box;margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--r);background:linear-gradient(180deg,rgba(19,30,51,.96),rgba(13,21,37,.96));box-shadow:0 12px 30px rgba(0,0,0,.18);display:grid;grid-template-columns:minmax(0,1fr);gap:8px;overflow:hidden; }
     .sidebar-actions-title { color:var(--primary);font-size:10px;font-weight:800;letter-spacing:1px;margin-bottom:2px; }
     .sidebar-action,.sidebar-actions .btn-submit { width:100%;min-width:0;min-height:42px;box-sizing:border-box;padding:10px 12px;border-radius:9px;font:inherit;font-size:12px;font-weight:800;line-height:1.25;text-align:center;white-space:normal;overflow-wrap:anywhere;cursor:pointer;transition:border-color .15s,background .15s,transform .15s; }

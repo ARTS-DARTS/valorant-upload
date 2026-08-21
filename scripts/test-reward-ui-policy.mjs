@@ -52,3 +52,8 @@ test('author statistics keeps a server-backed VP summary', () => {
   assert.match(app, /balance\.paid_vp/);
   assert.match(app, /Награждено лайнапов/);
 });
+
+test('Telegram community link is not duplicated in the author sidebar', () => {
+  assert.doesNotMatch(html, /class="sidebar-telegram"/);
+  assert.match(html, /class="header-telegram"/);
+});
