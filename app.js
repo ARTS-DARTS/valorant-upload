@@ -2995,6 +2995,16 @@ function closeProfileLevels() {
 }
 
 document.getElementById('profile-level-progress')?.addEventListener('click', openProfileLevels);
+
+const statsSummaryToggle = document.getElementById('stats-summary-toggle');
+const statsSummaryDetails = document.getElementById('stats-summary-details');
+statsSummaryToggle?.addEventListener('click', () => {
+  const expanded = statsSummaryToggle.getAttribute('aria-expanded') === 'true';
+  statsSummaryToggle.setAttribute('aria-expanded', String(!expanded));
+  if (!statsSummaryDetails) return;
+  statsSummaryDetails.hidden = expanded;
+  statsSummaryDetails.classList.toggle('is-opening', !expanded);
+});
 document.getElementById('profile-levels-close')?.addEventListener('click', closeProfileLevels);
 document.getElementById('profile-levels-modal')?.addEventListener('click', event => {
   if (event.target.id === 'profile-levels-modal') closeProfileLevels();

@@ -670,18 +670,20 @@
     <div class="stats-loader" id="stats-loader">Загрузка…</div>
     <div id="stats-cards" class="sidebar-row" style="display:none;">
       <!-- Status card: level + cooldown in one row -->
-      <div class="stat-card">
+      <button class="stat-card stats-summary-toggle" id="stats-summary-toggle" type="button"
+        aria-expanded="false" aria-controls="stats-summary-details">
         <div class="stat-label">МОЙ СТАТУС</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:5px;flex-wrap:wrap;">
+        <div class="stats-summary-main">
           <div style="display:flex;align-items:center;gap:5px;">
             <span id="level-icon" style="font-size:16px;line-height:1;flex-shrink:0;">—</span>
             <span id="level-name" style="font-weight:800;font-size:13px;">—</span>
           </div>
           <span id="cooldown-badge" style="font-size:11px;font-weight:700;font-family:monospace;letter-spacing:.3px;color:var(--green);white-space:nowrap;">—</span>
+          <span class="stats-summary-chevron" aria-hidden="true">⌄</span>
         </div>
-      </div>
+      </button>
       <!-- 3 count cards -->
-      <div class="stat-counts-row">
+      <div class="stat-counts-row" id="stats-summary-details" hidden>
         <button class="stat-card stat-filter-card s-approved" type="button" data-stat-filter="approved">
           <div class="stat-label">ОДОБРЕНО</div>
           <div class="stat-count" id="stat-approved">—</div>
