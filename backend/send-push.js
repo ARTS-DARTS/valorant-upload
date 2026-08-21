@@ -11,6 +11,13 @@ function clean(value) {
   return String(value ?? '').replace(/﻿/g, '').trim();
 }
 
+export const GOOGLE_PLAY_URL =
+  'https://play.google.com/store/apps/details?id=com.artsdarts.valorantlineups';
+
+export function externalUrlForNotification(type) {
+  return clean(type) === 'force_update' ? GOOGLE_PLAY_URL : '';
+}
+
 export function createSendPushHandler({ auth, db } = {}) {
   return async function handler(req, res) {
     try {
@@ -44,6 +51,8 @@ export function createSendPushHandler({ auth, db } = {}) {
     data:     { ...extraData, type: type || extraData.type || 'admin_message' },
     priority: 10,
       };
+      const externalUrl = externalUrlForNotification(payload.data.type);
+      if (externalUrl) payload.app_url = externalUrl;
 
       if (targetUid) {
     payload.include_aliases = { external_id: [targetUid] };

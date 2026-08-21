@@ -8,7 +8,11 @@ import { createAdminHealthHandler } from '../backend/admin-health.js';
 import { createAdminConfigBackupHandler } from '../backend/admin-config-backup.js';
 import { createModeratorApplicationHandler } from '../backend/moderator-application.js';
 import { createNotifyAgentSubscribersHandler } from '../backend/notify-agent-subscribers.js';
-import { createSendPushHandler } from '../backend/send-push.js';
+import {
+  GOOGLE_PLAY_URL,
+  createSendPushHandler,
+  externalUrlForNotification,
+} from '../backend/send-push.js';
 import { createBillingOrderStatusHandler } from '../backend/billing-order-status.js';
 import {
   createAccountDeleteHandler,
@@ -120,6 +124,12 @@ const authFor = uid => ({ verifyIdToken:async token => {
   if (token !== 'valid-token') throw Object.assign(new Error('bad token'), { code:'auth/id-token-revoked' });
   return { uid };
 } });
+
+test('force update pushes open the public Google Play listing', () => {
+  assert.equal(externalUrlForNotification('force_update'), GOOGLE_PLAY_URL);
+  assert.match(GOOGLE_PLAY_URL, /id=com\.artsdarts\.valorantlineups$/);
+  assert.equal(externalUrlForNotification('admin_message'), '');
+});
 
 test('payment result pages always provide an order-bound app return', () => {
   const successHtml = readFileSync(new URL('../payment-success.html', import.meta.url), 'utf8');
