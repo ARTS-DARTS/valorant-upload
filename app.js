@@ -86,6 +86,7 @@ let rewardDashboard = null;
 let rewardBusy = false;
 let rewardDemandAgent = '';
 let rewardDemandMap = '';
+let rewardDemandMapMode = 'deficit';
 
 function rewardStatusLabel(status) {
   return ({pending:'На проверке',approved:'Проверена',ready:'Код готов',revealed:'Код открыт',confirmed:'Завершена',rejected:'Отклонена',canceled:'Отменена'})[status] || status || '—';
@@ -99,9 +100,14 @@ function rewardDate(value) {
 }
 function updateRewardSubmitOptIn() {
   const host = document.getElementById('reward-submit-optin');
+  const input = document.getElementById('reward-submit-checkbox');
   const active = canSubmitForRewards(rewardDashboard);
+  const becomingAvailable = active && !moderatorDraftSourceId && host?.hidden === true;
   if (host) host.hidden = !active || !!moderatorDraftSourceId;
-  if (!active) { const input=document.getElementById('reward-submit-checkbox'); if(input) input.checked=false; }
+  if (input) {
+    if (!active || moderatorDraftSourceId) input.checked = false;
+    else if (becomingAvailable) input.checked = true;
+  }
 }
 function rewardDemandRows(value) {
   return Object.values(value || {}).filter(row => row && row.deficit === true);
@@ -128,10 +134,12 @@ function renderRewardDemand(deficits) {
   });
   if (!agents.includes(rewardDemandAgent)) rewardDemandAgent=agents[0]||'';
   const agentRows=groups.get(rewardDemandAgent)||[];
-  const maps=[...new Set(agentRows.map(row=>String(row.map||'')).filter(Boolean))].sort((a,b)=>{
+  const deficitMaps=[...new Set(agentRows.map(row=>String(row.map||'')).filter(Boolean))].sort((a,b)=>{
     const min=map=>Math.min(...agentRows.filter(row=>row.map===map).map(row=>Number(row.count||0)));
     return min(a)-min(b)||a.localeCompare(b,'ru');
   });
+  const allMaps=[...document.querySelectorAll('#sel-map option')].map(option=>String(option.value||option.textContent||'').trim()).filter(Boolean);
+  const maps=rewardDemandMapMode==='all' ? allMaps : deficitMaps;
   if (!maps.includes(rewardDemandMap)) rewardDemandMap=maps[0]||'';
   const abilities=agentRows.filter(row=>row.map===rewardDemandMap).sort((a,b)=>Number(a.count||0)-Number(b.count||0));
   const agentButtons=agents.map((agent,index)=>{
@@ -139,12 +147,13 @@ function renderRewardDemand(deficits) {
     const opacity=Math.max(.34,1-(index/Math.max(1,agents.length-1))*.66);
     return `<button class="reward-demand-agent${selected?' selected':''}${index===0?' hottest':''}" type="button" data-demand-agent="${esc(agent)}" title="${esc(agent)}" aria-label="${esc(agent)}" aria-pressed="${selected}" style="--demand-opacity:${opacity.toFixed(2)}">${icon?`<img src="${esc(icon)}" alt="">`:`<span>${esc(agent.slice(0,1)||'?')}</span>`}</button>`;
   }).join('');
-  const mapButtons=maps.map((map,index)=>`<button class="reward-demand-map${map===rewardDemandMap?' selected':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${index===0?'<span>◆</span>':''}${esc(map)}</button>`).join('');
+  const deficitMapSet=new Set(deficitMaps);
+  const mapButtons=maps.map(map=>`<button class="reward-demand-map${map===rewardDemandMap?' selected':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${deficitMapSet.has(map)?'<span>◆</span>':''}${esc(map)}</button>`).join('');
   const abilityCards=abilities.map(row=>{
     const count=Number(row.count||0), urgent=count===0;
     return `<article class="reward-demand-ability${urgent?' urgent':''}"><span class="reward-demand-count">${count}</span><div><strong>${esc(row.ability||'Способность')}</strong><small>${esc(row.side||'any')}</small></div><b>${urgent?'МАКС. ПРИОРИТЕТ':`Уже есть: ${count}`}</b></article>`;
   }).join('');
-  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals"><b>${mapRows.length}<small>маппул</small></b><b>${globalRows.length}<small>общий</small></b></div></header><div class="reward-demand-stage"><label>1 · АГЕНТ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><label>2 · КАРТА</label><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ</label><div class="reward-demand-abilities">${abilityCards||'<div class="reward-empty">Для этой карты дефицитных способностей нет.</div>'}</div></div></section>`;
+  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals"><b>${mapRows.length}<small>маппул</small></b><b>${globalRows.length}<small>общий</small></b></div></header><div class="reward-demand-stage"><label>1 · АГЕНТ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · КАРТА</label><div class="reward-demand-map-modes"><button type="button" data-demand-map-mode="deficit" class="${rewardDemandMapMode==='deficit'?'selected':''}">С дефицитом · ${deficitMaps.length}</button><button type="button" data-demand-map-mode="all" class="${rewardDemandMapMode==='all'?'selected':''}">Все карты · ${allMaps.length}</button></div></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ</label><div class="reward-demand-abilities">${abilityCards||'<div class="reward-empty">На этой карте дефицитных способностей выбранного агента нет.</div>'}</div></div></section>`;
 }
 function renderRewardDialog() {
   const host = document.getElementById('reward-dialog-body'); if(!host) return;
@@ -182,6 +191,8 @@ document.getElementById('reward-modal')?.addEventListener('click',async event=>{
   if(demandAgent){rewardDemandAgent=demandAgent.dataset.demandAgent||'';rewardDemandMap='';renderRewardDialog();return;}
   const demandMap=event.target.closest('[data-demand-map]');
   if(demandMap){rewardDemandMap=demandMap.dataset.demandMap||'';renderRewardDialog();return;}
+  const demandMapMode=event.target.closest('[data-demand-map-mode]');
+  if(demandMapMode){rewardDemandMapMode=demandMapMode.dataset.demandMapMode==='all'?'all':'deficit';rewardDemandMap='';renderRewardDialog();return;}
   const button=event.target.closest('[data-reward-action]'); if(!button||rewardBusy)return; rewardBusy=true; button.disabled=true;
   try {
     const action=button.dataset.rewardAction, payoutId=button.dataset.payoutId;
@@ -12309,7 +12320,7 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   if (!keepDraft) moderatorRewardOptIn = false;
   selectedAgent = null; selectedAbility = null;
   const rewardCheckbox = document.getElementById('reward-submit-checkbox');
-  if (rewardCheckbox) rewardCheckbox.checked = false;
+  if (rewardCheckbox) rewardCheckbox.checked = canSubmitForRewards(rewardDashboard) && !moderatorDraftSourceId;
   sovaCharge = 3; sovaBounces = 0;
   selectedCategory = null; selectedDifficulty = null; selectedRoundSide = null;
   markerX = null; markerY = null;
