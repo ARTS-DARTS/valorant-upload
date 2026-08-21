@@ -7,11 +7,18 @@ const appSource = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
 test('reward eligibility is decided explicitly at final moderation submit', () => {
   assert.match(queueSource, /итоговая оценка появится при завершении проверки/);
-  assert.match(appSource, /requestModeratorRewardDecision\(moderatorDraftSourceId\)/);
+  assert.match(appSource, /requestModeratorRewardDecision\(moderationLineupId\)/);
   assert.match(appSource, /name="final-reward-eligible" value="yes"/);
   assert.match(appSource, /name="final-reward-eligible" value="no"/);
   assert.doesNotMatch(appSource, /name="final-reward-eligible" value="(?:yes|no)" checked/);
   assert.match(appSource, /Выбери «Да» или «Нет» для каждого критерия/);
+});
+
+test('moderation reward review keeps and validates the existing lineup id', () => {
+  assert.match(appSource, /const moderationLineupId = String\(moderatorDraftSourceId \|\| ''\)\.trim\(\)/);
+  assert.match(appSource, /getDoc\(doc\(db, 'lineups', moderationLineupId\)\)/);
+  assert.match(appSource, /lineup_id: moderationLineupId \|\| lineupId/);
+  assert.match(appSource, /moderation\.complete lineup review/);
 });
 
 test('quality bonus cannot be selected for an ineligible lineup', () => {

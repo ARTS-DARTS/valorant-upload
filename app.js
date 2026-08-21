@@ -12320,6 +12320,10 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   let rangeRadius = null;
   let extraAbilitiesPayload = [];
   let lineupId = '';
+  // Keep the moderation target separate from the id generated for a brand-new
+  // lineup. The latter intentionally stays empty while an existing draft is
+  // being reviewed and previously made diagnostics report lineup_id="".
+  const moderationLineupId = String(moderatorDraftSourceId || '').trim();
   let submitStage = 'prepare';
   let submittedPayloadDiagnostics = {};
   try {
@@ -12359,7 +12363,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       submitStage = 'sync_defense_shapes';
       await syncConfiguredDefenseAbilityShapes();
     }
-    if (moderatorDraftSourceId) {
+    if (moderationLineupId) {
       submitStage = 'moderator_draft_save';
       clearTimeout(moderatorAutosaveTimer);
       moderatorAutosaveTimer = null;
@@ -12367,9 +12371,15 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       moderatorAutosaveDirty = false;
       if (moderatorRewardOptIn) {
         submitStage = 'moderator_reward_review';
-        const rewardDecision = await requestModeratorRewardDecision(moderatorDraftSourceId);
+        const currentLineup = await getDoc(doc(db, 'lineups', moderationLineupId));
+        if (!currentLineup.exists()) {
+          moderationController?.clearClaim?.();
+          await moderationController?.load?.();
+          throw new Error('Этот лайнап уже удалён или обработан. Очередь обновлена — выбери актуальный лайнап.');
+        }
+        const rewardDecision = await requestModeratorRewardDecision(moderationLineupId);
         if (!rewardDecision) throw new Error('Оценка награды не сохранена. Проверка остаётся открытой.');
-        const reviewResult = (await staffReviewRewardLineup({ lineup_id:moderatorDraftSourceId, ...rewardDecision })).data;
+        const reviewResult = (await staffReviewRewardLineup({ lineup_id:moderationLineupId, ...rewardDecision })).data;
         if (rewardDecision.eligible && reviewResult?.eligible !== true) {
           toast('Сервер обнаружил дубликат: лайнап можно обработать, но награда будет 0 VP.', 'w');
         }
@@ -12379,7 +12389,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lineupId: moderatorDraftSourceId,
+          lineupId: moderationLineupId,
           action: 'save_draft',
           data: {
             map, agent: selectedAgent, ability: normalizedAbility, title, description: desc,
@@ -12402,7 +12412,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || `Ошибка ${response.status}`);
-      clearModeratorVideoEditBackup(moderatorDraftSourceId);
+      clearModeratorVideoEditBackup(moderationLineupId);
       moderationController?.clearClaim?.();
       moderatorDraftSourceId = '';
       moderatorRewardOptIn = false;
@@ -12508,7 +12518,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
     showSuccess();
   } catch (e) {
     await logUploadError(e, {
-      action: 'submit_lineup',
+      action: moderationLineupId ? 'moderation.complete lineup review' : 'submit_lineup',
       stage: submitStage,
       map,
       agent: selectedAgent,
@@ -12516,7 +12526,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       normalized_ability: normalizedAbility,
       category: selectedCategory,
       content_type: contentType,
-      lineup_id: lineupId,
+      lineup_id: moderationLineupId || lineupId,
       user: userDiagnostics(),
       rate_limit: rateLimitDiagnostics,
       payload: submittedPayloadDiagnostics,
