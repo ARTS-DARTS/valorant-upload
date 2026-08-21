@@ -5,6 +5,11 @@ import {
   rewardActionErrorMessage,
   rewardProgramAccepting,
 } from '../reward-ui-policy.mjs';
+import { readFileSync } from 'node:fs';
+
+const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const rewardsPage = readFileSync(new URL('../rewards/index.html', import.meta.url), 'utf8');
 
 test('reward actions require an explicitly enabled program', () => {
   assert.equal(rewardProgramAccepting({ enabled:true }), true);
@@ -25,4 +30,15 @@ test('reward errors never expose a technical stack', () => {
     message:'Rewards program is not accepting participants.\n#0 stack',
   }), 'Программа наград пока не принимает участников');
   assert.equal(rewardActionErrorMessage(new Error('Ошибка\n#0 stack')), 'Ошибка');
+});
+
+test('reward currency is consistently presented as VP', () => {
+  const start = app.indexOf('function renderRewardDialog()');
+  const end = app.indexOf('async function loadRewardDashboard', start);
+  const rewardDialog = app.slice(start, end);
+  assert.match(rewardDialog, /Запросить код/);
+  assert.match(rewardDialog, /activePayout/);
+  assert.doesNotMatch(rewardDialog, /балл(?:ы|ов|а)?/i);
+  assert.doesNotMatch(rewardsPage, /балл(?:ы|ов|а)?/i);
+  assert.match(html, /7–11 VP/);
 });
