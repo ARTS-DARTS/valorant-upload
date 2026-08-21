@@ -10,6 +10,58 @@ function clean(value) {
   return String(value || '').trim();
 }
 
+const SENSITIVE_ERROR_KEYS = /(?:token|secret|password|authorization|cookie|api[_-]?key)/i;
+
+function reportValue(value, depth = 0) {
+  if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
+  if (typeof value === 'string') return value.slice(0, 12_000);
+  if (typeof value?.toDate === 'function') return value.toDate().toISOString();
+  if (depth >= 4) return '[truncated]';
+  if (Array.isArray(value)) return value.slice(0, 50).map(item => reportValue(item, depth + 1));
+  if (typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).slice(0, 80).map(([key, item]) => [
+      key,
+      SENSITIVE_ERROR_KEYS.test(key) ? '[redacted]' : reportValue(item, depth + 1),
+    ]));
+  }
+  return String(value).slice(0, 12_000);
+}
+
+export function buildErrorsReport(errorDocs, { generatedAt = new Date() } = {}) {
+  const errors = errorDocs.map(doc => ({ id:clean(doc.id), ...reportValue(doc.data?.() || {}) }));
+  return JSON.stringify({
+    report:'Vlineups application errors',
+    generated_at:generatedAt.toISOString(),
+    period_minutes:15,
+    events_in_file:errors.length,
+    errors,
+  }, null, 2);
+}
+
+export async function loadRecentErrorDocs(db, { now = () => Date.now(), limit = 100 } = {}) {
+  const snapshot = await db.collection('app_errors')
+    .where('timestamp', '>=', new Date(now() - 15 * 60_000))
+    .orderBy('timestamp', 'desc')
+    .limit(limit)
+    .get();
+  return snapshot.docs;
+}
+
+export async function sendTelegramDocument(token, chatId, contents, filename) {
+  const form = new FormData();
+  form.set('chat_id', chatId);
+  form.set('caption', 'Ошибки приложения за последние 15 минут');
+  form.set('document', new Blob([contents], { type:'application/json;charset=utf-8' }), filename);
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+    method:'POST', body:form, signal:AbortSignal.timeout(20_000),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.ok) {
+    const description = clean(payload.description).replace(/[\r\n]+/g, ' ').slice(0, 180);
+    throw new Error(`telegram_document_failed:${Number(payload.error_code) || response.status || 0}:${description || 'unknown_error'}`);
+  }
+}
+
 function millis(value) {
   if (typeof value?.toMillis === 'function') return value.toMillis();
   const parsed = new Date(value || 0).getTime();
@@ -101,7 +153,7 @@ export async function collectOperationalProblems({
     const adStats = await db.collection('ad_stats_daily').doc(yesterday).get();
     if (!adStats.exists) problems.push(`Нет рекламного агрегата за ${yesterday}`);
   }
-  return problems;
+  return { problems, errorCount };
 }
 
 export async function runOperationalMonitor({
@@ -109,12 +161,17 @@ export async function runOperationalMonitor({
   env = process.env,
   collector = collectOperationalProblems,
   sender = sendTelegram,
+  documentSender = sendTelegramDocument,
+  errorLoader = loadRecentErrorDocs,
+  now = () => Date.now(),
 } = {}) {
   const token = clean(env.TELEGRAM_BOT_TOKEN);
   const chatId = clean(env.TELEGRAM_ALERT_CHAT_ID);
   if (!token || !chatId) throw new Error('telegram_alerts_not_configured');
   await expireElapsedLocalOrders({ db });
-  const problems = await collector({ db });
+  const collected = await collector({ db, now });
+  const problems = Array.isArray(collected) ? collected : collected.problems;
+  const errorCount = Array.isArray(collected) ? 0 : Number(collected.errorCount || 0);
   const fingerprint = problems.sort().join('|');
   const stateRef = db.collection('settings').doc('operational_alerts');
   const previous = await stateRef.get();
@@ -123,6 +180,17 @@ export async function runOperationalMonitor({
   }
   if (problems.length) {
     await sender(token, chatId, ['🚨 VLineups: требуется внимание', '', ...problems.map(value => `• ${value}`)].join('\n'));
+    if (errorCount >= 5) {
+      const errorDocs = await errorLoader(db, { now, limit:100 });
+      const generatedAt = new Date(now());
+      const timestamp = generatedAt.toISOString().replace(/[:.]/g, '-');
+      await documentSender(
+        token,
+        chatId,
+        buildErrorsReport(errorDocs, { generatedAt }),
+        `vlineups-errors-${timestamp}.json`,
+      );
+    }
   } else if (previous.exists && previous.data()?.last_fingerprint) {
     await sender(token, chatId, '✅ VLineups: операционный мониторинг снова в норме.');
   }

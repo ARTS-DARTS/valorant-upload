@@ -20,7 +20,7 @@ import {
   buildAlertText,
   runExpirationAlert,
 } from './notify-expirations-telegram.mjs';
-import { runOperationalMonitor } from './monitor-operations-telegram.mjs';
+import { buildErrorsReport, runOperationalMonitor } from './monitor-operations-telegram.mjs';
 
 class Ref {
   constructor(db, path) { this.db = db; this.path = path; this.id = path.split('/').at(-1); }
@@ -375,6 +375,46 @@ test('operational Telegram monitor deduplicates API and payment problems', async
   assert.equal((await runOperationalMonitor(options)).sent, false);
   assert.equal(sent.length, 1);
   assert.match(sent[0], /Зависшие платежи/);
+});
+
+test('operational Telegram monitor attaches a redacted JSON report for an error burst', async () => {
+  const db = new MemoryDb();
+  const documents = [];
+  const generatedAt = Date.parse('2026-08-21T16:00:00.000Z');
+  const errorDocs = [{
+    id:'error-1',
+    data:() => ({
+      operation:'lineup.open', platform:'android', version:'1.0.84',
+      message:'Video failed', stack:'#0 Player.open', token:'must-not-leak',
+      timestamp:timestamp('2026-08-21T15:59:00.000Z'),
+    }),
+  }];
+  const result = await runOperationalMonitor({
+    db,
+    env:{ TELEGRAM_BOT_TOKEN:'token', TELEGRAM_ALERT_CHAT_ID:'chat' },
+    now:() => generatedAt,
+    collector:async () => ({ problems:['Всплеск ошибок приложения: 6 за 15 минут'], errorCount:6 }),
+    sender:async () => {},
+    errorLoader:async () => errorDocs,
+    documentSender:async (_token, _chat, contents, filename) => documents.push({ contents, filename }),
+  });
+  assert.equal(result.sent, true);
+  assert.equal(documents.length, 1);
+  assert.match(documents[0].filename, /^vlineups-errors-.*\.json$/);
+  const report = JSON.parse(documents[0].contents);
+  assert.equal(report.errors[0].operation, 'lineup.open');
+  assert.equal(report.errors[0].token, '[redacted]');
+  assert.equal(report.errors[0].timestamp, '2026-08-21T15:59:00.000Z');
+});
+
+test('error report keeps diagnostics but strips credential fields', () => {
+  const report = JSON.parse(buildErrorsReport([{
+    id:'e2',
+    data:() => ({ message:'Failure', context:{ apiKey:'hidden', screen:'Player' } }),
+  }], { generatedAt:new Date('2026-08-21T16:00:00.000Z') }));
+  assert.equal(report.errors[0].message, 'Failure');
+  assert.equal(report.errors[0].context.apiKey, '[redacted]');
+  assert.equal(report.errors[0].context.screen, 'Player');
 });
 
 test('admin billing paginates bounded orders and diagnoses stuck/review states', async () => {
