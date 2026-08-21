@@ -42,3 +42,13 @@ test('reward currency is consistently presented as VP', () => {
   assert.doesNotMatch(rewardsPage, /балл(?:ы|ов|а)?/i);
   assert.match(html, /7–11 VP/);
 });
+
+test('author statistics keeps a server-backed VP summary', () => {
+  assert.match(html, /id="cabinet-vp-grid"/);
+  assert.match(app, /function renderCabinetVpStats/);
+  assert.match(app, /balance\.available_vp/);
+  assert.match(app, /balance\.earned_vp/);
+  assert.match(app, /balance\.reserved_vp/);
+  assert.match(app, /balance\.paid_vp/);
+  assert.match(app, /Награждено лайнапов/);
+});

@@ -234,7 +234,7 @@ function renderRewardDialog() {
 }
 async function loadRewardDashboard({render=false}={}) {
   if(!currentUser) return;
-  try { rewardDashboard=(await getRewardsDashboard()).data; const balance=document.getElementById('author-reward-balance'); if(balance) balance.textContent=`${Number(rewardDashboard?.balance?.available_vp||0)} VP · открыть`; }
+  try { rewardDashboard=(await getRewardsDashboard()).data; const balance=document.getElementById('author-reward-balance'); if(balance) balance.textContent=`${Number(rewardDashboard?.balance?.available_vp||0)} VP · открыть`; renderCabinetVpStats(); }
   catch(error){ console.warn('rewards dashboard',error); const balance=document.getElementById('author-reward-balance'); if(balance) balance.textContent='Баланс временно недоступен'; }
   updateRewardSubmitOptIn(); if(render) renderRewardDialog();
 }
@@ -270,6 +270,7 @@ function setRewardModalOpen(open) {
   }
 }
 document.getElementById('author-reward-open')?.addEventListener('click', async()=>{ setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
+document.getElementById('cabinet-vp-open')?.addEventListener('click', async()=>{ setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
 document.getElementById('reward-close')?.addEventListener('click',()=>setRewardModalOpen(false));
 document.getElementById('reward-modal')?.addEventListener('click',async event=>{
   if(event.target.id==='reward-modal'){setRewardModalOpen(false);return;}
@@ -5387,6 +5388,27 @@ function renderCabinetStats() {
     <div class="cabinet-stat"><span>Доступ</span><b>${canCurrentUserUpload() ? 'Можно' : `${Math.min(viewed, UPLOAD_REQUIRED_VIEWS)}/${UPLOAD_REQUIRED_VIEWS}`}</b></div>`;
 }
 
+function renderCabinetVpStats() {
+  const target = document.getElementById('cabinet-vp-grid');
+  if (!target) return;
+  if (!rewardDashboard) {
+    target.innerHTML = '<div class="cabinet-vp-empty">Данные VP загружаются…</div>';
+    return;
+  }
+  const balance = rewardDashboard.balance || {};
+  const payouts = rewardDashboard.payouts || [];
+  const rewardedLineups = new Set((rewardDashboard.ledger || [])
+    .filter(item => Number(item.amount_vp || 0) > 0 && item.lineup_id)
+    .map(item => String(item.lineup_id))).size;
+  const activeRequests = payouts.filter(item => ['pending','approved','ready','revealed'].includes(item.status)).length;
+  target.innerHTML = `
+    <div class="cabinet-stat cabinet-stat-vp primary"><span>Доступно</span><b>${Number(balance.available_vp || 0)} VP</b></div>
+    <div class="cabinet-stat cabinet-stat-vp"><span>Заработано всего</span><b>${Number(balance.earned_vp || 0)} VP</b></div>
+    <div class="cabinet-stat cabinet-stat-vp"><span>В заявках</span><b>${Number(balance.reserved_vp || 0)} VP</b><small>${activeRequests ? `${activeRequests} активн.` : 'Нет активных'}</small></div>
+    <div class="cabinet-stat cabinet-stat-vp"><span>Получено кодами</span><b>${Number(balance.paid_vp || 0)} VP</b></div>
+    <div class="cabinet-stat cabinet-stat-vp"><span>Награждено лайнапов</span><b>${rewardedLineups}</b></div>`;
+}
+
 function renderAuthorWorkspace() {
   const visibleOwnLineups = currentUserLineups.filter(
     item => String(item.status || '').trim().toLowerCase() !== 'archived'
@@ -5399,6 +5421,7 @@ function renderAuthorWorkspace() {
   );
   renderDrafts();
   renderCabinetStats();
+  renderCabinetVpStats();
   renderMaterials();
   renderResubmissionBanner();
 }
