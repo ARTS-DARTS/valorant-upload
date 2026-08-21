@@ -149,11 +149,18 @@ function renderRewardDemand(deficits) {
   }).join('');
   const deficitMapSet=new Set(deficitMaps);
   const mapButtons=maps.map(map=>`<button class="reward-demand-map${map===rewardDemandMap?' selected':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${deficitMapSet.has(map)?'<span>◆</span>':''}${esc(map)}</button>`).join('');
-  const abilityCards=abilities.map(row=>{
+  const abilityCard=row=>{
     const count=Number(row.count||0), urgent=count===0;
     return `<article class="reward-demand-ability${urgent?' urgent':''}"><span class="reward-demand-count">${count}</span><div><strong>${esc(row.ability||'Способность')}</strong><small>${esc(row.side||'any')}</small></div><b>${urgent?'МАКС. ПРИОРИТЕТ':`Уже есть: ${count}`}</b></article>`;
-  }).join('');
-  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals"><b>${mapRows.length}<small>маппул</small></b><b>${globalRows.length}<small>общий</small></b></div></header><div class="reward-demand-stage"><label>1 · АГЕНТ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · КАРТА</label><div class="reward-demand-map-modes"><button type="button" data-demand-map-mode="deficit" class="${rewardDemandMapMode==='deficit'?'selected':''}">С дефицитом · ${deficitMaps.length}</button><button type="button" data-demand-map-mode="all" class="${rewardDemandMapMode==='all'?'selected':''}">Все карты · ${allMaps.length}</button></div></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ</label><div class="reward-demand-abilities">${abilityCards||'<div class="reward-empty">На этой карте дефицитных способностей выбранного агента нет.</div>'}</div></div></section>`;
+  };
+  const sideGroups=[
+    { key:'attack', label:'Атака', icon:'⚔' },
+    { key:'defense', label:'Защита', icon:'◆' },
+    { key:'any', label:'Любая сторона', icon:'◎' },
+  ].map(group=>({ ...group, rows:abilities.filter(row=>String(row.side||'any').toLowerCase()===group.key) }))
+    .filter(group=>group.key!=='any'||group.rows.length);
+  const abilityGroups=sideGroups.map(group=>`<section class="reward-demand-side-group${group.key==='any'?' neutral':''}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${group.rows.length}</b></header><div>${group.rows.map(abilityCard).join('')||'<p>Дефицитных способностей нет</p>'}</div></section>`).join('');
+  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals"><b>${mapRows.length}<small>маппул</small></b><b>${globalRows.length}<small>общий</small></b></div></header><div class="reward-demand-stage"><label>1 · АГЕНТ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · КАРТА</label><div class="reward-demand-map-modes"><button type="button" data-demand-map-mode="deficit" class="${rewardDemandMapMode==='deficit'?'selected':''}">С дефицитом · ${deficitMaps.length}</button><button type="button" data-demand-map-mode="all" class="${rewardDemandMapMode==='all'?'selected':''}">Все карты · ${allMaps.length}</button></div></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ</label><div class="reward-demand-side-columns">${abilityGroups||'<div class="reward-empty">На этой карте дефицитных способностей выбранного агента нет.</div>'}</div></div></section>`;
 }
 function renderRewardDialog() {
   const host = document.getElementById('reward-dialog-body'); if(!host) return;

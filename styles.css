@@ -1651,6 +1651,13 @@ body.footage-library-open { overflow:hidden; }
 .reward-demand-map-modes button:hover{color:#dff8ff}
 .reward-demand-map-modes button.selected{background:#17415a;color:#70e5fa;box-shadow:inset 0 0 0 1px rgba(85,231,255,.24)}
 @media(max-width:560px){.reward-demand-stage-head{align-items:flex-start;flex-direction:column}.reward-demand-map-modes{width:100%}.reward-demand-map-modes button{flex:1}}
+.reward-demand-side-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.reward-demand-side-group{min-width:0;padding:9px;border:1px solid rgba(255,176,46,.28);border-radius:12px;background:rgba(255,176,46,.035)}
+.reward-demand-side-group>header{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:7px;margin-bottom:8px;padding:0 2px 7px;border-bottom:1px solid rgba(255,176,46,.18)}
+.reward-demand-side-group>header span{color:#ffbd4a;font-size:12px}.reward-demand-side-group>header strong{color:#eef8ff;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.reward-demand-side-group>header b{display:grid;min-width:20px;height:20px;place-items:center;border-radius:6px;background:rgba(255,176,46,.12);color:#ffbd4a;font-size:10px}
+.reward-demand-side-group>div{display:grid;gap:7px}.reward-demand-side-group .reward-demand-ability{grid-template-columns:36px minmax(0,1fr);padding:8px}.reward-demand-side-group .reward-demand-ability>b{grid-column:2;text-align:left}.reward-demand-side-group p{margin:0;padding:13px 8px;color:#71879c;font-size:9px;text-align:center}
+.reward-demand-side-group.neutral{grid-column:1/-1;border-color:rgba(85,231,255,.22);background:rgba(85,231,255,.03)}.reward-demand-side-group.neutral>header{border-color:rgba(85,231,255,.15)}.reward-demand-side-group.neutral>header span,.reward-demand-side-group.neutral>header b{color:#65def4}.reward-demand-side-group.neutral>header b{background:rgba(85,231,255,.1)}
+@media(max-width:700px){.reward-demand-side-columns{grid-template-columns:1fr}.reward-demand-side-group.neutral{grid-column:auto}}
 .reward-demand-agents,.reward-demand-maps{padding:6px 7px 9px;scrollbar-width:thin;scrollbar-color:#348eab #081421}
 .reward-demand-agent{box-sizing:border-box}
 *{scrollbar-width:thin;scrollbar-color:#2d819d #08131f}
