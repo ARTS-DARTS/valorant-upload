@@ -41,6 +41,14 @@ test('extra trajectory handlers stay inside the extra trajectory renderer', () =
   assert.match(renderer, /sovaPanels\?\.querySelectorAll\('\[data-extra-sova-bounce\]'\)/);
 });
 
+test('extra trajectories keep their own visible ability icon', () => {
+  assert.match(app, /function extraAbilityIcon\(item\)/);
+  assert.match(app, /icon: catalog\?\.icon \|\| item\?\.icon \|\| ''/);
+  assert.match(app, /iconUrl: extraAbilityIcon\(item\)/);
+  assert.match(app, /const iconUrl = extra \? extraAbilityIcon\(extra\) : \(ability\?\.displayIcon \|\| ''\)/);
+  assert.match(app, /trajectory-start-icon-backdrop/);
+});
+
 test('missing throw position scrolls to the interactive map editor', () => {
   assert.match(app, /const mapEditorCard = validationCard\('map-wrap'\)/);
   assert.match(app, /markerX === null\) add\('Поставь позицию броска на карте\.', mapEditorCard\)/);

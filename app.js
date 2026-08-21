@@ -997,7 +997,9 @@ function normalizeExtraAbilityItem(item, index = 0) {
     order: Number(item?.order || index + 1),
     ability,
     slot: item?.slot || catalog?.slot || '',
-    icon: item?.icon || catalog?.icon || '',
+    // The ability name is the source of truth. Older drafts could carry the
+    // primary ability icon in an extra trajectory, so prefer the live catalog.
+    icon: catalog?.icon || item?.icon || '',
     trajectory: normalizeTrajectoryPoints(item?.trajectory),
     sova_charge: Math.max(0, Math.min(3, Number(item?.sova_charge ?? item?.sovaCharge ?? 3))),
     sova_bounces: Math.max(0, Math.min(2, Number(item?.sova_bounces ?? item?.sovaBounces ?? 0))),
@@ -1035,6 +1037,13 @@ function trajectoryFromMarkerFor(points = trajectoryPoints) {
 function trajectoryForSave(item = null) {
   const points = normalizeTrajectoryPoints(item?.trajectory ?? trajectoryPoints);
   return item ? points : trajectoryFromMarkerFor(points);
+}
+
+function extraAbilityIcon(item) {
+  if (!item) return '';
+  const ability = String(item.ability || '').trim();
+  const catalog = selectedAgentAbilities().find(ab => ab.ability === ability);
+  return catalog?.icon || item.icon || '';
 }
 
 function limitPrimaryAbilityExtras(items = extraAbilityTrajectories) {
@@ -1139,7 +1148,7 @@ function renderExtraAbilityPanel() {
           <div class="extra-ability-item ${selected ? 'selected' : ''}" data-extra-index="${idx}">
             <span class="extra-ability-num">${idx + 1}</span>
             <button class="extra-ability-main" type="button" data-extra-select="${idx}" title="Рисовать траекторию: ${esc(item.ability)}">
-              ${item.icon ? `<img src="${esc(item.icon)}" alt="">` : ''}
+              ${extraAbilityIcon(item) ? `<img src="${esc(extraAbilityIcon(item))}" alt="">` : ''}
               <span>
                 <span class="extra-ability-name">${esc(item.ability)}</span>
                 <span class="extra-ability-meta">${points >= 2 ? `${points} точек` : 'траектория не задана'}</span>
@@ -11263,8 +11272,18 @@ function renderTrajectory() {
       dot.setAttribute('stroke-width', '0.5');
       svg.appendChild(dot);
       if (i === 0 && iconUrl) {
+        const iconBackdrop = document.createElementNS(ns, 'circle');
+        iconBackdrop.setAttribute('cx', cx);
+        iconBackdrop.setAttribute('cy', cy);
+        iconBackdrop.setAttribute('r', '10');
+        iconBackdrop.setAttribute('fill', 'rgba(7,18,31,.94)');
+        iconBackdrop.setAttribute('stroke', color);
+        iconBackdrop.setAttribute('stroke-width', '1.6');
+        iconBackdrop.setAttribute('class', 'trajectory-start-icon-backdrop');
+        svg.appendChild(iconBackdrop);
         const icon = document.createElementNS(ns, 'image');
         icon.setAttribute('href', iconUrl);
+        icon.setAttributeNS('http://www.w3.org/1999/xlink', 'href', iconUrl);
         icon.setAttribute('x', String(Number(cx) - 9));
         icon.setAttribute('y', String(Number(cy) - 9));
         icon.setAttribute('width', '18');
@@ -11309,7 +11328,7 @@ function renderTrajectory() {
       opacity: active ? 0.95 : 0.48,
       width: active ? 2.6 : 1.9,
       orderLabel: `+${idx + 1}`,
-      iconUrl: item.icon || '',
+      iconUrl: extraAbilityIcon(item),
     });
   });
 
@@ -11328,7 +11347,7 @@ function updateMarkerIcon() {
     normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === selectedAbility
   );
   const extra = activeExtraAbility();
-  const iconUrl = extra?.icon || ability?.displayIcon || '';
+  const iconUrl = extra ? extraAbilityIcon(extra) : (ability?.displayIcon || '');
   const marker = document.getElementById('map-marker');
   if (marker) marker.style.visibility = extra ? 'hidden' : '';
   if (iconUrl) {
