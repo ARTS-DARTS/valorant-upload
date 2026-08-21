@@ -3622,6 +3622,10 @@ function updateModerationMovedHint(canModerate) {
 }
 
 document.getElementById('header-moderation')?.addEventListener('click', () => {
+  if (!canCurrentUserModerate()) {
+    openModApplication();
+    return;
+  }
   dismissModerationMovedHint();
   switchWorkspaceTab('moderation');
   document.getElementById('workspace-moderation')?.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -4528,6 +4532,15 @@ function updateAdminOnlyWorkspace() {
     closeMaterialForm();
   }
   const canModerate = canCurrentUserModerate();
+  const moderationWrap = document.getElementById('header-moderation-wrap');
+  const moderationButton = document.getElementById('header-moderation');
+  if (moderationWrap) moderationWrap.style.display = currentUser ? '' : 'none';
+  if (moderationButton) {
+    const label = moderationButton.querySelector('b');
+    if (label) label.textContent = canModerate ? 'Модерация' : 'Стать модератором';
+    moderationButton.setAttribute('aria-label', canModerate ? 'Открыть модерацию' : 'Подать заявку в модераторы');
+    moderationButton.title = canModerate ? 'Открыть модерацию' : 'Стать модератором';
+  }
   document.querySelectorAll('[data-moderator-only="true"]').forEach(el => {
     el.style.display = canModerate ? '' : 'none';
   });
@@ -12384,7 +12397,6 @@ document.getElementById('btn-another').addEventListener('click', () => resetUplo
 // Заявки проверяются в admin_panel.html (вкладка "Заявки").
 const modScreen = document.getElementById('mod-screen');
 
-document.getElementById('btn-become-mod').addEventListener('click', openModApplication);
 document.getElementById('mod-close').addEventListener('click', () => { modScreen.style.display = 'none'; });
 modScreen.addEventListener('click', e => { if (e.target === modScreen) modScreen.style.display = 'none'; });
 
