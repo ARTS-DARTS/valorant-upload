@@ -2968,7 +2968,13 @@ function openPendingLineupDeepLink() {
   if (!pendingLineupDeepLink) return;
   const lineup = findOwnLineup(pendingLineupDeepLink);
   if (!lineup) return;
-  switchWorkspaceTab(lineup.status === 'rejected' ? 'rejected' : 'mine');
+  if (lineup.status === 'rejected') {
+    myLineupsStatusFilter = 'rejected';
+    document.querySelectorAll('#my-status-filter .filter-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.status === 'rejected');
+    });
+  }
+  switchWorkspaceTab('mine');
   openLineupDetail(lineup.id);
   pendingLineupDeepLink = '';
   const cleanUrl = new URL(window.location.href);
@@ -3572,7 +3578,7 @@ function pauseAllSiteMedia() {
 }
 
 function switchWorkspaceTab(tab) {
-  const nextTab = tab || 'upload';
+  const nextTab = tab === 'rejected' ? 'mine' : (tab || 'upload');
   if (nextTab === 'moderation' && !canCurrentUserModerate()) return;
   const previousTab = activeWorkspaceTab;
   if (previousTab !== nextTab) deactivateWorkspaceTab(previousTab);
@@ -5327,12 +5333,6 @@ function renderAuthorWorkspace() {
     filteredOwnLineups(),
     visibleOwnLineups.length ? 'Ничего не найдено' : 'Лайнапов пока нет',
     visibleOwnLineups.length ? 'Попробуй другой статус или поисковый запрос.' : 'Отправь первый лайнап, и он появится здесь со статусом проверки.'
-  );
-  renderLineupList(
-    'rejected-lineups-list',
-    currentUserLineups.filter(x => x.status === 'rejected'),
-    'Отклонённых нет',
-    'Если модератор отклонит материал, он появится здесь для будущей доработки.'
   );
   renderDrafts();
   renderCabinetStats();
