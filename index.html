@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/app_icon3.png">
   <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
   <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/styles.css?v=2026-08-21-final-reward-review-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-08-21-profile-catalog-v1">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-08-01-immunity-v1">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-08-01-persistent-guide-border-v1">
 </head>
@@ -69,9 +69,32 @@
     <span class="header-telegram-label">@Vlineups</span>
   </a>
   <div class="user-info" id="header-user" style="display:none;">
-    <img id="user-avatar" src="" alt="" style="display:none;">
-    <span id="user-name"></span>
-    <button class="btn-out" id="btn-signout">Выйти</button>
+    <button class="profile-catalog-trigger" id="profile-catalog-trigger" type="button"
+      aria-expanded="false" aria-controls="profile-catalog" aria-label="Открыть личные разделы">
+      <span class="profile-catalog-avatar">
+        <img id="user-avatar" src="" alt="" style="display:none;">
+        <span id="user-avatar-fallback" aria-hidden="true">●</span>
+      </span>
+      <span id="user-name"></span>
+      <span class="profile-catalog-chevron" aria-hidden="true">⌄</span>
+    </button>
+    <div class="profile-catalog" id="profile-catalog" hidden>
+      <div class="profile-catalog-head"><span>ЛИЧНЫЙ КАБИНЕТ</span><small>Разделы автора</small></div>
+      <div class="profile-catalog-grid">
+        <button class="profile-menu-item" type="button" data-profile-workspace="stats"><i>▥</i><span>Статистика</span></button>
+        <button class="profile-menu-item" type="button" data-profile-workspace="materials"><i>▣</i><span>Материалы</span></button>
+        <button class="profile-menu-item" type="button" data-profile-workspace="notifications"><i>●</i><span>Уведомления</span><b id="notifications-tab-badge" class="chat-tab-badge" hidden></b></button>
+        <button class="profile-menu-item" type="button" data-profile-workspace="admin-chat"><i>◒</i><span>Чаты</span><b id="admin-chat-badge" class="chat-tab-badge" hidden></b></button>
+        <button class="profile-menu-item" type="button" data-profile-workspace="profile"><i>◎</i><span>Профиль</span></button>
+        <button class="profile-menu-item" id="social-messages-tab" type="button" data-profile-workspace="messages" hidden><i>✉</i><span>Личные сообщения</span></button>
+      </div>
+      <button class="profile-catalog-signout" id="btn-signout" type="button">Выйти из аккаунта</button>
+    </div>
+    <div class="profile-catalog-hint" id="profile-catalog-hint" role="status" hidden>
+      <button id="profile-catalog-hint-close" type="button" aria-label="Закрыть">×</button>
+      <strong>Личные разделы переехали</strong>
+      <span>Статистика, материалы, чаты и профиль теперь открываются здесь.</span>
+    </div>
   </div>
 </header>
 
@@ -124,12 +147,6 @@
       <button class="workspace-tab" data-workspace-tab="mine">Мои лайнапы</button>
       <button class="workspace-tab" data-workspace-tab="rejected">Отклонённые</button>
       <button class="workspace-tab" data-workspace-tab="drafts">Черновики</button>
-      <button class="workspace-tab" data-workspace-tab="stats">Статистика</button>
-      <button class="workspace-tab" data-workspace-tab="materials">Материалы</button>
-      <button class="workspace-tab" data-workspace-tab="notifications">🔔 Уведомления <span id="notifications-tab-badge" class="chat-tab-badge" hidden></span></button>
-      <button class="workspace-tab" data-workspace-tab="admin-chat">💬 Чаты <span id="admin-chat-badge" class="chat-tab-badge" hidden></span></button>
-      <button class="workspace-tab" data-workspace-tab="profile">Профиль</button>
-      <button class="workspace-tab" id="social-messages-tab" data-workspace-tab="messages" hidden>Личные сообщения</button>
     </nav>
   </div>
 
@@ -1055,7 +1072,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-08-21-final-reward-review-v1"></script>
+<script type="module" src="/app.js?v=2026-08-21-profile-catalog-v1"></script>
 <script defer src="/workspace-redesign.js?v=2026-08-02-map-gallery-sync-v1"></script>
 </body>
 </html>

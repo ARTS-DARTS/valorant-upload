@@ -3278,8 +3278,11 @@ function _unsubscribeUserProfile() {
 
 // ── Author workspace ─────────────────────────────────────────────────────────
 function initWorkspaceTabs() {
-  document.querySelectorAll('.workspace-tab').forEach(btn => {
-    btn.addEventListener('click', () => switchWorkspaceTab(btn.dataset.workspaceTab || 'upload'));
+  document.querySelectorAll('.workspace-tab,[data-profile-workspace]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchWorkspaceTab(btn.dataset.workspaceTab || btn.dataset.profileWorkspace || 'upload');
+      closeProfileCatalog();
+    });
   });
   document.querySelectorAll('#my-status-filter .filter-chip').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -3540,6 +3543,9 @@ function switchWorkspaceTab(tab) {
   document.querySelectorAll('.workspace-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.workspaceTab === activeWorkspaceTab);
   });
+  document.querySelectorAll('[data-profile-workspace]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.profileWorkspace === activeWorkspaceTab);
+  });
   document.querySelectorAll('.workspace-panel').forEach(panel => {
     panel.classList.toggle('active', panel.id === `workspace-${activeWorkspaceTab}`);
   });
@@ -3564,6 +3570,44 @@ document.addEventListener('visibilitychange', () => {
 });
 
 const MODERATION_MOVED_HINT_KEY = 'vl_moderation_moved_hint_20260730';
+const PROFILE_CATALOG_HINT_KEY = 'vl_profile_catalog_hint_20260821';
+
+function closeProfileCatalog() {
+  const trigger = document.getElementById('profile-catalog-trigger');
+  const catalog = document.getElementById('profile-catalog');
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  if (catalog) catalog.hidden = true;
+}
+
+function dismissProfileCatalogHint() {
+  const hint = document.getElementById('profile-catalog-hint');
+  if (hint) hint.hidden = true;
+  localStorage.setItem(PROFILE_CATALOG_HINT_KEY, '1');
+}
+
+function showProfileCatalogHint() {
+  const hint = document.getElementById('profile-catalog-hint');
+  if (hint) hint.hidden = localStorage.getItem(PROFILE_CATALOG_HINT_KEY) === '1';
+}
+
+document.getElementById('profile-catalog-trigger')?.addEventListener('click', event => {
+  event.stopPropagation();
+  const trigger = event.currentTarget;
+  const catalog = document.getElementById('profile-catalog');
+  const expanded = trigger.getAttribute('aria-expanded') === 'true';
+  trigger.setAttribute('aria-expanded', String(!expanded));
+  if (catalog) catalog.hidden = expanded;
+  dismissProfileCatalogHint();
+});
+document.getElementById('profile-catalog')?.addEventListener('click', event => event.stopPropagation());
+document.getElementById('profile-catalog-hint-close')?.addEventListener('click', event => {
+  event.stopPropagation();
+  dismissProfileCatalogHint();
+});
+document.addEventListener('click', closeProfileCatalog);
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeProfileCatalog();
+});
 
 function dismissModerationMovedHint() {
   const hint = document.getElementById('moderation-moved-hint');
@@ -5349,7 +5393,10 @@ onAuthStateChanged(auth, async user => {
     _subscribeStats(user.uid);
     _updateCooldown(user.uid);
     const av = document.getElementById('user-avatar');
-    if (user.photoURL) { av.src = user.photoURL; av.style.display = ''; }
+    const avatarFallback = document.getElementById('user-avatar-fallback');
+    if (user.photoURL) { av.src = user.photoURL; av.style.display = ''; if (avatarFallback) avatarFallback.hidden = true; }
+    else { av.removeAttribute('src'); av.style.display = 'none'; if (avatarFallback) { avatarFallback.hidden = false; avatarFallback.textContent = (authorDisplayName() || 'П').slice(0,1).toUpperCase(); } }
+    showProfileCatalogHint();
     const agentsReady = !agentsList.length ? loadAgents() : Promise.resolve();
     const mapsReady = loadMaps();
     let resumableModeratorEdit = false;

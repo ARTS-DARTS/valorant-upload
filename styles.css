@@ -48,6 +48,37 @@
     .header-telegram-icon { font-size:15px;line-height:1;transform:rotate(-12deg); }
     .user-info { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text2); }
     .user-info img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+    .user-info { position:relative; }
+    .profile-catalog-trigger { min-width:0;min-height:40px;display:flex;align-items:center;gap:8px;padding:4px 8px 4px 5px;border:1px solid transparent;border-radius:11px;background:transparent;color:var(--text2);font:inherit;cursor:pointer;transition:border-color .16s,background .16s,color .16s; }
+    .profile-catalog-trigger:hover,.profile-catalog-trigger[aria-expanded="true"] { border-color:rgba(79,195,247,.32);background:rgba(79,195,247,.08);color:var(--text1); }
+    .profile-catalog-trigger:focus-visible { outline:2px solid var(--primary);outline-offset:2px; }
+    .profile-catalog-avatar { flex:0 0 30px;width:30px;height:30px;display:grid;place-items:center;overflow:hidden;border:1px solid rgba(79,195,247,.28);border-radius:50%;background:linear-gradient(135deg,#17344a,#24243c);color:#75e5f7;font-size:12px;font-weight:900; }
+    .profile-catalog-avatar img { grid-area:1/1;width:100%;height:100%; }
+    .profile-catalog-avatar>span { grid-area:1/1; }
+    .profile-catalog-chevron { color:#6f879f;font-size:15px;line-height:1;transition:transform .18s; }
+    .profile-catalog-trigger[aria-expanded="true"] .profile-catalog-chevron { transform:rotate(180deg); }
+    .profile-catalog { position:absolute;z-index:160;right:0;top:48px;width:330px;padding:10px;border:1px solid #2b4157;border-radius:14px;background:linear-gradient(145deg,#101c2c,#0b1421);box-shadow:0 24px 70px rgba(0,0,0,.62);animation:profile-catalog-in .2s ease-out; }
+    .profile-catalog[hidden] { display:none; }
+    .profile-catalog::before { content:"";position:absolute;right:22px;top:-6px;width:10px;height:10px;border-left:1px solid #2b4157;border-top:1px solid #2b4157;background:#101c2c;transform:rotate(45deg); }
+    .profile-catalog-head { display:flex;align-items:center;justify-content:space-between;padding:4px 5px 10px; }
+    .profile-catalog-head span { color:#68daf2;font:900 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em; }
+    .profile-catalog-head small { color:#71869a;font-size:9px; }
+    .profile-catalog-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px; }
+    .profile-menu-item { position:relative;min-width:0;min-height:58px;display:grid;grid-template-columns:29px minmax(0,1fr);align-items:center;gap:8px;padding:9px;border:1px solid #223549;border-radius:10px;background:#111e2e;color:#aebed0;text-align:left;font:inherit;font-size:10px;font-weight:800;cursor:pointer;transition:border-color .16s,background .16s,transform .16s; }
+    .profile-menu-item i { width:29px;height:29px;display:grid;place-items:center;border-radius:8px;background:#172a3d;color:#63d9f2;font-style:normal;font-size:14px; }
+    .profile-menu-item:hover,.profile-menu-item.active { border-color:#3d91af;background:#142a3d;color:#f0f9ff;transform:translateY(-1px); }
+    .profile-menu-item.active i { background:#1d536b;color:#a7efff; }
+    .profile-menu-item .chat-tab-badge { position:absolute;right:7px;top:7px; }
+    .profile-catalog-signout { width:100%;margin-top:8px;padding:9px;border:1px solid rgba(255,70,85,.24);border-radius:9px;background:rgba(255,70,85,.05);color:#ff8b95;font:inherit;font-size:10px;font-weight:800;cursor:pointer; }
+    .profile-catalog-signout:hover { border-color:#ff4655;background:rgba(255,70,85,.1); }
+    .profile-catalog-hint { position:absolute;z-index:155;right:0;top:50px;width:275px;padding:14px 35px 14px 15px;border:1px solid rgba(85,231,255,.55);border-radius:12px;background:#102033;box-shadow:0 18px 55px rgba(0,0,0,.55);animation:profile-catalog-in .24s ease-out; }
+    .profile-catalog-hint[hidden] { display:none; }
+    .profile-catalog-hint::before { content:"";position:absolute;right:25px;top:-6px;width:10px;height:10px;border-left:1px solid rgba(85,231,255,.55);border-top:1px solid rgba(85,231,255,.55);background:#102033;transform:rotate(45deg); }
+    .profile-catalog-hint strong,.profile-catalog-hint span { display:block; }
+    .profile-catalog-hint strong { color:#effaff;font-size:12px; }
+    .profile-catalog-hint span { margin-top:5px;color:#9eb4c8;font-size:10px;line-height:1.45; }
+    .profile-catalog-hint button { position:absolute;right:7px;top:7px;width:22px;height:22px;border:0;background:transparent;color:#8fa6ba;font-size:17px;cursor:pointer; }
+    @keyframes profile-catalog-in { from { opacity:0;transform:translateY(-7px) scale(.98); } }
     .btn-out { background: transparent; border: 1px solid var(--border); color: var(--text2); padding: 5px 12px; border-radius: var(--r); cursor: pointer; font-size: 12px; transition: .15s; }
     .btn-out:hover { border-color: var(--primary); color: var(--primary); }
     .site-update-banner { position: fixed; left: 50%; top: 66px; z-index: 1000; transform: translate(-50%, -12px); display: flex; align-items: center; gap: 12px; width: min(560px, calc(100vw - 24px)); padding: 12px 14px; border-radius: var(--r); border: 1px solid rgba(79,195,247,.65); background: rgba(17,24,39,.98); box-shadow: 0 18px 48px rgba(0,0,0,.52); color: var(--text1); font-size: 13px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; }
@@ -310,6 +341,9 @@
       .header-telegram { display:none; }
       .site-sections a { font-size:10px; }
       .moderation-moved-hint { position:fixed; top:62px; right:10px; width:min(280px,calc(100vw - 20px)); }
+      .profile-catalog-trigger #user-name { display:none; }
+      .profile-catalog { position:fixed;top:60px;right:8px;width:min(330px,calc(100vw - 16px)); }
+      .profile-catalog-hint { position:fixed;top:62px;right:8px;width:min(280px,calc(100vw - 16px)); }
     }
     @media (prefers-reduced-motion:reduce) { .feedback-create-overlay,.feedback-create-card { animation:none; } }
     .empty-state { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--r); padding: 24px; color: var(--text2); font-size: 14px; line-height: 1.5; }
