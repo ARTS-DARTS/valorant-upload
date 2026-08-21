@@ -22,12 +22,19 @@
   height: 46px;
   padding: 0;
   align-items: end;
+  justify-content: center;
 }
 
 .workspace-redesign .workspace-tab {
   height: 40px;
   padding: 10px 14px;
   font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .workspace-redesign .workspace-tabs {
+    justify-content: flex-start;
+  }
 }
 
 .workspace-redesign .production-flow {
