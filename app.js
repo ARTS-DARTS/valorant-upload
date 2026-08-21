@@ -47,7 +47,7 @@ import {
   entitlementHasCooldownBypass,
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
-import { createSocialWebsite } from './social-communication.mjs?v=2026-08-11-social-v2';
+import { createSocialWebsite } from './social-communication.mjs?v=2026-08-21-profile-fix-v1';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,

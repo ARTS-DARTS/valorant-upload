@@ -55,19 +55,36 @@ export function createSocialWebsite({ db, functions, toast }) {
       return;
     }
     root.innerHTML = '<div class="social-empty">Загружаем профиль…</div>';
-    const snapshot = await getDoc(doc(db, 'public_profiles', normalized));
-    if (!snapshot.exists()) {
+    const own = user?.uid === normalized;
+    const [publicSnapshot, userSnapshot, statsSnapshot] = await Promise.all([
+      getDoc(doc(db, 'public_profiles', normalized)),
+      own ? getDoc(doc(db, 'users', normalized)) : Promise.resolve(null),
+      own ? getDoc(doc(db, 'user_stats', normalized)) : Promise.resolve(null),
+    ]);
+    if (!publicSnapshot.exists() && !userSnapshot?.exists()) {
       root.innerHTML = '<div class="social-empty">Профиль не найден или закрыт настройками приватности.</div>';
       return;
     }
-    const profile = snapshot.data();
-    const own = user?.uid === normalized;
+    const publicProfile = publicSnapshot.data() || {};
+    const accountProfile = userSnapshot?.data?.() || {};
+    const profileStats = statsSnapshot?.data?.() || {};
+    const profile = own
+      ? { ...publicProfile, ...profileStats, ...accountProfile }
+      : publicProfile;
+    const displayName = String(
+      profile.display_name || profile.name || profile.username || profile.displayName || user?.displayName || user?.email || 'Игрок'
+    ).trim();
+    const approvedLineups = Math.max(
+      Number(publicProfile.approved_lineups_count || publicProfile.approved_lineups || 0),
+      Number(profileStats.approved_lineups_count || profileStats.approved_lineups || 0),
+      Number(accountProfile.approved_lineups_count || accountProfile.approved_lineups || 0),
+    );
     const rating = Number(profile.rating_average || 0).toFixed(1);
     root.innerHTML = `<article class="social-profile-card">
-      <div class="social-avatar" aria-hidden="true">${escapeHtml((profile.display_name || '?').slice(0, 1).toUpperCase())}</div>
-      <div class="social-profile-copy"><span>Публичный профиль</span><h2>${escapeHtml(profile.display_name || 'Игрок')}</h2>
+      <div class="social-avatar" aria-hidden="true">${escapeHtml((displayName || '?').slice(0, 1).toUpperCase())}</div>
+      <div class="social-profile-copy"><span>${own ? 'Мой публичный профиль' : 'Публичный профиль'}</span><h2>${escapeHtml(displayName)}</h2>
       <p>${escapeHtml(profile.bio || 'Пользователь пока ничего о себе не написал.')}</p>
-      <div class="social-profile-stats"><b>★ ${rating}</b><b>${Number(profile.reviews_count || 0)} отзывов</b><b>${Number(profile.approved_lineups_count || 0)} лайнапов</b></div></div>
+      <div class="social-profile-stats"><b>★ ${rating}</b><b>${Number(profile.reviews_count || 0)} отзывов</b><b>${approvedLineups} лайнапов</b></div></div>
       <div class="social-profile-actions">
         <button type="button" data-profile-copy="${escapeHtml(normalized)}">Скопировать ссылку</button>
         ${own ? '' : `<button class="primary" type="button" data-profile-message="${escapeHtml(normalized)}">Написать</button>`}

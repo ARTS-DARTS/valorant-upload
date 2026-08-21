@@ -206,7 +206,7 @@ test('upload editor exposes a selection-aware inspector for real timeline items'
   assert.match(app, /error\('orphan_freeze'/);
   assert.match(app, /editorEls\.confirmCommit\.disabled = report\.blocking/);
   assert.match(html, /styles\.css\?v=2026-08-21-reward-compact-v2/);
-  assert.match(html, /app\.js\?v=2026-08-21-reward-compact-v2/);
+  assert.match(html, /app\.js\?v=2026-08-21-profile-fix-v1/);
   assert.match(app, /function rewardDemandAbilityIcon\(/);
   assert.match(app, /reward-demand-ability-icon/);
   assert.match(app, /function isRealRewardMap\(value\)/);
