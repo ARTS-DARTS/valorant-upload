@@ -2605,7 +2605,9 @@ function uploadCompatibleLineupVideo(file, onProgress) {
         if (!result.version || !result.public_id) throw new Error('Неполный ответ Cloudinary');
         resolve(
           `https://res.cloudinary.com/djxgwkbqn/video/upload/` +
-          `f_mp4,vc_h264,q_auto/v${result.version}/${result.public_id}.mp4`,
+          `c_limit,h_1080,w_1920/` +
+          `f_mp4,vc_h264:main:4.1,ac_aac,fps_1-30,fl_progressive,q_auto:good/` +
+          `v${result.version}/${result.public_id}.mp4`,
         );
       } catch (error) {
         reject(error);
@@ -2620,6 +2622,12 @@ function uploadCompatibleLineupVideo(file, onProgress) {
 }
 
 function uploadVideoToSelectel(file, onProgress) {
+  // Normalize user video before its URL reaches a lineup. Directly storing the
+  // source preserved 1080p/120 FPS and codecs unsupported by some Android
+  // hardware decoders.
+  return uploadCompatibleLineupVideo(file, onProgress);
+
+  /* Legacy direct-to-Selectel uploader retained temporarily for rollback.
   const fileName  = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   let xhr = null;
   let aborted = false;
@@ -2656,6 +2664,7 @@ function uploadVideoToSelectel(file, onProgress) {
 
   promise.abort = () => { aborted = true; xhr?.abort(); };
   return promise;
+  */
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────

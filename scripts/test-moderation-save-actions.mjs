@@ -42,6 +42,15 @@ test('save_progress keeps the moderation task incomplete', () => {
   );
 });
 
+test('moderator autosave never nests Firestore delete sentinels', () => {
+  const autosaveDraft = backendSource.slice(
+    backendSource.indexOf('async function autosaveDraft'),
+    backendSource.indexOf('function queueAuthorKey'),
+  );
+  assert.match(autosaveDraft, /spike_usage: clean\(data\.spike_usage\)/);
+  assert.doesNotMatch(autosaveDraft, /FieldValue\.delete\(\)/);
+});
+
 test('moderator editor exposes rejection and clears its active claim', () => {
   assert.match(appSource, /getElementById\('btn-reject-moderation'\).*rejectModeratorDraft\(\)/s);
   assert.match(appSource, /rejectButton\.hidden = !moderatorDraftSourceId/);

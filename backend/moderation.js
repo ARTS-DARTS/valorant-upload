@@ -485,10 +485,10 @@ async function autosaveDraft(req, res, moderator) {
       difficulty: clean(data.difficulty).slice(0, 20), round_side: clean(data.round_side).slice(0, 20),
       ...(contentType === 'lineup' && clean(data.round_side) === 'attack' ? {
         spike_usage: clean(data.spike_usage).slice(0, 20),
-        ...(clean(data.spike_usage) === 'placed' ? { spike_x:finite01(data.spike_x), spike_y:finite01(data.spike_y) } : {
-          spike_x:FieldValue.delete(), spike_y:FieldValue.delete(),
-        }),
-      } : { spike_usage:FieldValue.delete(), spike_x:FieldValue.delete(), spike_y:FieldValue.delete() }),
+        ...(clean(data.spike_usage) === 'placed'
+          ? { spike_x:finite01(data.spike_x), spike_y:finite01(data.spike_y) }
+          : {}),
+      } : {}),
       position_x: finite01(data.position_x), position_y: finite01(data.position_y), trajectory: safePoints(data.trajectory),
       extra_abilities: Array.isArray(data.extra_abilities) ? data.extra_abilities.slice(0, 2).map((item, index) => ({
         ability: clean(item?.ability).slice(0, 80), icon: clean(item?.icon).slice(0, 1000), order: index + 1,
