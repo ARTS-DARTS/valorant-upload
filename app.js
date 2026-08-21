@@ -1984,6 +1984,11 @@ function renderCategoryMapExtras() {
 
 function updateCategoryUi() {
   const normalized = normalizeContentCategory(selectedCategory || '');
+  if (normalized !== 'lineup' || selectedRoundSide !== 'attack') {
+    spikeUsage = null;
+    spikeX = spikeY = null;
+    if (mapMode === 'spike') mapMode = 'position';
+  }
   if (normalized && agentsList.length) loadAgentCategoryAvailability(normalized);
   if (normalized === 'defense') {
     const selected = agentsList.find(agent => agent.displayName === selectedAgent);
@@ -2034,6 +2039,7 @@ function updateCategoryUi() {
   renderExtraAbilityPanel();
   setMapMode(mapMode);
   renderCategoryMapExtras();
+  renderSpikeControls();
   renderDefenseAbilityMarkers();
   validateForm();
 }
@@ -2693,6 +2699,8 @@ document.getElementById('sova-bounce-picker')?.addEventListener('click', event =
 let selectedCategory = null;
 let selectedDifficulty = null;
 let selectedRoundSide = null;
+let spikeUsage = null;
+let spikeX = null, spikeY = null;
 let markerX = null, markerY = null;
 let trajectoryPoints = [];
 let extraAbilityTrajectories = [];
@@ -10508,9 +10516,60 @@ document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(b => {
     document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(x => x.classList.remove('selected'));
     b.classList.add('selected');
     selectedRoundSide = b.dataset.val;
+    if (selectedRoundSide !== 'attack') {
+      spikeUsage = null;
+      spikeX = spikeY = null;
+      if (mapMode === 'spike') setMapMode('position');
+    }
+    renderSpikeControls();
     applyMapViewTransform();
     validateForm(); _saveDraft();
   });
+});
+
+function renderSpikeControls() {
+  const group = document.getElementById('spike-choice');
+  const placeButton = document.getElementById('mode-spike');
+  const unusedButton = document.getElementById('spike-not-used');
+  const marker = document.getElementById('spike-marker');
+  const attackLineup = normalizeContentCategory(selectedCategory) === 'lineup' && selectedRoundSide === 'attack';
+  if (group) group.hidden = !attackLineup;
+  placeButton?.classList.toggle('is-selected', attackLineup && spikeUsage === 'placed');
+  unusedButton?.classList.toggle('is-selected', attackLineup && spikeUsage === 'not_used');
+  placeButton?.setAttribute('aria-pressed', String(attackLineup && spikeUsage === 'placed'));
+  unusedButton?.setAttribute('aria-pressed', String(attackLineup && spikeUsage === 'not_used'));
+  if (!marker) return;
+  if (!attackLineup || spikeUsage !== 'placed' || spikeX === null || spikeY === null) {
+    marker.hidden = true;
+    return;
+  }
+  const content = mapContentRect();
+  marker.hidden = false;
+  marker.style.left = `${(content.left + spikeX * content.width) / content.wrapWidth * 100}%`;
+  marker.style.top = `${(content.top + spikeY * content.height) / content.wrapHeight * 100}%`;
+}
+
+function spikeSubmissionPayload(contentType = selectedCategory, roundSide = selectedRoundSide) {
+  if (normalizeContentCategory(contentType) !== 'lineup' || roundSide !== 'attack') return {};
+  if (spikeUsage === 'placed') return { spike_usage:'placed', spike_x:spikeX, spike_y:spikeY };
+  if (spikeUsage === 'not_used') return { spike_usage:'not_used' };
+  return {};
+}
+
+document.getElementById('mode-spike')?.addEventListener('click', () => {
+  spikeUsage = 'placed';
+  setMapMode('spike');
+  renderSpikeControls();
+  validateForm();
+  _saveDraft();
+});
+document.getElementById('spike-not-used')?.addEventListener('click', () => {
+  spikeUsage = 'not_used';
+  spikeX = spikeY = null;
+  if (mapMode === 'spike') setMapMode('position');
+  renderSpikeControls();
+  validateForm();
+  _saveDraft();
 });
 document.getElementById('defense-ability-markers')?.addEventListener('click', e => {
   if (e.target.closest('[data-defense-marker-index]')) {
@@ -10734,10 +10793,12 @@ async function loadMapMinimap() {
     extraAbilityTrajectories = [];
     selectedExtraAbilityIndex = null;
     wallbangTargetX = wallbangTargetY = null;
+    spikeUsage = null; spikeX = spikeY = null;
     defenseZoomStart = null;
     defenseZoomArea = null;
     renderTrajectory();
     renderCategoryMapExtras();
+    renderSpikeControls();
     return;
   }
   ph.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text2);">Загружаем карту…</div>`;
@@ -10774,6 +10835,7 @@ async function loadMapMinimap() {
       renderTrajectory();
       renderMapSiteLabels();
       renderCategoryMapExtras();
+      renderSpikeControls();
       refreshMapGeometryAfterLayout();
     };
     const fail = reason => {
@@ -10807,6 +10869,7 @@ async function loadMapMinimap() {
     extraAbilityTrajectories = [];
     selectedExtraAbilityIndex = null;
     wallbangTargetX = wallbangTargetY = null;
+    spikeUsage = null; spikeX = spikeY = null;
     defenseZoomStart = null;
     defenseZoomArea = null;
     renderTrajectory();
@@ -10829,6 +10892,7 @@ function setMapMode(mode) {
   document.getElementById('mode-trajectory').classList.toggle('selected-mode', mode === 'trajectory');
   document.getElementById('mode-wallbang-target')?.classList.toggle('selected-mode', mode === 'target');
   document.getElementById('mode-defense-zoom')?.classList.toggle('selected-mode', mode === 'zoom');
+  document.getElementById('mode-spike')?.classList.toggle('selected-mode', mode === 'spike');
   const defense = normalizeContentCategory(selectedCategory) === 'defense';
   const wallbang = normalizeContentCategory(selectedCategory) === 'wallbang';
   document.getElementById('mode-position').style.display = defense ? 'none' : '';
@@ -10843,6 +10907,7 @@ function setMapMode(mode) {
   const hint = document.getElementById('map-hint');
   if (hint) {
     if (mode === 'target') hint.textContent = 'Кликни на карте точку, куда прилетает прострел.';
+    else if (mode === 'spike') hint.textContent = 'Кликни на место установки Spike.';
     else if (mode === 'zoom') hint.textContent = 'Зажми мышь на карте и выдели прямоугольник zoom-области.';
     else if (mode === 'defenseAbility') hint.textContent = selectedDefenseAbility?.shape?.kind === 'line_segment'
       ? 'Зажми на карте и протяни линию между двумя стенками.'
@@ -11097,7 +11162,12 @@ document.getElementById('map-wrap').addEventListener('click', e => {
   const img = document.getElementById('map-img');
   if (img.style.display === 'none') return;
   const { x, y } = eventToMapPoint(e);
-  if (mapMode === 'position') {
+  if (mapMode === 'spike') {
+    spikeUsage = 'placed';
+    spikeX = x;
+    spikeY = y;
+    renderSpikeControls();
+  } else if (mapMode === 'position') {
     if (normalizeContentCategory(selectedCategory) === 'defense') return;
     const extra = activeExtraAbility();
     if (extra) {
@@ -11290,6 +11360,7 @@ function collectDraftData() {
     category:   selectedCategory,
     difficulty: selectedDifficulty,
     roundSide: selectedRoundSide,
+    spikeUsage, spikeX, spikeY,
     title:      document.getElementById('inp-title')?.value || '',
     desc:       document.getElementById('inp-desc')?.value || '',
     markerX, markerY, mapMode,
@@ -11326,6 +11397,7 @@ function moderatorAutosavePayload() {
     description: document.getElementById('inp-desc')?.value || '',
     difficulty: selectedDifficulty || '',
     round_side: selectedRoundSide || '',
+    ...spikeSubmissionPayload(contentType, selectedRoundSide),
     position_x: contentType === 'defense' ? 0 : markerX,
     position_y: contentType === 'defense' ? 0 : markerY,
     trajectory: contentType === 'defense' ? [] : trajectoryFromMarker(),
@@ -11627,6 +11699,8 @@ function categoryHasPlacedData(category = selectedCategory) {
 
 function resetCategorySpecificData() {
   selectedAbility = null;
+  spikeUsage = null;
+  spikeX = spikeY = null;
   markerX = null;
   markerY = null;
   trajectoryPoints = [];
@@ -11654,6 +11728,7 @@ function resetCategorySpecificData() {
   renderTrajectory();
   renderExtraAbilityPanel();
   renderCategoryMapExtras();
+  renderSpikeControls();
   renderDefenseAbilityPanel();
   renderDefenseAbilityMarkers();
 }
@@ -11763,6 +11838,14 @@ function _restoreDraft(sourceDraft = null) {
     const btn = document.querySelector(`#side-row .pill-btn[data-val="${side}"]`);
     if (btn) { document.getElementById('side-row').querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); selectedRoundSide = side; applyMapViewTransform(); }
   }
+  spikeUsage = d.spikeUsage || d.spike_usage || null;
+  spikeX = d.spikeX ?? d.spike_x ?? null;
+  spikeY = d.spikeY ?? d.spike_y ?? null;
+  if (selectedRoundSide !== 'attack') {
+    spikeUsage = null;
+    spikeX = spikeY = null;
+  }
+  renderSpikeControls();
 
   // Map + marker (load minimap, then place marker after image loads)
   if (d.map) {
@@ -11835,6 +11918,7 @@ function _restoreDraft(sourceDraft = null) {
           updateMarkerIcon();
         }
         renderCategoryMapExtras();
+        renderSpikeControls();
         renderDefenseAbilityMarkers();
         refreshMapGeometryAfterLayout();
         syncConfiguredDefenseAbilityShapes();
@@ -11976,6 +12060,13 @@ function collectFormValidationErrors() {
   }
 
   if (category === 'lineup' && markerX === null) add('Поставь позицию броска на карте.', mapEditorCard);
+  if (category === 'lineup' && selectedRoundSide === 'attack') {
+    if (!['placed', 'not_used'].includes(spikeUsage)) {
+      add('Укажи Spike на карте или выбери «Не используется».', mapEditorCard);
+    } else if (spikeUsage === 'placed' && (spikeX === null || spikeY === null)) {
+      add('Поставь Spike на карте.', mapEditorCard);
+    }
+  }
   if (category === 'wallbang') {
     if (!selectedWallbangWeapons().length) add('Выбери оружие для прострела.', validationCard('wallbang-weapons'));
     if (markerX === null) add('Поставь позицию выстрела на карте.', mapEditorCard);
@@ -12274,6 +12365,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
           data: {
             map, agent: selectedAgent, ability: normalizedAbility, title, description: desc,
             difficulty: selectedDifficulty, round_side: selectedRoundSide,
+            ...spikeSubmissionPayload(contentType, selectedRoundSide),
             position_x: contentType === 'defense' ? 0 : markerX,
             position_y: contentType === 'defense' ? 0 : markerY,
             trajectory: contentType === 'defense' ? [] : trajectoryFromMarker(),
@@ -12318,6 +12410,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       content_type: contentType,
       difficulty: selectedDifficulty,
       round_side: selectedRoundSide,
+      ...spikeSubmissionPayload(contentType, selectedRoundSide),
       range_radius: rangeRadius,
       category_extras_valid: categoryExtrasValid(contentType),
       user_id: uid,
@@ -12359,6 +12452,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       schema_version: 2,
       difficulty:    selectedDifficulty,
       round_side:    selectedRoundSide,
+      ...spikeSubmissionPayload(contentType, selectedRoundSide),
       status:        'pending',
       submitted_at:  serverTimestamp(),
       user_id:       uid,
@@ -12435,6 +12529,7 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   if (rewardCheckbox) rewardCheckbox.checked = canSubmitForRewards(rewardDashboard) && !moderatorDraftSourceId;
   sovaCharge = 3; sovaBounces = 0;
   selectedCategory = null; selectedDifficulty = null; selectedRoundSide = null;
+  spikeUsage = null; spikeX = spikeY = null;
   markerX = null; markerY = null;
   trajectoryPoints = [];
   extraAbilityTrajectories = [];

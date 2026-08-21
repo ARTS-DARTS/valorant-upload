@@ -607,6 +607,15 @@
               <button id="mode-trajectory" class="pill-btn" onclick="setMapMode('trajectory')"><kbd>2</kbd> ➡ Траектория</button>
               <button id="mode-wallbang-target" class="pill-btn" type="button" style="display:none;">🎯 Точка попадания</button>
             </div>
+            <div id="spike-choice" class="spike-choice" hidden role="group" aria-label="Использование Spike">
+              <button id="mode-spike" class="pill-btn spike-choice-button" type="button" aria-pressed="false">
+                <span class="spike-choice-icon" aria-hidden="true">
+                  <svg viewBox="0 0 32 32"><path d="M16 2.5 29 26H3L16 2.5Z"/><circle cx="16" cy="17.5" r="6"/><circle cx="16" cy="17.5" r="2.3"/></svg>
+                </span>
+                Указать Spike
+              </button>
+              <button id="spike-not-used" class="pill-btn spike-choice-button" type="button" aria-pressed="false">Не используется</button>
+            </div>
             <div class="map-annotation-switches">
               <button class="pill-btn map-annotation-mode" data-map-annotation-mode="full" type="button">Full</button>
               <button class="pill-btn map-annotation-mode" data-map-annotation-mode="main" type="button">Main</button>
@@ -625,6 +634,9 @@
             <div id="map-orientation-layer" class="map-orientation-layer">
             <img id="map-img" class="map-img" crossorigin="anonymous" src="" alt="" style="display:none;">
             <div id="map-site-labels" class="map-site-labels" aria-hidden="true"></div>
+            <div id="spike-marker" class="spike-map-marker" hidden aria-label="Позиция Spike">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2.5 29 26H3L16 2.5Z"/><circle cx="16" cy="17.5" r="6"/><circle cx="16" cy="17.5" r="2.3"/></svg>
+            </div>
             <div id="defense-zoom-box" class="defense-zoom-box" style="display:none;"></div>
             <div id="wallbang-target-marker" class="wallbang-target-marker" style="display:none;">×</div>
             <div id="defense-ability-markers" class="defense-ability-markers"></div>

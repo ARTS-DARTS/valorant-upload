@@ -144,6 +144,12 @@ function missingMetadata(data = {}) {
   const missing = [];
   if (!['easy', 'medium', 'hard'].includes(clean(data.difficulty))) missing.push('difficulty');
   if (!['attack', 'defense', 'any'].includes(clean(data.round_side))) missing.push('round_side');
+  if (clean(data.content_type || data.category || 'lineup') === 'lineup' && clean(data.round_side) === 'attack') {
+    const usage = clean(data.spike_usage);
+    if (!['placed', 'not_used'].includes(usage) || (usage === 'placed' && (!Number.isFinite(Number(data.spike_x)) || !Number.isFinite(Number(data.spike_y))))) {
+      missing.push('spike_usage');
+    }
+  }
   const shotAbilities = sovaShotAbilities(data);
   if (shotAbilities.length && normalizedSovaShots(data).length < shotAbilities.length) missing.push('sova_shots');
   return missing;
@@ -189,6 +195,9 @@ function safeLineup(doc, viewerUid = '') {
     ability: clean(d.ability).slice(0, 80),
     difficulty: clean(d.difficulty).slice(0, 20),
     round_side: clean(d.round_side).slice(0, 20),
+    spike_usage: clean(d.spike_usage).slice(0, 20),
+    spike_x: Number.isFinite(Number(d.spike_x)) ? finite01(d.spike_x) : null,
+    spike_y: Number.isFinite(Number(d.spike_y)) ? finite01(d.spike_y) : null,
     sova_charge: typeof d.sova_charge === 'number' ? d.sova_charge : null,
     sova_bounces: normalizedSovaBounces(d.sova_bounces),
     sova_shots: normalizedSovaShots(d),
@@ -339,10 +348,23 @@ async function saveDraft(req, res, moderator, { complete = true } = {}) {
     const contentType = ['lineup', 'combo', 'wallbang', 'defense'].includes(clean(data.content_type || data.category))
       ? clean(data.content_type || data.category)
       : clean(currentData.content_type || currentData.category || 'lineup');
+    if (complete && contentType === 'lineup' && clean(data.round_side) === 'attack') {
+      const usage = clean(data.spike_usage);
+      const placed = usage === 'placed' && Number.isFinite(Number(data.spike_x)) && Number.isFinite(Number(data.spike_y));
+      if (usage !== 'not_used' && !placed) {
+        throw Object.assign(new Error('Укажи Spike на карте или выбери «Не используется».'), { status: 400 });
+      }
+    }
       const update = {
       map: clean(data.map).slice(0, 40), agent: clean(data.agent).slice(0, 40), ability: clean(data.ability).slice(0, 80),
       title: clean(data.title).slice(0, 100), description: clean(data.description).slice(0, 1000),
       difficulty: clean(data.difficulty).slice(0, 20), round_side: clean(data.round_side).slice(0, 20),
+      ...(contentType === 'lineup' && clean(data.round_side) === 'attack' ? {
+        spike_usage: clean(data.spike_usage).slice(0, 20),
+        ...(clean(data.spike_usage) === 'placed' ? { spike_x:finite01(data.spike_x), spike_y:finite01(data.spike_y) } : {
+          spike_x:FieldValue.delete(), spike_y:FieldValue.delete(),
+        }),
+      } : { spike_usage:FieldValue.delete(), spike_x:FieldValue.delete(), spike_y:FieldValue.delete() }),
       position_x: finite01(data.position_x), position_y: finite01(data.position_y), trajectory: safePoints(data.trajectory),
         extra_abilities: extras, range_radius: Math.max(0, Math.min(.5, Number(data.range_radius) || 0)),
         sova_charge: Math.max(0, Math.min(3, Number(data.sova_charge ?? 3))),
@@ -461,6 +483,12 @@ async function autosaveDraft(req, res, moderator) {
       map: clean(data.map).slice(0, 40), agent: clean(data.agent).slice(0, 40), ability: clean(data.ability).slice(0, 80),
       title: clean(data.title).slice(0, 100), description: clean(data.description).slice(0, 1000),
       difficulty: clean(data.difficulty).slice(0, 20), round_side: clean(data.round_side).slice(0, 20),
+      ...(contentType === 'lineup' && clean(data.round_side) === 'attack' ? {
+        spike_usage: clean(data.spike_usage).slice(0, 20),
+        ...(clean(data.spike_usage) === 'placed' ? { spike_x:finite01(data.spike_x), spike_y:finite01(data.spike_y) } : {
+          spike_x:FieldValue.delete(), spike_y:FieldValue.delete(),
+        }),
+      } : { spike_usage:FieldValue.delete(), spike_x:FieldValue.delete(), spike_y:FieldValue.delete() }),
       position_x: finite01(data.position_x), position_y: finite01(data.position_y), trajectory: safePoints(data.trajectory),
       extra_abilities: Array.isArray(data.extra_abilities) ? data.extra_abilities.slice(0, 2).map((item, index) => ({
         ability: clean(item?.ability).slice(0, 80), icon: clean(item?.icon).slice(0, 1000), order: index + 1,

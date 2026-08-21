@@ -1753,3 +1753,15 @@ body.footage-library-open { overflow:hidden; }
 *::-webkit-scrollbar-thumb{min-height:36px;border:2px solid #08131f;border-radius:999px;background:linear-gradient(180deg,#43b9d5,#276d89)}
 *::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#69d9ee,#3494b2)}
 *::-webkit-scrollbar-corner{background:#08131f}
+.spike-choice{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-left:10px;border-left:1px solid var(--border)}
+.spike-choice[hidden]{display:none}
+.spike-choice-button{min-height:36px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.spike-choice-button.is-selected{border-color:#f6dc38;background:rgba(246,220,56,.12);color:#fff}
+.spike-choice-icon{width:21px;height:21px;display:grid;place-items:center;flex:0 0 21px}
+.spike-choice-icon svg,.spike-map-marker svg{width:100%;height:100%;overflow:visible}
+.spike-choice-icon svg>path,.spike-map-marker svg>path{fill:#f6dc38;stroke:#302900;stroke-width:1.5;stroke-linejoin:round}
+.spike-choice-icon svg>circle:first-of-type,.spike-map-marker svg>circle:first-of-type{fill:#111827;stroke:#fff6a4;stroke-width:1.4}
+.spike-choice-icon svg>circle:last-of-type,.spike-map-marker svg>circle:last-of-type{fill:#f6dc38}
+.spike-map-marker{position:absolute;width:30px;height:30px;transform:translate(-50%,-50%);z-index:5;pointer-events:none;filter:drop-shadow(0 0 5px rgba(246,220,56,.78))}
+.spike-map-marker[hidden]{display:none}
+@media(max-width:760px){.spike-choice{width:100%;padding:8px 0 0;border-left:0;border-top:1px solid var(--border)}.spike-choice-button{flex:1 1 150px}}
