@@ -112,16 +112,24 @@ function updateRewardSubmitOptIn() {
 function rewardDemandRows(value) {
   return Object.values(value || {}).filter(row => row && typeof row === 'object');
 }
+function isRealRewardMap(value) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[—–-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return false;
+  return ![
+    'выбери карту', 'выберите карту', 'choose map', 'select map',
+    'harita seç', 'elige un mapa', 'selecione o mapa',
+  ].includes(normalized);
+}
 function rewardDemandIcon(agentName) {
   const agent = agentsList.find(item => item.displayName === agentName);
   return proxiedValorantUrl(agent?.displayIconSmall || agent?.displayIcon || '');
 }
 function renderRewardDemand(deficits) {
   const globalRows = rewardDemandRows(deficits?.global);
-  const mapRows = rewardDemandRows(deficits?.map_pool);
+  const mapRows = rewardDemandRows(deficits?.map_pool).filter(row => isRealRewardMap(row.map));
   const subscriberCounts = deficits?.agent_notification_subscribers || {};
   const activeMaps = (rewardDashboard?.settings?.active_map_pool || [])
-    .map(value => String(value || '').trim()).filter(Boolean);
+    .map(value => String(value || '').trim()).filter(isRealRewardMap);
   if (!globalRows.length && !mapRows.length) return '';
   const groups = new Map();
   mapRows.forEach(row => {
@@ -161,7 +169,7 @@ function renderRewardDemand(deficits) {
       minCount:rows.length?Math.min(...rows.map(row=>Number(row.count||0))):9999,
     };
   };
-  const maps=[...new Set([...activeMaps,...agentRows.map(row=>String(row.map||'').trim()).filter(Boolean)])].sort((a,b)=>{
+  const maps=[...new Set([...activeMaps,...agentRows.map(row=>String(row.map||'').trim()).filter(isRealRewardMap)])].sort((a,b)=>{
     const ap=mapPriority(a),bp=mapPriority(b);
     return bp.score-ap.score || bp.deficitCount-ap.deficitCount || ap.minCount-bp.minCount || a.localeCompare(b,'ru');
   });
