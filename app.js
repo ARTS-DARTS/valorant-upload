@@ -124,6 +124,12 @@ function rewardDemandIcon(agentName) {
   const agent = agentsList.find(item => item.displayName === agentName);
   return proxiedValorantUrl(agent?.displayIconSmall || agent?.displayIcon || '');
 }
+function rewardDemandAbilityIcon(agentName, abilityName) {
+  const normalized = value => String(value || '').trim().toLocaleLowerCase('ru-RU');
+  const agent = agentsList.find(item => normalized(item.displayName) === normalized(agentName));
+  const ability = (agent?.abilities || []).find(item => normalized(item.displayName) === normalized(abilityName));
+  return proxiedValorantUrl(ability?.displayIcon || '');
+}
 function renderRewardDemand(deficits) {
   const globalRows = rewardDemandRows(deficits?.global);
   const mapRows = rewardDemandRows(deficits?.map_pool).filter(row => isRealRewardMap(row.map));
@@ -184,7 +190,8 @@ function renderRewardDemand(deficits) {
   const mapButtons=maps.map((map,index)=>`<button class="reward-demand-map${map===rewardDemandMap?' selected':''}${mapPriority(map).deficitCount?' priority':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${esc(map)}${mapPriority(map).deficitCount?`<small>приоритет ${index+1}</small>`:''}</button>`).join('');
   const abilityCard=row=>{
     const count=Number(row.count||0), urgent=count===0;
-    return `<article class="reward-demand-ability${urgent?' urgent':''}"><span class="reward-demand-count">${count}</span><div><strong>${esc(row.ability||'Способность')}</strong><small>${esc(row.side||'any')}</small></div><b>${urgent?'МАКС. ПРИОРИТЕТ':`Уже есть: ${count}`}</b></article>`;
+    const icon=rewardDemandAbilityIcon(row.agent||rewardDemandAgent,row.ability);
+    return `<article class="reward-demand-ability${urgent?' urgent':''}"><span class="reward-demand-ability-icon">${icon?`<img src="${esc(icon)}" alt="">`:'✦'}</span><span class="reward-demand-count">${count}</span><div><strong>${esc(row.ability||'Способность')}</strong><small>${esc(row.side||'any')}</small></div><b>${urgent?'МАКС. ПРИОРИТЕТ':`Уже есть: ${count}`}</b></article>`;
   };
   const sideGroups=[
     { key:'attack', label:'Атака', icon:'⚔' },
