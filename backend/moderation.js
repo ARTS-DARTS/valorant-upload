@@ -798,6 +798,38 @@ async function moderate(req, res, moderator) {
   checkActionRate(moderator.uid);
   if (action === 'save_draft') return saveDraft(req, res, moderator, { complete:true });
   if (action === 'save_progress') return saveDraft(req, res, moderator, { complete:false });
+  if (action === 'set_reward_participation') {
+    if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error: 'Invalid lineup id' });
+    const enabled = req.body?.enabled === true;
+    const termsVersion = clean(req.body?.termsVersion).slice(0, 60);
+    if (enabled && !termsVersion) return res.status(400).json({ error: 'Не удалось определить актуальную версию условий наград' });
+    const db = getFirestore();
+    const ref = db.collection('lineups').doc(lineupId);
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status:404 });
+      const data = snap.data() || {};
+      assertCanModerateLineup(moderator, data);
+      if (!['pending', 'moderator_draft'].includes(data.status)) throw Object.assign(new Error('Лайнап уже обработан'), { status:409 });
+      if (clean(data.moderation_lock_uid) !== moderator.uid || timestampMillis(data.moderation_lock_expires_at) <= Date.now()) {
+        throw Object.assign(new Error('Сначала заново возьми лайнап в работу'), { status:409 });
+      }
+      tx.update(ref, {
+        reward_program_opt_in:enabled,
+        reward_terms_version:enabled ? termsVersion : FieldValue.delete(),
+      });
+      tx.create(db.collection('moderator_logs').doc(), {
+        lineup_id:lineupId,
+        action:'set_reward_participation',
+        enabled,
+        moderator_uid:moderator.uid,
+        moderator_name:moderator.name,
+        moderator_role:moderator.role,
+        created_at:FieldValue.serverTimestamp(),
+      });
+    });
+    return res.status(200).json({ ok:true, enabled });
+  }
   if (action === 'seed_metadata_queue') return seedMetadataQueue(res, moderator);
   if (action === 'complete_metadata') return completeMetadata(req, res, moderator);
   if (action === 'release_claim') return releaseClaim(req, res, moderator);

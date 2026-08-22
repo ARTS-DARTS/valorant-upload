@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const queueSource = readFileSync(new URL('../moderation.js', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const backendSource = readFileSync(new URL('../backend/moderation.js', import.meta.url), 'utf8');
 
 test('reward eligibility is decided explicitly at final moderation submit', () => {
   assert.match(queueSource, /итоговая оценка появится при завершении проверки/);
@@ -46,7 +47,14 @@ test('reward review participation is read from the current server lineup', () =>
 });
 
 test('moderator reward indicator mirrors the stored participation flag', () => {
-  assert.match(appSource, /input\.disabled = moderationActive/);
   assert.match(appSource, /else if \(moderationActive\) input\.checked = moderatorRewardOptIn === true/);
   assert.match(appSource, /moderatorRewardOptIn = d\.moderatorRewardOptIn === true;[\s\S]*?updateRewardSubmitOptIn\(\)/);
+});
+
+test('moderator can persist reward participation before completing review', () => {
+  assert.match(appSource, /action:'set_reward_participation'/);
+  assert.match(appSource, /moderatorRewardOptIn = enabled/);
+  assert.match(backendSource, /action === 'set_reward_participation'/);
+  assert.match(backendSource, /reward_program_opt_in:enabled/);
+  assert.match(backendSource, /reward_terms_version:enabled \? termsVersion : FieldValue\.delete\(\)/);
 });

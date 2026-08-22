@@ -106,12 +106,41 @@ function updateRewardSubmitOptIn() {
   const becomingAvailable = active && !moderatorDraftSourceId && host?.hidden === true;
   if (host) host.hidden = !active;
   if (input) {
-    input.disabled = moderationActive;
+    input.disabled = false;
     if (!active) input.checked = false;
     else if (moderationActive) input.checked = moderatorRewardOptIn === true;
     else if (becomingAvailable) input.checked = true;
   }
 }
+
+document.getElementById('reward-submit-checkbox')?.addEventListener('change', async event => {
+  if (!moderatorDraftSourceId || !currentUser) return;
+  const input = event.currentTarget;
+  const enabled = input.checked === true;
+  input.disabled = true;
+  try {
+    const token = await currentUser.getIdToken();
+    const response = await fetch('/api/moderation', {
+      method:'POST',
+      headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body:JSON.stringify({
+        lineupId:moderatorDraftSourceId,
+        action:'set_reward_participation',
+        enabled,
+        termsVersion:rewardDashboard?.settings?.terms_version || '',
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Ошибка ${response.status}`);
+    moderatorRewardOptIn = enabled;
+    toast(enabled ? 'Участие в наградах включено' : 'Участие в наградах выключено', 's');
+  } catch (error) {
+    input.checked = !enabled;
+    toast('Не удалось изменить участие: ' + toSafeErrorMessage(error), 'e');
+  } finally {
+    input.disabled = false;
+  }
+});
 function rewardDemandRows(value) {
   return Object.values(value || {}).filter(row => row && typeof row === 'object');
 }
