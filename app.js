@@ -12869,8 +12869,36 @@ function enableTwitchPlayerDrag() {
   };
   handle.addEventListener('pointerup', finish); handle.addEventListener('pointercancel', finish);
 }
+function enableTwitchRestoreDrag() {
+  const shell = document.getElementById('twitch-live-player');
+  const restore = document.getElementById('twitch-live-restore');
+  if (!shell || !restore) return;
+  let drag = null;
+  let suppressClick = false;
+  restore.addEventListener('pointerdown', event => {
+    const rect = restore.getBoundingClientRect();
+    drag = { pointerId:event.pointerId, startX:event.clientX, startY:event.clientY, dx:event.clientX-rect.left, dy:event.clientY-rect.top };
+    shell.style.left = `${rect.left}px`; shell.style.top = `${rect.top}px`; shell.style.right = 'auto'; shell.style.bottom = 'auto'; shell.style.transformOrigin = 'top left';
+    restore.setPointerCapture(event.pointerId); restore.classList.add('is-dragging'); event.preventDefault();
+  });
+  restore.addEventListener('pointermove', event => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY) > 4) suppressClick = true;
+    shell.style.left = `${Math.max(8,Math.min(innerWidth-42,event.clientX-drag.dx))}px`;
+    shell.style.top = `${Math.max(8,Math.min(innerHeight-42,event.clientY-drag.dy))}px`;
+  });
+  const finish = event => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    drag = null; restore.classList.remove('is-dragging');
+    const rect = restore.getBoundingClientRect();
+    localStorage.setItem('vlineups:twitch-live-position',JSON.stringify({x:Math.round(rect.left),y:Math.round(rect.top)}));
+  };
+  restore.addEventListener('pointerup',finish); restore.addEventListener('pointercancel',finish);
+  restore.addEventListener('click',event => { if (!suppressClick) return; suppressClick=false; event.preventDefault(); event.stopImmediatePropagation(); },true);
+}
 restoreTwitchPlayerPosition();
 enableTwitchPlayerDrag();
+enableTwitchRestoreDrag();
 function enableTwitchSoundAfterGesture() {
   if (!activeTwitchPlayer) return;
   try {

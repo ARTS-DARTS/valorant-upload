@@ -28,6 +28,8 @@ test('viewer can hide and restore the player without a close action', () => {
   assert.match(js, /classList\.remove\('minimized'\)/);
   assert.match(js, /vlineups:twitch-live-position/);
   assert.match(js, /setPointerCapture/);
+  assert.match(js, /function enableTwitchRestoreDrag\(\)/);
+  assert.match(js, /suppressClick/);
 });
 
 test('compact Twitch embed stays passive on hover', () => {
