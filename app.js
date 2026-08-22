@@ -182,12 +182,21 @@ function renderRewardDemand(deficits) {
     .map(value => String(value || '').trim()).filter(isRealRewardMap);
   if (!globalRows.length && !mapRows.length) return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>${categoryLabels[rewardDemandCategory]}</h3></div></header>${categoryChooser}<div class="reward-empty">Для этой открытой категории аналитика пока формируется.</div></section>`;
   if (rewardDemandCategory !== 'lineup') {
-    const maps = [...new Set([...activeMaps, ...mapRows.map(row => String(row.map || '').trim()).filter(isRealRewardMap)])];
+    const normalizedMap = value => String(value || '').trim().toLocaleLowerCase('ru-RU');
+    const poolOrder = new Map(activeMaps.map((map, index) => [normalizedMap(map), index]));
+    const mapLabels = new Map(activeMaps.map(map => [normalizedMap(map), map]));
+    mapRows.forEach(row => { const key=normalizedMap(row.map); if(key&&!mapLabels.has(key)) mapLabels.set(key,String(row.map||'').trim()); });
+    const mapMissing = key => mapRows.filter(row => normalizedMap(row.map) === key).reduce((sum,row) => sum + Math.max(0, Number(row.target_count||5)-Number(row.count||0)), 0);
+    const maps = [...mapLabels.keys()].sort((a,b) => mapMissing(b)-mapMissing(a) || (poolOrder.get(a)??999)-(poolOrder.get(b)??999) || a.localeCompare(b,'ru'));
     if (!maps.includes(rewardDemandMap)) rewardDemandMap = maps[0] || '';
-    const selectedRows = mapRows.filter(row => row.map === rewardDemandMap);
+    const selectedRows = mapRows.filter(row => normalizedMap(row.map) === rewardDemandMap).sort((a,b) => {
+      const missingA=Math.max(0,Number(a.target_count||5)-Number(a.count||0));
+      const missingB=Math.max(0,Number(b.target_count||5)-Number(b.count||0));
+      return missingB-missingA || String(a.agent||'').localeCompare(String(b.agent||''),'ru') || String(a.zone||'').localeCompare(String(b.zone||''),'ru');
+    });
     const mapButtons = maps.map(map => {
-      const missing = mapRows.filter(row => row.map === map && row.deficit === true).length;
-      return `<button class="reward-demand-map${map===rewardDemandMap?' selected':''}${missing?' priority':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${esc(map)}${missing?`<small>не хватает: ${missing}</small>`:''}</button>`;
+      const missing = mapMissing(map);
+      return `<button class="reward-demand-map${map===rewardDemandMap?' selected':''}${missing?' priority':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${esc(mapLabels.get(map)||map)}${missing?`<small>не хватает: ${missing}</small>`:''}</button>`;
     }).join('');
     const cards = selectedRows.map(row => {
       const count = Number(row.count || 0);
@@ -195,7 +204,8 @@ function renderRewardDemand(deficits) {
       const zone = String(row.zone || '').toUpperCase();
       const title = rewardDemandCategory === 'defense' ? `${row.agent || 'Агент'} · ${zone} Site` : (row.title || row.ability || categoryLabels[rewardDemandCategory]);
       const missing = Math.max(0, target - count);
-      return `<article class="reward-demand-ability${row.deficit===true?' urgent':''}"><span class="reward-demand-ability-icon">${rewardDemandCategory==='defense'?'◆':'✦'}</span><span class="reward-demand-count">${count}${target?`/${target}`:''}</span><div><strong>${esc(title)}</strong><small>${row.deficit===true?`Нужно ещё: ${missing}`:'Квота заполнена'}</small></div><b>${row.deficit===true?'АКТИВНОЕ ЗАДАНИЕ':'БЕЗ ДОП. VP'}</b></article>`;
+      const agentIcon = rewardDemandCategory === 'defense' ? rewardDemandIcon(row.agent) : '';
+      return `<article class="reward-demand-ability${row.deficit===true?' urgent':''}"><span class="reward-demand-ability-icon">${agentIcon?`<img src="${esc(agentIcon)}" alt="${esc(row.agent||'')}">`:rewardDemandCategory==='defense'?'◆':'✦'}</span><span class="reward-demand-count">${count}${target?`/${target}`:''}</span><div><strong>${esc(title)}</strong><small>${row.deficit===true?`Нужно ещё: ${missing}`:'Квота заполнена'}</small></div><b>${row.deficit===true?'АКТИВНОЕ ЗАДАНИЕ':'БЕЗ ДОП. VP'}</b></article>`;
     }).join('');
     return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>${categoryLabels[rewardDemandCategory]}</h3></div></header>${categoryChooser}<div class="reward-demand-mode-note">${rewardDemandCategory==='defense'?'Для каждого доступного агента на каждом сайте нужно 5 одобренных сетапов защиты. Атака не учитывается. После заполнения квоты дополнительные VP не начисляются.':'Показывается спрос только выбранной открытой категории.'}</div><div class="reward-demand-stage"><label>Карта</label><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>${rewardDemandCategory==='defense'?'Агенты, сайты и заполнение квоты':'Активный спрос'}</label><div class="reward-demand-side-columns"><section class="reward-demand-side-group"><div>${cards||'<p>Активных заданий нет</p>'}</div></section></div></div></section>`;
   }

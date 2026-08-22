@@ -60,6 +60,9 @@ test('reward demand starts with an open category and explains setup quotas', () 
   assert.match(app, /Для каждого доступного агента на каждом сайте нужно 5 одобренных сетапов защиты/);
   assert.match(app, /Атака не учитывается/);
   assert.match(app, /row\.agent \|\| 'Агент'/);
+  assert.match(app, /const normalizedMap = value/);
+  assert.match(app, /mapMissing\(b\)-mapMissing\(a\)/);
+  assert.match(app, /rewardDemandIcon\(row\.agent\)/);
   assert.match(app, /БЕЗ ДОП\. VP/);
 });
 
