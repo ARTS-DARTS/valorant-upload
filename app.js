@@ -11299,6 +11299,7 @@ function renderTrajectory() {
         icon.setAttribute('height', '18');
         icon.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         icon.setAttribute('class', 'trajectory-start-icon');
+        icon.setAttribute('transform', `rotate(${-currentMapQuarterTurns() * 90} ${cx} ${cy})`);
         svg.appendChild(icon);
       }
       if (orderLabel && i === path.length - 1) {
