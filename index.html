@@ -1062,6 +1062,11 @@
 
 <div id="toasts"></div>
 <div id="notification-banners" class="notification-banners" aria-live="polite"></div>
+<aside id="twitch-live-player" class="twitch-live-player" hidden aria-label="Прямой эфир Twitch">
+  <header><div><i></i><span>СЕЙЧАС В ЭФИРЕ</span><strong id="twitch-live-name">Twitch</strong></div><div class="twitch-live-actions"><button id="twitch-live-minimize" type="button" aria-label="Свернуть плеер" title="Свернуть">—</button><button id="twitch-live-close" type="button" aria-label="Закрыть плеер" title="Закрыть">×</button></div></header>
+  <div id="twitch-live-embed" class="twitch-live-embed"></div>
+  <button id="twitch-live-restore" class="twitch-live-restore" type="button" hidden><i></i><span>Эфир</span></button>
+</aside>
 <div id="notifications-intro" class="notifications-intro" hidden>
   <div class="notifications-intro-card">
     <div class="notifications-intro-icon">🔔</div>
