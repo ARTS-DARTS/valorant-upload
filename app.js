@@ -12775,7 +12775,7 @@ async function scanTwitchLiveChannels() {
     const mount = document.getElementById('twitch-live-embed');
     if (!shell || !mount || generation !== twitchLiveGeneration) return;
     shell.className = `twitch-live-player ${config.position || 'bottom-right'} is-checking`;
-    shell.hidden = true;
+    shell.hidden = false;
 
     const tryChannel = index => {
       if (generation !== twitchLiveGeneration) return;
@@ -12786,7 +12786,7 @@ async function scanTwitchLiveChannels() {
       let selected = false;
       let ready = false;
       let confirmedOnline = false;
-      const player = new Twitch.Player('twitch-live-embed', { width:534, height:300, channel:streamer.channel, parent:[location.hostname], autoplay:false, muted:true });
+      const player = new Twitch.Player('twitch-live-embed', { width:534, height:300, channel:streamer.channel, parent:[location.hostname], autoplay:config.autoplay !== false, muted:true });
       const startLivePlayback = () => {
         if (!ready || !confirmedOnline || config.autoplay === false || generation !== twitchLiveGeneration) return;
         try {
@@ -12809,6 +12809,8 @@ async function scanTwitchLiveChannels() {
         player.setVolume(activeTwitchVolume);
         player.setMuted(true);
         startLivePlayback();
+        setTimeout(startLivePlayback, 350);
+        setTimeout(startLivePlayback, 1200);
       });
       player.addEventListener(Twitch.Player.ONLINE, () => {
         if (resolved || generation !== twitchLiveGeneration) return;
@@ -12821,12 +12823,15 @@ async function scanTwitchLiveChannels() {
         player.setVolume(activeTwitchVolume);
         player.setMuted(true);
         startLivePlayback();
+        setTimeout(startLivePlayback, 350);
+        setTimeout(startLivePlayback, 1200);
         twitchLivePollTimer = setTimeout(scanTwitchLiveChannels, 180000);
       });
       player.addEventListener(Twitch.Player.OFFLINE, () => {
         if (generation !== twitchLiveGeneration) return;
         if (!resolved) { resolved = true; clearTimeout(fallback); tryChannel(index + 1); return; }
         if (!selected) return;
+        confirmedOnline = false;
         try { player.pause(); } catch (_) {}
         activeTwitchPlayer = null;
         hideTwitchLivePlayer();

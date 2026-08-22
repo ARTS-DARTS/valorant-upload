@@ -1777,3 +1777,4 @@ body.footage-library-open { overflow:hidden; }
 /* Keep the compact stream passive: Twitch receives no hover or click input. */
 .twitch-live-embed iframe{pointer-events:none}
 .twitch-live-restore{cursor:grab;touch-action:none;user-select:none}.twitch-live-restore.is-dragging{cursor:grabbing}
+.twitch-live-player.is-checking{visibility:visible;opacity:0;pointer-events:none}
