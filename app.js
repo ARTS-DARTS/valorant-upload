@@ -102,10 +102,13 @@ function updateRewardSubmitOptIn() {
   const host = document.getElementById('reward-submit-optin');
   const input = document.getElementById('reward-submit-checkbox');
   const active = canSubmitForRewards(rewardDashboard);
+  const moderationActive = !!moderatorDraftSourceId;
   const becomingAvailable = active && !moderatorDraftSourceId && host?.hidden === true;
-  if (host) host.hidden = !active || !!moderatorDraftSourceId;
+  if (host) host.hidden = !active;
   if (input) {
-    if (!active || moderatorDraftSourceId) input.checked = false;
+    input.disabled = moderationActive;
+    if (!active) input.checked = false;
+    else if (moderationActive) input.checked = moderatorRewardOptIn === true;
     else if (becomingAvailable) input.checked = true;
   }
 }
@@ -11841,6 +11844,7 @@ function _restoreDraft(sourceDraft = null) {
   moderatorDraftSourceId = d.moderatorDraftSourceId || '';
   moderatorRewardOptIn = d.moderatorRewardOptIn === true;
   moderatorSelectedAuthor = d.moderatorAuthor?.uid ? d.moderatorAuthor : null;
+  updateRewardSubmitOptIn();
   sageWallHandlesHidden = d.sageWallHandlesHidden === true;
   showModeratorAuthorPicker(moderatorSelectedAuthor);
   renderResubmissionBanner();

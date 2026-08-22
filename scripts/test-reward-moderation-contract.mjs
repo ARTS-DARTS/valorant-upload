@@ -44,3 +44,9 @@ test('reward review participation is read from the current server lineup', () =>
   assert.match(appSource, /currentLineup\.data\(\)\?\.reward_program_opt_in === true\s*\|\| moderatorRewardOptIn === true/);
   assert.doesNotMatch(appSource, /if \(moderatorRewardOptIn\) \{[\s\S]*?requestModeratorRewardDecision/);
 });
+
+test('moderator reward indicator mirrors the stored participation flag', () => {
+  assert.match(appSource, /input\.disabled = moderationActive/);
+  assert.match(appSource, /else if \(moderationActive\) input\.checked = moderatorRewardOptIn === true/);
+  assert.match(appSource, /moderatorRewardOptIn = d\.moderatorRewardOptIn === true;[\s\S]*?updateRewardSubmitOptIn\(\)/);
+});
