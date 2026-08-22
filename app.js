@@ -1245,6 +1245,10 @@ function addExtraAbilityByName(abilityName) {
     toast('Пока максимум 2 дополнительные траектории', 'w');
     return;
   }
+  if (abilityName === selectedAbility && extraAbilityTrajectories.some(item => item.ability === selectedAbility)) {
+    toast('Для основной способности доступна только одна дополнительная траектория', 'w');
+    return;
+  }
   const ab = selectedAgentAbilities().find(item => item.ability === abilityName);
   if (!ab) {
     toast('Выбери дополнительную абилку', 'w');
@@ -1309,10 +1313,6 @@ function renderSageWallOptions() {
   if (handlesToggle) {
     handlesToggle.textContent = sageWallHandlesHidden ? 'Показать точки' : 'Скрыть точки';
     handlesToggle.setAttribute('aria-pressed', String(sageWallHandlesHidden));
-  }
-  if (abilityName === selectedAbility && extraAbilityTrajectories.some(item => item.ability === selectedAbility)) {
-    toast('Для основной способности доступна только одна дополнительная траектория', 'w');
-    return;
   }
 }
 
