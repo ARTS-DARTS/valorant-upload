@@ -475,7 +475,10 @@ async function autosaveDraft(req, res, moderator) {
     if (currentExpiry <= Date.now()) {
       throw Object.assign(new Error('Время на проверку истекло. Возьми лайнап в работу заново.'), { status: 409 });
     }
-    expiresAt = new Date(currentExpiry);
+    // Editing is active, so extend the lease as part of the same transaction.
+    // This complements the client heartbeat and prevents a transient missed
+    // heartbeat from exposing the lineup to another moderator.
+    expiresAt = new Date(Date.now() + MODERATION_LOCK_MS);
     const contentType = ['lineup', 'combo', 'wallbang', 'defense'].includes(clean(data.content_type || data.category))
       ? clean(data.content_type || data.category)
       : clean(current.content_type || current.category || 'lineup');

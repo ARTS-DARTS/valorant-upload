@@ -49,6 +49,13 @@ test('moderator autosave never nests Firestore delete sentinels', () => {
   );
   assert.match(autosaveDraft, /spike_usage: clean\(data\.spike_usage\)/);
   assert.doesNotMatch(autosaveDraft, /FieldValue\.delete\(\)/);
+  assert.match(autosaveDraft, /expiresAt = new Date\(Date\.now\(\) \+ MODERATION_LOCK_MS\)/);
+});
+
+test('active moderator claim is renewed before its lease expires', () => {
+  assert.match(moderationSource, /action: 'renew_claim'/);
+  assert.match(moderationSource, /claimHeartbeatTimer = setInterval\(\(\) => renewClaim\(lineupId\), 2 \* 60_000\)/);
+  assert.match(moderationSource, /claimExpiresAt = Number\(claim\.expires_at\)/);
 });
 
 test('moderator editor exposes rejection and clears its active claim', () => {

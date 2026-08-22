@@ -6,6 +6,7 @@ let claimHeartbeatTimer = null;
 let claimedLineupId = '';
 let claimExpiresAt = 0;
 let claimCountdownTimer = null;
+let claimRenewalInFlight = false;
 let totalQueueItems = 0;
 let renderedQueueSignature = '';
 let active = false;
@@ -444,11 +445,38 @@ function renderClaimTimer() {
   if (seconds === 0) clearClaim();
 }
 
+async function renewClaim(lineupId = claimedLineupId) {
+  if (!lineupId || lineupId !== claimedLineupId || claimRenewalInFlight) return;
+  claimRenewalInFlight = true;
+  try {
+    const claim = await api('', {
+      method: 'POST',
+      body: JSON.stringify({ lineupId, action: 'renew_claim' }),
+    });
+    if (lineupId !== claimedLineupId) return;
+    claimExpiresAt = Number(claim.expires_at) || (Date.now() + 10 * 60_000);
+    const item = loadedItems.find(entry => entry.id === lineupId);
+    if (item) item.moderation_lock_expires_at = claimExpiresAt;
+    renderClaimTimer();
+  } catch (error) {
+    if (lineupId !== claimedLineupId) return;
+    if (error.status === 404 || error.status === 409) {
+      clearClaim();
+      context.toast('Бронь лайнапа потеряна. Правки сохранены локально — обнови очередь и возьми его заново.', 'e');
+      return;
+    }
+    console.warn('moderation claim renewal', error?.message || error);
+  } finally {
+    claimRenewalInFlight = false;
+  }
+}
+
 function startClaimHeartbeat(lineupId, expiresAt) {
   claimedLineupId = lineupId;
   claimExpiresAt = Number(expiresAt) || (Date.now() + 10 * 60_000);
   clearInterval(claimHeartbeatTimer);
   clearInterval(claimCountdownTimer);
+  claimHeartbeatTimer = setInterval(() => renewClaim(lineupId), 2 * 60_000);
   claimCountdownTimer = setInterval(renderClaimTimer, 1000);
   renderClaimTimer();
 }
@@ -460,6 +488,7 @@ function clearClaim() {
   clearInterval(claimCountdownTimer);
   claimHeartbeatTimer = null;
   claimCountdownTimer = null;
+  claimRenewalInFlight = false;
   renderClaimTimer();
 }
 
