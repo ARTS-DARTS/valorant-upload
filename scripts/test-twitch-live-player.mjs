@@ -21,8 +21,9 @@ test('player reads admin configuration and follows live state', () => {
   assert.match(js, /setTimeout\(scanTwitchLiveChannels, 180000\)/);
 });
 
-test('viewer can minimize and close the player', () => {
-  assert.match(js, /vlineups:twitch-live-closed/);
+test('viewer can hide and restore the player without a close action', () => {
+  assert.doesNotMatch(html, /id="twitch-live-close"/);
+  assert.match(js, /activeTwitchPlayer\?\.pause\(\)/);
   assert.match(js, /classList\.add\('minimized'\)/);
   assert.match(js, /classList\.remove\('minimized'\)/);
   assert.match(js, /vlineups:twitch-live-position/);
@@ -34,4 +35,9 @@ test('compact Twitch embed stays passive on hover', () => {
   assert.match(js, /PLAYBACK_BLOCKED[\s\S]*player\.setMuted\(true\);[\s\S]*player\.play\(\)/);
   assert.match(js, /function enableTwitchSoundAfterGesture\(\)[\s\S]*activeTwitchPlayer\.setMuted\(false\)/);
   assert.match(js, /document\.addEventListener\('pointerdown', enableTwitchSoundAfterGesture, true\)/);
+});
+
+test('muted autoplay is reinforced when the Twitch player becomes ready', () => {
+  assert.match(js, /Twitch\.Player\.READY/);
+  assert.match(js, /Twitch\.Player\.READY[\s\S]*player\.setMuted\(true\);[\s\S]*player\.play\(\)/);
 });
