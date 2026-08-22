@@ -4545,7 +4545,7 @@ async function requestModeratorRewardDecision(lineupId) {
       const quality = overlay.querySelector('input[name="final-reward-quality"]:checked')?.value;
       const total = overlay.querySelector('[data-final-reward-total]');
       if (!eligible || !quality) total.textContent = '—';
-      else total.textContent = eligible === 'no' ? '0 VP' : `${Math.min(11, 7 + (quality === 'yes' ? 1 : 0) + (rewardContext.deficit?.global ? 1 : 0) + (rewardContext.deficit?.map_pool ? 2 : 0) + (rewardContext.matched_task ? 1 : 0))} VP`;
+      else total.textContent = eligible === 'no' ? '0 VP' : `${Math.min(12, 7 + (quality === 'yes' ? 1 : 0) + (rewardContext.deficit?.global ? 1 : 0) + (rewardContext.deficit?.map_pool ? 2 : 0) + (rewardContext.matched_task ? 1 : 0))} VP`;
     };
     overlay.addEventListener('change', refreshTotal);
     overlay.querySelector('[data-final-reward-cancel]').addEventListener('click', () => close(null));
