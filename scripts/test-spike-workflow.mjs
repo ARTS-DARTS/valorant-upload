@@ -20,6 +20,12 @@ test('Spike uses the game-shaped marker at reduced map size', () => {
   assert.match(css, /\.spike-map-marker\{[^}]*width:20px;height:20px/);
 });
 
+test('map ability icons face down independently from Spike', () => {
+  assert.match(css, /\.trajectory-start-icon\{[^}]*rotate\(calc\(var\(--map-counter-rotation, 0deg\) - 90deg\)\)/);
+  assert.match(css, /#marker-icon\{[^}]*rotate\(calc\(var\(--map-counter-rotation, 0deg\) - 90deg\)\)/);
+  assert.match(css, /\.spike-map-marker img\{[^}]*\+ 90deg/);
+});
+
 test('moderation preserves and validates Spike metadata', () => {
   assert.match(moderation, /missing\.push\('spike_usage'\)/);
   assert.match(moderation, /spike_usage: clean\(data\.spike_usage\)/);
