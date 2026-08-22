@@ -40,7 +40,7 @@ test('reward currency is consistently presented as VP', () => {
   assert.match(rewardDialog, /activePayout/);
   assert.doesNotMatch(rewardDialog, /балл(?:ы|ов|а)?/i);
   assert.doesNotMatch(rewardsPage, /балл(?:ы|ов|а)?/i);
-  assert.match(html, /7–11 VP/);
+  assert.match(html, /7–12 VP/);
 });
 
 test('author statistics keeps a server-backed VP summary', () => {

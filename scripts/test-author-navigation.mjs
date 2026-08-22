@@ -12,7 +12,7 @@ test('rewards page returns to the author cabinet, not training', async () => {
 
 test('training page contains only training content', async () => {
   const html = await read('author-training/index.html');
-  assert.doesNotMatch(html, /7–11 VP за каждый одобренный лайнап/);
+  assert.doesNotMatch(html, /7–12 VP за каждый одобренный лайнап/);
   assert.doesNotMatch(html, /rewards-widget\.js/);
 });
 
