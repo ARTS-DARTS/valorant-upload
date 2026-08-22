@@ -12390,7 +12390,13 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         await moderationController?.load?.();
         throw new Error('Этот лайнап уже удалён или обработан. Очередь обновлена — выбери актуальный лайнап.');
       }
-      const rewardReviewRequired = currentLineup.data()?.reward_program_opt_in === true;
+      // Treat either source as affirmative. The moderation queue is loaded by
+      // the trusted backend and can already know that the author opted in,
+      // while a direct Firestore read may temporarily expose an older
+      // projection of the document. Only using the latter made the dialog
+      // disappear and allowed the draft to be returned to the queue silently.
+      const rewardReviewRequired = currentLineup.data()?.reward_program_opt_in === true
+        || moderatorRewardOptIn === true;
       moderatorRewardOptIn = rewardReviewRequired;
       if (rewardReviewRequired) {
         submitStage = 'moderator_reward_review';

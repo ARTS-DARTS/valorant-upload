@@ -33,7 +33,7 @@ test('automatic deficit and task criteria are shown separately from moderator ch
 });
 
 test('reward review is saved before the moderator lineup completion request', () => {
-  const branch = appSource.match(/const rewardReviewRequired = currentLineup\.data\(\)\?\.reward_program_opt_in === true;[\s\S]*?const token = await currentUser\.getIdToken\(\);/)?.[0] || '';
+  const branch = appSource.match(/const rewardReviewRequired = currentLineup\.data\(\)\?\.reward_program_opt_in === true[\s\S]*?const token = await currentUser\.getIdToken\(\);/)?.[0] || '';
   assert.match(branch, /if \(rewardReviewRequired\)/);
   assert.match(branch, /staffReviewRewardLineup/);
   assert.match(branch, /const token = await currentUser\.getIdToken/);
@@ -41,6 +41,6 @@ test('reward review is saved before the moderator lineup completion request', ()
 
 test('reward review participation is read from the current server lineup', () => {
   assert.match(appSource, /const currentLineup = await getDoc\(doc\(db, 'lineups', moderationLineupId\)\)/);
-  assert.match(appSource, /currentLineup\.data\(\)\?\.reward_program_opt_in === true/);
+  assert.match(appSource, /currentLineup\.data\(\)\?\.reward_program_opt_in === true\s*\|\| moderatorRewardOptIn === true/);
   assert.doesNotMatch(appSource, /if \(moderatorRewardOptIn\) \{[\s\S]*?requestModeratorRewardDecision/);
 });
