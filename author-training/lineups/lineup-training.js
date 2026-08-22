@@ -18,7 +18,11 @@ const issueItems = [
   'Не показана исходная позиция',
   'Не показан ориентир',
   'Не показано, что делает лайнап',
+  'Видео длится меньше 10 секунд',
+  'Игрок использует стандартный прицел',
+  'Лайнап записан в пользовательской игре',
 ];
+const correctIssueItems = new Set(issueItems.slice(0, 3));
 const quiz = [
   { q: 'Что обязательно показать до броска?', a: ['Только название карты', 'Позицию и ориентир прицела', 'Только агента'], c: 1 },
   { q: 'Можно ли скрыть параметры заряда или отскоков?', a: ['Нет, если они влияют на повторение', 'Да, всегда', 'Только на Ascent'], c: 0 },
@@ -103,7 +107,8 @@ function valid() {
   if (state.step === 1) return state.category === 'Лайнап';
   if (state.step === 2) return state.recording.size === recordingItems.length;
   if (state.step === 3) return state.acknowledged && state.template === 'correct';
-  if (state.step === 4) return state.issues.size === issueItems.length;
+  if (state.step === 4) return state.issues.size === correctIssueItems.size
+    && [...correctIssueItems].every(item => state.issues.has(item));
   return state.answers.length === quiz.length && quiz.every((item, i) => state.answers[i] === item.c);
 }
 function complete() {
@@ -114,6 +119,35 @@ function complete() {
   render();
 }
 function toggle(set, value) { set.has(value) ? set.delete(value) : set.add(value); saveDraft(); render(); }
+function toggleIssue(button) {
+  const value = button.dataset.issue;
+  toggleWithoutRender(state.issues, value);
+  saveDraft();
+  root.querySelectorAll('[data-issue]').forEach(issueButton => {
+    const selected = state.issues.has(issueButton.dataset.issue);
+    issueButton.classList.toggle('selected', selected);
+    issueButton.classList.toggle('correct', selected && correctIssueItems.has(issueButton.dataset.issue));
+    issueButton.classList.toggle('wrong', selected && !correctIssueItems.has(issueButton.dataset.issue));
+    const icon = issueButton.querySelector('i');
+    if (icon) icon.textContent = selected ? '!' : '?';
+  });
+  const ready = valid();
+  const next = root.querySelector('[data-next]');
+  if (next) next.disabled = !ready;
+  const actionStatus = root.querySelector('.lesson-actions > span');
+  if (actionStatus) actionStatus.textContent = ready ? 'Можно продолжать' : 'Заверши задание';
+  const quality = root.querySelector('.quality');
+  quality?.classList.toggle('ready', ready);
+  const scanStatus = quality?.querySelector('.scan span');
+  if (scanStatus) scanStatus.textContent = ready ? '✓' : '⌁';
+  const qualityTitle = quality?.querySelector('h3');
+  if (qualityTitle) qualityTitle.textContent = ready ? 'Шаг пройден' : 'Заверши задание';
+  const qualityText = quality?.querySelector('p');
+  if (qualityText) qualityText.textContent = ready
+    ? 'Все обязательные условия выполнены.'
+    : 'Выполни задание слева, чтобы продолжить.';
+}
+function toggleWithoutRender(set, value) { set.has(value) ? set.delete(value) : set.add(value); }
 function stepContent() {
   if (state.step === 0) return `<p class="eyebrow">ТВОЯ ЗАДАЧА</p><h1>Запиши лайнап, который повторят с первой попытки</h1><p class="lead">Хороший лайнап не заставляет угадывать позицию, ориентир или параметры броска. За шесть этапов ты соберёшь материал, готовый к публикации.</p><div class="principles"><article><b>01</b><span>Зафиксируй<small>Покажи точную позицию игрока</small></span></article><article><b>02</b><span>Наведи<small>Дай читаемый ориентир прицела</small></span></article><article><b>03</b><span>Докажи<small>Покажи попадание и результат</small></span></article></div>`;
   if (state.step === 1) {
@@ -122,7 +156,7 @@ function stepContent() {
   }
   if (state.step === 2) return `<p class="eyebrow">ЧЕК-ЛИСТ ЗАПИСИ</p><h1>Собери полный показ броска</h1><p class="lead">Отметь всё, без чего зритель не сможет точно повторить лайнап.</p><div class="checklist">${recordingItems.map(x => `<button class="${state.recording.has(x) ? 'selected' : ''}" data-recording="${x}"><i>${state.recording.has(x) ? '✓' : ''}</i>${x}</button>`).join('')}</div>`;
   if (state.step === 3) return `<p class="eyebrow">УЧЕБНАЯ КАРТОЧКА</p><h1>Прочитай правила оформления</h1><div class="example"><strong>ПРИМЕР</strong><p><b>Название:</b> A Site</p><p><b>Важно:</b> название материала заполняется на английском языке.</p><p><b>Описание:</b> позиция → ориентир → параметры → бросок → результат.</p></div><button class="acknowledge ${state.acknowledged ? 'selected' : ''}" data-acknowledge><i>${state.acknowledged ? '✓' : ''}</i><span><b>Я прочитал правило</b><small>Название должно быть на английском языке</small></span></button><div class="templates"><span>Выбери подходящий шаблон</span><button data-template="correct" class="${state.template === 'correct' ? 'selected correct' : ''}"><b>Лайнап по ориентиру</b><br>Позиция → прицел → параметры → бросок → результат</button><button data-template="wrong" class="${state.template === 'wrong' ? 'selected wrong' : ''}"><b>Защитный сетап</b><br>Общий вид → установка → активация</button></div>`;
-  if (state.step === 4) return `<p class="eyebrow">ПРАКТИКА · ПЛОХОЙ ПРИМЕР</p><h1>Найди три причины отклонения</h1><div class="bad-video"><video controls playsinline preload="metadata" aria-label="Плохой пример записи лайнапа"><source src="/author-training/lineups/lineup-control-example.mp4?v=2026-07-28-v1" type="video/mp4">Ваш браузер не поддерживает воспроизведение видео.</video></div><div class="issues">${issueItems.map(x => `<button class="${state.issues.has(x) ? 'selected correct' : ''}" data-issue="${x}"><i>${state.issues.has(x) ? '!' : '?'}</i>${x}</button>`).join('')}</div>`;
+  if (state.step === 4) return `<p class="eyebrow">ПРАКТИКА · ПЛОХОЙ ПРИМЕР</p><h1>Найди три причины отклонения</h1><div class="bad-video"><video controls playsinline preload="metadata" aria-label="Плохой пример записи лайнапа"><source src="/author-training/lineups/lineup-control-example.mp4?v=2026-07-28-v1" type="video/mp4">Ваш браузер не поддерживает воспроизведение видео.</video></div><div class="issues">${issueItems.map(x => { const selected = state.issues.has(x); return `<button class="${selected ? `selected ${correctIssueItems.has(x) ? 'correct' : 'wrong'}` : ''}" data-issue="${x}"><i>${selected ? '!' : '?'}</i>${x}</button>`; }).join('')}</div>`;
   return `<p class="eyebrow">ФИНАЛЬНАЯ ПРОВЕРКА</p><h1>Подтверди правила лайнапов</h1><div class="quiz">${quiz.map((item, i) => `<article><b>0${i + 1}</b><div><h3>${item.q}</h3><div class="quiz-options">${item.a.map((answer, ai) => `<button data-answer="${i}:${ai}" class="${state.answers[i] === ai ? `selected ${ai === item.c ? 'correct' : 'wrong'}` : ''}">${answer}</button>`).join('')}</div></div></article>`).join('')}</div>`;
 }
 function completionContent() {
@@ -164,7 +198,7 @@ function bind() {
   root.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { const n = Number(b.dataset.step); if (n <= state.maxStep) { state.step = n; saveDraft(); render(true); } });
   root.querySelectorAll('[data-category]').forEach(b => b.onclick = () => { state.category = b.dataset.category; saveDraft(); render(); });
   root.querySelectorAll('[data-recording]').forEach(b => b.onclick = () => toggle(state.recording, b.dataset.recording));
-  root.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => toggle(state.issues, b.dataset.issue));
+  root.querySelectorAll('[data-issue]').forEach(b => b.onclick = () => toggleIssue(b));
   root.querySelectorAll('[data-template]').forEach(b => b.onclick = () => { state.template = b.dataset.template; saveDraft(); render(); });
   root.querySelector('[data-acknowledge]')?.addEventListener('click', () => { state.acknowledged = !state.acknowledged; saveDraft(); render(); });
   root.querySelectorAll('[data-answer]').forEach(b => b.onclick = () => { const [q, a] = b.dataset.answer.split(':').map(Number); state.answers[q] = a; saveDraft(); render(); });
