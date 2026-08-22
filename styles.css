@@ -1774,8 +1774,8 @@ body.footage-library-open { overflow:hidden; }
 /* Compact draggable Twitch player overrides. */
 .twitch-live-player{width:534px;min-height:0;transform:scale(.5);transform-origin:bottom right}.twitch-live-player.bottom-left{transform-origin:bottom left}.twitch-live-player.top-right{transform-origin:top right}.twitch-live-player.top-left{transform-origin:top left}.twitch-live-player>header{height:38px;cursor:grab;user-select:none;touch-action:none}.twitch-live-player.is-dragging>header{cursor:grabbing}.twitch-live-embed{width:534px;height:300px}.twitch-live-embed iframe{width:534px!important;height:300px!important}.twitch-live-player.minimized{transform:none}.twitch-live-restore{width:34px;height:34px;justify-content:center;padding:0}.twitch-live-restore i{width:8px;height:8px}@media(max-width:520px){.twitch-live-player{right:8px!important;left:auto!important;bottom:8px!important;top:auto!important;width:534px;min-width:0;transform:scale(.5);transform-origin:bottom right}.twitch-live-player[style*="left"]{right:auto!important;bottom:auto!important;transform-origin:top left}}
 
-/* Keep the compact stream passive: Twitch receives no hover or click input. */
-.twitch-live-embed iframe{pointer-events:none}
+/* Keep Twitch controls interactive so playback can be started when the browser blocks autoplay. */
+.twitch-live-embed iframe{pointer-events:auto}
 .twitch-live-restore{cursor:grab;touch-action:none;user-select:none}.twitch-live-restore.is-dragging{cursor:grabbing}
 .twitch-live-player.is-checking{visibility:visible;opacity:0;pointer-events:none}
 .twitch-live-player{width:400px;transform:none}.twitch-live-player.bottom-left,.twitch-live-player.bottom-right,.twitch-live-player.top-left,.twitch-live-player.top-right{transform-origin:initial}.twitch-live-embed,.twitch-live-embed iframe{width:400px!important;height:300px!important}@media(max-width:420px){.twitch-live-player{left:8px!important;right:auto!important;transform:none}}

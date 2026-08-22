@@ -43,8 +43,8 @@ test('viewer can hide and restore the player without a close action', () => {
   assert.match(js, /suppressClick/);
 });
 
-test('compact Twitch embed stays passive on hover', () => {
-  assert.match(css, /\.twitch-live-embed iframe\{pointer-events:none\}/);
+test('Twitch embed remains interactive when autoplay is blocked', () => {
+  assert.match(css, /\.twitch-live-embed iframe\{pointer-events:auto\}/);
   assert.match(js, /PLAYBACK_BLOCKED[\s\S]*if \(!confirmedOnline\) return;[\s\S]*setTimeout\(startLivePlayback, 250\)/);
   assert.match(js, /function enableTwitchSoundAfterGesture\(\)[\s\S]*activeTwitchPlayer\.setMuted\(false\)/);
   assert.match(js, /document\.addEventListener\('pointerdown', enableTwitchSoundAfterGesture, true\)/);
