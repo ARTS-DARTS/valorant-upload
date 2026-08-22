@@ -4510,7 +4510,13 @@ function openModeratorDraft(item) {
 }
 
 async function requestModeratorRewardDecision(lineupId) {
-  const rewardContext = (await getRewardReviewContext({ lineup_id:lineupId })).data || {};
+  let rewardContext = {};
+  try {
+    rewardContext = (await getRewardReviewContext({ lineup_id:lineupId })).data || {};
+  } catch (error) {
+    console.warn('reward review context unavailable, using moderation fallback', error);
+    rewardContext = { context_unavailable:true };
+  }
   return new Promise(resolve => {
     const overlay = document.createElement('div');
     overlay.className = 'reward-review-dialog-backdrop';
@@ -4521,6 +4527,7 @@ async function requestModeratorRewardDecision(lineupId) {
       <div class="reward-review-row"><span>По материалу понятно, как повторить лайнап?</span><div class="reward-review-choice"><label class="yes"><input type="radio" name="final-reward-quality" value="yes">✓ Да</label><label class="no"><input type="radio" name="final-reward-quality" value="no">✕ Нет</label></div></div>
       <div class="reward-review-auto"><span>Общий дефицит</span><b class="${rewardContext.deficit?.global ? 'yes' : 'no'}">${rewardContext.deficit?.global ? '✓ Да · +1 VP' : '✕ Нет'}</b><span>Дефицит маппула</span><b class="${rewardContext.deficit?.map_pool ? 'yes' : 'no'}">${rewardContext.deficit?.map_pool ? '✓ Да · +2 VP' : '✕ Нет'}</b><span>Активное задание</span><b class="${rewardContext.matched_task ? 'yes' : 'no'}">${rewardContext.matched_task ? '✓ Да · +1 VP' : '✕ Нет'}</b><span>Предварительный итог</span><b class="total" data-final-reward-total>—</b></div>
       ${rewardContext.duplicate_lineup_id ? `<div class="reward-review-warning">Найден похожий материал: ${esc(rewardContext.duplicate_lineup_id)}. Сервер не допустит автоматическое начисление.</div>` : ''}
+      ${rewardContext.context_unavailable ? '<div class="reward-review-warning">Автоматические критерии временно недоступны. Ручная оценка будет сохранена сервером модерации; итоговый расчёт выполнится при публикации.</div>' : ''}
       <textarea class="finput" maxlength="500" data-final-reward-comment placeholder="Что проверено и почему принято такое решение"></textarea>
       <div class="reward-review-dialog-actions"><button type="button" class="moderation-action" data-final-reward-cancel>Вернуться</button><button type="button" class="moderation-action moderation-complete" data-final-reward-save>Сохранить и завершить</button></div>
       <div class="reward-review-dialog-error" data-final-reward-error></div>
@@ -4547,6 +4554,23 @@ async function requestModeratorRewardDecision(lineupId) {
     });
     document.body.appendChild(overlay);
   });
+}
+
+async function saveModeratorRewardDecision(lineupId, decision) {
+  try {
+    return (await staffReviewRewardLineup({ lineup_id:lineupId, ...decision })).data;
+  } catch (error) {
+    if (!['functions/not-found', 'not-found'].includes(String(error?.code || '')) && !/lineup not found/i.test(String(error?.message || ''))) throw error;
+    const token = await currentUser.getIdToken();
+    const response = await fetch('/api/moderation', {
+      method:'POST',
+      headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body:JSON.stringify({ lineupId, action:'save_reward_review', ...decision }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Ошибка ${response.status}`);
+    return result;
+  }
 }
 
 function showModeratorAuthorPicker(author = null) {
@@ -12435,7 +12459,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         submitStage = 'moderator_reward_review';
         const rewardDecision = await requestModeratorRewardDecision(moderationLineupId);
         if (!rewardDecision) throw new Error('Оценка награды не сохранена. Проверка остаётся открытой.');
-        const reviewResult = (await staffReviewRewardLineup({ lineup_id:moderationLineupId, ...rewardDecision })).data;
+        const reviewResult = await saveModeratorRewardDecision(moderationLineupId, rewardDecision);
         if (rewardDecision.eligible && reviewResult?.eligible !== true) {
           toast('Сервер обнаружил дубликат: лайнап можно обработать, но награда будет 0 VP.', 'w');
         }

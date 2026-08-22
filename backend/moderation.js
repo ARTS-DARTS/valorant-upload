@@ -830,6 +830,49 @@ async function moderate(req, res, moderator) {
     });
     return res.status(200).json({ ok:true, enabled });
   }
+  if (action === 'save_reward_review') {
+    if (!/^[A-Za-z0-9_-]{6,128}$/.test(lineupId)) return res.status(400).json({ error:'Invalid lineup id' });
+    if (typeof req.body?.eligible !== 'boolean' || typeof req.body?.quality_clear !== 'boolean') return res.status(400).json({ error:'Выбери Да или Нет для каждого критерия' });
+    const eligible = req.body.eligible;
+    const qualityClear = req.body.quality_clear;
+    const comment = clean(req.body?.comment).slice(0, 500);
+    if (!comment) return res.status(400).json({ error:'Комментарий модератора обязателен' });
+    if (!eligible && qualityClear) return res.status(400).json({ error:'Недопущенный материал не может получить бонус качества' });
+    const db = getFirestore();
+    const lineupRef = db.collection('lineups').doc(lineupId);
+    const reviewRef = db.collection('reward_lineup_reviews').doc(lineupId);
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(lineupRef);
+      if (!snap.exists) throw Object.assign(new Error('Lineup not found'), { status:404 });
+      const data = snap.data() || {};
+      assertCanModerateLineup(moderator, data);
+      if (data.reward_program_opt_in !== true) throw Object.assign(new Error('Участие в наградах не включено'), { status:409 });
+      if (clean(data.moderation_lock_uid) !== moderator.uid || timestampMillis(data.moderation_lock_expires_at) <= Date.now()) throw Object.assign(new Error('Сначала заново возьми лайнап в работу'), { status:409 });
+      tx.set(reviewRef, {
+        lineup_id:lineupId,
+        author_uid:clean(data.user_id || data.uid || data.author_uid),
+        reviewer_uid:moderator.uid,
+        reviewer_role:moderator.role,
+        eligible,
+        requested_eligible:eligible,
+        quality_clear:qualityClear,
+        comment,
+        duplicate_lineup_id:null,
+        duplicate_override:false,
+        reviewed_at:FieldValue.serverTimestamp(),
+        moderation_fallback:true,
+      });
+      tx.create(db.collection('moderator_logs').doc(), {
+        lineup_id:lineupId,
+        action:'save_reward_review',
+        moderator_uid:moderator.uid,
+        moderator_name:moderator.name,
+        moderator_role:moderator.role,
+        created_at:FieldValue.serverTimestamp(),
+      });
+    });
+    return res.status(200).json({ ok:true, eligible, fallback:true });
+  }
   if (action === 'seed_metadata_queue') return seedMetadataQueue(res, moderator);
   if (action === 'complete_metadata') return completeMetadata(req, res, moderator);
   if (action === 'release_claim') return releaseClaim(req, res, moderator);

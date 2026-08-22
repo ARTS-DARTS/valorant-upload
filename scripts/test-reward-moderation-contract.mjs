@@ -36,7 +36,7 @@ test('automatic deficit and task criteria are shown separately from moderator ch
 test('reward review is saved before the moderator lineup completion request', () => {
   const branch = appSource.match(/const rewardReviewRequired = currentLineup\.data\(\)\?\.reward_program_opt_in === true[\s\S]*?const token = await currentUser\.getIdToken\(\);/)?.[0] || '';
   assert.match(branch, /if \(rewardReviewRequired\)/);
-  assert.match(branch, /staffReviewRewardLineup/);
+  assert.match(branch, /saveModeratorRewardDecision/);
   assert.match(branch, /const token = await currentUser\.getIdToken/);
 });
 
@@ -57,4 +57,13 @@ test('moderator can persist reward participation before completing review', () =
   assert.match(backendSource, /action === 'set_reward_participation'/);
   assert.match(backendSource, /reward_program_opt_in:enabled/);
   assert.match(backendSource, /reward_terms_version:enabled \? termsVersion : FieldValue\.delete\(\)/);
+});
+
+test('reward review falls back to the moderation database when callable cannot find lineup', () => {
+  assert.match(appSource, /context_unavailable:true/);
+  assert.match(appSource, /saveModeratorRewardDecision\(moderationLineupId, rewardDecision\)/);
+  assert.match(appSource, /action:'save_reward_review'/);
+  assert.match(backendSource, /action === 'save_reward_review'/);
+  assert.match(backendSource, /db\.collection\('reward_lineup_reviews'\)\.doc\(lineupId\)/);
+  assert.match(backendSource, /moderation_fallback:true/);
 });
