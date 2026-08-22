@@ -57,7 +57,9 @@ test('reward demand starts with an open category and explains setup quotas', () 
   assert.match(app, /Какая категория интересует\?/);
   assert.match(app, /content_categories/);
   assert.match(app, /data-demand-category/);
-  assert.match(app, /На каждом сайте нужно 5 одобренных сетапов/);
+  assert.match(app, /Для каждого доступного агента на каждом сайте нужно 5 одобренных сетапов защиты/);
+  assert.match(app, /Атака не учитывается/);
+  assert.match(app, /row\.agent \|\| 'Агент'/);
   assert.match(app, /БЕЗ ДОП\. VP/);
 });
 
