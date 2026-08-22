@@ -12926,14 +12926,4 @@ function enableTwitchRestoreDrag() {
 restoreTwitchPlayerPosition();
 enableTwitchPlayerDrag();
 enableTwitchRestoreDrag();
-function enableTwitchSoundAfterGesture() {
-  if (!activeTwitchPlayer) return;
-  try {
-    activeTwitchPlayer.setVolume(activeTwitchVolume);
-    activeTwitchPlayer.setMuted(false);
-    activeTwitchPlayer.play();
-    document.removeEventListener('pointerdown', enableTwitchSoundAfterGesture, true);
-  } catch (_) {}
-}
-document.addEventListener('pointerdown', enableTwitchSoundAfterGesture, true);
 queueMicrotask(scanTwitchLiveChannels);
