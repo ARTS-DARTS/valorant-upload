@@ -53,6 +53,14 @@ test('author statistics keeps a server-backed VP summary', () => {
   assert.match(app, /Награждено лайнапов/);
 });
 
+test('reward demand starts with an open category and explains setup quotas', () => {
+  assert.match(app, /Какая категория интересует\?/);
+  assert.match(app, /content_categories/);
+  assert.match(app, /data-demand-category/);
+  assert.match(app, /На каждом сайте нужно 5 одобренных сетапов/);
+  assert.match(app, /БЕЗ ДОП\. VP/);
+});
+
 test('Telegram community link is not duplicated in the author sidebar', () => {
   assert.doesNotMatch(html, /class="sidebar-telegram"/);
   assert.match(html, /class="header-telegram"/);

@@ -87,6 +87,7 @@ let rewardBusy = false;
 let rewardDemandAgent = '';
 let rewardDemandMap = '';
 let rewardDemandRanking = 'map_pool';
+let rewardDemandCategory = '';
 
 function rewardStatusLabel(status) {
   return ({pending:'На проверке',approved:'Проверена',ready:'Код готов',revealed:'Код открыт',confirmed:'Завершена',rejected:'Отклонена',canceled:'Отменена'})[status] || status || '—';
@@ -163,12 +164,41 @@ function rewardDemandAbilityIcon(agentName, abilityName) {
   return proxiedValorantUrl(ability?.displayIcon || '');
 }
 function renderRewardDemand(deficits) {
-  const globalRows = rewardDemandRows(deficits?.global);
-  const mapRows = rewardDemandRows(deficits?.map_pool).filter(row => isRealRewardMap(row.map));
+  const categoryLabels = { lineup:'Лайнапы', defense:'Сетапы защиты', combo:'Комбо', wallbang:'Прострелы' };
+  const configuredCategories = rewardDashboard?.settings?.content_categories || { lineup:true };
+  const openCategories = ['lineup', 'defense', 'combo', 'wallbang'].filter(category => configuredCategories[category] === true);
+  if (!openCategories.length) return '';
+  const categoryButtons = openCategories.map(category => `<button type="button" class="reward-demand-map${rewardDemandCategory===category?' selected':''}" data-demand-category="${category}" aria-pressed="${rewardDemandCategory===category}">${categoryLabels[category]}</button>`).join('');
+  const categoryChooser = `<div class="reward-demand-stage"><label>Какая категория интересует?</label><div class="reward-demand-maps">${categoryButtons}</div></div>`;
+  if (!openCategories.includes(rewardDemandCategory)) {
+    rewardDemandCategory = '';
+    return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div></header>${categoryChooser}</section>`;
+  }
+  const belongsToCategory = row => String(row.category || 'lineup').toLowerCase() === rewardDemandCategory;
+  const globalRows = rewardDemandRows(deficits?.global).filter(belongsToCategory);
+  const mapRows = rewardDemandRows(deficits?.map_pool).filter(row => isRealRewardMap(row.map) && belongsToCategory(row));
   const subscriberCounts = deficits?.agent_notification_subscribers || {};
   const activeMaps = (rewardDashboard?.settings?.active_map_pool || [])
     .map(value => String(value || '').trim()).filter(isRealRewardMap);
-  if (!globalRows.length && !mapRows.length) return '';
+  if (!globalRows.length && !mapRows.length) return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>${categoryLabels[rewardDemandCategory]}</h3></div></header>${categoryChooser}<div class="reward-empty">Для этой открытой категории аналитика пока формируется.</div></section>`;
+  if (rewardDemandCategory !== 'lineup') {
+    const maps = [...new Set([...activeMaps, ...mapRows.map(row => String(row.map || '').trim()).filter(isRealRewardMap)])];
+    if (!maps.includes(rewardDemandMap)) rewardDemandMap = maps[0] || '';
+    const selectedRows = mapRows.filter(row => row.map === rewardDemandMap);
+    const mapButtons = maps.map(map => {
+      const missing = mapRows.filter(row => row.map === map && row.deficit === true).length;
+      return `<button class="reward-demand-map${map===rewardDemandMap?' selected':''}${missing?' priority':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${esc(map)}${missing?`<small>не хватает: ${missing}</small>`:''}</button>`;
+    }).join('');
+    const cards = selectedRows.map(row => {
+      const count = Number(row.count || 0);
+      const target = Number(row.target_count || (rewardDemandCategory === 'defense' ? 5 : 0));
+      const zone = String(row.zone || '').toUpperCase();
+      const title = rewardDemandCategory === 'defense' ? `${zone} Site` : (row.title || row.ability || categoryLabels[rewardDemandCategory]);
+      const missing = Math.max(0, target - count);
+      return `<article class="reward-demand-ability${row.deficit===true?' urgent':''}"><span class="reward-demand-ability-icon">${rewardDemandCategory==='defense'?'◆':'✦'}</span><span class="reward-demand-count">${count}${target?`/${target}`:''}</span><div><strong>${esc(title)}</strong><small>${row.deficit===true?`Нужно ещё: ${missing}`:'Квота заполнена'}</small></div><b>${row.deficit===true?'АКТИВНОЕ ЗАДАНИЕ':'БЕЗ ДОП. VP'}</b></article>`;
+    }).join('');
+    return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>${categoryLabels[rewardDemandCategory]}</h3></div></header>${categoryChooser}<div class="reward-demand-mode-note">${rewardDemandCategory==='defense'?'На каждом сайте нужно 5 одобренных сетапов. После заполнения квоты дополнительные VP не начисляются.':'Показывается спрос только выбранной открытой категории.'}</div><div class="reward-demand-stage"><label>Карта</label><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>${rewardDemandCategory==='defense'?'Сайты и заполнение квоты':'Активный спрос'}</label><div class="reward-demand-side-columns"><section class="reward-demand-side-group"><div>${cards||'<p>Активных заданий нет</p>'}</div></section></div></div></section>`;
+  }
   const groups = new Map();
   mapRows.forEach(row => {
     const agent = String(row.agent || '').trim();
@@ -234,7 +264,7 @@ function renderRewardDemand(deficits) {
   ].map(group=>({ ...group, rows:abilities.filter(row=>String(row.side||'any').toLowerCase()===group.key) }))
     .filter(group=>group.key!=='any'||group.rows.length);
   const abilityGroups=sideGroups.map(group=>`<section class="reward-demand-side-group${group.key==='any'?' neutral':''}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${group.rows.length}</b></header><div>${group.rows.map(abilityCard).join('')||'<p>Дефицитных способностей нет</p>'}</div></section>`).join('');
-  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals" role="group" aria-label="Режим оценки дефицита"><button type="button" data-demand-ranking="map_pool" class="${rewardDemandRanking==='map_pool'?'selected':''}" aria-pressed="${rewardDemandRanking==='map_pool'}"><b>${mapRows.filter(row=>row.deficit===true).length}</b><small>Маппул</small></button><button type="button" data-demand-ranking="global" class="${rewardDemandRanking==='global'?'selected':''}" aria-pressed="${rewardDemandRanking==='global'}"><b>${globalRows.filter(row=>row.deficit===true).length}</b><small>Общее</small></button></div></header><div class="reward-demand-mode-note">${rewardDemandRanking==='map_pool'?'Порядок учитывает дефицит агента и способности на каждой карте.':'Общий дефицит также считается на выбранной карте; задания уточняют недостающие зоны.'}</div><div class="reward-demand-stage"><label>1 · АГЕНТ · ПО ПРИОРИТЕТУ И ПОДПИСКАМ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · ВЕСЬ АКТИВНЫЙ МАППУЛ · ПРИОРИТЕТНЫЕ КАРТЫ ПЕРВЫМИ</label></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ И НЕДОСТАЮЩИЕ ЗОНЫ</label><div class="reward-demand-side-columns">${abilityGroups||'<div class="reward-empty">Для этой карты пока нет данных по способностям выбранного агента.</div>'}</div></div></section>`;
+  return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals" role="group" aria-label="Режим оценки дефицита"><button type="button" data-demand-ranking="map_pool" class="${rewardDemandRanking==='map_pool'?'selected':''}" aria-pressed="${rewardDemandRanking==='map_pool'}"><b>${mapRows.filter(row=>row.deficit===true).length}</b><small>Маппул</small></button><button type="button" data-demand-ranking="global" class="${rewardDemandRanking==='global'?'selected':''}" aria-pressed="${rewardDemandRanking==='global'}"><b>${globalRows.filter(row=>row.deficit===true).length}</b><small>Общее</small></button></div></header>${categoryChooser}<div class="reward-demand-mode-note">${rewardDemandRanking==='map_pool'?'Порядок учитывает дефицит агента и способности на каждой карте.':'Общий дефицит также считается на выбранной карте; задания уточняют недостающие зоны.'}</div><div class="reward-demand-stage"><label>1 · АГЕНТ · ПО ПРИОРИТЕТУ И ПОДПИСКАМ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · ВЕСЬ АКТИВНЫЙ МАППУЛ · ПРИОРИТЕТНЫЕ КАРТЫ ПЕРВЫМИ</label></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ И НЕДОСТАЮЩИЕ ЗОНЫ</label><div class="reward-demand-side-columns">${abilityGroups||'<div class="reward-empty">Для этой карты пока нет данных по способностям выбранного агента.</div>'}</div></div></section>`;
 }
 function renderRewardDialog() {
   const host = document.getElementById('reward-dialog-body'); if(!host) return;
@@ -306,11 +336,13 @@ function setRewardModalOpen(open) {
     window.scrollTo(0, rewardModalScrollY);
   }
 }
-document.getElementById('author-reward-open')?.addEventListener('click', async()=>{ setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
-document.getElementById('cabinet-vp-open')?.addEventListener('click', async()=>{ setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
+document.getElementById('author-reward-open')?.addEventListener('click', async()=>{ rewardDemandCategory=''; setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
+document.getElementById('cabinet-vp-open')?.addEventListener('click', async()=>{ rewardDemandCategory=''; setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
 document.getElementById('reward-close')?.addEventListener('click',()=>setRewardModalOpen(false));
 document.getElementById('reward-modal')?.addEventListener('click',async event=>{
   if(event.target.id==='reward-modal'){setRewardModalOpen(false);return;}
+  const demandCategory=event.target.closest('[data-demand-category]');
+  if(demandCategory){rewardDemandCategory=demandCategory.dataset.demandCategory||'';rewardDemandAgent='';rewardDemandMap='';renderRewardDialog();return;}
   const demandAgent=event.target.closest('[data-demand-agent]');
   if(demandAgent){rewardDemandAgent=demandAgent.dataset.demandAgent||'';rewardDemandMap='';renderRewardDialog();return;}
   const demandMap=event.target.closest('[data-demand-map]');
