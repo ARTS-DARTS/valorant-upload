@@ -28,3 +28,7 @@ test('viewer can minimize and close the player', () => {
   assert.match(js, /vlineups:twitch-live-position/);
   assert.match(js, /setPointerCapture/);
 });
+
+test('compact Twitch embed stays passive on hover', () => {
+  assert.match(css, /\.twitch-live-embed iframe\{pointer-events:none\}/);
+});
