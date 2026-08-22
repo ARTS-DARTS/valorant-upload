@@ -11356,10 +11356,9 @@ function updateMarkerIcon() {
     ab.slot === selectedAbility ||
     normalizeAbilityName(agent.displayName, ab.displayName, ab.slot) === selectedAbility
   );
-  const extra = activeExtraAbility();
-  const iconUrl = extra ? extraAbilityIcon(extra) : (ability?.displayIcon || '');
+  const iconUrl = ability?.displayIcon || '';
   const marker = document.getElementById('map-marker');
-  if (marker) marker.style.visibility = extra ? 'hidden' : '';
+  if (marker) marker.style.visibility = '';
   if (iconUrl) {
     img.src = iconUrl;
     img.style.display = 'block';

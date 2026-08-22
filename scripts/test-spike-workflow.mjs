@@ -28,6 +28,12 @@ test('map ability icons face down independently from Spike', () => {
   assert.match(css, /\.spike-map-marker img\{[^}]*\+ 90deg/);
 });
 
+test('selecting an extra trajectory keeps the primary ability marker intact', () => {
+  assert.match(app, /const iconUrl = ability\?\.displayIcon \|\| '';/);
+  assert.match(app, /if \(marker\) marker\.style\.visibility = '';/);
+  assert.doesNotMatch(app, /marker\.style\.visibility = extra \? 'hidden'/);
+});
+
 test('moderation preserves and validates Spike metadata', () => {
   assert.match(moderation, /missing\.push\('spike_usage'\)/);
   assert.match(moderation, /spike_usage: clean\(data\.spike_usage\)/);
