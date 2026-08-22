@@ -39,4 +39,11 @@ test('moderation preserves and validates Spike metadata', () => {
   assert.match(moderation, /spike_usage: clean\(data\.spike_usage\)/);
   assert.match(moderation, /spike_x:finite01\(data\.spike_x\)/);
   assert.match(moderation, /spike_y:finite01\(data\.spike_y\)/);
+  const restoredDraft = app.slice(
+    app.indexOf('function rejectedLineupDraft'),
+    app.indexOf('function categoryExtraDetailHtml'),
+  );
+  assert.match(restoredDraft, /spikeUsage: item\.spike_usage \|\| null/);
+  assert.match(restoredDraft, /spikeX: item\.spike_x \?\? null/);
+  assert.match(restoredDraft, /spikeY: item\.spike_y \?\? null/);
 });
