@@ -45,7 +45,8 @@ test('extra trajectories keep their own visible ability icon', () => {
   assert.match(app, /function extraAbilityIcon\(item\)/);
   assert.match(app, /icon: catalog\?\.icon \|\| item\?\.icon \|\| ''/);
   assert.match(app, /iconUrl: extraAbilityIcon\(item\)/);
-  assert.match(app, /const iconUrl = extra \? extraAbilityIcon\(extra\) : \(ability\?\.displayIcon \|\| ''\)/);
+  assert.match(app, /const iconUrl = ability\?\.displayIcon \|\| ''/);
+  assert.match(app, /if \(marker\) marker\.style\.visibility = ''/);
   assert.match(app, /trajectory-start-icon-backdrop/);
 });
 
