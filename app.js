@@ -12378,14 +12378,19 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       moderatorAutosaveTimer = null;
       if (moderatorAutosaveRequest) await moderatorAutosaveRequest.catch(() => {});
       moderatorAutosaveDirty = false;
-      if (moderatorRewardOptIn) {
+      // The Firestore document is the authority for reward participation.
+      // A restored/stale client draft can lose moderatorRewardOptIn and used
+      // to skip the mandatory review dialog entirely.
+      const currentLineup = await getDoc(doc(db, 'lineups', moderationLineupId));
+      if (!currentLineup.exists()) {
+        moderationController?.clearClaim?.();
+        await moderationController?.load?.();
+        throw new Error('Этот лайнап уже удалён или обработан. Очередь обновлена — выбери актуальный лайнап.');
+      }
+      const rewardReviewRequired = currentLineup.data()?.reward_program_opt_in === true;
+      moderatorRewardOptIn = rewardReviewRequired;
+      if (rewardReviewRequired) {
         submitStage = 'moderator_reward_review';
-        const currentLineup = await getDoc(doc(db, 'lineups', moderationLineupId));
-        if (!currentLineup.exists()) {
-          moderationController?.clearClaim?.();
-          await moderationController?.load?.();
-          throw new Error('Этот лайнап уже удалён или обработан. Очередь обновлена — выбери актуальный лайнап.');
-        }
         const rewardDecision = await requestModeratorRewardDecision(moderationLineupId);
         if (!rewardDecision) throw new Error('Оценка награды не сохранена. Проверка остаётся открытой.');
         const reviewResult = (await staffReviewRewardLineup({ lineup_id:moderationLineupId, ...rewardDecision })).data;
