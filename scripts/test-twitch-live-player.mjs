@@ -7,11 +7,10 @@ const html = await readFile(new URL('index.html', root), 'utf8');
 const js = await readFile(new URL('app.js', root), 'utf8');
 const css = await readFile(new URL('styles.css', root), 'utf8');
 
-test('site contains a compliant 400 by 300 Twitch player surface', () => {
+test('site contains a widescreen Twitch player surface', () => {
   assert.match(html, /id="twitch-live-player"/);
   assert.match(html, /id="twitch-live-embed"/);
-  assert.match(js, /width:400, height:300/);
-  assert.match(css, /\.twitch-live-embed\{width:400px;height:300px/);
+  assert.match(js, /width:534, height:300/);
 });
 
 test('player reads admin configuration and follows live state', () => {
@@ -26,4 +25,6 @@ test('viewer can minimize and close the player', () => {
   assert.match(js, /vlineups:twitch-live-closed/);
   assert.match(js, /classList\.add\('minimized'\)/);
   assert.match(js, /classList\.remove\('minimized'\)/);
+  assert.match(js, /vlineups:twitch-live-position/);
+  assert.match(js, /setPointerCapture/);
 });

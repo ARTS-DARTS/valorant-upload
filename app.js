@@ -12785,7 +12785,7 @@ async function scanTwitchLiveChannels() {
       const streamer = channels[index];
       mount.replaceChildren();
       let resolved = false;
-      const player = new Twitch.Player('twitch-live-embed', { width:400, height:300, channel:streamer.channel, parent:[location.hostname], autoplay:config.autoplay !== false, muted:true });
+      const player = new Twitch.Player('twitch-live-embed', { width:534, height:300, channel:streamer.channel, parent:[location.hostname], autoplay:config.autoplay !== false, muted:true });
       const fallback = setTimeout(() => { if (!resolved) { resolved = true; tryChannel(index + 1); } }, 12000);
       player.addEventListener(Twitch.Player.ONLINE, () => {
         if (resolved || generation !== twitchLiveGeneration) return;
@@ -12820,4 +12820,42 @@ document.getElementById('twitch-live-close')?.addEventListener('click', () => {
 });
 document.getElementById('twitch-live-minimize')?.addEventListener('click', () => document.getElementById('twitch-live-player')?.classList.add('minimized'));
 document.getElementById('twitch-live-restore')?.addEventListener('click', () => document.getElementById('twitch-live-player')?.classList.remove('minimized'));
+function restoreTwitchPlayerPosition() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('vlineups:twitch-live-position') || 'null');
+    const shell = document.getElementById('twitch-live-player');
+    if (!shell || !Number.isFinite(saved?.x) || !Number.isFinite(saved?.y)) return;
+    shell.style.left = `${Math.max(8, Math.min(innerWidth - 275, saved.x))}px`;
+    shell.style.top = `${Math.max(8, Math.min(innerHeight - 180, saved.y))}px`;
+    shell.style.right = 'auto'; shell.style.bottom = 'auto'; shell.style.transformOrigin = 'top left';
+  } catch (_) {}
+}
+function enableTwitchPlayerDrag() {
+  const shell = document.getElementById('twitch-live-player');
+  const handle = shell?.querySelector(':scope > header');
+  if (!shell || !handle) return;
+  let drag = null;
+  handle.addEventListener('pointerdown', event => {
+    if (event.target.closest('button')) return;
+    const rect = shell.getBoundingClientRect();
+    drag = { pointerId:event.pointerId, dx:event.clientX-rect.left, dy:event.clientY-rect.top };
+    shell.style.left = `${rect.left}px`; shell.style.top = `${rect.top}px`; shell.style.right = 'auto'; shell.style.bottom = 'auto'; shell.style.transformOrigin = 'top left';
+    shell.classList.add('is-dragging'); handle.setPointerCapture(event.pointerId); event.preventDefault();
+  });
+  handle.addEventListener('pointermove', event => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const rect = shell.getBoundingClientRect();
+    shell.style.left = `${Math.max(8, Math.min(innerWidth-rect.width-8, event.clientX-drag.dx))}px`;
+    shell.style.top = `${Math.max(8, Math.min(innerHeight-rect.height-8, event.clientY-drag.dy))}px`;
+  });
+  const finish = event => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    drag = null; shell.classList.remove('is-dragging');
+    const rect = shell.getBoundingClientRect();
+    localStorage.setItem('vlineups:twitch-live-position', JSON.stringify({x:Math.round(rect.left),y:Math.round(rect.top)}));
+  };
+  handle.addEventListener('pointerup', finish); handle.addEventListener('pointercancel', finish);
+}
+restoreTwitchPlayerPosition();
+enableTwitchPlayerDrag();
 queueMicrotask(scanTwitchLiveChannels);
