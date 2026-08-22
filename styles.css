@@ -1778,3 +1778,4 @@ body.footage-library-open { overflow:hidden; }
 .twitch-live-embed iframe{pointer-events:none}
 .twitch-live-restore{cursor:grab;touch-action:none;user-select:none}.twitch-live-restore.is-dragging{cursor:grabbing}
 .twitch-live-player.is-checking{visibility:visible;opacity:0;pointer-events:none}
+.twitch-live-player{width:400px;transform:none}.twitch-live-player.bottom-left,.twitch-live-player.bottom-right,.twitch-live-player.top-left,.twitch-live-player.top-right{transform-origin:initial}.twitch-live-embed,.twitch-live-embed iframe{width:400px!important;height:300px!important}@media(max-width:420px){.twitch-live-player{left:8px!important;right:auto!important;transform:none}}

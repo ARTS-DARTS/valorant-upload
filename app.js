@@ -12786,7 +12786,7 @@ async function scanTwitchLiveChannels() {
       let selected = false;
       let ready = false;
       let confirmedOnline = false;
-      const player = new Twitch.Player('twitch-live-embed', { width:534, height:300, channel:streamer.channel, parent:[location.hostname], autoplay:config.autoplay !== false, muted:true });
+      const player = new Twitch.Player('twitch-live-embed', { width:400, height:300, channel:streamer.channel, parent:[location.hostname], autoplay:config.autoplay !== false, muted:true });
       const startLivePlayback = () => {
         if (!ready || !confirmedOnline || config.autoplay === false || generation !== twitchLiveGeneration) return;
         try {

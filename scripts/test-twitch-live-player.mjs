@@ -10,7 +10,8 @@ const css = await readFile(new URL('styles.css', root), 'utf8');
 test('site contains a widescreen Twitch player surface', () => {
   assert.match(html, /id="twitch-live-player"/);
   assert.match(html, /id="twitch-live-embed"/);
-  assert.match(js, /width:534, height:300/);
+  assert.match(js, /width:400, height:300/);
+  assert.match(css, /\.twitch-live-player\{width:400px;transform:none\}/);
 });
 
 test('player reads admin configuration and follows live state', () => {
