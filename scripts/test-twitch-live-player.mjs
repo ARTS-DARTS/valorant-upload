@@ -23,8 +23,9 @@ test('player reads admin configuration and follows live state', () => {
 
 test('only a confirmed online channel can be shown and autoplayed', () => {
   assert.match(js, /autoplay:false, muted:true/);
-  assert.match(js, /Twitch\.Player\.ONLINE[\s\S]*shell\.hidden = false;[\s\S]*player\.play\(\)/);
-  assert.doesNotMatch(js.match(/Twitch\.Player\.READY[\s\S]*?\n\s*}\);/)?.[0] || '', /player\.play\(\)/);
+  assert.match(js, /if \(!ready \|\| !confirmedOnline \|\| config\.autoplay === false/);
+  assert.match(js, /Twitch\.Player\.READY[\s\S]*ready = true;[\s\S]*startLivePlayback\(\)/);
+  assert.match(js, /Twitch\.Player\.ONLINE[\s\S]*confirmedOnline = true;[\s\S]*shell\.hidden = false;[\s\S]*startLivePlayback\(\)/);
   assert.match(js, /if \(!selected\) return;/);
 });
 
@@ -41,12 +42,12 @@ test('viewer can hide and restore the player without a close action', () => {
 
 test('compact Twitch embed stays passive on hover', () => {
   assert.match(css, /\.twitch-live-embed iframe\{pointer-events:none\}/);
-  assert.match(js, /PLAYBACK_BLOCKED[\s\S]*player\.setMuted\(true\);[\s\S]*player\.play\(\)/);
+  assert.match(js, /PLAYBACK_BLOCKED[\s\S]*if \(!confirmedOnline\) return;[\s\S]*setTimeout\(startLivePlayback, 250\)/);
   assert.match(js, /function enableTwitchSoundAfterGesture\(\)[\s\S]*activeTwitchPlayer\.setMuted\(false\)/);
   assert.match(js, /document\.addEventListener\('pointerdown', enableTwitchSoundAfterGesture, true\)/);
 });
 
-test('muted autoplay is reinforced when the Twitch player becomes ready', () => {
+test('muted autoplay waits for both Twitch readiness and online confirmation', () => {
   assert.match(js, /Twitch\.Player\.READY/);
-  assert.match(js, /Twitch\.Player\.READY[\s\S]*player\.setMuted\(true\);[\s\S]*player\.play\(\)/);
+  assert.match(js, /const startLivePlayback = \(\) => \{[\s\S]*player\.setMuted\(true\);[\s\S]*player\.play\(\)/);
 });
