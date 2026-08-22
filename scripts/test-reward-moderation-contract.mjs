@@ -29,7 +29,7 @@ test('quality bonus cannot be selected for an ineligible lineup', () => {
 test('automatic deficit and task criteria are shown separately from moderator choices', () => {
   assert.match(appSource, /reward-review-auto/);
   assert.match(appSource, /Общий дефицит/);
-  assert.match(appSource, /Дефицит маппула/);
+  assert.match(appSource, /Дефицит активного маппула/);
   assert.match(appSource, /Активное задание/);
 });
 
