@@ -21,6 +21,13 @@ test('player reads admin configuration and follows live state', () => {
   assert.match(js, /setTimeout\(scanTwitchLiveChannels, 180000\)/);
 });
 
+test('only a confirmed online channel can be shown and autoplayed', () => {
+  assert.match(js, /autoplay:false, muted:true/);
+  assert.match(js, /Twitch\.Player\.ONLINE[\s\S]*shell\.hidden = false;[\s\S]*player\.play\(\)/);
+  assert.doesNotMatch(js.match(/Twitch\.Player\.READY[\s\S]*?\n\s*}\);/)?.[0] || '', /player\.play\(\)/);
+  assert.match(js, /if \(!selected\) return;/);
+});
+
 test('viewer can hide and restore the player without a close action', () => {
   assert.doesNotMatch(html, /id="twitch-live-close"/);
   assert.match(js, /activeTwitchPlayer\?\.pause\(\)/);

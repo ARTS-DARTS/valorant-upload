@@ -12775,7 +12775,7 @@ async function scanTwitchLiveChannels() {
     const mount = document.getElementById('twitch-live-embed');
     if (!shell || !mount || generation !== twitchLiveGeneration) return;
     shell.className = `twitch-live-player ${config.position || 'bottom-right'} is-checking`;
-    shell.hidden = false;
+    shell.hidden = true;
 
     const tryChannel = index => {
       if (generation !== twitchLiveGeneration) return;
@@ -12783,21 +12783,27 @@ async function scanTwitchLiveChannels() {
       const streamer = channels[index];
       mount.replaceChildren();
       let resolved = false;
-      const player = new Twitch.Player('twitch-live-embed', { width:534, height:300, channel:streamer.channel, parent:[location.hostname], autoplay:config.autoplay !== false, muted:true });
-      const fallback = setTimeout(() => { if (!resolved) { resolved = true; tryChannel(index + 1); } }, 12000);
+      let selected = false;
+      const player = new Twitch.Player('twitch-live-embed', { width:534, height:300, channel:streamer.channel, parent:[location.hostname], autoplay:false, muted:true });
+      const fallback = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          try { player.pause(); } catch (_) {}
+          tryChannel(index + 1);
+        }
+      }, 12000);
       player.addEventListener(Twitch.Player.READY, () => {
-        if (generation !== twitchLiveGeneration) return;
-        activeTwitchPlayer = player;
+        if (generation !== twitchLiveGeneration || resolved) return;
         activeTwitchVolume = Math.max(0, Math.min(1, Number(config.initial_volume ?? 1) / 100));
         player.setVolume(activeTwitchVolume);
         player.setMuted(true);
-        if (config.autoplay !== false) player.play();
       });
       player.addEventListener(Twitch.Player.ONLINE, () => {
         if (resolved || generation !== twitchLiveGeneration) return;
-        resolved = true; clearTimeout(fallback);
+        resolved = true; selected = true; clearTimeout(fallback);
         document.getElementById('twitch-live-name').textContent = streamer.display_name || streamer.channel;
         shell.classList.remove('is-checking');
+        shell.hidden = false;
         activeTwitchPlayer = player;
         activeTwitchVolume = Math.max(0, Math.min(1, Number(config.initial_volume ?? 1) / 100));
         player.setVolume(activeTwitchVolume);
@@ -12808,6 +12814,9 @@ async function scanTwitchLiveChannels() {
       player.addEventListener(Twitch.Player.OFFLINE, () => {
         if (generation !== twitchLiveGeneration) return;
         if (!resolved) { resolved = true; clearTimeout(fallback); tryChannel(index + 1); return; }
+        if (!selected) return;
+        try { player.pause(); } catch (_) {}
+        activeTwitchPlayer = null;
         hideTwitchLivePlayer();
         twitchLivePollTimer = setTimeout(scanTwitchLiveChannels, 60000);
       });
