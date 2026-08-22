@@ -30,7 +30,7 @@ test('automatic deficit and task criteria are shown separately from moderator ch
   assert.match(appSource, /reward-review-auto/);
   assert.match(appSource, /Общий дефицит/);
   assert.match(appSource, /Дефицит активного маппула/);
-  assert.match(appSource, /Активное задание/);
+  assert.match(appSource, /Автозадание рынка/);
 });
 
 test('reward review is saved before the moderator lineup completion request', () => {
