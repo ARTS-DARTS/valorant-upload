@@ -2584,8 +2584,13 @@ function renderPointSuggestions(hostId, values, { label, kind }) {
   }));
 }
 
+function isCompactSuggestedTitle(value) {
+  const title = String(value || '').trim();
+  return !!title && !/\b(?:from|to)\b/i.test(title);
+}
+
 function renderNearbyCopySuggestions(items) {
-  const titles = [...new Set(items.map(item => item.title).filter(Boolean))].slice(0, 3);
+  const titles = [...new Set(items.map(item => item.title).filter(isCompactSuggestedTitle))].slice(0, 3);
   const descriptions = [...new Set(items.map(item => item.description).filter(Boolean))].slice(0, 3);
   renderPointSuggestions('title-suggestions', titles, { label: 'Предложенные названия по точке', kind: 'title' });
   renderPointSuggestions('description-suggestions', descriptions, { label: 'Предложенные описания по точке', kind: 'description' });
