@@ -12738,6 +12738,8 @@ async function submitModApplication() {
 // ── Twitch live partner player ───────────────────────────────────────────────
 let twitchLiveGeneration = 0;
 let twitchLivePollTimer = null;
+let activeTwitchPlayer = null;
+let activeTwitchVolume = 0.01;
 
 function loadTwitchPlayerSdk() {
   if (window.Twitch?.Player) return Promise.resolve(window.Twitch);
@@ -12792,8 +12794,10 @@ async function scanTwitchLiveChannels() {
         resolved = true; clearTimeout(fallback);
         document.getElementById('twitch-live-name').textContent = streamer.display_name || streamer.channel;
         shell.classList.remove('is-checking');
-        player.setVolume(Math.max(0, Math.min(1, Number(config.initial_volume ?? 1) / 100)));
-        player.setMuted(false);
+        activeTwitchPlayer = player;
+        activeTwitchVolume = Math.max(0, Math.min(1, Number(config.initial_volume ?? 1) / 100));
+        player.setVolume(activeTwitchVolume);
+        player.setMuted(true);
         if (config.autoplay !== false) player.play();
         twitchLivePollTimer = setTimeout(scanTwitchLiveChannels, 180000);
       });
@@ -12803,7 +12807,10 @@ async function scanTwitchLiveChannels() {
         hideTwitchLivePlayer();
         twitchLivePollTimer = setTimeout(scanTwitchLiveChannels, 60000);
       });
-      player.addEventListener(Twitch.Player.PLAYBACK_BLOCKED, () => player.setMuted(true));
+      player.addEventListener(Twitch.Player.PLAYBACK_BLOCKED, () => {
+        player.setMuted(true);
+        player.play();
+      });
     };
     tryChannel(0);
   } catch (error) {
@@ -12858,4 +12865,14 @@ function enableTwitchPlayerDrag() {
 }
 restoreTwitchPlayerPosition();
 enableTwitchPlayerDrag();
+function enableTwitchSoundAfterGesture() {
+  if (!activeTwitchPlayer) return;
+  try {
+    activeTwitchPlayer.setVolume(activeTwitchVolume);
+    activeTwitchPlayer.setMuted(false);
+    activeTwitchPlayer.play();
+    document.removeEventListener('pointerdown', enableTwitchSoundAfterGesture, true);
+  } catch (_) {}
+}
+document.addEventListener('pointerdown', enableTwitchSoundAfterGesture, true);
 queueMicrotask(scanTwitchLiveChannels);

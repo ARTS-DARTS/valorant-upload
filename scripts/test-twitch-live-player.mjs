@@ -31,4 +31,7 @@ test('viewer can minimize and close the player', () => {
 
 test('compact Twitch embed stays passive on hover', () => {
   assert.match(css, /\.twitch-live-embed iframe\{pointer-events:none\}/);
+  assert.match(js, /PLAYBACK_BLOCKED[\s\S]*player\.setMuted\(true\);[\s\S]*player\.play\(\)/);
+  assert.match(js, /function enableTwitchSoundAfterGesture\(\)[\s\S]*activeTwitchPlayer\.setMuted\(false\)/);
+  assert.match(js, /document\.addEventListener\('pointerdown', enableTwitchSoundAfterGesture, true\)/);
 });
