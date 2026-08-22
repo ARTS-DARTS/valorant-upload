@@ -12862,6 +12862,7 @@ async function submitModApplication() {
 let twitchLiveGeneration = 0;
 let twitchLivePollTimer = null;
 let activeTwitchChannel = '';
+let twitchLiveMinimized = localStorage.getItem('vlineups:twitch-live-minimized') === '1';
 
 function hideTwitchLivePlayer() {
   const shell = document.getElementById('twitch-live-player');
@@ -12898,7 +12899,7 @@ function showTwitchLiveChannel(streamer, config) {
   const shell = document.getElementById('twitch-live-player');
   const mount = document.getElementById('twitch-live-embed');
   if (!shell || !mount) return;
-  shell.className = `twitch-live-player ${config.position || 'bottom-right'}`;
+  shell.className = `twitch-live-player ${config.position || 'bottom-right'}${twitchLiveMinimized ? ' minimized' : ''}`;
   shell.hidden = false;
   document.getElementById('twitch-live-name').textContent = streamer.display_name || streamer.channel;
   if (activeTwitchChannel === streamer.channel && mount.querySelector('iframe')) return;
@@ -12936,9 +12937,13 @@ async function scanTwitchLiveChannels() {
 }
 
 document.getElementById('twitch-live-minimize')?.addEventListener('click', () => {
+  twitchLiveMinimized = true;
+  localStorage.setItem('vlineups:twitch-live-minimized', '1');
   document.getElementById('twitch-live-player')?.classList.add('minimized');
 });
 document.getElementById('twitch-live-restore')?.addEventListener('click', () => {
+  twitchLiveMinimized = false;
+  localStorage.removeItem('vlineups:twitch-live-minimized');
   document.getElementById('twitch-live-player')?.classList.remove('minimized');
 });
 function restoreTwitchPlayerPosition() {

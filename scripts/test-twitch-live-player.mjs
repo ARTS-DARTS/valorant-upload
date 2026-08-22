@@ -38,6 +38,8 @@ test('viewer can hide and restore the player without a close action', () => {
   assert.match(js, /setPointerCapture/);
   assert.match(js, /function enableTwitchRestoreDrag\(\)/);
   assert.match(js, /suppressClick/);
+  assert.match(js, /vlineups:twitch-live-minimized/);
+  assert.match(js, /twitchLiveMinimized \? ' minimized' : ''/);
 });
 
 test('Twitch embed remains interactive when autoplay is blocked', () => {
