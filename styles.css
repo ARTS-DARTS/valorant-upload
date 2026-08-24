@@ -1809,3 +1809,5 @@ html body h1,html body h2,html body h3,html body strong,html body b{font-family:
 .reward-demand-map.selected small{color:#12303b!important}
 html body .reward-demand-map{min-height:44px;padding:6px 14px;font-size:15px!important;font-weight:900;line-height:1.05}
 html body .reward-demand-map small{display:block;margin-top:4px;font-size:9px!important;font-weight:800;line-height:1!important;letter-spacing:.045em}
+html body .reward-demand-totals button small{margin:0 0 5px;font-size:10px!important;line-height:1!important}
+html body .reward-demand-totals button b{font-size:17px!important;line-height:1}
