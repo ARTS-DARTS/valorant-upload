@@ -4,7 +4,6 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 
 import { adminAuth, adminFirestore } from './_lib/firebase-admin.js';
 import { normalizeEntitlement } from './_lib/billing/entitlements.js';
-import { queueSubscriptionUsage } from './_lib/billing/subscription-usage.js';
 import { createPreAuthLimiter } from './billing-me.js';
 
 const ALLOWED_ORIGINS = new Set([
@@ -389,9 +388,8 @@ export async function applyEngagementAction({ db, uid, input, now = new Date() }
         throw httpError(409, 'finished');
       }
     }
-    const rawEntitlement = entitlementSnap.exists ? entitlementSnap.data() : {};
     const entitlement = normalizeEntitlement(
-      rawEntitlement,
+      entitlementSnap.exists ? entitlementSnap.data() : null,
       { now },
     );
     const metadata = markerMetadata(uid, input, entitlement, Timestamp.fromDate(now));
@@ -420,22 +418,6 @@ export async function applyEngagementAction({ db, uid, input, now = new Date() }
       created_at: metadata.cast_at,
       expires_at: Timestamp.fromMillis(now.getTime() + RECEIPT_TTL_MS),
     });
-    if (metadata.weight > 1 && mutation.markerWrite === 'set') {
-      queueSubscriptionUsage(tx, {
-        db,
-        uid,
-        entitlement:rawEntitlement,
-        eventType:{
-          'lineup-like':'sponsor_lineup_like',
-          'lineup-reputation':'sponsor_lineup_relevance',
-          'poll-vote':'sponsor_poll_vote',
-          'duel-vote':'sponsor_duel_vote',
-        }[input.action],
-        eventId:receiptId,
-        targetId:input.targetId,
-        occurredAt:now,
-      });
-    }
     return response;
   });
 }
