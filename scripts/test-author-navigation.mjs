@@ -22,3 +22,13 @@ test('own profile uses account and stats fallbacks', async () => {
   assert.match(source, /getDoc\(doc\(db, 'user_stats', normalized\)\)/);
   assert.match(source, /Мой публичный профиль/);
 });
+
+test('new author statistics start before optional account services', async () => {
+  const source = await read('app.js');
+  const authStart = source.indexOf('onAuthStateChanged(auth');
+  const statsPosition = source.indexOf('_subscribeStats(user.uid);', authStart);
+  const rewardsPosition = source.indexOf('await loadRewardDashboard();', authStart);
+  assert.ok(statsPosition > authStart, 'statistics subscription must be started');
+  assert.ok(rewardsPosition > statsPosition, 'statistics must not wait for rewards dashboard');
+  assert.match(source, /_statsFallbackTimer = setTimeout\([\s\S]*?element\.textContent = '0'/);
+});

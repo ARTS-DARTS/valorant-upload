@@ -3188,6 +3188,8 @@ function openPendingLineupDeepLink() {
 
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
+let _statsFallbackTimer = null;
+let _statsSubscriptionGeneration = 0;
 let _cooldownInterval = null;
 let _cooldownAccessUnsubs = [];
 let _cooldownExempt = false;
@@ -3428,8 +3430,24 @@ async function _updateCooldown(uid) {
 
 function _subscribeStats(uid) {
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
+  if (_statsFallbackTimer) { clearTimeout(_statsFallbackTimer); _statsFallbackTimer = null; }
+  const generation = ++_statsSubscriptionGeneration;
+  _statsFallbackTimer = setTimeout(() => {
+    if (generation !== _statsSubscriptionGeneration) return;
+    ['approved', 'pending', 'rejected', 'moderators'].forEach(key => {
+      const element = document.getElementById(`stat-${key}`);
+      if (element) element.textContent = '0';
+    });
+    _updateLevelDisplay(effectiveApprovedLineups(0));
+    const loader = document.getElementById('stats-loader');
+    const cards = document.getElementById('stats-cards');
+    if (loader) loader.style.display = 'none';
+    if (cards) cards.style.display = 'flex';
+    renderAuthorWorkspace();
+  }, 8000);
   const q = query(collection(db, 'lineups'), where('user_id', '==', uid));
   _statsUnsub = onSnapshot(q, snap => {
+    if (_statsFallbackTimer) { clearTimeout(_statsFallbackTimer); _statsFallbackTimer = null; }
     let approved = 0, pending = 0, rejected = 0, moderators = 0;
     currentUserLineups = [];
     snap.forEach(d => {
@@ -3471,6 +3489,8 @@ function _subscribeStats(uid) {
 
 function _unsubscribeStats() {
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
+  _statsSubscriptionGeneration++;
+  if (_statsFallbackTimer) { clearTimeout(_statsFallbackTimer); _statsFallbackTimer = null; }
   _clearCooldownTimer();
   document.getElementById('stats-loader').style.display = '';
   document.getElementById('stats-loader').textContent   = 'Загрузка…';
@@ -5684,6 +5704,10 @@ onAuthStateChanged(auth, async user => {
     if (headerNotifications) headerNotifications.hidden = false;
     if (headerSoundTest) headerSoundTest.hidden = false;
     await loadCurrentUserProfile(user);
+    // Core profile UI must not wait for optional rewards, entitlements or
+    // category configuration. New accounts may not have those documents yet.
+    _subscribeUserProfile(user.uid);
+    _subscribeStats(user.uid);
     await loadRewardDashboard();
     await _subscribeCooldownAccess(user.uid);
     showTrainingReturnFeedback();
@@ -5692,8 +5716,6 @@ onAuthStateChanged(auth, async user => {
     if (activeWorkspaceTab !== 'moderation') activateWorkspaceTab(activeWorkspaceTab);
     document.getElementById('user-name').textContent = authorDisplayName() || 'Пользователь';
     updateUploadGate();
-    _subscribeUserProfile(user.uid);
-    _subscribeStats(user.uid);
     _updateCooldown(user.uid);
     const av = document.getElementById('user-avatar');
     const avatarFallback = document.getElementById('user-avatar-fallback');
