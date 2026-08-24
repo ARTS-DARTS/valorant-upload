@@ -92,6 +92,13 @@ test('reward demand starts with an open category and explains setup quotas', () 
   assert.match(app, /БЕЗ ДОП\. VP/);
 });
 
+test('reward demand keeps primary labels larger than supporting text', () => {
+  assert.match(styles, /reward-demand-stage>label[\s\S]*?font-size:12px/);
+  assert.match(styles, /reward-demand-mode-note\{[^}]*font-size:10\.5px/);
+  assert.match(styles, /reward-demand-ability strong\{[^}]*font-size:13\.5px/);
+  assert.match(styles, /reward-demand-ability small\{[^}]*font-size:9px/);
+});
+
 test('Telegram community link is not duplicated in the author sidebar', () => {
   assert.doesNotMatch(html, /class="sidebar-telegram"/);
   assert.match(html, /class="header-telegram"/);
