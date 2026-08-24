@@ -1816,3 +1816,7 @@ html body .reward-demand-map{min-height:44px;padding:6px 14px;font-size:15px!imp
 html body .reward-demand-map small{display:block;margin-top:4px;font-size:9px!important;font-weight:800;line-height:1!important;letter-spacing:.045em}
 html body .reward-demand-totals button small{margin:0 0 5px;font-size:10px!important;line-height:1!important}
 html body .reward-demand-totals button b{font-size:17px!important;line-height:1}
+
+/* Reward opt-in: the action is primary; its outcome is supporting copy. */
+html body .reward-submit-optin b{font-size:14px!important;font-weight:800;line-height:1.25!important;letter-spacing:0}
+html body .reward-submit-optin small{margin-top:2px;font-size:10px!important;font-weight:500;line-height:1.35!important;letter-spacing:0;color:#93a9bc}
