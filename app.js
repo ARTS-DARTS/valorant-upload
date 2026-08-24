@@ -4387,6 +4387,11 @@ function isMainAdminChat(itemOrId) {
   return id === adminChatId(currentUser?.uid);
 }
 
+function isLineupModerationFeedback(item) {
+  return item?.source === 'lineup_rejection' ||
+    item?.category === 'ответы на лайнапы';
+}
+
 function renderAdminChatList() {
   const list = document.getElementById('admin-chat-list');
   if (!list || !currentUser) return;
@@ -4476,7 +4481,9 @@ function openAdminChat() {
   activeAdminChatId ||= adminChatId(currentUser.uid);
   const inbox = query(collection(db, 'feedback'), where('user_id', '==', currentUser.uid), limit(100));
   adminChatUnsub = onSnapshot(inbox, snap => {
-    adminChatItems = snap.docs.map(entry => ({ id:entry.id, ...entry.data() }));
+    adminChatItems = snap.docs
+      .map(entry => ({ id:entry.id, ...entry.data() }))
+      .filter(item => !isLineupModerationFeedback(item));
     const active = adminChatItems.find(item => item.id === activeAdminChatId) || { id:activeAdminChatId };
     renderAdminChat(active);
     const unreadCount = adminChatItems.filter(item => item.user_unread === true || (item.reply && item.reply_read !== true)).length;
