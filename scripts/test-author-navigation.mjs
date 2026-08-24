@@ -32,3 +32,13 @@ test('new author statistics start before optional account services', async () =>
   assert.ok(rewardsPosition > statsPosition, 'statistics must not wait for rewards dashboard');
   assert.match(source, /_statsFallbackTimer = setTimeout\([\s\S]*?element\.textContent = '0'/);
 });
+
+test('chat sends cannot erase text typed while the request is pending', async () => {
+  const app = await read('app.js');
+  const social = await read('social-communication.mjs');
+  for (const source of [app, social]) {
+    assert.match(source, /const submittedValue = input\?\.value \|\| '';/);
+    assert.match(source, /input\.value = '';[\s\S]*?await/);
+    assert.match(source, /if \(input\.value === ''\) input\.value = submittedValue;/);
+  }
+});

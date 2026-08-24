@@ -48,7 +48,7 @@ import {
   entitlementHasCooldownBypass,
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
-import { createSocialWebsite } from './social-communication.mjs?v=2026-08-21-profile-fix-v1';
+import { createSocialWebsite } from './social-communication.mjs?v=2026-08-24-chat-compose-guard-v1';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -4561,19 +4561,26 @@ document.getElementById('admin-chat-form')?.addEventListener('submit', async eve
   event.preventDefault();
   if (!currentUser || !activeAdminChatId) return;
   const input = document.getElementById('admin-chat-input');
-  const text = input?.value.trim() || '';
+  const submittedValue = input?.value || '';
+  const text = submittedValue.trim();
   if (!text) return;
+  input.value = '';
   const ref = doc(db, 'feedback', activeAdminChatId);
   const message = { from:'user', text, ts:Date.now() };
   const profileName = currentUserProfile?.name || currentUserProfile?.display_name || currentUser.email || 'Пользователь';
-  const existing = await getDoc(ref);
-  if (existing.exists()) {
-    if (!isMainAdminChat(activeAdminChatId) && existing.data()?.status === 'closed') return;
-    await updateDoc(ref, { thread:arrayUnion(message), admin_unread:true, user_unread:false, reply_read:true, user_read_at:serverTimestamp(), last_from:'user', status:'open' });
-  } else {
-    await setDoc(ref, { text, category:'Чат с администрацией', username:profileName, user_id:currentUser.uid, is_read:false, reply:null, reply_read:null, created_at:serverTimestamp() });
+  try {
+    const existing = await getDoc(ref);
+    if (existing.exists()) {
+      if (!isMainAdminChat(activeAdminChatId) && existing.data()?.status === 'closed') throw new Error('Обращение уже закрыто');
+      await updateDoc(ref, { thread:arrayUnion(message), admin_unread:true, user_unread:false, reply_read:true, user_read_at:serverTimestamp(), last_from:'user', status:'open' });
+    } else {
+      await setDoc(ref, { text, category:'Чат с администрацией', username:profileName, user_id:currentUser.uid, is_read:false, reply:null, reply_read:null, created_at:serverTimestamp() });
+    }
+  } catch (error) {
+    if (input.value === '') input.value = submittedValue;
+    input.focus();
+    toast('Не удалось отправить сообщение: ' + toSafeErrorMessage(error), 'e');
   }
-  input.value = '';
 });
 
 function statusLabel(status) {

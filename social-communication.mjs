@@ -178,9 +178,17 @@ export function createSocialWebsite({ db, functions, toast }) {
   document.getElementById('social-message-form')?.addEventListener('submit', async event => {
     event.preventDefault();
     const input = document.getElementById('social-message-input');
-    const text = input?.value.trim();
+    const submittedValue = input?.value || '';
+    const text = submittedValue.trim();
     if (!text) return;
-    try { await sendCurrent(text); input.value = ''; } catch (error) { toast?.(error.message, 'e'); }
+    input.value = '';
+    try {
+      await sendCurrent(text);
+    } catch (error) {
+      if (input.value === '') input.value = submittedValue;
+      input.focus();
+      toast?.(error.message, 'e');
+    }
   });
   document.getElementById('social-request-actions')?.addEventListener('click', async event => {
     const decision = event.target.closest('[data-request-decision]')?.dataset.requestDecision;
