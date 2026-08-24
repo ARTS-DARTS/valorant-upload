@@ -179,6 +179,11 @@ ensure_release() {
   fi
   (
     cd "$candidate_dir"
+    set -a
+    # Preflight tests exercise the same Firebase-backed handlers as production.
+    # Load the protected VPS environment without copying secrets into a release.
+    source "$CONTROL_DIR/.env"
+    set +a
     npm ci --omit=optional
     npm run check
     npm run check:billing-results --if-present
