@@ -37,6 +37,7 @@ import clientErrorHandler from './backend/client-error.js';
 import lineupsAccessHandler from './backend/lineups-access.js';
 import yandexAdStatsHandler, { syncYandexAdStats } from './backend/yandex-ad-stats.js';
 import partnerInquiriesHandler from './backend/partner-inquiries.js';
+import appCheckConfigHandler from './backend/app-check-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,6 +65,7 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/ready', readinessHandler);
+app.get('/api/app-check-config', appCheckConfigHandler);
 app.all('/api/billing/me', billingMeHandler);
 app.all('/api/billing/plans', billingPlansHandler);
 app.post(

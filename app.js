@@ -10,6 +10,7 @@ import { getFirestore, doc, collection, getDoc, setDoc, deleteDoc, writeBatch,
 import { getFunctions, httpsCallable }
                                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
 import { initSiteVersionWatcher }             from './site-version-watcher.js?v=2026-07-30-global-update-v1';
+import { initializePublicAppCheck }           from './web-app-check.mjs?v=2026-08-24-app-check-v1';
 import { undefinedPaths, withoutUndefined }   from './firestore-data.mjs?v=2026-08-19-firestore-safe-v1';
 import {
   MAX_FREEZE_ANNOTATION_STROKES,
@@ -64,6 +65,7 @@ const cfg = {
 };
 
 const app  = initializeApp(cfg);
+await initializePublicAppCheck(app);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 const functions = getFunctions(app, 'us-central1');
