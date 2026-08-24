@@ -36,7 +36,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Failed to upload release archive.' }
 
   $apiVersion = [string](ssh $Server "$serverDeployer --api-version")
-  if ($LASTEXITCODE -ne 0 -or $apiVersion.Trim() -ne '3') {
+  if ($LASTEXITCODE -ne 0 -or $apiVersion.Trim() -ne '4') {
     throw 'The protected VPS deployer is missing or incompatible. Run install_vps_deployer.ps1 first.'
   }
 

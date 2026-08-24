@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-DEPLOYER_API_VERSION=3
+DEPLOYER_API_VERSION=4
 if [[ ${1:-} == '--api-version' ]]; then
   printf '%s\n' "$DEPLOYER_API_VERSION"
   exit 0
@@ -259,6 +259,12 @@ ensure_release() {
     return 1
   fi
   rm -f -- "$candidate_dir/.valorant-deploy-source-sha"
+  while IFS= read -r -d '' shell_file; do
+    if LC_ALL=C grep $'\r' "$shell_file" >/dev/null; then
+      log "refusing deploy: shell script contains CRLF: ${shell_file#"$candidate_dir/"}"
+      return 1
+    fi
+  done < <(find "$candidate_dir" -type f -name '*.sh' -print0)
   (
     cd "$candidate_dir"
     npm ci --omit=optional

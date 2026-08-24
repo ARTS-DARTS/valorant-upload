@@ -79,6 +79,15 @@ test('control-plane shell scripts parse in the shell used by deployment', () => 
   }
 });
 
+test('repository forces every shell script to LF in committed release archives', async () => {
+  const attributes = await readFile(new URL('.gitattributes', root), 'utf8');
+  assert.match(attributes, /^\*\.sh\s+text\s+eol=lf\s*$/m);
+  for (const path of [serverDeployPath, deployerInstallerPath]) {
+    const source = await readFile(path);
+    assert.equal(source.includes(Buffer.from('\r\n')), false, `${path} still contains CRLF`);
+  }
+});
+
 async function validateArchive(entries, expectedSha) {
   const temp = await mkdtemp(join(tmpdir(), 'valorant-archive-guard-'));
   const archive = join(temp, 'fixture.tar');
@@ -124,6 +133,11 @@ test('archive bytes and candidate identity are verified before preflight', () =>
   assert.doesNotMatch(serverDeploy, /tar[^\n]*\|[^\n]*grep/);
   assert.match(serverDeploy, /archive may contain only regular files and directories/);
   assert.match(serverDeploy, /archive must contain exactly one source marker/);
+  assert.match(serverDeploy, /refusing deploy: shell script contains CRLF/);
+  assert.ok(
+    serverDeploy.indexOf('refusing deploy: shell script contains CRLF') < installPosition,
+    'CRLF shell scripts must be rejected before package code executes',
+  );
 });
 
 test('deployer updates are serialized, immutable, and cannot downgrade', () => {
