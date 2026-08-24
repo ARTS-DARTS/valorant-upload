@@ -21,6 +21,8 @@ test('public site uses the selected Segoe Interface typography', () => {
   assert.match(styles, /font-family:"Segoe UI Variable Text","Segoe UI",Roboto,Arial,sans-serif!important/);
   assert.match(styles, /small,html body label\{font-size:14px!important/);
   assert.match(styles, /reward-demand-map\.selected[^}]*background:#55e7ff!important/);
+  assert.match(styles, /html body \.reward-demand-map\{[^}]*font-size:15px!important/);
+  assert.match(styles, /html body \.reward-demand-map small\{[^}]*font-size:9px!important/);
 });
 
 test('both pending claims and reward history use a bounded seven-row scroller', () => {
