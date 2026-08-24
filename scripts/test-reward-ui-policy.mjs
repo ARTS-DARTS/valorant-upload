@@ -101,6 +101,11 @@ test('reward demand keeps primary labels larger than supporting text', () => {
   assert.match(styles, /reward-demand-ability small\{[^}]*font-size:9px/);
 });
 
+test('reward demand totals place labels above their numbers', () => {
+  assert.match(app, /<small>Маппул<\/small><b>\$\{mapRows/);
+  assert.match(app, /<small>Общее<\/small><b>\$\{globalRows/);
+});
+
 test('Telegram community link is not duplicated in the author sidebar', () => {
   assert.doesNotMatch(html, /class="sidebar-telegram"/);
   assert.match(html, /class="header-telegram"/);
