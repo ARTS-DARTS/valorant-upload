@@ -47,20 +47,16 @@ export async function loadRecentErrorDocs(db, { now = () => Date.now(), limit = 
   return snapshot.docs;
 }
 
-export async function sendTelegramDocument(token, chatId, contents, filename, { fetchImpl = fetch, allowMigration = true } = {}) {
+export async function sendTelegramDocument(token, chatId, contents, filename) {
   const form = new FormData();
   form.set('chat_id', chatId);
   form.set('caption', 'Ошибки приложения за последние 15 минут');
   form.set('document', new Blob([contents], { type:'application/json;charset=utf-8' }), filename);
-  const response = await fetchImpl(`https://api.telegram.org/bot${token}/sendDocument`, {
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
     method:'POST', body:form, signal:AbortSignal.timeout(20_000),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.ok) {
-    const migratedChatId = clean(payload?.parameters?.migrate_to_chat_id);
-    if (allowMigration && migratedChatId) {
-      return sendTelegramDocument(token, migratedChatId, contents, filename, { fetchImpl, allowMigration:false });
-    }
     const description = clean(payload.description).replace(/[\r\n]+/g, ' ').slice(0, 180);
     throw new Error(`telegram_document_failed:${Number(payload.error_code) || response.status || 0}:${description || 'unknown_error'}`);
   }
@@ -179,37 +175,22 @@ export async function runOperationalMonitor({
   const fingerprint = problems.sort().join('|');
   const stateRef = db.collection('settings').doc('operational_alerts');
   const previous = await stateRef.get();
-  const previousData = previous.data() || {};
-  const textAlreadySent = previousData.last_fingerprint === fingerprint;
-  const documentAlreadySent = previousData.last_document_fingerprint === fingerprint;
-  if (textAlreadySent && (errorCount < 5 || documentAlreadySent)) {
+  if (previous.data()?.last_fingerprint === fingerprint) {
     return { sent:false, reason:'unchanged', count:problems.length };
   }
   if (problems.length) {
-    if (!textAlreadySent) {
-      await sender(token, chatId, ['🚨 VLineups: требуется внимание', '', ...problems.map(value => `• ${value}`)].join('\n'));
-    }
-    let documentSent = documentAlreadySent;
-    let documentError = null;
-    if (errorCount >= 5 && !documentAlreadySent) {
+    await sender(token, chatId, ['🚨 VLineups: требуется внимание', '', ...problems.map(value => `• ${value}`)].join('\n'));
+    if (errorCount >= 5) {
       const errorDocs = await errorLoader(db, { now, limit:100 });
       const generatedAt = new Date(now());
       const timestamp = generatedAt.toISOString().replace(/[:.]/g, '-');
-      try {
-        await documentSender(token, chatId, buildErrorsReport(errorDocs, { generatedAt }), `vlineups-errors-${timestamp}.json`);
-        documentSent = true;
-      } catch (error) {
-        documentError = clean(error?.message || error).slice(0, 300);
-      }
+      await documentSender(
+        token,
+        chatId,
+        buildErrorsReport(errorDocs, { generatedAt }),
+        `vlineups-errors-${timestamp}.json`,
+      );
     }
-    await stateRef.set({
-      last_fingerprint:fingerprint,
-      last_count:problems.length,
-      last_document_fingerprint:documentSent ? fingerprint : previousData.last_document_fingerprint || null,
-      last_document_error:documentError,
-      checked_at:FieldValue.serverTimestamp(),
-    }, { merge:true });
-    return { sent:!textAlreadySent, documentSent, documentError, count:problems.length };
   } else if (previous.exists && previous.data()?.last_fingerprint) {
     await sender(token, chatId, '✅ VLineups: операционный мониторинг снова в норме.');
   }
