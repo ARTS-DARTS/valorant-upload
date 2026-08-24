@@ -1820,3 +1820,10 @@ html body .reward-demand-totals button b{font-size:17px!important;line-height:1}
 /* Reward opt-in: the action is primary; its outcome is supporting copy. */
 html body .reward-submit-optin b{font-size:14px!important;font-weight:800;line-height:1.25!important;letter-spacing:0}
 html body .reward-submit-optin small{margin-top:2px;font-size:10px!important;font-weight:500;line-height:1.35!important;letter-spacing:0;color:#93a9bc}
+
+/* Screenshot instructions: actions lead, explanations support. */
+html body .production-shot-help b{font-size:12px!important;font-weight:800;line-height:1.25!important;letter-spacing:0}
+html body .production-shot-help span{font-size:9px!important;font-weight:500;line-height:1.4!important;letter-spacing:0;color:#91a8bf}
+html body .shot-requirement{display:flex;align-items:baseline;gap:5px;flex-wrap:wrap;color:#9db0c4;font-size:11px!important;line-height:1.4!important}
+html body .shot-requirement b{color:#f5f8fc;font-size:16px!important;font-weight:800;line-height:1.25!important;letter-spacing:0}
+html body .shot-requirement span{font-size:11px!important;font-weight:500;line-height:1.4!important;letter-spacing:0}

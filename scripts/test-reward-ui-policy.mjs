@@ -27,7 +27,7 @@ test('public site uses the selected Segoe Interface typography', () => {
 
 test('both pending claims and reward history use a bounded seven-row scroller', () => {
   assert.match(styles, /reward-dashboard>\.reward-panel:last-child \.reward-list\{max-height:469px;overflow-y:auto/);
-  assert.match(html, /styles\.css\?v=2026-08-24-reward-optin-hierarchy-v1/);
+  assert.match(html, /styles\.css\?v=2026-08-24-shot-text-hierarchy-v1/);
   assert.match(html, /app\.js\?v=2026-08-24-reward-zone-coverage-v1/);
 });
 
@@ -132,6 +132,14 @@ test('reward demand keeps primary labels larger than supporting text', () => {
 test('reward submission opt-in keeps its title larger than its explanation', () => {
   assert.match(styles, /html body \.reward-submit-optin b\{font-size:14px!important/);
   assert.match(styles, /html body \.reward-submit-optin small\{[^}]*font-size:10px!important/);
+});
+
+test('screenshot instructions keep required actions larger than explanations', () => {
+  assert.match(html, /class="hint shot-requirement"/);
+  assert.match(styles, /html body \.production-shot-help b\{font-size:12px!important/);
+  assert.match(styles, /html body \.production-shot-help span\{font-size:9px!important/);
+  assert.match(styles, /html body \.shot-requirement b\{[^}]*font-size:16px!important/);
+  assert.match(styles, /html body \.shot-requirement span\{font-size:11px!important/);
 });
 
 test('reward demand totals place labels above their numbers', () => {
