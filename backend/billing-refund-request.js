@@ -98,9 +98,11 @@ export function createBillingRefundRequestHandler({
         const orderRef = firestore.collection('billing_orders').doc(orderId);
         const requestRef = firestore.collection('billing_refund_requests').doc(`${decoded.uid}__${orderId}`);
         const feedbackRef = firestore.collection('feedback').doc(`refund__${orderId}`);
-        const [orderSnap, requestSnap] = await Promise.all([
+        const usageRef = firestore.collection('subscription_usage_summaries').doc(`${decoded.uid}__${orderId}`);
+        const [orderSnap, requestSnap, usageSnap] = await Promise.all([
           tx.get(orderRef),
           tx.get(requestRef),
+          tx.get(usageRef),
         ]);
 
         if (requestSnap.exists) {
@@ -128,6 +130,7 @@ export function createBillingRefundRequestHandler({
           plan_id: clean(order.plan_id),
           amount_minor: Number(order.amount_minor) || 0,
           currency: clean(order.currency) || 'RUB',
+          usage_summary: usageSnap.exists ? usageSnap.data() : null,
           created_at: createdAt,
           updated_at: createdAt,
         });

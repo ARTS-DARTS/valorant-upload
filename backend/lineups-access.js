@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { adminAuth, adminFirestore } from './_lib/firebase-admin.js';
 import { normalizeEntitlement } from './_lib/billing/entitlements.js';
+import { recordSubscriptionUsage } from './_lib/billing/subscription-usage.js';
 
 const MEDIA_HOSTS = new Set([
   'd5adab93-7400-49ad-b1f9-66966c03d203.selstorage.ru',
@@ -119,11 +120,19 @@ export function createLineupsAccessHandler({
       if (req.method !== 'GET' && req.method !== 'POST') throw fail(405, 'method_not_allowed');
       const decoded = await authorize(req, verifyIdToken);
       const entitlementSnap = await database.collection('account_entitlements').doc(decoded.uid).get();
-      const entitlement = normalizeEntitlement(entitlementSnap.exists ? entitlementSnap.data() : null, { now: new Date(now()) });
+      const rawEntitlement = entitlementSnap.exists ? entitlementSnap.data() : {};
+      const entitlement = normalizeEntitlement(rawEntitlement, { now: new Date(now()) });
       if (!entitlement.capabilities.plus_tools) throw fail(403, 'plus_required');
 
       if (req.path === '/api/lineups') {
         const snapshot = await database.collection('lineups').where('status', '==', 'approved').limit(160).get();
+        await recordSubscriptionUsage(database, {
+          uid:decoded.uid,
+          entitlement:rawEntitlement,
+          eventType:'site_lineups_opened',
+          eventId:`lineups_${new Date(now()).toISOString().slice(0,13)}`,
+          occurredAt:new Date(now()),
+        });
         return res.status(200).json({ lineups:snapshot.docs.map(publicLineup), server_time:new Date(now()).toISOString() });
       }
       if (req.path === '/api/lineups/playback-token') {
@@ -137,6 +146,14 @@ export function createLineupsAccessHandler({
         cleanupSessions(now());
         const rawToken = randomBytes(32).toString('base64url');
         sessions.set(tokenHash(rawToken), { uid:decoded.uid, lineupId, expiresAt:now() + PLAYBACK_TTL_MS });
+        await recordSubscriptionUsage(database, {
+          uid:decoded.uid,
+          entitlement:rawEntitlement,
+          eventType:'site_lineup_video_opened',
+          eventId:`video_${lineupId}_${new Date(now()).toISOString().slice(0,13)}`,
+          targetId:lineupId,
+          occurredAt:new Date(now()),
+        });
         return res.status(201).json({ playback_url:`/api/lineups/video?id=${encodeURIComponent(lineupId)}&token=${encodeURIComponent(rawToken)}`, expires_in:Math.floor(PLAYBACK_TTL_MS / 1000), watermark:clean(decoded.email || decoded.name || decoded.uid, 80) });
       }
       throw fail(404, 'not_found');
