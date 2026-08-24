@@ -293,7 +293,10 @@ function renderRewardDialog() {
   }
   const balance=data.balance||{}, payouts=data.payouts||[], ledger=data.ledger||[], held=data.held_claims||[];
   const rewardDebt=Math.max(0,Number(balance.debt_vp||0));
-  const denominations=(settings.denominations||[475]).filter(value=>Number(value)<=Number(balance.available_vp||0));
+  const denominations=[...new Set((settings.denominations||[475,1000,1520,2050,2575,3650,5350,11000]).map(Number).filter(value=>Number.isInteger(value)&&value>0))].sort((a,b)=>a-b);
+  const availableVp=Number(balance.available_vp||0);
+  const affordableDenominations=denominations.filter(value=>value<=availableVp);
+  const selectedDenomination=affordableDenominations.at(-1)||0;
   const activePayout=payouts.find(item=>['pending','approved','ready','revealed'].includes(item.status));
   const payoutStatusCopy=activePayout ? ({
     pending:'Заявка отправлена и ожидает проверки.',
@@ -308,8 +311,8 @@ function renderRewardDialog() {
     : activePayout
       ? `<div class="reward-payout-progress"><strong>${Number(activePayout.amount_vp||0)} VP · ${esc(rewardStatusLabel(activePayout.status))}</strong><span>${payoutStatusCopy}</span>${activePayout.status==='pending'?`<button class="reward-action" data-reward-action="cancel" data-payout-id="${esc(activePayout.id)}">Отменить заявку</button>`:''}</div>`
       : denominations.length
-        ? `<div class="reward-payout-ready"><div><span>Доступный номинал</span><strong>${Number(denominations[0])} VP</strong><small>Регион кода: ${esc(membership.region||'—')}</small></div><div class="reward-actions"><select class="finput" id="reward-payout-amount" aria-label="Номинал кода">${denominations.map(value=>`<option value="${Number(value)}">${Number(value)} VP</option>`).join('')}</select><button class="reward-action primary" data-reward-action="payout">Запросить код</button></div></div><p class="reward-payout-note">После проверки купим совместимый код. Обычно это занимает до ${Number(settings.fulfillment_sla_hours||24)} часов. Код открывается один раз в Android-приложении.</p>`
-        : `<div class="reward-empty">До минимального номинала не хватает VP. Доступно сейчас: ${Number(balance.available_vp||0)} VP.</div>`;
+        ? `<div class="reward-coupon-picker"><div class="reward-coupon-region"><div><span>Регион Riot-аккаунта</span><strong>${membership.region==='TR'?'🇹🇷 Турция':'🇷🇺 Россия'} (${esc(membership.region||'RU')})</strong><small>Код будет куплен именно для этого региона.</small></div><label><span>Изменить регион</span><select class="finput" id="reward-payout-region"><option value="RU"${membership.region==='RU'?' selected':''}>🇷🇺 Россия (RU)</option><option value="TR"${membership.region==='TR'?' selected':''}>🇹🇷 Турция (TR)</option></select></label></div><div class="reward-coupon-grid" role="radiogroup" aria-label="Номинал кода">${denominations.map(value=>{const enabled=value<=availableVp,missing=Math.max(0,value-availableVp),selected=value===selectedDenomination;return `<button type="button" class="reward-coupon${selected?' selected':''}" data-reward-denomination="${value}" role="radio" aria-checked="${selected}"${enabled?'':` disabled aria-label="${value} VP, не хватает ${missing} VP"`}><strong>${value}</strong><span>VP</span><small>${enabled?'Доступно':`Не хватает ${missing}`}</small></button>`;}).join('')}</div><input type="hidden" id="reward-payout-amount" value="${selectedDenomination}"><div class="reward-coupon-submit"><span>${selectedDenomination?`Будет заморожено ${selectedDenomination} VP до решения по заявке.`:`До первого купона не хватает ${Math.max(0,denominations[0]-availableVp)} VP.`}</span><button class="reward-action primary" data-reward-action="payout"${selectedDenomination?'':' disabled'}>Выбрать купон</button></div></div><p class="reward-payout-note">После отправки VP резервируются. В админке заявка проверяется, затем к ней назначается совместимый код из базы или новый код, купленный вручную. Обычно это занимает до ${Number(settings.fulfillment_sla_hours||24)} часов.</p>`
+        : '<div class="reward-empty">Номиналы кодов пока не настроены.</div>';
   host.innerHTML=`<div class="reward-dashboard"><section class="reward-balance"><div><strong>${Number(balance.available_vp||0)} VP</strong><small>Доступно · ${Number(balance.reserved_vp||0)} VP в заявках · ${Number(balance.earned_vp||0)} VP заработано${rewardDebt?` · долг ${rewardDebt} VP`:''}</small></div><a class="reward-action" href="/rewards" target="_blank" rel="noopener">Условия</a></section><section class="reward-panel"><h3>ПОЛУЧИТЬ КОД</h3>${payoutAction}</section>${renderRewardDemand(data.deficits)}${held.length?`<section class="reward-panel"><h3>ОЖИДАЮТ ПРОВЕРКИ</h3><div class="reward-list reward-list--held">${held.map(item=>`<div class="reward-item"><div><b>${Number(item.amount_vp||0)} VP · ${esc(item.lineup_title||'Лайнап без названия')}</b><small>${esc(rewardHoldLabel(item.reason))}</small></div></div>`).join('')}</div></section>`:''}<section class="reward-panel"><h3>ЗАЯВКИ</h3><div class="reward-list">${payouts.map(item=>`<div class="reward-item"><div><b>${Number(item.amount_vp||0)} VP · ${esc(item.region||'')}</b><small>${rewardStatusLabel(item.status)} · ${rewardDate(item.created_at)}${item.status==='approved'&&item.fulfillment_due_at?` · ожидаем код до ${rewardDate(item.fulfillment_due_at)}`:''}${item.review_reason?` · ${esc(item.review_reason)}`:''}</small>${['ready','revealed'].includes(item.status)?'<small>Код готов. Откройте его в Android-приложении VLineups.</small>':''}</div><div class="reward-actions">${item.status==='pending'?`<button class="reward-action" data-reward-action="cancel" data-payout-id="${esc(item.id)}">Отменить</button>`:''}</div></div>`).join('')||'<div class="reward-empty">Заявок пока нет</div>'}</div></section><section class="reward-panel"><h3>ИСТОРИЯ НАЧИСЛЕНИЙ</h3><div class="reward-list">${ledger.map(item=>`<div class="reward-item"><div><b>${esc(item.title||'Лайнап')}</b><small>${rewardDate(item.created_at)} · база ${Number(item.components?.base||0)} VP, дефицит +${Number(item.components?.global_deficit||0)+Number(item.components?.map_pool_deficit||0)} VP, качество +${Number(item.components?.quality||0)} VP, задание +${Number(item.components?.task||0)} VP</small></div><strong>${Number(item.amount_vp||0)>=0?'+':''}${Number(item.amount_vp||0)} VP</strong></div>`).join('')||'<div class="reward-empty">Первое начисление VP появится после одобрения отмеченного лайнапа.</div>'}</div></section></div>`;
 }
 async function loadRewardDashboard({render=false}={}) {
@@ -362,12 +365,31 @@ document.getElementById('reward-modal')?.addEventListener('click',async event=>{
   if(demandMap){rewardDemandMap=demandMap.dataset.demandMap||'';renderRewardDialog();return;}
   const demandRanking=event.target.closest('[data-demand-ranking]');
   if(demandRanking){rewardDemandRanking=demandRanking.dataset.demandRanking==='global'?'global':'map_pool';rewardDemandAgent='';rewardDemandMap='';renderRewardDialog();return;}
+  const denomination=event.target.closest('[data-reward-denomination]');
+  if(denomination&&!denomination.disabled){
+    document.querySelectorAll('[data-reward-denomination]').forEach(item=>{const selected=item===denomination;item.classList.toggle('selected',selected);item.setAttribute('aria-checked',String(selected));});
+    const amount=document.getElementById('reward-payout-amount'); if(amount) amount.value=denomination.dataset.rewardDenomination||'';
+    const note=document.querySelector('.reward-coupon-submit span'); if(note) note.textContent=`Будет заморожено ${Number(denomination.dataset.rewardDenomination||0)} VP до решения по заявке.`;
+    return;
+  }
   const button=event.target.closest('[data-reward-action]'); if(!button||rewardBusy)return; rewardBusy=true; button.disabled=true;
   try {
     const action=button.dataset.rewardAction, payoutId=button.dataset.payoutId;
     if(['join','payout'].includes(action) && !rewardProgramAccepting(rewardDashboard?.settings)) throw new Error('Программа наград пока не принимает участников');
     if(action==='join'){ if(!document.getElementById('reward-terms-accepted')?.checked) throw new Error('Сначала прими условия программы'); await joinRewardProgram({accepted:true,terms_version:rewardDashboard.settings.terms_version,region:document.getElementById('reward-region').value}); toast('Участие в программе включено','s'); }
-    if(action==='payout'){ await requestRewardPayout({amount_vp:Number(document.getElementById('reward-payout-amount').value),idempotency_key:crypto.randomUUID()}); toast('Заявка создана','s'); }
+    if(action==='payout'){
+      const amountVp=Number(document.getElementById('reward-payout-amount')?.value||0);
+      const selectedRegion=String(document.getElementById('reward-payout-region')?.value||rewardDashboard.membership?.region||'').toUpperCase();
+      const currentRegion=String(rewardDashboard.membership?.region||'').toUpperCase();
+      if(!amountVp) throw new Error('Выбери доступный номинал купона');
+      if(selectedRegion!==currentRegion){
+        const regionName=selectedRegion==='TR'?'Турция':'Россия';
+        if(!confirm(`Сменить регион наград на «${regionName}»? Заявка и код будут созданы только для этого региона.`)) return;
+        await joinRewardProgram({accepted:true,terms_version:rewardDashboard.settings.terms_version,region:selectedRegion});
+      }
+      if(!confirm(`Создать заявку на ${amountVp} VP? Эти VP будут заморожены до выдачи кода или отмены заявки.`)) return;
+      await requestRewardPayout({amount_vp:amountVp,idempotency_key:crypto.randomUUID()}); toast('Заявка создана, VP зарезервированы','s');
+    }
     if(action==='cancel'){ await cancelRewardPayout({payout_id:payoutId}); toast('Заявка отменена, VP возвращены','s'); }
     await loadRewardDashboard({render:true});
   } catch(error){ toast('Операция не выполнена: '+rewardActionErrorMessage(error),'e'); }

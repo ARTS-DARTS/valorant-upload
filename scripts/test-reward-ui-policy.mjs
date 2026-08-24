@@ -25,8 +25,8 @@ test('public site uses the requested readable Times typography', () => {
 
 test('both pending claims and reward history use a bounded seven-row scroller', () => {
   assert.match(styles, /reward-dashboard>\.reward-panel:last-child \.reward-list\{max-height:469px;overflow-y:auto/);
-  assert.match(html, /styles\.css\?v=2026-08-24-rewards-a11y-v1/);
-  assert.match(html, /app\.js\?v=2026-08-24-rewards-a11y-v1/);
+  assert.match(html, /styles\.css\?v=2026-08-24-reward-coupons-v1/);
+  assert.match(html, /app\.js\?v=2026-08-24-reward-coupons-v1/);
 });
 
 test('reward actions require an explicitly enabled program', () => {
@@ -54,11 +54,19 @@ test('reward currency is consistently presented as VP', () => {
   const start = app.indexOf('function renderRewardDialog()');
   const end = app.indexOf('async function loadRewardDashboard', start);
   const rewardDialog = app.slice(start, end);
-  assert.match(rewardDialog, /Запросить код/);
+  assert.match(rewardDialog, /Выбрать купон/);
   assert.match(rewardDialog, /activePayout/);
   assert.doesNotMatch(rewardDialog, /балл(?:ы|ов|а)?/i);
   assert.doesNotMatch(rewardsPage, /балл(?:ы|ов|а)?/i);
   assert.match(html, /7–12 VP/);
+});
+
+test('all configured reward coupons stay visible while unavailable ones are disabled', () => {
+  assert.match(app, /settings\.denominations\|\|\[475,1000,1520,2050,2575,3650,5350,11000\]/);
+  assert.match(app, /data-reward-denomination/);
+  assert.match(app, /value<=availableVp/);
+  assert.match(app, /VP будут заморожены/);
+  assert.match(styles, /\.reward-coupon:disabled/);
 });
 
 test('author statistics keeps a server-backed VP summary', () => {
