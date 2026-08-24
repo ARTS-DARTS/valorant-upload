@@ -355,6 +355,17 @@ function setRewardModalOpen(open) {
 document.getElementById('author-reward-open')?.addEventListener('click', async()=>{ rewardDemandCategory=''; setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
 document.getElementById('cabinet-vp-open')?.addEventListener('click', async()=>{ rewardDemandCategory=''; setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
 document.getElementById('reward-close')?.addEventListener('click',()=>setRewardModalOpen(false));
+document.getElementById('reward-modal')?.addEventListener('wheel',event=>{
+  const rail=event.target.closest?.('.reward-demand-agents,.reward-demand-maps');
+  if(!rail||rail.scrollWidth<=rail.clientWidth)return;
+  const delta=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;
+  if(!delta)return;
+  const maxScroll=rail.scrollWidth-rail.clientWidth;
+  const canMove=delta<0?rail.scrollLeft>0:rail.scrollLeft<maxScroll-1;
+  if(!canMove)return;
+  event.preventDefault();
+  rail.scrollLeft=Math.max(0,Math.min(maxScroll,rail.scrollLeft+delta));
+},{passive:false});
 document.getElementById('reward-modal')?.addEventListener('click',async event=>{
   if(event.target.id==='reward-modal'){setRewardModalOpen(false);return;}
   const demandCategory=event.target.closest('[data-demand-category]');

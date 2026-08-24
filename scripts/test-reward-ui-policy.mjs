@@ -106,6 +106,12 @@ test('reward demand totals place labels above their numbers', () => {
   assert.match(app, /<small>Общее<\/small><b>\$\{globalRows/);
 });
 
+test('reward demand agent and map rails support horizontal mouse-wheel scrolling', () => {
+  assert.match(app, /\.reward-demand-agents,\.reward-demand-maps/);
+  assert.match(app, /rail\.scrollLeft=Math\.max\(0,Math\.min\(maxScroll,rail\.scrollLeft\+delta\)\)/);
+  assert.match(app, /\{passive:false\}/);
+});
+
 test('Telegram community link is not duplicated in the author sidebar', () => {
   assert.doesNotMatch(html, /class="sidebar-telegram"/);
   assert.match(html, /class="header-telegram"/);
