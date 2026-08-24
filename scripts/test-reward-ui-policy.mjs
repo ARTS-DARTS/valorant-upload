@@ -23,6 +23,12 @@ test('public site uses the requested readable Times typography', () => {
   assert.match(styles, /reward-demand-map\.selected[^}]*background:#55e7ff!important/);
 });
 
+test('both pending claims and reward history use a bounded seven-row scroller', () => {
+  assert.match(styles, /reward-dashboard>\.reward-panel:last-child \.reward-list\{max-height:469px;overflow-y:auto/);
+  assert.match(html, /styles\.css\?v=2026-08-24-rewards-a11y-v1/);
+  assert.match(html, /app\.js\?v=2026-08-24-rewards-a11y-v1/);
+});
+
 test('reward actions require an explicitly enabled program', () => {
   assert.equal(rewardProgramAccepting({ enabled:true }), true);
   assert.equal(rewardProgramAccepting({ enabled:false }), false);
