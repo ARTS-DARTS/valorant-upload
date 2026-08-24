@@ -1783,6 +1783,9 @@ body.footage-library-open { overflow:hidden; }
 /* Keep long reward-review queues inside a seven-row viewport. */
 .reward-list--held{max-height:469px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px}
 .reward-list--held,.reward-dashboard>.reward-panel:last-child .reward-list{max-height:469px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:6px;border:1px solid #31506a;border-radius:10px;background:#091321}
+.reward-dashboard>.reward-panel:last-child .reward-list{gap:0}
+.reward-dashboard>.reward-panel:last-child .reward-item{position:relative;padding:13px 10px;border-radius:0;background:transparent}
+.reward-dashboard>.reward-panel:last-child .reward-item:not(:last-child)::after{content:"";position:absolute;right:10px;bottom:0;left:10px;height:1px;background:linear-gradient(90deg,rgba(85,231,255,.34),rgba(126,158,187,.18) 72%,transparent)}
 
 /* Accessibility typography experiment requested for the whole public site. */
 html body,html body *{font-family:"Times New Roman",Times,serif!important}
