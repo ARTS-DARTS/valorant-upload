@@ -221,7 +221,7 @@ export async function runOperationalMonitor({
   return { sent:true, count:problems.length };
 }
 
-if (process.argv[1]?.replaceAll('\\', '/').endsWith('/monitor-operations-telegram.mjs')) {
+if (process.argv[1] && import.meta.url === `file://${process.argv[1].replaceAll('\\', '/')}`) {
   runOperationalMonitor()
     .then(result => console.log(JSON.stringify(result)))
     .catch(error => {
