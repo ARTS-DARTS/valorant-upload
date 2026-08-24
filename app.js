@@ -263,12 +263,19 @@ function renderRewardDemand(deficits) {
     return `<button class="reward-demand-agent${selected?' selected':''}" type="button" data-demand-agent="${esc(agent)}" title="${esc(agent)} · уведомления: ${subscribers}" aria-label="${esc(agent)}, уведомления: ${subscribers}" aria-pressed="${selected}" style="--demand-opacity:${opacity.toFixed(2)}">${icon?`<img src="${esc(icon)}" alt="">`:`<span>${esc(agent.slice(0,1)||'?')}</span>`}</button>`;
   }).join('');
   const mapButtons=maps.map((map,index)=>`<button class="reward-demand-map${map===rewardDemandMap?' selected':''}${mapPriority(map).deficitCount?' priority':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${esc(map)}${mapPriority(map).deficitCount?`<small>приоритет ${index+1}</small>`:''}</button>`).join('');
+  const normalizeDemandKey=value=>String(value||'').trim().toLowerCase();
+  const zoneCoverageForRow=row=>rewardDashboard?.deficits?.market_zone_coverage?.[normalizeDemandKey(row.map)]?.[normalizeDemandKey(row.agent||rewardDemandAgent)]?.[normalizeDemandKey(row.ability)]?.[normalizeDemandKey(row.side)]||null;
   const abilityCard=row=>{
-    const count=Number(row.count||0), urgent=count===0;
+    const count=Number(row.count||0);
     const icon=rewardDemandAbilityIcon(row.agent||rewardDemandAgent,row.ability);
-    const normalize=value=>String(value||'').trim().toLowerCase();
-    const missingZones=(rewardDashboard?.tasks||[]).filter(task=>task.automatic===true&&normalize(task.map)===normalize(row.map)&&normalize(task.agent)===normalize(row.agent||rewardDemandAgent)&&normalize(task.ability)===normalize(row.ability)&&normalize(task.side)===normalize(row.side)).map(task=>normalize(task.zone)==='mid'?'MID':String(task.zone||'').toUpperCase()).filter(Boolean);
-    return `<article class="reward-demand-ability${urgent?' urgent':''}"><span class="reward-demand-ability-icon">${icon?`<img src="${esc(icon)}" alt="">`:'✦'}</span><span class="reward-demand-count">${count}</span><div><strong>${esc(row.ability||'Способность')}</strong><small>${esc(row.side||'any')}${missingZones.length?` · нужны: ${missingZones.map(esc).join(', ')}`:''}</small></div><b>${missingZones.length?`ЗАДАНИЕ · ${missingZones.map(esc).join(' / ')}`:urgent?'МАКС. ПРИОРИТЕТ':`Уже есть: ${count}`}</b></article>`;
+    const coverage=zoneCoverageForRow(row);
+    const zones=coverage?Object.entries(coverage):[];
+    const missingZones=zones.filter(([,zoneCount])=>Number(zoneCount||0)===0).map(([zone])=>zone);
+    const legacyMissingZones=!coverage?(rewardDashboard?.tasks||[]).filter(task=>task.automatic===true&&normalizeDemandKey(task.map)===normalizeDemandKey(row.map)&&normalizeDemandKey(task.agent)===normalizeDemandKey(row.agent||rewardDemandAgent)&&normalizeDemandKey(task.ability)===normalizeDemandKey(row.ability)&&normalizeDemandKey(task.side)===normalizeDemandKey(row.side)).map(task=>normalizeDemandKey(task.zone)).filter(Boolean):[];
+    const missing=coverage?missingZones:legacyMissingZones;
+    const urgent=missing.length>0||(!coverage&&count===0);
+    const zoneList=zones.length?`<div class="reward-demand-zones" aria-label="Покрытие плентов и мида">${zones.map(([zone,zoneCount])=>`<span class="${Number(zoneCount||0)>0?'filled':'missing'}"><em>${esc(zone==='mid'?'MID':zone.toUpperCase())}</em><b>${Number(zoneCount||0)}</b></span>`).join('')}</div>`:'';
+    return `<article class="reward-demand-ability${urgent?' urgent':''}"><span class="reward-demand-ability-icon">${icon?`<img src="${esc(icon)}" alt="">`:'✦'}</span><span class="reward-demand-count">${count}</span><div><strong>${esc(row.ability||'Способность')}</strong><small>${esc(row.side||'any')}</small>${zoneList}</div><b>${missing.length?`НУЖНЫ · ${missing.map(zone=>esc(zone==='mid'?'MID':zone.toUpperCase())).join(' / ')}`:`ВСЕ ЗОНЫ ЕСТЬ`}</b></article>`;
   };
   const sideGroups=[
     { key:'attack', label:'Атака', icon:'⚔' },
@@ -276,7 +283,12 @@ function renderRewardDemand(deficits) {
     { key:'any', label:'Любая сторона', icon:'◎' },
   ].map(group=>({ ...group, rows:abilities.filter(row=>String(row.side||'any').toLowerCase()===group.key) }))
     .filter(group=>group.key!=='any'||group.rows.length);
-  const abilityGroups=sideGroups.map(group=>`<section class="reward-demand-side-group${group.key==='any'?' neutral':''}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${group.rows.length}</b></header><div>${group.rows.map(abilityCard).join('')||'<p>Дефицитных способностей нет</p>'}</div></section>`).join('');
+  const abilityGroups=sideGroups.map(group=>{
+    const zoneTotals=group.rows.flatMap(row=>Object.values(zoneCoverageForRow(row)||{}).map(Number));
+    const filledZones=zoneTotals.filter(count=>count>0).length;
+    const coverageLabel=zoneTotals.length?`${filledZones}/${zoneTotals.length}`:String(group.rows.length);
+    return `<section class="reward-demand-side-group${group.key==='any'?' neutral':''}"><header><span>${group.icon}</span><strong>${group.label}</strong><b title="Заполнено зон">${coverageLabel}</b></header><div>${group.rows.map(abilityCard).join('')||'<p>Дефицитных способностей нет</p>'}</div></section>`;
+  }).join('');
   return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals" role="group" aria-label="Режим оценки дефицита"><button type="button" data-demand-ranking="map_pool" class="${rewardDemandRanking==='map_pool'?'selected':''}" aria-pressed="${rewardDemandRanking==='map_pool'}"><small>Маппул</small><b>${mapRows.filter(row=>row.deficit===true).length}</b></button><button type="button" data-demand-ranking="global" class="${rewardDemandRanking==='global'?'selected':''}" aria-pressed="${rewardDemandRanking==='global'}"><small>Общее</small><b>${globalRows.filter(row=>row.deficit===true).length}</b></button></div></header>${categoryChooser}<div class="reward-demand-mode-note">${rewardDemandRanking==='map_pool'?'Порядок учитывает дефицит агента и способности на каждой карте.':'Общий дефицит также считается на выбранной карте; задания уточняют недостающие зоны.'}</div><div class="reward-demand-stage"><label>1 · АГЕНТ · ПО ПРИОРИТЕТУ И ПОДПИСКАМ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · ВЕСЬ АКТИВНЫЙ МАППУЛ · ПРИОРИТЕТНЫЕ КАРТЫ ПЕРВЫМИ</label></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ И НЕДОСТАЮЩИЕ ЗОНЫ</label><div class="reward-demand-side-columns">${abilityGroups||'<div class="reward-empty">Для этой карты пока нет данных по способностям выбранного агента.</div>'}</div></div></section>`;
 }
 function renderRewardDialog() {
