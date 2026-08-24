@@ -21,6 +21,11 @@ try {
 
   $deployer = Join-Path $tempRoot 'ops\deploy-valorant-upload.sh'
   $installer = Join-Path $tempRoot 'ops\install-valorant-upload-deployer.sh'
+  $utf8NoBom = [Text.UTF8Encoding]::new($false)
+  foreach ($shellFile in @($deployer, $installer)) {
+    $shellText = [IO.File]::ReadAllText($shellFile).Replace("`r`n", "`n").Replace("`r", "`n")
+    [IO.File]::WriteAllText($shellFile, $shellText, $utf8NoBom)
+  }
   $deployerSha256 = (Get-FileHash -LiteralPath $deployer -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($deployerSha256 -notmatch '^[0-9a-f]{64}$') { throw 'Failed to checksum committed deployer.' }
 

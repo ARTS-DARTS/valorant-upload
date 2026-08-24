@@ -11,6 +11,7 @@ const root = new URL('../', import.meta.url);
 const localDeploy = await readFile(new URL('deploy_vps_local.ps1', root), 'utf8');
 const serverDeploy = await readFile(new URL('ops/deploy-valorant-upload.sh', root), 'utf8');
 const deployerInstaller = await readFile(new URL('ops/install-valorant-upload-deployer.sh', root), 'utf8');
+const localDeployerInstaller = await readFile(new URL('install_vps_deployer.ps1', root), 'utf8');
 const serverDeployPath = fileURLToPath(new URL('ops/deploy-valorant-upload.sh', root));
 const deployerInstallerPath = fileURLToPath(new URL('ops/install-valorant-upload-deployer.sh', root));
 
@@ -136,6 +137,8 @@ test('deployer updates are serialized, immutable, and cannot downgrade', () => {
   assert.match(deployerInstaller, /both previous entrypoints were restored and verified/);
   assert.match(deployerInstaller, /CRITICAL: deployer installer rollback/);
   assert.doesNotMatch(deployerInstaller, /candidate_version=\$\(bash/);
+  assert.match(localDeployerInstaller, /\.Replace\("\`r\`n", "\`n"\)\.Replace\("\`r", "\`n"\)/);
+  assert.match(localDeployerInstaller, /UTF8Encoding\]::new\(\$false\)/);
 });
 
 test('last-good changes only after preflight and before a different release is activated', () => {
