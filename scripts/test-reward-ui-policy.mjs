@@ -27,7 +27,7 @@ test('public site uses the selected Segoe Interface typography', () => {
 
 test('both pending claims and reward history use a bounded seven-row scroller', () => {
   assert.match(styles, /reward-dashboard>\.reward-panel:last-child \.reward-list\{max-height:469px;overflow-y:auto/);
-  assert.match(html, /styles\.css\?v=2026-08-24-reward-zone-coverage-v1/);
+  assert.match(html, /styles\.css\?v=2026-08-24-stats-chevron-v1/);
   assert.match(html, /app\.js\?v=2026-08-24-reward-zone-coverage-v1/);
 });
 
@@ -91,6 +91,13 @@ test('author training card keeps its heading readable', () => {
 test('profile level supporting text stays visually secondary', () => {
   const workspaceStyles = readFileSync(new URL('../workspace-redesign.css', import.meta.url), 'utf8');
   assert.match(workspaceStyles, /profile-level-progress-meta small\{font-size:7px!important/);
+});
+
+test('statistics expander uses one centered rotating chevron', () => {
+  assert.match(styles, /stats-summary-chevron \{[^}]*border-radius:50%/);
+  assert.match(styles, /stats-summary-chevron::before \{[^}]*border-right:2px solid/);
+  assert.match(styles, /aria-expanded="true"\] \.stats-summary-chevron::before \{ transform:rotate\(225deg\)/);
+  assert.doesNotMatch(styles, /stats-summary-chevron::before \{ content:"⌄"/);
 });
 
 test('reward demand starts with an open category and explains setup quotas', () => {
