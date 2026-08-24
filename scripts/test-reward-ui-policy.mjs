@@ -27,8 +27,8 @@ test('public site uses the selected Segoe Interface typography', () => {
 
 test('both pending claims and reward history use a bounded seven-row scroller', () => {
   assert.match(styles, /reward-dashboard>\.reward-panel:last-child \.reward-list\{max-height:469px;overflow-y:auto/);
-  assert.match(html, /styles\.css\?v=2026-08-24-segoe-interface-v1/);
-  assert.match(html, /app\.js\?v=2026-08-24-reward-coupons-v1/);
+  assert.match(html, /styles\.css\?v=2026-08-24-reward-zone-coverage-v1/);
+  assert.match(html, /app\.js\?v=2026-08-24-reward-zone-coverage-v1/);
 });
 
 test('reward actions require an explicitly enabled program', () => {
@@ -92,6 +92,15 @@ test('reward demand starts with an open category and explains setup quotas', () 
   assert.match(app, /mapMissing\(b\)-mapMissing\(a\)/);
   assert.match(app, /rewardDemandIcon\(row\.agent\)/);
   assert.match(app, /БЕЗ ДОП\. VP/);
+});
+
+test('lineup demand keeps A, B, C and Mid coverage visible after tasks close', () => {
+  assert.match(app, /market_zone_coverage/);
+  assert.match(app, /zoneCoverageForRow/);
+  assert.match(app, /reward-demand-zones/);
+  assert.match(app, /Покрытие плентов и мида/);
+  assert.match(app, /ВСЕ ЗОНЫ ЕСТЬ/);
+  assert.match(styles, /\.reward-demand-zones/);
 });
 
 test('reward demand keeps primary labels larger than supporting text', () => {

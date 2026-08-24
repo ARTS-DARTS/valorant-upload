@@ -1702,6 +1702,11 @@ body.footage-library-open { overflow:hidden; }
 .reward-demand-side-group .reward-demand-ability-icon img{width:25px;height:25px}
 .reward-demand-side-group .reward-demand-ability>div{align-self:center}
 .reward-demand-side-group .reward-demand-ability>b{grid-column:auto;align-self:center;max-width:78px;text-align:right;white-space:normal}
+.reward-demand-zones{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.reward-demand-zones span{display:inline-grid;grid-template-columns:auto auto;align-items:center;gap:5px;min-width:42px;padding:3px 6px;border:1px solid rgba(85,231,255,.2);border-radius:6px;background:rgba(85,231,255,.055)}
+.reward-demand-zones span.missing{border-color:rgba(255,176,46,.42);background:rgba(255,176,46,.09)}
+.reward-demand-zones em{color:#a9bdce;font:800 8px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace;font-style:normal;letter-spacing:.04em}
+.reward-demand-zones b{color:#68dff5;font-size:10px;line-height:1}.reward-demand-zones .missing b{color:#ffbd4a}
 @media(max-width:620px){.reward-demand-side-group .reward-demand-ability{grid-template-columns:30px 30px minmax(0,1fr) auto;gap:7px}.reward-demand-side-group .reward-demand-ability-icon,.reward-demand-side-group .reward-demand-count{width:30px;height:30px}.reward-demand-side-group .reward-demand-ability>b{grid-column:auto;max-width:68px}}
 
 /* Reward typography: one readable hierarchy instead of mixed utility styles. */
