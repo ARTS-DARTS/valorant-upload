@@ -21,3 +21,14 @@ test('automatic guide playback is requested from the category click flow', () =>
   assert.match(appSource, /function openCategoryFormGuide\(\{ autoplay = false \} = \{\}\)/);
   assert.match(appSource, /video\.addEventListener\('canplay',[\s\S]*?video\.play\(\)/);
 });
+
+test('mandatory training never overlaps the optional form guide', () => {
+  assert.match(
+    appSource,
+    /if \(categoryTrainingGateActive \|\| !hasCategoryTraining\('lineup'\)\) return;/,
+  );
+  assert.match(
+    appSource,
+    /categoryTrainingGateActive = Boolean\([\s\S]*?if \(categoryTrainingGateActive\) closeCategoryFormGuide\(\);/,
+  );
+});

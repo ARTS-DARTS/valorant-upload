@@ -3018,6 +3018,10 @@ function openCategoryFormGuide({ autoplay = false } = {}) {
 
 function showLineupFormGuideOnFirstCategoryChoice() {
   if (normalizeContentCategory(selectedCategory || '') !== 'lineup') return;
+  // The mandatory category training and the short form guide are separate
+  // overlays. A new author must see only the training gate; the form guide is
+  // offered after that training has been completed.
+  if (categoryTrainingGateActive || !hasCategoryTraining('lineup')) return;
   try {
     if (localStorage.getItem(LINEUP_FORM_GUIDE_FIRST_VIEW_KEY) === '1') return;
     localStorage.setItem(LINEUP_FORM_GUIDE_FIRST_VIEW_KEY, '1');
@@ -3134,6 +3138,7 @@ function updateCategoryTrainingGate() {
   });
   const trainingPath = CATEGORY_TRAINING_PATHS[category];
   categoryTrainingGateActive = Boolean(trainingPath && !hasCategoryTraining(category));
+  if (categoryTrainingGateActive) closeCategoryFormGuide();
   const gate = document.getElementById('category-training-gate');
   const link = document.getElementById('category-training-link');
   if (gate) gate.hidden = !categoryTrainingGateActive;
