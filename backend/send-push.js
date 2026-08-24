@@ -6,6 +6,7 @@ import {
   applyAdminCors,
   requireAdminRequest,
 } from './_lib/admin-auth.js';
+import { adminMessaging } from './_lib/firebase-admin.js';
 
 function clean(value) {
   return String(value ?? '').replace(/﻿/g, '').trim();
@@ -18,13 +19,14 @@ export function externalUrlForNotification(type) {
   return clean(type) === 'force_update' ? GOOGLE_PLAY_URL : '';
 }
 
-export function createSendPushHandler({ auth, db } = {}) {
+export function createSendPushHandler({ auth, db, messaging = adminMessaging() } = {}) {
   return async function handler(req, res) {
     try {
       applyAdminCors(req, res);
       if (req.method === 'OPTIONS') return res.status(204).end();
       if (req.method !== 'POST') return res.status(405).json({ error:'method_not_allowed' });
-      await requireAdminRequest(req, { auth, db });
+      const adminRequest = await requireAdminRequest(req, { auth, db });
+      const firestore = db || adminRequest.db;
 
       const {
     title,
@@ -90,7 +92,36 @@ export function createSendPushHandler({ auth, db } = {}) {
       });
 
       const data = await osRes.json().catch(() => ({}));
-      return res.status(osRes.status).json(data);
+      if (!osRes.ok || !targetUid || Number(data.recipients || 0) > 0) {
+        return res.status(osRes.status).json(data);
+      }
+
+      // Some existing Android accounts have a valid Firebase token but were
+      // never linked to a OneSignal external_id. Do not silently report a
+      // successful personal push with zero recipients: fall back to FCM.
+      const user = await firestore.collection('users').doc(targetUid).get();
+      const fcmToken = clean(user.data()?.fcm_token);
+      if (!fcmToken) return res.status(osRes.status).json(data);
+      try {
+        const fcmId = await messaging.send({
+          token: fcmToken,
+          notification: { title: clean(title), body: clean(body) },
+          data: Object.fromEntries(Object.entries({
+            ...extraData,
+            type: type || extraData.type || 'admin_message',
+          }).map(([key, value]) => [key, String(value ?? '')])),
+          android: { priority: 'high' },
+        });
+        return res.status(200).json({
+          ...data,
+          recipients: 1,
+          provider: 'fcm_fallback',
+          fcm_id: fcmId,
+        });
+      } catch (fcmError) {
+        console.warn('send-push FCM fallback failed:', fcmError?.code || fcmError?.message || fcmError);
+        return res.status(osRes.status).json({ ...data, fcm_fallback_error: true });
+      }
     } catch (error) {
       return adminRequestError(res, error, 'send-push');
     }

@@ -1,6 +1,7 @@
 import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 
 function clean(value) {
   return String(value ?? '').replace(/^\uFEFF/, '').replace(/п»ї/g, '').trim();
@@ -27,6 +28,11 @@ export function adminApp() {
 export function adminFirestore() {
   ensureFirebaseAdmin();
   return getFirestore();
+}
+
+export function adminMessaging() {
+  ensureFirebaseAdmin();
+  return getMessaging();
 }
 
 export async function validateFirebaseAdminServices({
