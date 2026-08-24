@@ -170,8 +170,9 @@ function renderRewardDemand(deficits) {
   const configuredCategories = rewardDashboard?.settings?.content_categories || { lineup:true };
   const openCategories = ['lineup', 'defense', 'combo', 'wallbang'].filter(category => configuredCategories[category] === true);
   if (!openCategories.length) return '';
+  if (openCategories.length === 1) rewardDemandCategory = openCategories[0];
   const categoryButtons = openCategories.map(category => `<button type="button" class="reward-demand-map${rewardDemandCategory===category?' selected':''}" data-demand-category="${category}" aria-pressed="${rewardDemandCategory===category}">${categoryLabels[category]}</button>`).join('');
-  const categoryChooser = `<div class="reward-demand-stage"><label>Какая категория интересует?</label><div class="reward-demand-maps">${categoryButtons}</div></div>`;
+  const categoryChooser = openCategories.length === 1 ? '' : `<div class="reward-demand-stage reward-demand-category-stage">${rewardDemandCategory?'':'<label>Какая категория интересует?</label>'}<div class="reward-demand-maps">${categoryButtons}</div></div>`;
   if (!openCategories.includes(rewardDemandCategory)) {
     rewardDemandCategory = '';
     return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div></header>${categoryChooser}</section>`;

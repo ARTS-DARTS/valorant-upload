@@ -1782,3 +1782,11 @@ body.footage-library-open { overflow:hidden; }
 
 /* Keep long reward-review queues inside a seven-row viewport. */
 .reward-list--held{max-height:469px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px}
+
+/* Accessibility typography experiment requested for the whole public site. */
+html body,html body *{font-family:"Times New Roman",Times,serif!important}
+html body{font-size:16px;line-height:1.5}
+html body small,html body label{font-size:14px!important;line-height:1.45!important;letter-spacing:.02em}
+html body button,html body input,html body select,html body textarea{font-size:15px}
+.reward-demand-map.selected{border-color:#8ff3ff!important;background:#55e7ff!important;color:#06131c!important;box-shadow:0 0 0 2px rgba(85,231,255,.28),0 0 22px rgba(85,231,255,.38)!important;font-weight:900}
+.reward-demand-map.selected small{color:#12303b!important}

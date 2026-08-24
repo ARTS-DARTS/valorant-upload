@@ -8,8 +8,20 @@ import {
 import { readFileSync } from 'node:fs';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const styles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const rewardsPage = readFileSync(new URL('../rewards/index.html', import.meta.url), 'utf8');
+
+test('reward category auto-selects when only one category is open', () => {
+  assert.match(app, /openCategories\.length === 1\) rewardDemandCategory = openCategories\[0\]/);
+  assert.match(app, /categoryChooser = openCategories\.length === 1 \? ''/);
+});
+
+test('public site uses the requested readable Times typography', () => {
+  assert.match(styles, /font-family:"Times New Roman",Times,serif!important/);
+  assert.match(styles, /small,html body label\{font-size:14px!important/);
+  assert.match(styles, /reward-demand-map\.selected[^}]*background:#55e7ff!important/);
+});
 
 test('reward actions require an explicitly enabled program', () => {
   assert.equal(rewardProgramAccepting({ enabled:true }), true);
