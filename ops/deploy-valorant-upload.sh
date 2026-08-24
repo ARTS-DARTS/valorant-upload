@@ -179,12 +179,12 @@ ensure_release() {
   fi
   (
     cd "$candidate_dir"
-    set -a
-    # Preflight tests exercise the same Firebase-backed handlers as production.
-    # Load the protected VPS environment without copying secrets into a release.
-    source "$CONTROL_DIR/.env"
-    set +a
     npm ci --omit=optional
+    # Preflight tests exercise the same Firebase-backed handlers as production.
+    # Let dotenv parse the protected environment; shell-sourcing it is unsafe for
+    # quoted or multiline service-account values.
+    export DOTENV_CONFIG_PATH="$CONTROL_DIR/.env"
+    export NODE_OPTIONS='--import dotenv/config'
     npm run check
     npm run check:billing-results --if-present
     npm run test:billing --if-present
