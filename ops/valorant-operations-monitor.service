@@ -5,6 +5,6 @@ After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/var/www/valorant-upload-current
-EnvironmentFile=/var/www/valorant-upload/.env
+Environment=DOTENV_CONFIG_PATH=/var/www/valorant-upload/.env
+Environment="NODE_OPTIONS=--import dotenv/config"
 ExecStart=/usr/bin/node /var/www/valorant-upload-current/scripts/monitor-operations-telegram.mjs
-
