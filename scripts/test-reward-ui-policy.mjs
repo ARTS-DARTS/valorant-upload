@@ -81,6 +81,13 @@ test('author statistics keeps a server-backed VP summary', () => {
   assert.match(app, /Награждено лайнапов/);
 });
 
+test('author training card keeps its heading readable', () => {
+  assert.match(styles, /reward-demand-ability strong/);
+  const workspaceStyles = readFileSync(new URL('../workspace-redesign.css', import.meta.url), 'utf8');
+  assert.match(workspaceStyles, /sidebar-training-head\{[^}]*font-size:11px/);
+  assert.match(html, /workspace-redesign\.css\?v=2026-08-24-training-title-v1/);
+});
+
 test('reward demand starts with an open category and explains setup quotas', () => {
   assert.match(app, /Какая категория интересует\?/);
   assert.match(app, /content_categories/);
