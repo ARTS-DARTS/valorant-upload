@@ -33,12 +33,14 @@ test('new author statistics start before optional account services', async () =>
   assert.match(source, /_statsFallbackTimer = setTimeout\([\s\S]*?element\.textContent = '0'/);
 });
 
-test('chat sends cannot erase text typed while the request is pending', async () => {
+test('failed chat sends stay in an outbox with retry and delete actions', async () => {
   const app = await read('app.js');
   const social = await read('social-communication.mjs');
   for (const source of [app, social]) {
-    assert.match(source, /const submittedValue = input\?\.value \|\| '';/);
-    assert.match(source, /input\.value = '';[\s\S]*?await/);
-    assert.match(source, /if \(input\.value === ''\) input\.value = submittedValue;/);
+    assert.match(source, /status:'sending'/);
+    assert.match(source, /status = 'failed'/);
+    assert.match(source, /Не отправлено/);
+    assert.match(source, /Отправить заново/);
+    assert.match(source, /data-[a-z-]*message-action="delete"/);
   }
 });

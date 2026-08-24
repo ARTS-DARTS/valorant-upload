@@ -48,7 +48,7 @@ import {
   entitlementHasCooldownBypass,
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
-import { createSocialWebsite } from './social-communication.mjs?v=2026-08-24-chat-compose-guard-v1';
+import { createSocialWebsite } from './social-communication.mjs?v=2026-08-24-message-outbox-v1';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -3940,6 +3940,7 @@ let adminChatItems = [];
 let activeAdminChatId = '';
 let adminChatSnapshotReady = false;
 let adminChatLastAdminTs = 0;
+const adminChatOutbox = new Map();
 const adminChatId = uid => `moderator_application_${uid}`;
 
 async function sendSitePresence() {
@@ -4424,11 +4425,14 @@ function renderAdminChat(data) {
   const closed = !mainChat && data?.status === 'closed';
   const thread = document.getElementById('admin-chat-thread');
   const messages = feedbackMessages(data);
+  const localMessages = [...adminChatOutbox.values()].filter(item => item.chatId === activeAdminChatId);
   if (thread) {
-    thread.innerHTML = messages.length ? messages.map(message => {
+    const delivered = messages.map(message => {
       const mine = message.from === 'user';
       return `<div class="admin-chat-row ${mine ? 'mine' : 'theirs'}"><div class="admin-chat-bubble"><div>${esc(message.text || '')}</div><time>${chatMessageTime(message.ts)}</time></div></div>`;
-    }).join('') : `<div class="admin-chat-empty">${mainChat ? 'Это постоянный чат с администрацией. Ты можешь написать первым.' : 'В этом обращении пока нет сообщений.'}</div>`;
+    }).join('');
+    const pending = localMessages.map(message => `<div class="admin-chat-row mine local-message ${message.status}" data-admin-outbox-id="${esc(message.id)}"><div class="admin-chat-bubble"><div>${esc(message.text)}</div><time>${message.status === 'failed' ? '<b>!</b> Не отправлено' : 'Отправляется…'}</time></div></div>`).join('');
+    thread.innerHTML = delivered || pending ? delivered + pending : `<div class="admin-chat-empty">${mainChat ? 'Это постоянный чат с администрацией. Ты можешь написать первым.' : 'В этом обращении пока нет сообщений.'}</div>`;
     thread.scrollTop = thread.scrollHeight;
   }
   const unread = data?.user_unread === true;
@@ -4492,6 +4496,73 @@ document.getElementById('admin-chat-list')?.addEventListener('click', event => {
 });
 document.getElementById('admin-chat-back')?.addEventListener('click', () => {
   document.querySelector('.messenger-shell')?.classList.remove('chat-open');
+});
+
+let adminChatContextMenu = null;
+function closeAdminChatContextMenu() {
+  adminChatContextMenu?.remove();
+  adminChatContextMenu = null;
+}
+function openAdminChatContextMenu(event, messageId) {
+  closeAdminChatContextMenu();
+  const item = adminChatOutbox.get(messageId);
+  if (!item || item.status !== 'failed') return;
+  const menu = document.createElement('div');
+  menu.className = 'message-context-menu';
+  menu.dataset.adminMessageMenu = messageId;
+  menu.innerHTML = '<button type="button" data-message-action="retry">↻ Отправить заново</button><button type="button" class="danger" data-message-action="delete">Удалить</button>';
+  document.body.append(menu);
+  const left = Math.min(event.clientX, window.innerWidth - menu.offsetWidth - 10);
+  const top = Math.min(event.clientY, window.innerHeight - menu.offsetHeight - 10);
+  menu.style.left = `${Math.max(10, left)}px`;
+  menu.style.top = `${Math.max(10, top)}px`;
+  adminChatContextMenu = menu;
+}
+document.getElementById('admin-chat-thread')?.addEventListener('contextmenu', event => {
+  const row = event.target.closest('[data-admin-outbox-id].failed');
+  if (!row) return;
+  event.preventDefault();
+  openAdminChatContextMenu(event, row.dataset.adminOutboxId);
+});
+document.addEventListener('pointerdown', event => {
+  if (adminChatContextMenu && !event.target.closest('.message-context-menu')) closeAdminChatContextMenu();
+});
+
+async function sendAdminOutboxMessage(item) {
+  item.status = 'sending';
+  renderAdminChat(adminChatDoc || { id:item.chatId });
+  const ref = doc(db, 'feedback', item.chatId);
+  const message = { from:'user', text:item.text, ts:item.ts };
+  const profileName = currentUserProfile?.name || currentUserProfile?.display_name || currentUser.email || 'Пользователь';
+  try {
+    const existing = await getDoc(ref);
+    if (existing.exists()) {
+      if (!isMainAdminChat(item.chatId) && existing.data()?.status === 'closed') throw new Error('Обращение уже закрыто');
+      await updateDoc(ref, { thread:arrayUnion(message), admin_unread:true, user_unread:false, reply_read:true, user_read_at:serverTimestamp(), last_from:'user', status:'open' });
+    } else {
+      await setDoc(ref, { text:item.text, category:'Чат с администрацией', username:profileName, user_id:currentUser.uid, is_read:false, reply:null, reply_read:null, created_at:serverTimestamp() });
+    }
+    adminChatOutbox.delete(item.id);
+  } catch (error) {
+    item.status = 'failed';
+    item.error = toSafeErrorMessage(error);
+  }
+  renderAdminChat(adminChatDoc || { id:item.chatId });
+}
+
+document.addEventListener('click', event => {
+  const action = event.target.closest('[data-message-action]');
+  const messageId = action?.closest('[data-admin-message-menu]')?.dataset.adminMessageMenu;
+  if (!action || !messageId) return;
+  const item = adminChatOutbox.get(messageId);
+  closeAdminChatContextMenu();
+  if (!item) return;
+  if (action.dataset.messageAction === 'delete') {
+    adminChatOutbox.delete(messageId);
+    renderAdminChat(adminChatDoc || { id:item.chatId });
+  } else {
+    sendAdminOutboxMessage(item);
+  }
 });
 
 const feedbackCreateOverlay = document.getElementById('feedback-create-overlay');
@@ -4565,22 +4636,9 @@ document.getElementById('admin-chat-form')?.addEventListener('submit', async eve
   const text = submittedValue.trim();
   if (!text) return;
   input.value = '';
-  const ref = doc(db, 'feedback', activeAdminChatId);
-  const message = { from:'user', text, ts:Date.now() };
-  const profileName = currentUserProfile?.name || currentUserProfile?.display_name || currentUser.email || 'Пользователь';
-  try {
-    const existing = await getDoc(ref);
-    if (existing.exists()) {
-      if (!isMainAdminChat(activeAdminChatId) && existing.data()?.status === 'closed') throw new Error('Обращение уже закрыто');
-      await updateDoc(ref, { thread:arrayUnion(message), admin_unread:true, user_unread:false, reply_read:true, user_read_at:serverTimestamp(), last_from:'user', status:'open' });
-    } else {
-      await setDoc(ref, { text, category:'Чат с администрацией', username:profileName, user_id:currentUser.uid, is_read:false, reply:null, reply_read:null, created_at:serverTimestamp() });
-    }
-  } catch (error) {
-    if (input.value === '') input.value = submittedValue;
-    input.focus();
-    toast('Не удалось отправить сообщение: ' + toSafeErrorMessage(error), 'e');
-  }
+  const item = { id:`admin-${Date.now()}-${Math.random().toString(36).slice(2)}`, chatId:activeAdminChatId, text, ts:Date.now(), status:'sending' };
+  adminChatOutbox.set(item.id, item);
+  sendAdminOutboxMessage(item);
 });
 
 function statusLabel(status) {

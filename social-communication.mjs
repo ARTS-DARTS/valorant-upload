@@ -19,6 +19,8 @@ export function createSocialWebsite({ db, functions, toast }) {
   let messageUnsubscribe = null;
   let members = [];
   let activeConversation = null;
+  let activeMessageDocs = [];
+  const messageOutbox = new Map();
   const profileNames = new Map();
 
   const profileRoot = () => document.getElementById('social-profile-root');
@@ -111,15 +113,12 @@ export function createSocialWebsite({ db, functions, toast }) {
     if (requestActions) requestActions.hidden = !(member.folder === 'requests' && member.request_state === 'pending');
     renderMembers();
     messageUnsubscribe?.();
+    activeMessageDocs = [];
+    renderConversationMessages();
     const messagesQuery = query(collection(db, 'conversations', conversationId, 'messages'), orderBy('created_at', 'asc'), limit(200));
     messageUnsubscribe = onSnapshot(messagesQuery, snapshot => {
-      const root = thread();
-      if (!root) return;
-      root.innerHTML = snapshot.docs.map(message => {
-        const data = message.data();
-        return `<div class="social-message ${data.sender_id === user.uid ? 'mine' : ''}"><span>${escapeHtml(data.text || (data.type === 'image' ? 'Фотография' : 'Сообщение'))}</span></div>`;
-      }).join('') || '<div class="social-empty">Сообщений пока нет.</div>';
-      root.scrollTop = root.scrollHeight;
+      activeMessageDocs = snapshot.docs;
+      renderConversationMessages();
       const lastMessage = snapshot.docs.at(-1);
       if (lastMessage) calls.markConversationRead({
         conversation_id: conversationId,
@@ -130,14 +129,36 @@ export function createSocialWebsite({ db, functions, toast }) {
     });
   }
 
+  function renderConversationMessages() {
+    const root = thread();
+    if (!root || !activeConversation) return;
+    const delivered = activeMessageDocs.map(message => {
+      const data = message.data();
+      return `<div class="social-message ${data.sender_id === user.uid ? 'mine' : ''}"><span>${escapeHtml(data.text || (data.type === 'image' ? 'Фотография' : 'Сообщение'))}</span></div>`;
+    }).join('');
+    const pending = [...messageOutbox.values()]
+      .filter(item => item.conversationId === activeConversation.conversation_id)
+      .map(item => `<div class="social-message mine local-message ${item.status}" data-social-outbox-id="${escapeHtml(item.id)}"><span>${escapeHtml(item.text)}</span><small>${item.status === 'failed' ? '<b>!</b> Не отправлено' : 'Отправляется…'}</small></div>`).join('');
+    root.innerHTML = delivered || pending ? delivered + pending : '<div class="social-empty">Сообщений пока нет.</div>';
+    root.scrollTop = root.scrollHeight;
+  }
+
   async function sendToProfile(targetUid, text) {
     await calls.createMessageRequest({ target_uid: targetUid, text, client_message_id: clientId() });
     toast?.('Запрос на переписку отправлен', 's');
   }
 
-  async function sendCurrent(text) {
-    if (!activeConversation) throw new Error('Сначала выберите диалог');
-    await calls.sendDirectMessage({ conversation_id: activeConversation.conversation_id, text, client_message_id: clientId() });
+  async function sendOutboxMessage(item) {
+    item.status = 'sending';
+    renderConversationMessages();
+    try {
+      await calls.sendDirectMessage({ conversation_id:item.conversationId, text:item.text, client_message_id:item.clientMessageId });
+      messageOutbox.delete(item.id);
+    } catch (error) {
+      item.status = 'failed';
+      item.error = error.message;
+    }
+    renderConversationMessages();
   }
 
   function subscribeMembers() {
@@ -181,13 +202,44 @@ export function createSocialWebsite({ db, functions, toast }) {
     const submittedValue = input?.value || '';
     const text = submittedValue.trim();
     if (!text) return;
+    if (!activeConversation) { toast?.('Сначала выберите диалог', 'e'); return; }
     input.value = '';
-    try {
-      await sendCurrent(text);
-    } catch (error) {
-      if (input.value === '') input.value = submittedValue;
-      input.focus();
-      toast?.(error.message, 'e');
+    const item = { id:`social-${Date.now()}-${Math.random().toString(36).slice(2)}`, clientMessageId:clientId(), conversationId:activeConversation.conversation_id, text, status:'sending' };
+    messageOutbox.set(item.id, item);
+    sendOutboxMessage(item);
+  });
+
+  let messageContextMenu = null;
+  function closeMessageContextMenu() { messageContextMenu?.remove(); messageContextMenu = null; }
+  thread()?.addEventListener('contextmenu', event => {
+    const bubble = event.target.closest('[data-social-outbox-id].failed');
+    if (!bubble) return;
+    event.preventDefault();
+    closeMessageContextMenu();
+    const menu = document.createElement('div');
+    menu.className = 'message-context-menu';
+    menu.dataset.socialMessageMenu = bubble.dataset.socialOutboxId;
+    menu.innerHTML = '<button type="button" data-social-message-action="retry">↻ Отправить заново</button><button type="button" class="danger" data-social-message-action="delete">Удалить</button>';
+    document.body.append(menu);
+    menu.style.left = `${Math.max(10, Math.min(event.clientX, innerWidth - menu.offsetWidth - 10))}px`;
+    menu.style.top = `${Math.max(10, Math.min(event.clientY, innerHeight - menu.offsetHeight - 10))}px`;
+    messageContextMenu = menu;
+  });
+  document.addEventListener('pointerdown', event => {
+    if (messageContextMenu && !event.target.closest('.message-context-menu')) closeMessageContextMenu();
+  });
+  document.addEventListener('click', event => {
+    const action = event.target.closest('[data-social-message-action]');
+    const messageId = action?.closest('[data-social-message-menu]')?.dataset.socialMessageMenu;
+    if (!action || !messageId) return;
+    const item = messageOutbox.get(messageId);
+    closeMessageContextMenu();
+    if (!item) return;
+    if (action.dataset.socialMessageAction === 'delete') {
+      messageOutbox.delete(messageId);
+      renderConversationMessages();
+    } else {
+      sendOutboxMessage(item);
     }
   });
   document.getElementById('social-request-actions')?.addEventListener('click', async event => {
@@ -208,6 +260,8 @@ export function createSocialWebsite({ db, functions, toast }) {
     async setUser(nextUser) {
       user = nextUser || null;
       activeConversation = null;
+      activeMessageDocs = [];
+      messageOutbox.clear();
       messageUnsubscribe?.(); messageUnsubscribe = null;
       const messagesTab = document.getElementById('social-messages-tab');
       if (messagesTab) messagesTab.hidden = true;

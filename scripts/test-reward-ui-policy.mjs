@@ -27,8 +27,8 @@ test('public site uses the selected Segoe Interface typography', () => {
 
 test('both pending claims and reward history use a bounded seven-row scroller', () => {
   assert.match(styles, /reward-dashboard>\.reward-panel:last-child \.reward-list\{max-height:469px;overflow-y:auto/);
-  assert.match(html, /styles\.css\?v=2026-08-24-instruction-card-hierarchy-v1/);
-  assert.match(html, /app\.js\?v=2026-08-24-chat-compose-guard-v1/);
+  assert.match(html, /styles\.css\?v=2026-08-24-message-outbox-v1/);
+  assert.match(html, /app\.js\?v=2026-08-24-message-outbox-v1/);
 });
 
 test('reward actions require an explicitly enabled program', () => {
