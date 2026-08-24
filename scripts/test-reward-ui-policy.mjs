@@ -25,7 +25,7 @@ test('public site uses the requested readable Times typography', () => {
 
 test('both pending claims and reward history use a bounded seven-row scroller', () => {
   assert.match(styles, /reward-dashboard>\.reward-panel:last-child \.reward-list\{max-height:469px;overflow-y:auto/);
-  assert.match(html, /styles\.css\?v=2026-08-24-reward-coupons-v1/);
+  assert.match(html, /styles\.css\?v=2026-08-24-reward-coupons-v2/);
   assert.match(html, /app\.js\?v=2026-08-24-reward-coupons-v1/);
 });
 
