@@ -30,7 +30,8 @@ test('new author statistics start before optional account services', async () =>
   const rewardsPosition = source.indexOf('await loadRewardDashboard();', authStart);
   assert.ok(statsPosition > authStart, 'statistics subscription must be started');
   assert.ok(rewardsPosition > statsPosition, 'statistics must not wait for rewards dashboard');
-  assert.match(source, /_statsFallbackTimer = setTimeout\([\s\S]*?element\.textContent = '0'/);
+  assert.doesNotMatch(source, /_statsFallbackTimer|setTimeout\([\s\S]*?element\.textContent = '0'/);
+  assert.match(source, /loader\.textContent = 'Ошибка загрузки'/);
 });
 
 test('failed chat sends stay in an outbox with retry and delete actions', async () => {
@@ -42,5 +43,19 @@ test('failed chat sends stay in an outbox with retry and delete actions', async 
     assert.match(source, /Не отправлено/);
     assert.match(source, /Отправить заново/);
     assert.match(source, /data-[a-z-]*message-action="delete"/);
+    assert.match(source, /local-message-actions/);
   }
+});
+
+test('lineup moderation replies are not silently removed from the user inbox', async () => {
+  const source = await read('app.js');
+  assert.doesNotMatch(source, /\.filter\(item => !isLineupModerationFeedback\(item\)\)/);
+});
+
+test('chat failure states are announced without stealing focus', async () => {
+  const html = await read('index.html');
+  assert.match(html, /id="admin-chat-thread"[^>]*role="log"[^>]*aria-live="polite"/);
+  assert.match(html, /id="social-message-thread"[^>]*role="log"[^>]*aria-live="polite"/);
+  assert.match(html, /id="admin-chat-input"[^>]*aria-label=/);
+  assert.match(html, /id="social-message-input"[^>]*aria-label=/);
 });

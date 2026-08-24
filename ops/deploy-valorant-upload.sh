@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+DEPLOYER_API_VERSION=3
+if [[ ${1:-} == '--api-version' ]]; then
+  printf '%s\n' "$DEPLOYER_API_VERSION"
+  exit 0
+fi
+
 umask 027
 
 CONTROL_DIR=/var/www/valorant-upload
@@ -14,7 +20,12 @@ PM2_APP=valorant-upload
 READY_URL=http://127.0.0.1:3000/ready
 HEALTH_URL=http://127.0.0.1:3000/health
 SOURCE_ARCHIVE=${VALORANT_UPLOAD_SOURCE_ARCHIVE:-}
+SOURCE_ARCHIVE_SHA256=${VALORANT_UPLOAD_SOURCE_ARCHIVE_SHA256:-}
 SOURCE_SHA=${VALORANT_UPLOAD_SOURCE_SHA:-}
+EXPECTED_CURRENT_SHA=${VALORANT_UPLOAD_EXPECTED_CURRENT_SHA:-}
+ANCESTRY_VERIFIED=${VALORANT_UPLOAD_ANCESTRY_VERIFIED:-0}
+ALLOW_ROLLBACK=${VALORANT_UPLOAD_ALLOW_ROLLBACK:-0}
+DEPLOY_INITIATOR=${VALORANT_UPLOAD_DEPLOY_INITIATOR:-unknown}
 
 candidate_dir=''
 remote_sha=''
@@ -46,9 +57,70 @@ release_sha() {
 
 valid_runtime_path() {
   local runtime=$1
-  [[ "$runtime" == "$CONTROL_DIR" ||
-     "$runtime" =~ ^${RELEASES_DIR}/[0-9a-f]{40}$ ]]
+  [[ "$runtime" =~ ^${RELEASES_DIR}/[0-9a-f]{40}$ ]]
 }
+
+validate_release_archive() {
+  local archive=$1
+  local expected_sha=$2
+  local paths_file types_file marker_file marker_count marker_size
+
+  if [[ ! -f "$archive" || -L "$archive" || ! "$expected_sha" =~ ^[0-9a-f]{40}$ ]]; then
+    log 'refusing deploy: release archive validation received invalid input'
+    return 1
+  fi
+
+  paths_file=$(mktemp)
+  types_file=$(mktemp)
+  marker_file=$(mktemp)
+  if ! LC_ALL=C tar --quoting-style=escape -tf "$archive" >"$paths_file"; then
+    log 'refusing deploy: archive file listing failed'
+    rm -f -- "$paths_file" "$types_file" "$marker_file"
+    return 1
+  fi
+  if grep -E '(^/|(^|/)\.\.(/|$))' "$paths_file" >/dev/null; then
+    log 'refusing deploy: archive contains an unsafe path'
+    rm -f -- "$paths_file" "$types_file" "$marker_file"
+    return 1
+  fi
+  marker_count=$(grep -Fxc -- '.valorant-deploy-source-sha' "$paths_file" || true)
+  if [[ "$marker_count" != 1 ]]; then
+    log 'refusing deploy: archive must contain exactly one source marker'
+    rm -f -- "$paths_file" "$types_file" "$marker_file"
+    return 1
+  fi
+  if ! LC_ALL=C tar --quoting-style=escape -tvf "$archive" >"$types_file"; then
+    log 'refusing deploy: archive type listing failed'
+    rm -f -- "$paths_file" "$types_file" "$marker_file"
+    return 1
+  fi
+  if grep -E '^[^-d]' "$types_file" >/dev/null; then
+    log 'refusing deploy: archive may contain only regular files and directories'
+    rm -f -- "$paths_file" "$types_file" "$marker_file"
+    return 1
+  fi
+  if ! tar -xOf "$archive" -- '.valorant-deploy-source-sha' >"$marker_file"; then
+    log 'refusing deploy: archive source marker could not be read'
+    rm -f -- "$paths_file" "$types_file" "$marker_file"
+    return 1
+  fi
+  marker_size=$(wc -c <"$marker_file")
+  if [[ "$marker_size" != 40 || "$(<"$marker_file")" != "$expected_sha" ]]; then
+    log 'refusing deploy: archive source marker does not match candidate SHA'
+    rm -f -- "$paths_file" "$types_file" "$marker_file"
+    return 1
+  fi
+  rm -f -- "$paths_file" "$types_file" "$marker_file"
+}
+
+if [[ ${1:-} == '--validate-archive' ]]; then
+  if [[ $# -ne 3 ]]; then
+    printf '%s\n' 'Usage: deployer --validate-archive ARCHIVE EXPECTED_SHA' >&2
+    exit 64
+  fi
+  validate_release_archive "$2" "$3"
+  exit
+fi
 
 probe_ready_once() {
   local expected_sha=$1
@@ -101,18 +173,6 @@ start_runtime() {
   )
 }
 
-sync_control_checkout() {
-  if [[ -n "$SOURCE_ARCHIVE" ]]; then
-    log 'archive deployment: control checkout was not changed'
-    return
-  fi
-  if git -C "$CONTROL_DIR" merge --ff-only "$remote_sha"; then
-    log "control checkout synced to $remote_sha"
-  else
-    log 'warning: runtime is healthy but the control checkout did not fast-forward'
-  fi
-}
-
 rollback_runtime() {
   local rollback_sha
   if [[ -z "$rollback_target" || ! -d "$rollback_target" ]] ||
@@ -127,13 +187,25 @@ rollback_runtime() {
   fi
   log "rolling runtime back to $rollback_sha"
   atomic_link "$rollback_target" "$CURRENT_LINK"
-  start_runtime "$rollback_target" "$rollback_sha"
-  if [[ -f "$rollback_target/.release-sha" ]]; then
-    probe_ready "$rollback_sha"
-  else
-    probe_health
+  if ! start_runtime "$rollback_target" "$rollback_sha"; then
+    log "automatic rollback failed while starting $rollback_sha"
+    return 1
   fi
-  pm2 save
+  if [[ -f "$rollback_target/.release-sha" ]]; then
+    if ! probe_ready "$rollback_sha"; then
+      log "automatic rollback readiness failed for $rollback_sha"
+      return 1
+    fi
+  else
+    if ! probe_health; then
+      log "automatic rollback health check failed for $rollback_sha"
+      return 1
+    fi
+  fi
+  if ! pm2 save; then
+    log "automatic rollback could not persist PM2 state for $rollback_sha"
+    return 1
+  fi
   log "rollback healthy: $rollback_sha"
 }
 
@@ -142,7 +214,9 @@ cleanup() {
   trap - EXIT
   set +e
   if [[ "$runtime_switched" -eq 1 && "$deployment_committed" -ne 1 ]]; then
-    rollback_runtime
+    if ! rollback_runtime; then
+      log "CRITICAL: automatic rollback failed after candidate $remote_sha"
+    fi
     mkdir -p "$STATE_DIR"
     printf '%s %s status=%s\n' "$(date -Is)" "$remote_sha" "$status" \
       >"$STATE_DIR/last-failure"
@@ -151,6 +225,10 @@ cleanup() {
         "$candidate_dir" == "$RELEASES_DIR"/.????????????????????????????????????????.new.* &&
         -d "$candidate_dir" ]]; then
     rm -rf -- "$candidate_dir"
+  fi
+  if [[ "$SOURCE_ARCHIVE" =~ ^/var/lib/valorant-upload-deploy/incoming/[0-9a-f]{40}-[0-9a-f]{32}\.tar$ &&
+        -f "$SOURCE_ARCHIVE" && ! -L "$SOURCE_ARCHIVE" ]]; then
+    rm -f -- "$SOURCE_ARCHIVE"
   fi
   exit "$status"
 }
@@ -162,7 +240,9 @@ ensure_release() {
       log "refusing deploy: release path must not be a symlink: $release_dir"
       return 1
     fi
-    if [[ "$(release_sha "$release_dir")" == "$remote_sha" ]]; then
+    if [[ "$(release_sha "$release_dir")" == "$remote_sha" &&
+          -f "$release_dir/.release-archive-sha256" &&
+          "$(tr -d '\r\n' <"$release_dir/.release-archive-sha256")" == "$SOURCE_ARCHIVE_SHA256" ]]; then
       log "using preflighted release $remote_sha"
       return
     fi
@@ -172,11 +252,13 @@ ensure_release() {
 
   candidate_dir=$(mktemp -d "$RELEASES_DIR/.${remote_sha}.new.XXXXXX")
   log "building isolated release $remote_sha"
-  if [[ -n "$SOURCE_ARCHIVE" ]]; then
-    tar -xf "$SOURCE_ARCHIVE" -C "$candidate_dir"
-  else
-    git -C "$CONTROL_DIR" archive "$remote_sha" | tar -x -C "$candidate_dir"
+  tar --no-same-owner --no-same-permissions -xf "$SOURCE_ARCHIVE" -C "$candidate_dir"
+  if [[ ! -f "$candidate_dir/.valorant-deploy-source-sha" ||
+        "$(tr -d '\r\n' <"$candidate_dir/.valorant-deploy-source-sha")" != "$remote_sha" ]]; then
+    log 'refusing deploy: archive source marker does not match candidate SHA'
+    return 1
   fi
+  rm -f -- "$candidate_dir/.valorant-deploy-source-sha"
   (
     cd "$candidate_dir"
     npm ci --omit=optional
@@ -190,6 +272,7 @@ ensure_release() {
     npm run test:billing --if-present
   )
   printf '%s\n' "$remote_sha" >"$candidate_dir/.release-sha"
+  printf '%s\n' "$SOURCE_ARCHIVE_SHA256" >"$candidate_dir/.release-archive-sha256"
   mv -- "$candidate_dir" "$release_dir"
   candidate_dir=''
 }
@@ -207,59 +290,76 @@ log 'checking valorant-upload'
 mkdir -p "$RELEASES_DIR" "$STATE_DIR"
 
 cd "$CONTROL_DIR"
-if [[ -n "$SOURCE_ARCHIVE" ]]; then
-  if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-    log 'refusing deploy: VALORANT_UPLOAD_SOURCE_SHA is invalid'
-    exit 1
-  fi
-  if [[ ! -f "$SOURCE_ARCHIVE" || -L "$SOURCE_ARCHIVE" ]]; then
-    log 'refusing deploy: source archive is missing or is a symlink'
-    exit 1
-  fi
-  remote_sha=$SOURCE_SHA
-else
-  git fetch origin main:refs/remotes/origin/main
-  if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-    log 'refusing deploy: tracked control-plane files have local changes'
-    exit 1
-  fi
-  remote_sha=$(git rev-parse origin/main)
-fi
-if [[ ! "$remote_sha" =~ ^[0-9a-f]{40}$ ]]; then
-  log 'refusing deploy: origin/main did not resolve to a full SHA'
+if [[ -z "$SOURCE_ARCHIVE" || -z "$SOURCE_SHA" ]]; then
+  log 'refusing deploy: an explicit source archive and SHA are required; implicit origin/main deploys are disabled'
   exit 1
 fi
+if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ || ! "$EXPECTED_CURRENT_SHA" =~ ^[0-9a-f]{40}$ ||
+      ! "$SOURCE_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+  log 'refusing deploy: source SHA, expected current SHA, or archive checksum is invalid'
+  exit 1
+fi
+if [[ ! "$SOURCE_ARCHIVE" =~ ^/var/lib/valorant-upload-deploy/incoming/${SOURCE_SHA}-[0-9a-f]{32}\.tar$ ||
+      ! -f "$SOURCE_ARCHIVE" || -L "$SOURCE_ARCHIVE" ]]; then
+  log 'refusing deploy: source archive is missing or is a symlink'
+  exit 1
+fi
+if [[ "$(sha256sum "$SOURCE_ARCHIVE" | awk '{print $1}')" != "$SOURCE_ARCHIVE_SHA256" ]]; then
+  log 'refusing deploy: source archive checksum does not match'
+  exit 1
+fi
+if ! validate_release_archive "$SOURCE_ARCHIVE" "$SOURCE_SHA"; then
+  exit 1
+fi
+if [[ ! "$DEPLOY_INITIATOR" =~ ^[A-Za-z0-9._:@-]{1,64}$ ]]; then
+  log 'refusing deploy: initiator is invalid'
+  exit 1
+fi
+remote_sha=$SOURCE_SHA
+log "deploy request: initiator=$DEPLOY_INITIATOR mode=archive expected_current=$EXPECTED_CURRENT_SHA candidate=$remote_sha rollback=$ALLOW_ROLLBACK"
 
 if [[ -e "$LAST_GOOD_LINK" && ! -L "$LAST_GOOD_LINK" ]]; then
   log 'refusing deploy: last-good path exists and is not a symlink'
   exit 1
 fi
-if [[ ! -L "$LAST_GOOD_LINK" ]]; then
-  atomic_link "$CONTROL_DIR" "$LAST_GOOD_LINK"
+current_target=$(readlink -f "$CURRENT_LINK" || true)
+if ! valid_runtime_path "$current_target"; then
+  log 'refusing deploy: current runtime target is outside managed runtime paths'
+  exit 1
 fi
-rollback_target=$(readlink -f "$LAST_GOOD_LINK" || true)
-if ! valid_runtime_path "$rollback_target"; then
-  log 'refusing deploy: last-good target is outside managed runtime paths'
+current_sha=$(release_sha "$current_target")
+if [[ "$current_sha" != "$EXPECTED_CURRENT_SHA" ]]; then
+  log "refusing deploy: current SHA changed (expected $EXPECTED_CURRENT_SHA, found $current_sha)"
+  exit 1
+fi
+if [[ "$ALLOW_ROLLBACK" != 0 && "$ALLOW_ROLLBACK" != 1 ]]; then
+  log 'refusing deploy: rollback flag must be 0 or 1'
+  exit 1
+fi
+if [[ "$remote_sha" != "$current_sha" && "$ALLOW_ROLLBACK" != 1 && "$ANCESTRY_VERIFIED" != 1 ]]; then
+  log 'refusing deploy: forward ancestry was not verified by the archive builder'
   exit 1
 fi
 
-if probe_ready_once "$remote_sha"; then
-  if [[ -L "$CURRENT_LINK" ]]; then
-    current_target=$(readlink -f "$CURRENT_LINK" || true)
-    if [[ -n "$current_target" ]] &&
-       valid_runtime_path "$current_target" &&
-       [[ "$(release_sha "$current_target")" == "$remote_sha" ]]; then
-      atomic_link "$current_target" "$LAST_GOOD_LINK"
-    fi
-  fi
+if [[ "$remote_sha" == "$current_sha" ]] && probe_ready_once "$remote_sha"; then
   log "already healthy: $remote_sha"
-  sync_control_checkout
   deployment_committed=1
   exit 0
 fi
 
 release_dir="$RELEASES_DIR/$remote_sha"
 ensure_release "$release_dir"
+
+if [[ "$remote_sha" != "$current_sha" ]]; then
+  rollback_target=$current_target
+  atomic_link "$current_target" "$LAST_GOOD_LINK"
+elif [[ -L "$LAST_GOOD_LINK" ]]; then
+  rollback_target=$(readlink -f "$LAST_GOOD_LINK" || true)
+  if ! valid_runtime_path "$rollback_target"; then
+    log 'refusing deploy: last-good target is outside managed runtime paths'
+    exit 1
+  fi
+fi
 
 log "activating release $remote_sha"
 atomic_link "$release_dir" "$CURRENT_LINK"
@@ -272,10 +372,8 @@ if ! probe_ready "$remote_sha"; then
 fi
 
 pm2 save
-atomic_link "$release_dir" "$LAST_GOOD_LINK"
 mkdir -p "$STATE_DIR"
 printf '%s %s\n' "$(date -Is)" "$remote_sha" >"$STATE_DIR/last-success"
 rm -f -- "$STATE_DIR/last-failure"
 deployment_committed=1
-sync_control_checkout
 log "deployed and ready: $remote_sha"

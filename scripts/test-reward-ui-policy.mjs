@@ -22,13 +22,18 @@ test('public site uses the selected Segoe Interface typography', () => {
   assert.match(styles, /small,html body label\{font-size:14px!important/);
   assert.match(styles, /reward-demand-map\.selected[^}]*background:#55e7ff!important/);
   assert.match(styles, /html body \.reward-demand-map\{[^}]*font-size:15px!important/);
-  assert.match(styles, /html body \.reward-demand-map small\{[^}]*font-size:9px!important/);
+  assert.match(styles, /html body \.reward-demand-map small\{[^}]*font-size:10px!important/);
 });
 
 test('both pending claims and reward history use a bounded seven-row scroller', () => {
-  assert.match(styles, /reward-dashboard>\.reward-panel:last-child \.reward-list\{max-height:469px;overflow-y:auto/);
-  assert.match(html, /styles\.css\?v=2026-08-24-message-outbox-v1/);
-  assert.match(html, /app\.js\?v=2026-08-24-message-outbox-v1/);
+  assert.match(app, /function sizeRewardLists\(host\)/);
+  assert.match(app, /dataset\.visibleRewardRows = '7'/);
+  assert.match(app, /getBoundingClientRect\(\)\.height/);
+  assert.match(app, /list\.style\.maxHeight = 'none'/);
+  assert.match(app, /window\.addEventListener\('resize',[\s\S]*?sizeRewardLists\(host\)/);
+  assert.match(styles, /reward-list--held,\.reward-list--bounded\{max-height:469px;overflow-y:auto/);
+  assert.match(html, /styles\.css\?v=2026-08-25-surgical-v1/);
+  assert.match(html, /app\.js\?v=2026-08-25-surgical-v1/);
 });
 
 test('reward actions require an explicitly enabled program', () => {
@@ -85,12 +90,12 @@ test('author training card keeps its heading readable', () => {
   assert.match(styles, /reward-demand-ability strong/);
   const workspaceStyles = readFileSync(new URL('../workspace-redesign.css', import.meta.url), 'utf8');
   assert.match(workspaceStyles, /sidebar-training-head\{[^}]*font-size:11px/);
-  assert.match(html, /workspace-redesign\.css\?v=2026-08-24-profile-meta-v2/);
+  assert.match(html, /workspace-redesign\.css\?v=2026-08-25-surgical-v1/);
 });
 
 test('profile level supporting text stays visually secondary', () => {
   const workspaceStyles = readFileSync(new URL('../workspace-redesign.css', import.meta.url), 'utf8');
-  assert.match(workspaceStyles, /profile-level-progress-meta small\{font-size:7px!important/);
+  assert.match(workspaceStyles, /profile-level-progress-meta small\{font-size:11px!important/);
 });
 
 test('statistics expander uses one centered rotating chevron', () => {
@@ -119,6 +124,8 @@ test('lineup demand keeps A, B, C and Mid coverage visible after tasks close', (
   assert.match(app, /reward-demand-zones/);
   assert.match(app, /Покрытие плентов и мида/);
   assert.match(app, /ВСЕ ЗОНЫ ЕСТЬ/);
+  assert.match(app, /ПОКРЫТИЕ ЗОН НЕ РАССЧИТАНО/);
+  assert.match(app, /expectedZonesForMap=map=>\['a','b',[\s\S]*?\['c'\][\s\S]*?'mid'\]/);
   assert.match(styles, /\.reward-demand-zones/);
 });
 
@@ -129,22 +136,36 @@ test('reward demand keeps primary labels larger than supporting text', () => {
   assert.match(styles, /reward-demand-ability small\{[^}]*font-size:9px/);
 });
 
+test('component typography overrides the global small and label defaults', () => {
+  assert.match(styles, /html body \.reward-demand-stage>label,[\s\S]*?font-size:12px!important/);
+  assert.match(styles, /html body \.reward-demand-ability strong\{font-size:14px!important/);
+  assert.match(styles, /html body \.reward-demand-ability small\{font-size:11px!important/);
+  assert.match(styles, /html body \.production-help-copy strong\{font-size:16px!important/);
+});
+
+test('ability choices stay balanced instead of wrapping as three plus one', () => {
+  const workspaceFixes = readFileSync(new URL('../workspace-redesign-fixes.css', import.meta.url), 'utf8');
+  assert.match(workspaceFixes, /abilities-row \{[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(workspaceFixes, /@media \(max-width: 380px\)[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(workspaceFixes, /abilities-row > \.ability-empty-hint,[\s\S]*?grid-column: 1 \/ -1/);
+});
+
 test('reward submission opt-in keeps its title larger than its explanation', () => {
   assert.match(styles, /html body \.reward-submit-optin b\{font-size:14px!important/);
-  assert.match(styles, /html body \.reward-submit-optin small\{[^}]*font-size:10px!important/);
+  assert.match(styles, /html body \.reward-submit-optin small\{[^}]*font-size:11px!important/);
 });
 
 test('screenshot instructions keep required actions larger than explanations', () => {
   assert.match(html, /class="hint shot-requirement"/);
   assert.match(styles, /html body \.production-shot-help b\{font-size:12px!important/);
-  assert.match(styles, /html body \.production-shot-help span\{font-size:9px!important/);
+  assert.match(styles, /html body \.production-shot-help span\{font-size:11px!important/);
   assert.match(styles, /html body \.shot-requirement b\{[^}]*font-size:16px!important/);
   assert.match(styles, /html body \.shot-requirement span\{font-size:11px!important/);
 });
 
 test('author instruction card keeps its action larger than its description', () => {
-  assert.match(styles, /html body \.production-help-copy strong\{font-size:14px!important/);
-  assert.match(styles, /html body \.production-help-copy small\{font-size:10px!important/);
+  assert.match(styles, /html body \.production-help-copy strong\{font-size:16px!important/);
+  assert.match(styles, /html body \.production-help-copy small\{font-size:11px!important/);
 });
 
 test('reward demand totals place labels above their numbers', () => {

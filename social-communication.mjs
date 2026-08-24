@@ -138,7 +138,7 @@ export function createSocialWebsite({ db, functions, toast }) {
     }).join('');
     const pending = [...messageOutbox.values()]
       .filter(item => item.conversationId === activeConversation.conversation_id)
-      .map(item => `<div class="social-message mine local-message ${item.status}" data-social-outbox-id="${escapeHtml(item.id)}"><span>${escapeHtml(item.text)}</span><small>${item.status === 'failed' ? '<b>!</b> Не отправлено' : 'Отправляется…'}</small></div>`).join('');
+      .map(item => `<div class="social-message mine local-message ${item.status}" data-social-outbox-id="${escapeHtml(item.id)}"><span>${escapeHtml(item.text)}</span><small>${item.status === 'failed' ? '<b>!</b> Не отправлено' : 'Отправляется…'}</small>${item.status === 'failed' ? `<div class="local-message-actions" data-social-message-menu="${escapeHtml(item.id)}"><button type="button" data-social-message-action="retry">Отправить заново</button><button type="button" class="danger" data-social-message-action="delete">Удалить</button></div>` : ''}</div>`).join('');
     root.innerHTML = delivered || pending ? delivered + pending : '<div class="social-empty">Сообщений пока нет.</div>';
     root.scrollTop = root.scrollHeight;
   }

@@ -2,14 +2,13 @@
 
 ## Current production state
 
-As of 2026-08-02, `https://vlineups.ru` runs on the paid Russian VPS at
+As of 2026-08-25, `https://vlineups.ru` runs on the paid Russian VPS at
 `212.15.49.68` behind Nginx and PM2. This VPS is the production source of
 truth.
 
-The Vercel project's GitHub integration is disconnected and `vlineups.ru` is
-no longer attached to Vercel. Do not use Vercel for production deployments.
-The Vercel project and `vlineups.tech` are temporarily retained only as a
-rollback path; remove them only after a separate stability decision.
+Production is updated directly from a committed local checkout. Do not use
+GitHub, Vercel, a server-side `git pull`, or a mutable working tree as a
+release source.
 
 This site needs Node.js because it serves two API routes:
 
@@ -46,30 +45,33 @@ apt install -y nodejs
 npm install -g pm2
 ```
 
-## App
+## App bootstrap
 
 ```bash
-mkdir -p /var/www
-cd /var/www
-git clone https://github.com/ARTS-DARTS/valorant-upload.git
-cd valorant-upload
-npm ci
+install -d -m 0750 /var/www/valorant-upload
+cd /var/www/valorant-upload
 cp .env.example .env
 nano .env
 ```
 
 Fill all values in `.env`.
 
-Install the release deployer and perform the first start through it. The
-deployer injects the exact commit SHA required by `/ready`:
+Transfer the initial control files and protected `.env` through the
+operator-approved bootstrap process. Never put `.env` in a release archive.
 
-```bash
-install -o root -g root -m 0750 \
-  /var/www/valorant-upload/ops/deploy-valorant-upload.sh \
-  /usr/local/bin/deploy-valorant-upload.sh
-/usr/local/bin/deploy-valorant-upload.sh
-pm2 startup
+From the committed Windows checkout, install the protected control-plane once
+and deploy the exact local commit:
+
+```powershell
+.\install_vps_deployer.ps1
+.\deploy_vps_local.ps1
 ```
+
+The installer creates immutable
+`/usr/local/sbin/valorant-upload-deployer`. The old
+`/usr/local/bin/deploy-valorant-upload.sh` entrypoint is intentionally
+replaced by a blocker that exits with code 64. Run `pm2 startup` separately
+on the VPS when boot persistence is first configured.
 
 Check:
 
@@ -125,14 +127,25 @@ https://vlineups.ru/api/yandex-callback
 
 ## Safe update
 
-```bash
-/usr/local/bin/deploy-valorant-upload.sh
-tail -n 80 /var/log/valorant-upload-deploy.log
+From a clean committed local checkout:
+
+```powershell
+.\deploy_vps_local.ps1
 ```
 
 Do not update production with raw `git pull`, `npm ci`, or `pm2 restart`.
-The deployer builds an isolated release, atomically switches the runtime, and
-rolls back to the last confirmed release if readiness fails.
+The client verifies that the live SHA is an ancestor of the candidate, uploads
+a content-addressed archive, and sends the expected live SHA. The immutable
+deployer verifies the archive digest, paths, entry types, and embedded source
+marker before running any package code. It then builds an isolated release,
+atomically switches the runtime, and rolls back to the last confirmed release
+if readiness fails.
+
+An intentional rollback requires an explicit operator action:
+
+```powershell
+.\deploy_vps_local.ps1 -AllowRollback
+```
 
 ## Automatic update
 
@@ -145,30 +158,22 @@ systemctl is-enabled valorant-upload-autodeploy.timer
 systemctl is-active valorant-upload-autodeploy.timer
 ```
 
-The canonical script is versioned at `ops/deploy-valorant-upload.sh`. It fetches
-`origin/main`, runs syntax and billing tests in an isolated archive, creates an
-immutable SHA release, atomically switches `/var/www/valorant-upload-current`,
-and accepts the release only when `/ready` returns that exact SHA. The prior
-release remains available through `/var/www/valorant-upload-last-good`.
+The canonical runtime script is versioned at
+`ops/deploy-valorant-upload.sh`, but deployments never execute that mutable
+copy. If the control-plane changes, increment `DEPLOYER_API_VERSION`, commit
+the change, and install it transactionally before the runtime deployment:
 
-Install or update the deploy script:
-
-```bash
-install -o root -g root -m 0750 \
-  /var/www/valorant-upload/ops/deploy-valorant-upload.sh \
-  /usr/local/bin/deploy-valorant-upload.sh
+```powershell
+.\install_vps_deployer.ps1
+.\deploy_vps_local.ps1
 ```
 
-If the deploy script itself changed, reinstall it from the synced control
-checkout before the next manual deployment:
+The installer holds both install and runtime locks, refuses downgrades or a
+same-version/different-digest replacement, stages both entrypoints before
+mutation, and restores the previous files plus immutable attributes on any
+failure.
 
-```bash
-install -o root -g root -m 0750 \
-  /var/www/valorant-upload/ops/deploy-valorant-upload.sh \
-  /usr/local/bin/deploy-valorant-upload.sh
-```
-
-After every runtime push, run the safe update script above and verify that
+After every deployment, verify that
 `/ready` reports the expected Git SHA, then verify the live asset:
 
 ```bash

@@ -1077,7 +1077,7 @@
     .stat-counts-row[hidden] { display:none; }
     .stat-counts-row.is-opening { animation:statsSummaryOpen .22s ease both;transform-origin:top; }
     @keyframes statsSummaryOpen { from { opacity:0;transform:translateY(-5px) scaleY(.96); } to { opacity:1;transform:none; } }
-    @media (prefers-reduced-motion:reduce) { .stat-counts-row.is-opening { animation:none; }.stats-summary-chevron { transition:none; } }
+    @media (prefers-reduced-motion:reduce) { .stat-counts-row.is-opening { animation:none; }.stats-summary-chevron,.stats-summary-chevron::before { transition:none; } }
     .stat-counts-row .stat-card { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
     .stat-filter-card { width:100%; color:inherit; font:inherit; text-align:left; cursor:pointer; transition:border-color .16s,background .16s,transform .16s; }
     .stat-filter-card:hover { border-color:rgba(79,195,247,.55); background:rgba(79,195,247,.08); transform:translateY(-1px); }
@@ -1806,8 +1806,8 @@ body.footage-library-open { overflow:hidden; }
 .twitch-live-player{width:400px;min-height:0;transform:none}.twitch-live-player.bottom-left,.twitch-live-player.bottom-right,.twitch-live-player.top-left,.twitch-live-player.top-right{transform-origin:initial}.twitch-live-embed,.twitch-live-embed iframe{width:400px!important;height:225px!important}.twitch-live-player:not(.minimized) .twitch-live-restore{display:none}@media(max-width:420px){.twitch-live-player{left:8px!important;right:auto!important;transform:none}}
 
 /* Keep long reward-review queues inside a seven-row viewport. */
-.reward-list--held{max-height:469px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px}
-.reward-list--held,.reward-dashboard>.reward-panel:last-child .reward-list{max-height:469px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:6px;border:1px solid #31506a;border-radius:10px;background:#091321}
+.reward-list--held,.reward-list--bounded{max-height:469px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px}
+.reward-list--held,.reward-list--bounded{overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:6px;border:1px solid #31506a;border-radius:10px;background:#091321}
 .reward-dashboard>.reward-panel:last-child .reward-list{gap:0}
 .reward-dashboard>.reward-panel:last-child .reward-item{position:relative;padding:13px 10px;border-radius:0;background:transparent}
 .reward-dashboard>.reward-panel:last-child .reward-item b{display:block;font-size:17px;line-height:1.25;font-weight:800;letter-spacing:-.01em;color:#f7fbff}
@@ -1824,21 +1824,31 @@ html body h1,html body h2,html body h3,html body strong,html body b{font-family:
 .reward-demand-map.selected{border-color:#8ff3ff!important;background:#55e7ff!important;color:#06131c!important;box-shadow:0 0 0 2px rgba(85,231,255,.28),0 0 22px rgba(85,231,255,.38)!important;font-weight:900}
 .reward-demand-map.selected small{color:#12303b!important}
 html body .reward-demand-map{min-height:44px;padding:6px 14px;font-size:15px!important;font-weight:900;line-height:1.05}
-html body .reward-demand-map small{display:block;margin-top:4px;font-size:9px!important;font-weight:800;line-height:1!important;letter-spacing:.045em}
+html body .reward-demand-map small{display:block;margin-top:4px;font-size:10px!important;font-weight:800;line-height:1!important;letter-spacing:.045em}
 html body .reward-demand-totals button small{margin:0 0 5px;font-size:10px!important;line-height:1!important}
 html body .reward-demand-totals button b{font-size:17px!important;line-height:1}
 
 /* Reward opt-in: the action is primary; its outcome is supporting copy. */
 html body .reward-submit-optin b{font-size:14px!important;font-weight:800;line-height:1.25!important;letter-spacing:0}
-html body .reward-submit-optin small{margin-top:2px;font-size:10px!important;font-weight:500;line-height:1.35!important;letter-spacing:0;color:#93a9bc}
+html body .reward-submit-optin small{margin-top:2px;font-size:11px!important;font-weight:500;line-height:1.35!important;letter-spacing:0;color:#93a9bc}
 
 /* Screenshot instructions: actions lead, explanations support. */
 html body .production-shot-help b{font-size:12px!important;font-weight:800;line-height:1.25!important;letter-spacing:0}
-html body .production-shot-help span{font-size:9px!important;font-weight:500;line-height:1.4!important;letter-spacing:0;color:#91a8bf}
+html body .production-shot-help span{font-size:11px!important;font-weight:500;line-height:1.4!important;letter-spacing:0;color:#91a8bf}
 html body .shot-requirement{display:flex;align-items:baseline;gap:5px;flex-wrap:wrap;color:#9db0c4;font-size:11px!important;line-height:1.4!important}
 html body .shot-requirement b{color:#f5f8fc;font-size:16px!important;font-weight:800;line-height:1.25!important;letter-spacing:0}
 html body .shot-requirement span{font-size:11px!important;font-weight:500;line-height:1.4!important;letter-spacing:0}
 
 /* Author instruction card: the action stays above its supporting description. */
-html body .production-help-copy strong{font-size:14px!important;font-weight:800;line-height:1.25!important;letter-spacing:0}
-html body .production-help-copy small{font-size:10px!important;font-weight:500;line-height:1.4!important;letter-spacing:.01em;color:#91a9c7}
+html body .production-help-copy strong{font-size:16px!important;font-weight:800;line-height:1.25!important;letter-spacing:0}
+html body .production-help-copy small{font-size:11px!important;font-weight:500;line-height:1.4!important;letter-spacing:.01em;color:#91a9c7}
+
+/* Surgical typography guards: global small/label defaults must not invert local hierarchy. */
+html body .reward-demand-stage>label,
+html body .reward-demand-stage-head>label{font-size:12px!important;line-height:1.35!important}
+html body .reward-demand-ability strong{font-size:14px!important;line-height:1.3!important}
+html body .reward-demand-ability small{font-size:11px!important;line-height:1.35!important}
+.local-message-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin-top:7px}
+.local-message-actions button{min-height:32px;padding:5px 9px;border:1px solid rgba(85,231,255,.36);border-radius:7px;background:#10283a;color:#bdefff;font-family:inherit;font-size:11px;font-weight:700;line-height:1.2;cursor:pointer}
+.local-message-actions button:hover,.local-message-actions button:focus-visible{border-color:#55e7ff;color:#fff;outline:none}
+.local-message-actions button.danger{border-color:rgba(255,70,85,.45);background:rgba(255,70,85,.08);color:#ff98a2}

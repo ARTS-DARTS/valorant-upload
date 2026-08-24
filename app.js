@@ -48,7 +48,7 @@ import {
   entitlementHasCooldownBypass,
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
-import { createSocialWebsite } from './social-communication.mjs?v=2026-08-24-message-outbox-v1';
+import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-surgical-v1';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -265,17 +265,27 @@ function renderRewardDemand(deficits) {
   const mapButtons=maps.map((map,index)=>`<button class="reward-demand-map${map===rewardDemandMap?' selected':''}${mapPriority(map).deficitCount?' priority':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${esc(map)}${mapPriority(map).deficitCount?`<small>приоритет ${index+1}</small>`:''}</button>`).join('');
   const normalizeDemandKey=value=>String(value||'').trim().toLowerCase();
   const zoneCoverageForRow=row=>rewardDashboard?.deficits?.market_zone_coverage?.[normalizeDemandKey(row.map)]?.[normalizeDemandKey(row.agent||rewardDemandAgent)]?.[normalizeDemandKey(row.ability)]?.[normalizeDemandKey(row.side)]||null;
+  const expectedZonesForMap=map=>['a','b',...(['haven','lotus'].includes(normalizeDemandKey(map))?['c']:[]),'mid'];
+  const normalizedZoneCoverage=row=>{
+    const raw=zoneCoverageForRow(row);
+    if(!raw||typeof raw!=='object'||!Object.keys(raw).length)return null;
+    const normalized=Object.fromEntries(Object.entries(raw).map(([zone,value])=>[normalizeDemandKey(zone),Number(value||0)]));
+    return Object.fromEntries(expectedZonesForMap(row.map).map(zone=>[zone,Number(normalized[zone]||0)]));
+  };
   const abilityCard=row=>{
     const count=Number(row.count||0);
     const icon=rewardDemandAbilityIcon(row.agent||rewardDemandAgent,row.ability);
-    const coverage=zoneCoverageForRow(row);
+    const coverage=normalizedZoneCoverage(row);
     const zones=coverage?Object.entries(coverage):[];
     const missingZones=zones.filter(([,zoneCount])=>Number(zoneCount||0)===0).map(([zone])=>zone);
     const legacyMissingZones=!coverage?(rewardDashboard?.tasks||[]).filter(task=>task.automatic===true&&normalizeDemandKey(task.map)===normalizeDemandKey(row.map)&&normalizeDemandKey(task.agent)===normalizeDemandKey(row.agent||rewardDemandAgent)&&normalizeDemandKey(task.ability)===normalizeDemandKey(row.ability)&&normalizeDemandKey(task.side)===normalizeDemandKey(row.side)).map(task=>normalizeDemandKey(task.zone)).filter(Boolean):[];
     const missing=coverage?missingZones:legacyMissingZones;
     const urgent=missing.length>0||(!coverage&&count===0);
     const zoneList=zones.length?`<div class="reward-demand-zones" aria-label="Покрытие плентов и мида">${zones.map(([zone,zoneCount])=>`<span class="${Number(zoneCount||0)>0?'filled':'missing'}"><em>${esc(zone==='mid'?'MID':zone.toUpperCase())}</em><b>${Number(zoneCount||0)}</b></span>`).join('')}</div>`:'';
-    return `<article class="reward-demand-ability${urgent?' urgent':''}"><span class="reward-demand-ability-icon">${icon?`<img src="${esc(icon)}" alt="">`:'✦'}</span><span class="reward-demand-count">${count}</span><div><strong>${esc(row.ability||'Способность')}</strong><small>${esc(row.side||'any')}</small>${zoneList}</div><b>${missing.length?`НУЖНЫ · ${missing.map(zone=>esc(zone==='mid'?'MID':zone.toUpperCase())).join(' / ')}`:`ВСЕ ЗОНЫ ЕСТЬ`}</b></article>`;
+    const coverageStatus=missing.length
+      ?`НУЖНЫ · ${missing.map(zone=>esc(zone==='mid'?'MID':zone.toUpperCase())).join(' / ')}`
+      :coverage?'ВСЕ ЗОНЫ ЕСТЬ':'ПОКРЫТИЕ ЗОН НЕ РАССЧИТАНО';
+    return `<article class="reward-demand-ability${urgent?' urgent':''}"><span class="reward-demand-ability-icon">${icon?`<img src="${esc(icon)}" alt="">`:'✦'}</span><span class="reward-demand-count">${count}</span><div><strong>${esc(row.ability||'Способность')}</strong><small>${esc(row.side||'any')}</small>${zoneList}</div><b>${coverageStatus}</b></article>`;
   };
   const sideGroups=[
     { key:'attack', label:'Атака', icon:'⚔' },
@@ -284,13 +294,45 @@ function renderRewardDemand(deficits) {
   ].map(group=>({ ...group, rows:abilities.filter(row=>String(row.side||'any').toLowerCase()===group.key) }))
     .filter(group=>group.key!=='any'||group.rows.length);
   const abilityGroups=sideGroups.map(group=>{
-    const zoneTotals=group.rows.flatMap(row=>Object.values(zoneCoverageForRow(row)||{}).map(Number));
+    const zoneTotals=group.rows.flatMap(row=>Object.values(normalizedZoneCoverage(row)||{}).map(Number));
     const filledZones=zoneTotals.filter(count=>count>0).length;
     const coverageLabel=zoneTotals.length?`${filledZones}/${zoneTotals.length}`:String(group.rows.length);
     return `<section class="reward-demand-side-group${group.key==='any'?' neutral':''}"><header><span>${group.icon}</span><strong>${group.label}</strong><b title="Заполнено зон">${coverageLabel}</b></header><div>${group.rows.map(abilityCard).join('')||'<p>Дефицитных способностей нет</p>'}</div></section>`;
   }).join('');
   return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div><div class="reward-demand-totals" role="group" aria-label="Режим оценки дефицита"><button type="button" data-demand-ranking="map_pool" class="${rewardDemandRanking==='map_pool'?'selected':''}" aria-pressed="${rewardDemandRanking==='map_pool'}"><small>Маппул</small><b>${mapRows.filter(row=>row.deficit===true).length}</b></button><button type="button" data-demand-ranking="global" class="${rewardDemandRanking==='global'?'selected':''}" aria-pressed="${rewardDemandRanking==='global'}"><small>Общее</small><b>${globalRows.filter(row=>row.deficit===true).length}</b></button></div></header>${categoryChooser}<div class="reward-demand-mode-note">${rewardDemandRanking==='map_pool'?'Порядок учитывает дефицит агента и способности на каждой карте.':'Общий дефицит также считается на выбранной карте; задания уточняют недостающие зоны.'}</div><div class="reward-demand-stage"><label>1 · АГЕНТ · ПО ПРИОРИТЕТУ И ПОДПИСКАМ</label><div class="reward-demand-agents">${agentButtons}</div></div><div class="reward-demand-stage"><div class="reward-demand-stage-head"><label>2 · ВЕСЬ АКТИВНЫЙ МАППУЛ · ПРИОРИТЕТНЫЕ КАРТЫ ПЕРВЫМИ</label></div><div class="reward-demand-maps">${mapButtons}</div></div><div class="reward-demand-stage"><label>3 · СПОСОБНОСТЬ И НЕДОСТАЮЩИЕ ЗОНЫ</label><div class="reward-demand-side-columns">${abilityGroups||'<div class="reward-empty">Для этой карты пока нет данных по способностям выбранного агента.</div>'}</div></div></section>`;
 }
+
+function sizeRewardLists(host) {
+  requestAnimationFrame(() => {
+    host.querySelectorAll('[data-visible-reward-rows]').forEach(list => {
+      const rowCount = Math.max(1, Number(list.dataset.visibleRewardRows || 7));
+      const items = [...list.children].slice(0, rowCount);
+      if (list.children.length <= rowCount || items.length < rowCount) {
+        list.style.maxHeight = 'none';
+        return;
+      }
+      const style = getComputedStyle(list);
+      const gap = Number.parseFloat(style.rowGap || style.gap) || 0;
+      const padding = (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
+      const border = (Number.parseFloat(style.borderTopWidth) || 0) + (Number.parseFloat(style.borderBottomWidth) || 0);
+      const height = items.reduce((total, item) => total + item.getBoundingClientRect().height, 0)
+        + gap * (items.length - 1) + padding + border;
+      list.style.maxHeight = `${Math.ceil(height)}px`;
+    });
+  });
+}
+
+let rewardListResizeFrame = 0;
+window.addEventListener('resize', () => {
+  if (rewardListResizeFrame) cancelAnimationFrame(rewardListResizeFrame);
+  rewardListResizeFrame = requestAnimationFrame(() => {
+    rewardListResizeFrame = 0;
+    const modal = document.getElementById('reward-modal');
+    const host = document.getElementById('reward-dialog-body');
+    if (host && modal && !modal.hidden) sizeRewardLists(host);
+  });
+});
+
 function renderRewardDialog() {
   const host = document.getElementById('reward-dialog-body'); if(!host) return;
   const data = rewardDashboard;
@@ -326,6 +368,14 @@ function renderRewardDialog() {
         ? `<div class="reward-coupon-picker"><div class="reward-coupon-region"><div><span>Регион Riot-аккаунта</span><strong>${membership.region==='TR'?'🇹🇷 Турция':'🇷🇺 Россия'} (${esc(membership.region||'RU')})</strong><small>Код будет куплен именно для этого региона.</small></div><label><span>Изменить регион</span><select class="finput" id="reward-payout-region"><option value="RU"${membership.region==='RU'?' selected':''}>🇷🇺 Россия (RU)</option><option value="TR"${membership.region==='TR'?' selected':''}>🇹🇷 Турция (TR)</option></select></label></div><div class="reward-coupon-grid" role="radiogroup" aria-label="Номинал кода">${denominations.map(value=>{const enabled=value<=availableVp,missing=Math.max(0,value-availableVp),selected=value===selectedDenomination;return `<button type="button" class="reward-coupon${selected?' selected':''}" data-reward-denomination="${value}" role="radio" aria-checked="${selected}"${enabled?'':` disabled aria-label="${value} VP, не хватает ${missing} VP"`}><strong>${value}</strong><span>VP</span><small>${enabled?'Доступно':`Не хватает ${missing}`}</small></button>`;}).join('')}</div><input type="hidden" id="reward-payout-amount" value="${selectedDenomination}"><div class="reward-coupon-submit"><span>${selectedDenomination?`Будет заморожено ${selectedDenomination} VP до решения по заявке.`:`До первого купона не хватает ${Math.max(0,denominations[0]-availableVp)} VP.`}</span><button class="reward-action primary" data-reward-action="payout"${selectedDenomination?'':' disabled'}>Выбрать купон</button></div></div><p class="reward-payout-note">После отправки VP резервируются. В админке заявка проверяется, затем к ней назначается совместимый код из базы или новый код, купленный вручную. Обычно это занимает до ${Number(settings.fulfillment_sla_hours||24)} часов.</p>`
         : '<div class="reward-empty">Номиналы кодов пока не настроены.</div>';
   host.innerHTML=`<div class="reward-dashboard"><section class="reward-balance"><div><strong>${Number(balance.available_vp||0)} VP</strong><small>Доступно · ${Number(balance.reserved_vp||0)} VP в заявках · ${Number(balance.earned_vp||0)} VP заработано${rewardDebt?` · долг ${rewardDebt} VP`:''}</small></div><a class="reward-action" href="/rewards" target="_blank" rel="noopener">Условия</a></section><section class="reward-panel"><h3>ПОЛУЧИТЬ КОД</h3>${payoutAction}</section>${renderRewardDemand(data.deficits)}${held.length?`<section class="reward-panel"><h3>ОЖИДАЮТ ПРОВЕРКИ</h3><div class="reward-list reward-list--held">${held.map(item=>`<div class="reward-item"><div><b>${Number(item.amount_vp||0)} VP · ${esc(item.lineup_title||'Лайнап без названия')}</b><small>${esc(rewardHoldLabel(item.reason))}</small></div></div>`).join('')}</div></section>`:''}<section class="reward-panel"><h3>ЗАЯВКИ</h3><div class="reward-list">${payouts.map(item=>`<div class="reward-item"><div><b>${Number(item.amount_vp||0)} VP · ${esc(item.region||'')}</b><small>${rewardStatusLabel(item.status)} · ${rewardDate(item.created_at)}${item.status==='approved'&&item.fulfillment_due_at?` · ожидаем код до ${rewardDate(item.fulfillment_due_at)}`:''}${item.review_reason?` · ${esc(item.review_reason)}`:''}</small>${['ready','revealed'].includes(item.status)?'<small>Код готов. Откройте его в Android-приложении VLineups.</small>':''}</div><div class="reward-actions">${item.status==='pending'?`<button class="reward-action" data-reward-action="cancel" data-payout-id="${esc(item.id)}">Отменить</button>`:''}</div></div>`).join('')||'<div class="reward-empty">Заявок пока нет</div>'}</div></section><section class="reward-panel"><h3>ИСТОРИЯ НАЧИСЛЕНИЙ</h3><div class="reward-list">${ledger.map(item=>`<div class="reward-item"><div><b>${esc(item.title||'Лайнап')}</b><small>${rewardDate(item.created_at)} · база ${Number(item.components?.base||0)} VP, дефицит +${Number(item.components?.global_deficit||0)+Number(item.components?.map_pool_deficit||0)} VP, качество +${Number(item.components?.quality||0)} VP, задание +${Number(item.components?.task||0)} VP</small></div><strong>${Number(item.amount_vp||0)>=0?'+':''}${Number(item.amount_vp||0)} VP</strong></div>`).join('')||'<div class="reward-empty">Первое начисление VP появится после одобрения отмеченного лайнапа.</div>'}</div></section></div>`;
+  const heldList = host.querySelector('.reward-list--held');
+  if (heldList) heldList.dataset.visibleRewardRows = '7';
+  const historyList = host.querySelector('.reward-dashboard > .reward-panel:last-child .reward-list');
+  if (historyList) {
+    historyList.classList.add('reward-list--bounded');
+    historyList.dataset.visibleRewardRows = '7';
+  }
+  sizeRewardLists(host);
 }
 async function loadRewardDashboard({render=false}={}) {
   if(!currentUser) return;
@@ -3211,8 +3261,6 @@ function openPendingLineupDeepLink() {
 
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 let _statsUnsub = null;
-let _statsFallbackTimer = null;
-let _statsSubscriptionGeneration = 0;
 let _cooldownInterval = null;
 let _cooldownAccessUnsubs = [];
 let _cooldownExempt = false;
@@ -3453,24 +3501,8 @@ async function _updateCooldown(uid) {
 
 function _subscribeStats(uid) {
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
-  if (_statsFallbackTimer) { clearTimeout(_statsFallbackTimer); _statsFallbackTimer = null; }
-  const generation = ++_statsSubscriptionGeneration;
-  _statsFallbackTimer = setTimeout(() => {
-    if (generation !== _statsSubscriptionGeneration) return;
-    ['approved', 'pending', 'rejected', 'moderators'].forEach(key => {
-      const element = document.getElementById(`stat-${key}`);
-      if (element) element.textContent = '0';
-    });
-    _updateLevelDisplay(effectiveApprovedLineups(0));
-    const loader = document.getElementById('stats-loader');
-    const cards = document.getElementById('stats-cards');
-    if (loader) loader.style.display = 'none';
-    if (cards) cards.style.display = 'flex';
-    renderAuthorWorkspace();
-  }, 8000);
   const q = query(collection(db, 'lineups'), where('user_id', '==', uid));
   _statsUnsub = onSnapshot(q, snap => {
-    if (_statsFallbackTimer) { clearTimeout(_statsFallbackTimer); _statsFallbackTimer = null; }
     let approved = 0, pending = 0, rejected = 0, moderators = 0;
     currentUserLineups = [];
     snap.forEach(d => {
@@ -3512,8 +3544,6 @@ function _subscribeStats(uid) {
 
 function _unsubscribeStats() {
   if (_statsUnsub) { _statsUnsub(); _statsUnsub = null; }
-  _statsSubscriptionGeneration++;
-  if (_statsFallbackTimer) { clearTimeout(_statsFallbackTimer); _statsFallbackTimer = null; }
   _clearCooldownTimer();
   document.getElementById('stats-loader').style.display = '';
   document.getElementById('stats-loader').textContent   = 'Загрузка…';
@@ -4387,11 +4417,6 @@ function isMainAdminChat(itemOrId) {
   return id === adminChatId(currentUser?.uid);
 }
 
-function isLineupModerationFeedback(item) {
-  return item?.source === 'lineup_rejection' ||
-    item?.category === 'ответы на лайнапы';
-}
-
 function renderAdminChatList() {
   const list = document.getElementById('admin-chat-list');
   if (!list || !currentUser) return;
@@ -4436,7 +4461,7 @@ function renderAdminChat(data) {
       const mine = message.from === 'user';
       return `<div class="admin-chat-row ${mine ? 'mine' : 'theirs'}"><div class="admin-chat-bubble"><div>${esc(message.text || '')}</div><time>${chatMessageTime(message.ts)}</time></div></div>`;
     }).join('');
-    const pending = localMessages.map(message => `<div class="admin-chat-row mine local-message ${message.status}" data-admin-outbox-id="${esc(message.id)}"><div class="admin-chat-bubble"><div>${esc(message.text)}</div><time>${message.status === 'failed' ? '<b>!</b> Не отправлено' : 'Отправляется…'}</time></div></div>`).join('');
+    const pending = localMessages.map(message => `<div class="admin-chat-row mine local-message ${message.status}" data-admin-outbox-id="${esc(message.id)}"><div class="admin-chat-bubble"><div>${esc(message.text)}</div><time>${message.status === 'failed' ? '<b>!</b> Не отправлено' : 'Отправляется…'}</time>${message.status === 'failed' ? `<div class="local-message-actions" data-admin-message-menu="${esc(message.id)}"><button type="button" data-message-action="retry">Отправить заново</button><button type="button" class="danger" data-message-action="delete">Удалить</button></div>` : ''}</div></div>`).join('');
     thread.innerHTML = delivered || pending ? delivered + pending : `<div class="admin-chat-empty">${mainChat ? 'Это постоянный чат с администрацией. Ты можешь написать первым.' : 'В этом обращении пока нет сообщений.'}</div>`;
     thread.scrollTop = thread.scrollHeight;
   }
@@ -4482,8 +4507,7 @@ function openAdminChat() {
   const inbox = query(collection(db, 'feedback'), where('user_id', '==', currentUser.uid), limit(100));
   adminChatUnsub = onSnapshot(inbox, snap => {
     adminChatItems = snap.docs
-      .map(entry => ({ id:entry.id, ...entry.data() }))
-      .filter(item => !isLineupModerationFeedback(item));
+      .map(entry => ({ id:entry.id, ...entry.data() }));
     const active = adminChatItems.find(item => item.id === activeAdminChatId) || { id:activeAdminChatId };
     renderAdminChat(active);
     const unreadCount = adminChatItems.filter(item => item.user_unread === true || (item.reply && item.reply_read !== true)).length;

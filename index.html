@@ -10,9 +10,9 @@
   <link rel="apple-touch-icon" href="/app_icon3.png">
   <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
   <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/styles.css?v=2026-08-24-message-outbox-v1">
-  <link rel="stylesheet" href="/workspace-redesign.css?v=2026-08-24-profile-meta-v2">
-  <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-08-24-type-ability-axis-v1">
+  <link rel="stylesheet" href="/styles.css?v=2026-08-25-surgical-v1">
+  <link rel="stylesheet" href="/workspace-redesign.css?v=2026-08-25-surgical-v1">
+  <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-08-25-surgical-v1">
 </head>
 <body>
 
@@ -825,10 +825,10 @@
           </div>
           <span id="admin-chat-status">Подключение…</span>
         </header>
-        <div id="admin-chat-thread" class="admin-chat-thread"><div class="admin-chat-empty">Выбери диалог</div></div>
+        <div id="admin-chat-thread" class="admin-chat-thread" role="log" aria-live="polite" aria-relevant="additions text"><div class="admin-chat-empty">Выбери диалог</div></div>
         <div id="admin-chat-closed" class="admin-chat-closed" hidden>Обращение закрыто. Переписка сохранена только для чтения.</div>
         <form id="admin-chat-form" class="admin-chat-compose">
-          <textarea id="admin-chat-input" maxlength="500" rows="2" placeholder="Напиши сообщение…"></textarea>
+          <textarea id="admin-chat-input" maxlength="500" rows="2" placeholder="Напиши сообщение…" aria-label="Сообщение администрации"></textarea>
           <button type="submit">Отправить</button>
         </form>
       </section>
@@ -899,8 +899,8 @@
     <section class="social-page-shell social-messenger">
       <aside id="social-dialog-list" class="social-dialog-list"><div class="social-empty">Загружаем диалоги…</div></aside>
       <div class="social-thread-shell"><div class="social-thread-note">Незнакомому пользователю можно отправить только одно сообщение-запрос. Продолжение станет доступно после принятия.<span id="social-request-actions" hidden><button type="button" data-request-decision="accept">Принять</button><button type="button" data-request-decision="decline">Отклонить</button></span></div>
-        <div id="social-message-thread" class="social-message-thread"><div class="social-empty">Выберите диалог.</div></div>
-        <form id="social-message-form" class="social-message-compose"><textarea id="social-message-input" maxlength="4000" rows="2" placeholder="Сообщение"></textarea><button type="submit">Отправить</button></form>
+        <div id="social-message-thread" class="social-message-thread" role="log" aria-live="polite" aria-relevant="additions text"><div class="social-empty">Выберите диалог.</div></div>
+        <form id="social-message-form" class="social-message-compose"><textarea id="social-message-input" maxlength="4000" rows="2" placeholder="Сообщение" aria-label="Сообщение пользователю"></textarea><button type="submit">Отправить</button></form>
       </div>
     </section>
   </div>
@@ -1076,7 +1076,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-08-24-message-outbox-v1"></script>
+<script type="module" src="/app.js?v=2026-08-25-surgical-v1"></script>
 <script defer src="/workspace-redesign.js?v=2026-08-02-map-gallery-sync-v1"></script>
 </body>
 </html>

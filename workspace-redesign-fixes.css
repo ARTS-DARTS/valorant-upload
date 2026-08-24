@@ -139,7 +139,7 @@
 }
 .production-help-copy small {
   color: #91a9c7;
-  font-size: 9px !important;
+  font-size: 11px !important;
   font-weight: 500 !important;
   line-height: 1.35 !important;
   letter-spacing: .01em;
@@ -147,12 +147,18 @@
 
 /* Ability choices use one fixed visual axis regardless of icon artwork bounds. */
 .workspace-redesign .abilities-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch;
+}
+.workspace-redesign .abilities-row > .ability-empty-hint,
+.workspace-redesign .abilities-row > span:only-child {
+  grid-column: 1 / -1;
 }
 .workspace-redesign .ability-btn {
   box-sizing: border-box;
-  width: 82px;
-  min-width: 82px;
+  width: 100%;
+  min-width: 0;
   height: 82px;
   min-height: 82px;
   padding: 8px 6px;
@@ -167,6 +173,12 @@
   min-height: 14px;
   line-height: 14px;
   text-align: center;
+}
+
+@media (max-width: 380px) {
+  .workspace-redesign .abilities-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .workspace-redesign .production-flow .category-form-guide-launch {
