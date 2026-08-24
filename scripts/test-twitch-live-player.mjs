@@ -51,3 +51,12 @@ test('Twitch embed remains interactive when autoplay is blocked', () => {
 test('the active iframe is preserved while the selected channel stays the same', () => {
   assert.match(js, /if \(activeTwitchChannel === streamer\.channel && mount\.querySelector\('iframe'\)\) return/);
 });
+
+test('guest sessions never read or retry the protected Twitch configuration', () => {
+  assert.doesNotMatch(js, /queueMicrotask\(scanTwitchLiveChannels\)/);
+  assert.match(js, /if \(user\) \{[\s\S]*?void scanTwitchLiveChannels\(\)/);
+  assert.match(js, /\} else \{\s*stopTwitchLiveScan\(\)/);
+  assert.match(js, /function stopTwitchLiveScan\(\) \{[\s\S]*?twitchLiveGeneration\+\+[\s\S]*?clearTimeout\(twitchLivePollTimer\)[\s\S]*?hideTwitchLivePlayer\(\)/);
+  assert.match(js, /async function scanTwitchLiveChannels\(\) \{\s*if \(!currentUser\) \{\s*stopTwitchLiveScan\(\);\s*return;/);
+  assert.match(js, /catch \(error\) \{\s*if \(generation !== twitchLiveGeneration \|\| !currentUser\) return;\s*console\.warn/);
+});

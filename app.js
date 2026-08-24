@@ -48,7 +48,7 @@ import {
   entitlementHasCooldownBypass,
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
-import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-surgical-v1';
+import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-surgical-v2';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -5818,6 +5818,7 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('form-screen').style.display = '';
     document.getElementById('success-screen').style.display = 'none'; // hide overlay on auth change
     document.getElementById('header-user').style.display = 'flex';
+    void scanTwitchLiveChannels();
     const headerNotifications = document.getElementById('header-notifications');
     const headerSoundTest = document.getElementById('header-sound-test');
     if (headerNotifications) headerNotifications.hidden = false;
@@ -5863,6 +5864,7 @@ onAuthStateChanged(auth, async user => {
     startSitePresence();
     hideSiteLoader();
   } else {
+    stopTwitchLiveScan();
     clearInterval(sitePresenceTimer);
     sitePresenceTimer = null;
     deactivateWorkspaceTab(activeWorkspaceTab);
@@ -13042,6 +13044,13 @@ function hideTwitchLivePlayer() {
   activeTwitchChannel = '';
 }
 
+function stopTwitchLiveScan() {
+  twitchLiveGeneration++;
+  clearTimeout(twitchLivePollTimer);
+  twitchLivePollTimer = null;
+  hideTwitchLivePlayer();
+}
+
 function twitchPreviewBytes(channel, cacheKey) {
   return fetch(`https://static-cdn.jtvnw.net/previews-ttv/live_user_${encodeURIComponent(channel)}-80x45.jpg?v=${cacheKey}`, { cache:'no-store', mode:'cors' })
     .then(response => {
@@ -13084,10 +13093,15 @@ function showTwitchLiveChannel(streamer, config) {
 }
 
 async function scanTwitchLiveChannels() {
+  if (!currentUser) {
+    stopTwitchLiveScan();
+    return;
+  }
   const generation = ++twitchLiveGeneration;
   clearTimeout(twitchLivePollTimer);
   try {
     const configSnap = await getDoc(doc(db, 'settings', 'twitch_streamers'));
+    if (generation !== twitchLiveGeneration || !currentUser) return;
     const config = configSnap.exists() ? configSnap.data() : null;
     const channels = Array.isArray(config?.channels)
       ? config.channels.filter(item => item?.enabled !== false && /^[a-z0-9_]{1,25}$/i.test(item?.channel || '')).sort((a,b) => Number(a.priority||0)-Number(b.priority||0))
@@ -13102,6 +13116,7 @@ async function scanTwitchLiveChannels() {
     else hideTwitchLivePlayer();
     twitchLivePollTimer = setTimeout(scanTwitchLiveChannels, 60000);
   } catch (error) {
+    if (generation !== twitchLiveGeneration || !currentUser) return;
     console.warn('Twitch live scan unavailable', error);
     twitchLivePollTimer = setTimeout(scanTwitchLiveChannels, 60000);
   }
@@ -13183,4 +13198,3 @@ function enableTwitchRestoreDrag() {
 restoreTwitchPlayerPosition();
 enableTwitchPlayerDrag();
 enableTwitchRestoreDrag();
-queueMicrotask(scanTwitchLiveChannels);

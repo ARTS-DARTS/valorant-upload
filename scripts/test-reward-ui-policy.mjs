@@ -32,8 +32,9 @@ test('both pending claims and reward history use a bounded seven-row scroller', 
   assert.match(app, /list\.style\.maxHeight = 'none'/);
   assert.match(app, /window\.addEventListener\('resize',[\s\S]*?sizeRewardLists\(host\)/);
   assert.match(styles, /reward-list--held,\.reward-list--bounded\{max-height:469px;overflow-y:auto/);
-  assert.match(html, /styles\.css\?v=2026-08-25-surgical-v1/);
-  assert.match(html, /app\.js\?v=2026-08-25-surgical-v1/);
+  assert.match(html, /styles\.css\?v=2026-08-25-surgical-v2/);
+  assert.match(html, /workspace-redesign-fixes\.css\?v=2026-08-25-surgical-v2/);
+  assert.match(html, /app\.js\?v=2026-08-25-surgical-v2/);
 });
 
 test('reward actions require an explicitly enabled program', () => {
@@ -90,7 +91,7 @@ test('author training card keeps its heading readable', () => {
   assert.match(styles, /reward-demand-ability strong/);
   const workspaceStyles = readFileSync(new URL('../workspace-redesign.css', import.meta.url), 'utf8');
   assert.match(workspaceStyles, /sidebar-training-head\{[^}]*font-size:11px/);
-  assert.match(html, /workspace-redesign\.css\?v=2026-08-25-surgical-v1/);
+  assert.match(html, /workspace-redesign\.css\?v=2026-08-25-surgical-v2/);
 });
 
 test('profile level supporting text stays visually secondary', () => {

@@ -59,3 +59,11 @@ test('chat failure states are announced without stealing focus', async () => {
   assert.match(html, /id="admin-chat-input"[^>]*aria-label=/);
   assert.match(html, /id="social-message-input"[^>]*aria-label=/);
 });
+
+test('mobile author navigation is contained by the redesign cascade', async () => {
+  const css = await read('workspace-redesign-fixes.css');
+  assert.match(css, /@media \(max-width: 980px\)[\s\S]*?\.workspace-redesign \.header \{[\s\S]*?padding-inline: 10px/);
+  assert.match(css, /\.workspace-redesign \.header \.logo \{[\s\S]*?font-size: 0/);
+  assert.match(css, /\.workspace-redesign \.site-sections \{[\s\S]*?min-width: 0;[\s\S]*?flex: 0 1 auto;[\s\S]*?overflow-x: auto/);
+  assert.match(css, /\.workspace-redesign \.site-sections a \{[\s\S]*?flex: 0 0 auto/);
+});
