@@ -25,7 +25,7 @@ import billingCheckoutHandler from './backend/billing-checkout.js';
 import billingOrderStatusHandler from './backend/billing-order-status.js';
 import billingRefundRequestHandler from './backend/billing-refund-request.js';
 import adminBillingHandler from './backend/admin-billing.js';
-import accountDeleteHandler, { createAdminAccountDeleteHandler, deleteAccountData } from './backend/account-delete.js';
+import accountDeleteHandler, { deleteAccountData } from './backend/account-delete.js';
 import { finalizeDueAccountDeletions } from './backend/account-deletion-workflow.js';
 import adminExpirationsHandler from './backend/admin-expirations.js';
 import adminHealthHandler from './backend/admin-health.js';
@@ -68,7 +68,11 @@ app.get('/ready', readinessHandler);
 app.get('/api/app-check-config', appCheckConfigHandler);
 app.all('/api/billing/me', billingMeHandler);
 app.all('/api/billing/plans', billingPlansHandler);
-app.post('/api/billing/webhook/robokassa', express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 50 }), robokassaWebhookHandler);
+app.post(
+  '/api/billing/webhook/robokassa',
+  express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 50 }),
+  robokassaWebhookHandler,
+);
 app.post('/api/internal/billing/reconcile/robokassa', robokassaReconciliationHandler);
 
 app.use(express.json({ limit: '1mb' }));
@@ -84,7 +88,6 @@ app.all('/api/lineups/playback-token', lineupsAccessHandler);
 app.all('/api/lineups/video', lineupsAccessHandler);
 app.all('/api/admin/billing', adminBillingHandler);
 app.all('/api/account/delete', accountDeleteHandler);
-app.all('/api/admin/account/delete', createAdminAccountDeleteHandler());
 app.all('/api/admin/expirations', adminExpirationsHandler);
 app.all('/api/admin/health', adminHealthHandler);
 app.all('/api/admin/config-backup', adminConfigBackupHandler);
@@ -102,8 +105,8 @@ app.use(
         return;
       }
       res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
-    }
-  })
+    },
+  }),
 );
 
 app.all('/api/send-push', sendPushHandler);
@@ -202,34 +205,25 @@ if (!process.env.VERCEL_RUNTIME) {
   app.listen(port, '127.0.0.1', () => {
     console.log(`Valorant upload site listening on http://127.0.0.1:${port}`);
     if (typeof process.send === 'function') process.send('ready');
-    const runDuelFinalizer = () =>
-      finalizeExpiredDuels()
-        .then((results) => {
-          const finalized = results.filter((item) => item && !item.tie && !item.alreadyFinalized).length;
-          if (finalized) console.log(`Finalized duels: ${finalized}`);
-        })
-        .catch((error) => console.error('duel finalizer:', error));
+    const runDuelFinalizer = () => finalizeExpiredDuels().then(results => {
+      const finalized = results.filter(item => item && !item.tie && !item.alreadyFinalized).length;
+      if (finalized) console.log(`Finalized duels: ${finalized}`);
+    }).catch(error => console.error('duel finalizer:', error));
     setTimeout(runDuelFinalizer, 15000);
     setInterval(runDuelFinalizer, 60000);
-    const runAccountDeletionFinalizer = () =>
-      finalizeDueAccountDeletions({ deleteAccountData })
-        .then((results) => {
-          if (results.length) console.log(`Account deletion jobs: ${JSON.stringify(results)}`);
-        })
-        .catch((error) => console.error('account deletion finalizer:', error));
+    const runAccountDeletionFinalizer = () => finalizeDueAccountDeletions({ deleteAccountData })
+      .then(results => {
+        if (results.length) console.log(`Account deletion jobs: ${JSON.stringify(results)}`);
+      })
+      .catch(error => console.error('account deletion finalizer:', error));
     setTimeout(runAccountDeletionFinalizer, 20000);
     setInterval(runAccountDeletionFinalizer, 60000);
-    setTimeout(
-      () =>
-        notifySiteUpdateOnce()
-          .then((result) => console.log('Site update push:', result))
-          .catch((error) => console.error('site update push:', error)),
-      25000
-    );
-    const syncAdRevenue = () =>
-      syncYandexAdStats({ days: 60 })
-        .then((result) => console.log(`Yandex ad statistics synced: ${result.rows.length} days`))
-        .catch((error) => console.error('Yandex ad statistics sync:', error.message));
+    setTimeout(() => notifySiteUpdateOnce()
+      .then(result => console.log('Site update push:', result))
+      .catch(error => console.error('site update push:', error)), 25000);
+    const syncAdRevenue = () => syncYandexAdStats({ days:60 })
+      .then(result => console.log(`Yandex ad statistics synced: ${result.rows.length} days`))
+      .catch(error => console.error('Yandex ad statistics sync:', error.message));
     setTimeout(syncAdRevenue, 45000);
     setInterval(syncAdRevenue, 3 * 60 * 60 * 1000);
   });
