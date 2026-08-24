@@ -13,6 +13,8 @@ LOCK_FILE=/var/lock/valorant-upload-deploy.lock
 PM2_APP=valorant-upload
 READY_URL=http://127.0.0.1:3000/ready
 HEALTH_URL=http://127.0.0.1:3000/health
+SOURCE_ARCHIVE=${VALORANT_UPLOAD_SOURCE_ARCHIVE:-}
+SOURCE_SHA=${VALORANT_UPLOAD_SOURCE_SHA:-}
 
 candidate_dir=''
 remote_sha=''
@@ -100,6 +102,10 @@ start_runtime() {
 }
 
 sync_control_checkout() {
+  if [[ -n "$SOURCE_ARCHIVE" ]]; then
+    log 'archive deployment: control checkout was not changed'
+    return
+  fi
   if git -C "$CONTROL_DIR" merge --ff-only "$remote_sha"; then
     log "control checkout synced to $remote_sha"
   else
@@ -166,7 +172,11 @@ ensure_release() {
 
   candidate_dir=$(mktemp -d "$RELEASES_DIR/.${remote_sha}.new.XXXXXX")
   log "building isolated release $remote_sha"
-  git -C "$CONTROL_DIR" archive "$remote_sha" | tar -x -C "$candidate_dir"
+  if [[ -n "$SOURCE_ARCHIVE" ]]; then
+    tar -xf "$SOURCE_ARCHIVE" -C "$candidate_dir"
+  else
+    git -C "$CONTROL_DIR" archive "$remote_sha" | tar -x -C "$candidate_dir"
+  fi
   (
     cd "$candidate_dir"
     npm ci --omit=optional
@@ -192,14 +202,24 @@ log 'checking valorant-upload'
 mkdir -p "$RELEASES_DIR" "$STATE_DIR"
 
 cd "$CONTROL_DIR"
-git fetch origin main:refs/remotes/origin/main
-
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-  log 'refusing deploy: tracked control-plane files have local changes'
-  exit 1
+if [[ -n "$SOURCE_ARCHIVE" ]]; then
+  if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+    log 'refusing deploy: VALORANT_UPLOAD_SOURCE_SHA is invalid'
+    exit 1
+  fi
+  if [[ ! -f "$SOURCE_ARCHIVE" || -L "$SOURCE_ARCHIVE" ]]; then
+    log 'refusing deploy: source archive is missing or is a symlink'
+    exit 1
+  fi
+  remote_sha=$SOURCE_SHA
+else
+  git fetch origin main:refs/remotes/origin/main
+  if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+    log 'refusing deploy: tracked control-plane files have local changes'
+    exit 1
+  fi
+  remote_sha=$(git rev-parse origin/main)
 fi
-
-remote_sha=$(git rev-parse origin/main)
 if [[ ! "$remote_sha" =~ ^[0-9a-f]{40}$ ]]; then
   log 'refusing deploy: origin/main did not resolve to a full SHA'
   exit 1
