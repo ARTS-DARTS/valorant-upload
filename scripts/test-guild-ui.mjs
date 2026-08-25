@@ -148,6 +148,13 @@ test('missing plant cells are gold and the selected plant overrides them in cyan
   assert.ok(missingRule >= 0 && selectedRule > missingRule, 'selected cyan rule must override the gold missing-zone rule');
 });
 
+test('Guild demand cards keep readable text and ability icons on desktop and mobile', () => {
+  assert.match(css, /\.guild-demand-ability\{[^}]*grid-template-columns:38px 38px/);
+  assert.match(css, /\.guild-demand-ability-icon img\{width:31px;height:31px\}/);
+  assert.match(css, /\.guild-demand-copy strong\{[^}]*font-size:16px/);
+  assert.match(css, /@media\(max-width:700px\)[^\n]*\.guild-demand-ability\{grid-template-columns:34px 34px/);
+});
+
 test('guild assignment enforces the mandatory template fields before submission', () => {
   assert.match(app, /guildAssignmentSnapshot\?\.requirements/);
   assert.match(app, /Загрузи обязательное видео для задания Гильдии/);
