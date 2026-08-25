@@ -35,7 +35,10 @@ test('guild quests use the familiar agent, map and side demand-board flow', () =
 test('the former rewards card opens the Guild board while VP payout remains separate', () => {
   assert.match(html, /<small>ГИЛЬДИЯ<\/small><strong id="author-reward-balance">Открыть доску заданий<\/strong>/);
   assert.match(app, /author-reward-open'\)\?\.addEventListener\('click', \(\)=>switchWorkspaceTab\('guild'\)\)/);
-  assert.match(app, /cabinet-vp-open'\)\?\.addEventListener\('click'.*setRewardModalOpen\(true\)/);
+  assert.match(app, /cabinet-vp-open'\)\?\.addEventListener\('click', openRewardExchange\)/);
+  assert.match(app, /openVpExchange:openRewardExchange/);
+  assert.match(guild, /data-guild-action="exchange">Обменять<\/button>/);
+  assert.match(guild, /if \(action === 'exchange'\) return openVpExchange\(\)/);
 });
 
 test('reward-program history is visibly distinguished from new Guild work', () => {

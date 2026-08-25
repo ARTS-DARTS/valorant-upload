@@ -49,7 +49,7 @@ import {
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
 import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-guild-v3';
-import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v6';
+import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v7';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -118,6 +118,7 @@ const guildWebsite = createGuildWebsite({
   ensureRewardMembership:ensureGuildRewardMembership,
   openAssignmentDraft:assignment => openGuildAssignmentDraft(assignment),
   detachAssignmentDraft:assignmentId => detachGuildAssignmentDraft(assignmentId),
+  openVpExchange:openRewardExchange,
   agentIcon:agent => rewardDemandIcon(agent),
   abilityIcon:(agent, ability) => rewardDemandAbilityIcon(agent, ability),
   toast:(...args) => toast(...args),
@@ -457,8 +458,14 @@ function setRewardModalOpen(open) {
     window.scrollTo(0, rewardModalScrollY);
   }
 }
+async function openRewardExchange() {
+  rewardDemandCategory = '';
+  setRewardModalOpen(true);
+  renderRewardDialog();
+  await loadRewardDashboard({ render:true });
+}
 document.getElementById('author-reward-open')?.addEventListener('click', ()=>switchWorkspaceTab('guild'));
-document.getElementById('cabinet-vp-open')?.addEventListener('click', async()=>{ rewardDemandCategory=''; setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
+document.getElementById('cabinet-vp-open')?.addEventListener('click', openRewardExchange);
 document.getElementById('reward-close')?.addEventListener('click',()=>setRewardModalOpen(false));
 document.getElementById('reward-modal')?.addEventListener('wheel',event=>{
   const rail=event.target.closest?.('.reward-demand-agents,.reward-demand-maps');
