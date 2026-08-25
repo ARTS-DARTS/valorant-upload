@@ -28,6 +28,7 @@ test('guild dashboard keeps separate XP, slots, labels and Pirozhki state', () =
   assert.match(guild, /Активный бонус/);
   assert.match(guild, /Взято авантюристом/);
   assert.match(guild, /function rankLabel/);
+  assert.match(guild, /best_completion_streak_days/);
 });
 
 test('guild submission is linked to one server assignment and cannot join normal rewards', () => {
@@ -49,6 +50,7 @@ test('mobile app deep link opens the exact active guild assignment', () => {
   assert.match(app, /guildWebsite\.openAssignment\(guildDeepLink\.assignmentId\)/);
   assert.match(guild, /async openAssignment\(assignmentId\)/);
   assert.match(guild, /\['active', 'revision_required'\]\.includes\(assignment\.status\)/);
+  assert.match(guild, /recordGuildQuestOpened/);
 });
 
 test('an adventurer can appeal an applied penalty from Guild history', () => {
@@ -60,5 +62,6 @@ test('an adventurer can appeal an applied penalty from Guild history', () => {
 test('public profiles expose only positive Guild achievements', () => {
   assert.match(social, /publicProfile\.guild_member === true/);
   assert.match(social, /guild_completed_quests/);
+  assert.match(social, /guild_best_completion_streak/);
   assert.doesNotMatch(social, /guild_(?:abandoned|expired|penalty|available_vp)/);
 });

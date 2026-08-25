@@ -85,8 +85,9 @@ export function createSocialWebsite({ db, functions, toast }) {
       Number(accountProfile.approved_lineups_count || accountProfile.approved_lineups || 0),
     );
     const rating = Number(profile.rating_average || 0).toFixed(1);
+    const guildStreak = Math.max(0, Number(publicProfile.guild_best_completion_streak || 0));
     const guildAchievement = publicProfile.guild_member === true
-      ? `<b>🛡 ${escapeHtml(guildRank(publicProfile.guild_rank_key))} · уровень ${Math.max(1, Number(publicProfile.guild_level || 1))} · ${Math.max(0, Number(publicProfile.guild_completed_quests || 0))} заданий</b>`
+      ? `<b>🛡 ${escapeHtml(guildRank(publicProfile.guild_rank_key))} · уровень ${Math.max(1, Number(publicProfile.guild_level || 1))} · ${Math.max(0, Number(publicProfile.guild_completed_quests || 0))} заданий${guildStreak > 1 ? ` · серия ${guildStreak} дн.` : ''}</b>`
       : '';
     root.innerHTML = `<article class="social-profile-card">
       <div class="social-avatar" aria-hidden="true">${escapeHtml((displayName || '?').slice(0, 1).toUpperCase())}</div>

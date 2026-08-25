@@ -125,7 +125,7 @@ export function createGuildWebsite({
     const history = assignments.filter(item => !active.includes(item)).slice(0, 20);
     host.innerHTML = `<div class="guild-board">
       <header class="guild-command-strip">
-        <div class="guild-rank"><span>РАНГ ГИЛЬДИИ</span><strong>${esc(rankLabel(profile.rank_key))}</strong><small>Уровень ${Number(profile.level || 1)}</small></div>
+        <div class="guild-rank"><span>РАНГ ГИЛЬДИИ</span><strong>${esc(rankLabel(profile.rank_key))}</strong><small>Уровень ${Number(profile.level || 1)} · серия ${Number(profile.completion_streak_days || 0)} дн. · рекорд ${Number(profile.best_completion_streak_days || 0)}</small></div>
         <div class="guild-level-track"><div><span>${Number(profile.xp || 0)} Guild XP</span><b>${profile.next_level_xp ? `до ${Number(profile.next_level_xp)} XP` : 'максимальный ранг'}</b></div><i><em style="width:${progressPercent(profile)}%"></em></i></div>
         <div class="guild-slots"><span>СЛОТЫ ЗАДАНИЙ</span><strong>${Number(profile.active_assignment_count || 0)}<i>/</i>${Number(profile.quest_limit || 5)}</strong><small>Чем выше уровень, тем больше лимит</small></div>
         <div class="guild-vp"><span>ДОСТУПНО</span><strong>${Number(dashboard.balance?.available_vp || 0)} VP</strong><button type="button" data-guild-action="privacy">${profile.hide_public_nickname ? 'Показывать ник' : 'Скрывать ник'}</button></div>
@@ -160,13 +160,18 @@ export function createGuildWebsite({
     }
   }
 
+  async function openTrackedDraft(assignment) {
+    await call('recordGuildQuestOpened', { assignment_id:assignment.id }).catch(() => {});
+    await openAssignmentDraft(assignment);
+  }
+
   async function act(button) {
     const action = button.dataset.guildAction;
     if (loading) return;
     if (action === 'reload') return load({ force:true });
     if (action === 'open') {
       const assignment = dashboard?.assignments?.find(item => item.id === button.dataset.assignmentId);
-      if (assignment) openAssignmentDraft(assignment);
+      if (assignment) await openTrackedDraft(assignment);
       return;
     }
     if (action === 'abandon'
@@ -234,7 +239,7 @@ export function createGuildWebsite({
       if (!assignment || !['active', 'revision_required'].includes(assignment.status)) {
         throw new Error('Задание уже недоступно для редактирования. Обнови Гильдию.');
       }
-      await openAssignmentDraft(assignment);
+      await openTrackedDraft(assignment);
     },
     reset() { entry = null; dashboard = null; loading = false; host.innerHTML = ''; },
     refresh() { entry = null; dashboard = null; return load({ force:true }); },
