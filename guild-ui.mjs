@@ -92,20 +92,22 @@ function guildDemandTask(quest, assignment, abilityIcon) {
     ? 'Скрытый авантюрист'
     : (quest.assignee?.name || 'Авантюрист');
   const route = [quest.start_zone, quest.end_zone].filter(Boolean).map(esc).join(' → ');
+  const side = guildSide(quest.round_side);
+  const sideLabel = side === 'attack' ? 'атака' : side === 'defense' ? 'защита' : 'любая сторона';
   return `<article class="guild-demand-task guild-demand-task--${tone}" data-quest-id="${esc(quest.id)}">
     <span class="guild-demand-task-icon">${icon ? `<img src="${esc(icon)}" alt="">` : '✦'}</span>
     <div class="guild-demand-task-copy">
       <strong>${esc(quest.generated_title || quest.ability || 'Задание')}</strong>
-      <small>${esc(quest.ability || quest.agent || 'Лайнап')}${route ? ` · ${route}` : ''}</small>
-      <span>${Number(quest.reward_vp || 0) + Number(quest.bonus_vp || 0)} VP · ${Number(quest.guild_xp || 0)} Guild XP</span>
+      <small>${sideLabel}${route ? ` · ${route}` : ''}</small>
     </div>
+    <div class="guild-demand-task-reward"><b>${Number(quest.reward_vp || 0) + Number(quest.bonus_vp || 0)} VP</b><span>${Number(quest.guild_xp || 0)} XP</span></div>
     <div class="guild-demand-task-state">
       <b>${esc(questStatusCopy(quest.status))}</b>
       ${quest.status !== 'available' ? `<small>${isMine ? 'Твоё задание' : `Выполняет: ${esc(assignee)}`}</small>` : ''}
     </div>
     <div class="guild-demand-task-actions">
-      ${canTake ? `<button class="guild-button guild-button--take" type="button" data-guild-action="take" data-quest-id="${esc(quest.id)}">Взять</button>` : ''}
-      ${canOpen ? `<button class="guild-button guild-button--open" type="button" data-guild-action="open" data-assignment-id="${esc(assignment.id)}">${assignment.status === 'revision_required' ? 'Доработать' : 'Открыть'}</button>` : ''}
+      ${canTake ? `<button class="guild-button guild-button--take" type="button" data-guild-action="take" data-quest-id="${esc(quest.id)}">Взять задание</button>` : ''}
+      ${canOpen ? `<button class="guild-button guild-button--open" type="button" data-guild-action="open" data-assignment-id="${esc(assignment.id)}">${assignment.status === 'revision_required' ? 'Доработать' : 'Открыть задание'}</button>` : ''}
     </div>
   </article>`;
 }
@@ -127,7 +129,7 @@ function guildDemandBoard({ quests, assignmentByQuest, selectedAgent, selectedMa
   const mapButtons = maps.map((map, index) => {
     const selected = map === activeMap;
     const free = agentQuests.filter(quest => guildKey(quest.map) === guildKey(map) && quest.status === 'available').length;
-    return `<button class="guild-demand-map${selected ? ' selected' : ''}" type="button" data-guild-filter-map="${esc(map)}" aria-pressed="${selected}"><strong>${esc(map)}</strong><small>${free ? `приоритет ${index + 1} · свободно ${free}` : 'все задания взяты'}</small></button>`;
+    return `<button class="guild-demand-map${selected ? ' selected' : ''}" type="button" data-guild-filter-map="${esc(map)}" aria-pressed="${selected}"><strong>${esc(map)}</strong><small>ПРИОРИТЕТ ${index + 1}${free ? '' : ' · ВЗЯТО'}</small></button>`;
   }).join('');
   const groups = [
     { key:'attack', icon:'⚔', label:'АТАКА' },
@@ -142,7 +144,7 @@ function guildDemandBoard({ quests, assignmentByQuest, selectedAgent, selectedMa
     selectedAgent:activeAgent,
     selectedMap:activeMap,
     html: quests.length ? `<div class="guild-demand-board">
-      <p class="guild-demand-note">Порядок учитывает реальный дефицит материалов. Выбери агента и карту, затем возьми конкретное задание.</p>
+      <p class="guild-demand-note">Задания отсортированы по реальному дефициту.</p>
       <section class="guild-demand-stage"><label>1 · АГЕНТ · ПО ПРИОРИТЕТУ ЗАДАНИЙ</label><div class="guild-demand-agents">${agentButtons}</div></section>
       <section class="guild-demand-stage"><label>2 · КАРТА · ПРИОРИТЕТНЫЕ ПЕРВЫМИ</label><div class="guild-demand-maps">${mapButtons}</div></section>
       <section class="guild-demand-stage"><label>3 · СПОСОБНОСТЬ И НЕДОСТАЮЩИЕ ЗОНЫ</label><div class="guild-demand-side-columns">${groups || '<div class="guild-empty"><strong>Для выбранной пары заданий нет</strong><span>Выбери другого агента или карту.</span></div>'}</div></section>
