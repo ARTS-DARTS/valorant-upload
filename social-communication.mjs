@@ -8,6 +8,9 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({
 }[char]));
 const timestampMs = value => value?.toMillis?.() || 0;
 const clientId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+const guildRank = key => ({
+  novice:'Новичок', scout:'Разведчик', pathfinder:'Следопыт', veteran:'Ветеран', master:'Мастер',
+})[String(key || '').toLowerCase()] || 'Новичок';
 
 export function createSocialWebsite({ db, functions, toast }) {
   const calls = Object.fromEntries([
@@ -82,11 +85,14 @@ export function createSocialWebsite({ db, functions, toast }) {
       Number(accountProfile.approved_lineups_count || accountProfile.approved_lineups || 0),
     );
     const rating = Number(profile.rating_average || 0).toFixed(1);
+    const guildAchievement = publicProfile.guild_member === true
+      ? `<b>🛡 ${escapeHtml(guildRank(publicProfile.guild_rank_key))} · уровень ${Math.max(1, Number(publicProfile.guild_level || 1))} · ${Math.max(0, Number(publicProfile.guild_completed_quests || 0))} заданий</b>`
+      : '';
     root.innerHTML = `<article class="social-profile-card">
       <div class="social-avatar" aria-hidden="true">${escapeHtml((displayName || '?').slice(0, 1).toUpperCase())}</div>
       <div class="social-profile-copy"><span>${own ? 'Мой публичный профиль' : 'Публичный профиль'}</span><h2>${escapeHtml(displayName)}</h2>
       <p>${escapeHtml(profile.bio || 'Пользователь пока ничего о себе не написал.')}</p>
-      <div class="social-profile-stats"><b>★ ${rating}</b><b>${Number(profile.reviews_count || 0)} отзывов</b><b>${approvedLineups} лайнапов</b></div></div>
+      <div class="social-profile-stats"><b>★ ${rating}</b><b>${Number(profile.reviews_count || 0)} отзывов</b><b>${approvedLineups} лайнапов</b>${guildAchievement}</div></div>
       <div class="social-profile-actions">
         <button type="button" data-profile-copy="${escapeHtml(normalized)}">Скопировать ссылку</button>
         ${own ? '' : `<button class="primary" type="button" data-profile-message="${escapeHtml(normalized)}">Написать</button>`}

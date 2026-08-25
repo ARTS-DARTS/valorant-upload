@@ -76,11 +76,14 @@ function questCard(quest, assignment) {
 function assignmentRow(item) {
   const deadline = item.status === 'revision_required' ? item.revision_deadline_at : item.deadline_at;
   const reward = Number(item.snapshot?.reward_vp || 0) + Number(item.snapshot?.bonus_vp || 0);
+  const penalty = Number(item.penalty_applied_vp || 0);
   const canOpen = ['active', 'revision_required'].includes(item.status);
+  const appealLabel = ({ pending:'Апелляция на рассмотрении', approved:'Штраф отменён', rejected:'Апелляция отклонена' })[item.appeal_status] || '';
   return `<article class="guild-assignment-row guild-assignment-row--${esc(item.status)}">
     <div><span>${esc(statusCopy(item.status))}</span><strong>${esc(item.snapshot?.generated_title || item.snapshot?.ability || 'Задание')}</strong><small>${[item.snapshot?.map, item.snapshot?.agent, item.snapshot?.ability].filter(Boolean).map(esc).join(' · ')}</small></div>
-    <div class="guild-assignment-result"><b>${item.status === 'hot_awarded' ? `+${Number(item.awarded_vp || reward)} VP` : `${reward} VP`}</b><small>${deadline ? remainingLabel(deadline) : statusCopy(item.status)}</small></div>
+    <div class="guild-assignment-result"><b>${penalty ? `−${penalty} VP` : item.status === 'hot_awarded' ? `+${Number(item.awarded_vp || reward)} VP` : `${reward} VP`}</b><small>${appealLabel || (deadline ? remainingLabel(deadline) : statusCopy(item.status))}</small></div>
     ${canOpen ? `<button class="guild-button guild-button--open" type="button" data-guild-action="open" data-assignment-id="${esc(item.id)}">Продолжить</button>` : ''}
+    ${penalty && !item.appeal_status ? `<button class="guild-button guild-button--quiet" type="button" data-guild-action="appeal" data-assignment-id="${esc(item.id)}">Оспорить штраф</button>` : ''}
   </article>`;
 }
 
@@ -127,7 +130,7 @@ export function createGuildWebsite({
         <div class="guild-slots"><span>СЛОТЫ ЗАДАНИЙ</span><strong>${Number(profile.active_assignment_count || 0)}<i>/</i>${Number(profile.quest_limit || 5)}</strong><small>Чем выше уровень, тем больше лимит</small></div>
         <div class="guild-vp"><span>ДОСТУПНО</span><strong>${Number(dashboard.balance?.available_vp || 0)} VP</strong><button type="button" data-guild-action="privacy">${profile.hide_public_nickname ? 'Показывать ник' : 'Скрывать ник'}</button></div>
       </header>
-      <section class="guild-legend" aria-label="Обозначения заданий"><b>Метки</b><span class="available">Свободно</span><span class="bonus">Активный бонус</span><span class="claimed">Взято авантюристом</span><span class="review">Проверяется</span><span class="revision">Нужна доработка</span></section>
+      <section class="guild-legend" aria-label="Обозначения заданий"><b>Метки</b><span class="available">Свободно</span><span class="bonus">Активный бонус</span><span class="claimed">Взято авантюристом</span><span class="review">Проверяется</span><span class="revision">Нужна доработка</span><span class="fulfilled">Пирожки / награда выдана</span></section>
       ${active.length ? `<section class="guild-active"><div class="guild-section-head"><div><span>МОЯ РАБОТА</span><h2>Текущие задания</h2></div><b>${active.filter(item => ['active','revision_required'].includes(item.status)).length} занимают слот</b></div><div class="guild-assignment-list">${active.map(assignmentRow).join('')}</div></section>` : ''}
       <section class="guild-quests"><div class="guild-section-head"><div><span>ДОСКА ГИЛЬДИИ</span><h2>Задания алгоритма</h2></div><b>${(dashboard.quests || []).filter(item => item.status === 'available').length} свободно</b></div>
         <div class="guild-quest-grid">${(dashboard.quests || []).map(quest => questCard(quest, assignmentByQuest.get(quest.id))).join('') || '<div class="guild-empty"><strong>Свободных заданий пока нет</strong><span>Алгоритм обновляет доску по фактическому дефициту материалов.</span></div>'}</div></section>
@@ -168,6 +171,15 @@ export function createGuildWebsite({
     }
     if (action === 'abandon'
       && !confirm('Вернуть задание в Гильдию? Черновик останется в «Кабинет автора → Черновики».')) return;
+    let appealReason = '';
+    if (action === 'appeal') {
+      appealReason = prompt('Объясни, почему штраф нужно пересмотреть. Минимум 10 символов.')?.trim() || '';
+      if (!appealReason) return;
+      if (appealReason.length < 10) {
+        toast('Для апелляции нужно описать причину минимум в 10 символах.', 'w');
+        return;
+      }
+    }
     loading = true;
     button.disabled = true;
     try {
@@ -192,6 +204,13 @@ export function createGuildWebsite({
         await call('setGuildPrivacy', { hide_public_nickname:!dashboard.profile.hide_public_nickname });
         toast('Настройка ника обновлена', 's');
       }
+      if (action === 'appeal') {
+        await call('createGuildPenaltyAppeal', {
+          assignment_id:button.dataset.assignmentId,
+          reason:appealReason,
+        });
+        toast('Апелляция отправлена гильдмастеру.', 's');
+      }
       entry = null; dashboard = null;
       loading = false;
       await load({ force:true });
@@ -209,6 +228,14 @@ export function createGuildWebsite({
 
   return {
     open:options => load(options),
+    async openAssignment(assignmentId) {
+      await load({ force:true });
+      const assignment = dashboard?.assignments?.find(item => item.id === assignmentId);
+      if (!assignment || !['active', 'revision_required'].includes(assignment.status)) {
+        throw new Error('Задание уже недоступно для редактирования. Обнови Гильдию.');
+      }
+      await openAssignmentDraft(assignment);
+    },
     reset() { entry = null; dashboard = null; loading = false; host.innerHTML = ''; },
     refresh() { entry = null; dashboard = null; return load({ force:true }); },
   };

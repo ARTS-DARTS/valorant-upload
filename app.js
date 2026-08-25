@@ -48,8 +48,8 @@ import {
   entitlementHasCooldownBypass,
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
-import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-surgical-v2';
-import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v1';
+import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-guild-v3';
+import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v3';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -120,6 +120,13 @@ const guildWebsite = createGuildWebsite({
   detachAssignmentDraft:assignmentId => detachGuildAssignmentDraft(assignmentId),
   toast:(...args) => toast(...args),
 });
+const guildDeepLink = (() => {
+  const query = new URLSearchParams(window.location.search);
+  return {
+    workspace:query.get('workspace') || '',
+    assignmentId:query.get('assignment') || '',
+  };
+})();
 
 function rewardStatusLabel(status) {
   return ({pending:'На проверке',approved:'Проверена',ready:'Код готов',revealed:'Код открыт',confirmed:'Завершена',rejected:'Отклонена',canceled:'Отменена'})[status] || status || '—';
@@ -6034,6 +6041,16 @@ onAuthStateChanged(auth, async user => {
     // Keep the loader over the form until reference lists are final. Otherwise
     // the full agent catalog flashes before category permissions filter it.
     await Promise.all([agentsReady, mapsReady]);
+    if (guildDeepLink.workspace === 'guild') {
+      switchWorkspaceTab('guild');
+      if (guildDeepLink.assignmentId) {
+        try {
+          await guildWebsite.openAssignment(guildDeepLink.assignmentId);
+        } catch (error) {
+          toast(error?.message || 'Не удалось открыть заготовку задания Гильдии.', 'e');
+        }
+      }
+    }
     openAdminChat();
     await syncAuthorTrainingCriteriaNotifications().catch(error => {
       console.warn('training criteria notification sync', error?.message || error);
