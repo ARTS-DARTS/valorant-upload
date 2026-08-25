@@ -146,12 +146,30 @@ export function createGuildWebsite({
     if (dashboard) renderDashboard(); else renderEntry();
   }
 
+  function preserveReturnedDrafts(assignments) {
+    const returned = (assignments || []).filter(item =>
+      ['abandoned', 'expired', 'revision_failed', 'canceled'].includes(item.status));
+    let saved = 0;
+    for (const assignment of returned) {
+      if (detachAssignmentDraft(assignment.id) === true) saved += 1;
+    }
+    if (saved) {
+      toast(
+        saved === 1
+          ? 'Черновик возвращённого задания сохранён: Кабинет автора → Черновики.'
+          : `Сохранено черновиков возвращённых заданий: ${saved}. Открой «Кабинет автора → Черновики».`,
+        's',
+      );
+    }
+  }
+
   async function load({ force = false } = {}) {
     if (loading || (!force && (dashboard || entry))) return;
     loading = true; render();
     try {
       entry = await call('getGuildEntry');
       dashboard = entry.member?.permanent ? await call('getGuildDashboard') : null;
+      if (dashboard) preserveReturnedDrafts(dashboard.assignments);
     } catch (error) {
       host.innerHTML = `<div class="guild-empty"><strong>Гильдия временно недоступна</strong><span>${esc(error?.message || 'Обнови страницу и попробуй ещё раз.')}</span><button class="guild-button" data-guild-action="reload">Повторить</button></div>`;
     } finally {

@@ -5379,6 +5379,7 @@ function detachGuildAssignmentDraft(assignmentId) {
   const current = guildAssignmentId === assignmentId ? collectDraftData() : null;
   const drafts = getSavedDrafts();
   const source = current || drafts.find(item => item.guildAssignmentId === assignmentId);
+  let saved = false;
   if (source) {
     const now = Date.now();
     const detached = { ...source, id:`draft_${now}_guild`, updatedAt:now, guildDetachedFrom:assignmentId };
@@ -5389,6 +5390,7 @@ function detachGuildAssignmentDraft(assignmentId) {
     delete detached.guildRevisionRequired;
     delete detached.guildRevisionCount;
     writeSavedDrafts([detached, ...drafts.filter(item => item.guildAssignmentId !== assignmentId)]);
+    saved = true;
     if (guildAssignmentId === assignmentId) {
       try {
         localStorage.setItem(_ACTIVE_DRAFT_ID_KEY, detached.id);
@@ -5399,6 +5401,7 @@ function detachGuildAssignmentDraft(assignmentId) {
   if (guildAssignmentId === assignmentId) clearGuildAssignmentContext();
   renderDrafts();
   renderAuthorWorkspace();
+  return saved;
 }
 
 function categoryExtraDetailHtml(item) {

@@ -59,6 +59,13 @@ test('an adventurer can appeal an applied penalty from Guild history', () => {
   assert.match(guild, /appealReason\.length < 10/);
 });
 
+test('server-side return or expiry preserves the linked local draft and tells the user where it is', () => {
+  assert.match(guild, /function preserveReturnedDrafts/);
+  assert.match(guild, /\['abandoned', 'expired', 'revision_failed', 'canceled'\]/);
+  assert.match(guild, /Кабинет автора → Черновики/);
+  assert.match(app, /return saved;/);
+});
+
 test('public profiles expose only positive Guild achievements', () => {
   assert.match(social, /publicProfile\.guild_member === true/);
   assert.match(social, /guild_completed_quests/);
