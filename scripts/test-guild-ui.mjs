@@ -24,7 +24,9 @@ test('guild is a dedicated author workspace with responsive quest board', () => 
 test('Guild status labels sit to the left of the algorithm board', () => {
   assert.match(guild, /guild-section-head guild-section-head--board/);
   assert.match(guild, /guild-quests-layout[\s\S]*guild-legend[\s\S]*guild-quests/);
-  assert.match(css, /guild-quests-layout\{display:grid;grid-template-columns:210px minmax\(0,920px\)/);
+  assert.match(css, /guild-quests-layout\{position:relative;display:block;width:min\(920px,100%\)/);
+  assert.match(css, /guild-quests-layout>\.guild-legend\{position:absolute;top:0;right:calc\(100% \+ 18px\);width:280px/);
+  assert.match(css, /guild-quests-layout>\.guild-legend span\{padding:9px 10px;font-size:11px/);
 });
 
 test('guild quests use the familiar agent, map and side demand-board flow', () => {
