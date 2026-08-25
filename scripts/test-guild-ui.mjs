@@ -21,6 +21,12 @@ test('guild is a dedicated author workspace with responsive quest board', () => 
   assert.match(css, /guild-legend \.fulfilled::before/);
 });
 
+test('Guild status labels sit inside the algorithm board heading', () => {
+  assert.match(guild, /guild-section-head guild-section-head--board/);
+  assert.match(guild, /guild-board-heading[\s\S]*Задания алгоритма[\s\S]*guild-legend/);
+  assert.match(css, /guild-board-heading\{display:flex;align-items:flex-end/);
+});
+
 test('guild quests use the familiar agent, map and side demand-board flow', () => {
   assert.match(guild, /data-guild-filter-agent/);
   assert.match(guild, /data-guild-filter-map/);
