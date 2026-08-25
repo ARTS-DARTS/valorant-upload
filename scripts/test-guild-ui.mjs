@@ -155,6 +155,14 @@ test('missing plant cells are gold and the selected plant overrides them in cyan
   assert.ok(missingRule >= 0 && selectedRule > missingRule, 'selected cyan rule must override the gold missing-zone rule');
 });
 
+test('covered plant cells remain selectable and reduce the displayed VP reward', () => {
+  assert.match(guild, /const zoneStates = zones\.map\(\(\[zone, count\]\) => \(\{ zone, count,/);
+  assert.match(guild, /if \(state === 'claimed'\) return/);
+  assert.match(guild, /const rewardVp = Math\.max\(0, base - coverage\)/);
+  assert.match(guild, /const bonusVp = coverage === 0 \? bonus : 0/);
+  assert.match(css, /\.reward-demand-zones button\.filled:hover/);
+});
+
 test('Guild demand cards keep readable text and ability icons on desktop and mobile', () => {
   assert.match(css, /\.guild-demand-ability\{[^}]*grid-template-columns:38px 38px/);
   assert.match(css, /\.guild-demand-ability-icon img\{width:31px;height:31px\}/);

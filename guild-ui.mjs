@@ -129,6 +129,11 @@ function guildQuestForZone(quests, row, zone) {
     && guildKey(quest.end_zone) === guildKey(zone));
 }
 
+function guildQuestBlocksZone(quest) {
+  return Boolean(quest?.active !== false)
+    && ['assigned', 'under_review', 'revision_required'].includes(guildKey(quest?.status));
+}
+
 function guildChoiceMatches(choice, row, zone = '') {
   return Boolean(choice)
     && guildKey(choice.map) === guildKey(row.map)
@@ -138,14 +143,24 @@ function guildChoiceMatches(choice, row, zone = '') {
     && (!zone || guildKey(choice.zone) === guildKey(zone));
 }
 
-function guildDemandTask(row, quests, abilityIcon, rewards, selectedChoice) {
+function guildDemandReward(settings, coverageCount) {
+  const base = Math.max(0, Math.trunc(Number(settings?.algorithm_reward_vp || 0)));
+  const bonus = Math.max(0, Math.trunc(Number(settings?.algorithm_bonus_vp || 0)));
+  const coverage = Math.max(0, Math.trunc(Number(coverageCount || 0)));
+  const rewardVp = Math.max(0, base - coverage);
+  const bonusVp = coverage === 0 ? bonus : 0;
+  return { vp:rewardVp + bonusVp, bonus_vp:bonusVp, xp:Number(settings?.algorithm_guild_xp || 0) };
+}
+
+function guildDemandTask(row, quests, abilityIcon, settings, selectedChoice) {
   const coverage = guildCoverageFor(row.demand, row);
   const zones = Object.entries(coverage);
   const missing = zones.filter(([, count]) => count <= 0).map(([zone]) => zone);
-  const zoneStates = missing.map(zone => ({ zone, quest:guildQuestForZone(quests, row, zone) }));
-  const selectable = zoneStates.filter(item => !item.quest || item.quest.status === 'available');
+  const zoneStates = zones.map(([zone, count]) => ({ zone, count, quest:guildQuestForZone(quests, row, zone) }));
+  const selectable = zoneStates.filter(item => !guildQuestBlocksZone(item.quest));
   const selected = selectable.find(item => guildChoiceMatches(selectedChoice, row, item.zone));
-  const allClaimed = missing.length > 0 && !selectable.length;
+  const allClaimed = !selectable.length;
+  const rewards = guildDemandReward(settings, selected?.count || 0);
   const icon = abilityIcon(row.agent, row.ability);
   const zoneLabel = zone => zone === 'mid' ? 'MID' : zone.toUpperCase();
   const status = selected
@@ -155,11 +170,11 @@ function guildDemandTask(row, quests, abilityIcon, rewards, selectedChoice) {
     : 'ВСЕ ЗОНЫ ЕСТЬ';
   const chips = zones.map(([zone, count]) => {
     const quest = guildQuestForZone(quests, row, zone);
-    const state = count > 0 ? 'filled' : quest && quest.status !== 'available' ? 'claimed' : 'missing';
+    const state = guildQuestBlocksZone(quest) ? 'claimed' : count > 0 ? 'filled' : 'missing';
     const contents = `<em>${zoneLabel(zone)}</em><b>${Number(count || 0)}</b>`;
-    if (state !== 'missing') return `<span class="${state}">${contents}</span>`;
+    if (state === 'claimed') return `<span class="${state}">${contents}</span>`;
     const isSelected = guildChoiceMatches(selectedChoice, row, zone);
-    return `<button class="missing${isSelected ? ' selected' : ''}" type="button" data-guild-select-zone
+    return `<button class="${state}${isSelected ? ' selected' : ''}" type="button" data-guild-select-zone
       data-guild-demand-map="${esc(row.map)}" data-guild-demand-agent="${esc(row.agent)}"
       data-guild-demand-ability="${esc(row.ability)}" data-guild-demand-side="${esc(guildSide(row.side || row.round_side))}"
       data-guild-demand-zone="${esc(zone)}" aria-pressed="${isSelected}" title="Выбрать плент ${esc(zoneLabel(zone))}">${contents}</button>`;
@@ -228,8 +243,7 @@ function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selecte
     if (!rows.length) return '';
     const zoneCounts = rows.flatMap(row => Object.values(guildCoverageFor(demand, row)));
     const filled = zoneCounts.filter(count => Number(count) > 0).length;
-    const rewards = { vp:Number(settings?.algorithm_reward_vp || 0) + Number(settings?.algorithm_bonus_vp || 0), bonus_vp:Number(settings?.algorithm_bonus_vp || 0), xp:Number(settings?.algorithm_guild_xp || 0) };
-    return `<section class="guild-demand-side guild-demand-side--${group.key}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${filled}/${zoneCounts.length}</b></header><div>${rows.map(row => guildDemandTask(row, quests, abilityIcon, rewards, selectedChoice)).join('')}</div></section>`;
+    return `<section class="guild-demand-side guild-demand-side--${group.key}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${filled}/${zoneCounts.length}</b></header><div>${rows.map(row => guildDemandTask(row, quests, abilityIcon, settings, selectedChoice)).join('')}</div></section>`;
   }).join('');
   const manual = quests.filter(quest => quest.source === 'guildmaster');
   return {
