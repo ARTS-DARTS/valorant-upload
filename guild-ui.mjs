@@ -73,15 +73,93 @@ function questCard(quest, assignment) {
   </article>`;
 }
 
+const guildKey = value => String(value || '').trim().toLocaleLowerCase('ru-RU');
+
+function guildSide(value) {
+  const side = guildKey(value);
+  if (['attack', 'atk', 'атака'].includes(side)) return 'attack';
+  if (['defense', 'defence', 'def', 'защита'].includes(side)) return 'defense';
+  return 'any';
+}
+
+function guildDemandTask(quest, assignment, abilityIcon) {
+  const tone = questTone(quest);
+  const isMine = Boolean(assignment);
+  const canTake = quest.status === 'available';
+  const canOpen = isMine && ['active', 'revision_required'].includes(assignment.status);
+  const icon = abilityIcon(quest.agent, quest.ability);
+  const assignee = quest.assignee?.hidden
+    ? 'Скрытый авантюрист'
+    : (quest.assignee?.name || 'Авантюрист');
+  const route = [quest.start_zone, quest.end_zone].filter(Boolean).map(esc).join(' → ');
+  return `<article class="guild-demand-task guild-demand-task--${tone}" data-quest-id="${esc(quest.id)}">
+    <span class="guild-demand-task-icon">${icon ? `<img src="${esc(icon)}" alt="">` : '✦'}</span>
+    <div class="guild-demand-task-copy">
+      <strong>${esc(quest.generated_title || quest.ability || 'Задание')}</strong>
+      <small>${esc(quest.ability || quest.agent || 'Лайнап')}${route ? ` · ${route}` : ''}</small>
+      <span>${Number(quest.reward_vp || 0) + Number(quest.bonus_vp || 0)} VP · ${Number(quest.guild_xp || 0)} Guild XP</span>
+    </div>
+    <div class="guild-demand-task-state">
+      <b>${esc(questStatusCopy(quest.status))}</b>
+      ${quest.status !== 'available' ? `<small>${isMine ? 'Твоё задание' : `Выполняет: ${esc(assignee)}`}</small>` : ''}
+    </div>
+    <div class="guild-demand-task-actions">
+      ${canTake ? `<button class="guild-button guild-button--take" type="button" data-guild-action="take" data-quest-id="${esc(quest.id)}">Взять</button>` : ''}
+      ${canOpen ? `<button class="guild-button guild-button--open" type="button" data-guild-action="open" data-assignment-id="${esc(assignment.id)}">${assignment.status === 'revision_required' ? 'Доработать' : 'Открыть'}</button>` : ''}
+    </div>
+  </article>`;
+}
+
+function guildDemandBoard({ quests, assignmentByQuest, selectedAgent, selectedMap, agentIcon, abilityIcon }) {
+  const unique = values => [...new Set(values.filter(Boolean))];
+  const agents = unique(quests.map(quest => String(quest.agent || '').trim()));
+  const activeAgent = agents.includes(selectedAgent) ? selectedAgent : (agents[0] || '');
+  const agentQuests = quests.filter(quest => guildKey(quest.agent) === guildKey(activeAgent));
+  const maps = unique(agentQuests.map(quest => String(quest.map || '').trim()));
+  const activeMap = maps.includes(selectedMap) ? selectedMap : (maps[0] || '');
+  const visible = agentQuests.filter(quest => guildKey(quest.map) === guildKey(activeMap));
+  const agentButtons = agents.map(agent => {
+    const icon = agentIcon(agent);
+    const selected = agent === activeAgent;
+    const free = quests.filter(quest => guildKey(quest.agent) === guildKey(agent) && quest.status === 'available').length;
+    return `<button class="guild-demand-agent${selected ? ' selected' : ''}" type="button" data-guild-filter-agent="${esc(agent)}" aria-pressed="${selected}" title="${esc(agent)} · свободно: ${free}">${icon ? `<img src="${esc(icon)}" alt="${esc(agent)}">` : `<span>${esc(agent.slice(0, 1) || '?')}</span>`}</button>`;
+  }).join('');
+  const mapButtons = maps.map((map, index) => {
+    const selected = map === activeMap;
+    const free = agentQuests.filter(quest => guildKey(quest.map) === guildKey(map) && quest.status === 'available').length;
+    return `<button class="guild-demand-map${selected ? ' selected' : ''}" type="button" data-guild-filter-map="${esc(map)}" aria-pressed="${selected}"><strong>${esc(map)}</strong><small>${free ? `приоритет ${index + 1} · свободно ${free}` : 'все задания взяты'}</small></button>`;
+  }).join('');
+  const groups = [
+    { key:'attack', icon:'⚔', label:'АТАКА' },
+    { key:'defense', icon:'◆', label:'ЗАЩИТА' },
+    { key:'any', icon:'◇', label:'ЛЮБАЯ СТОРОНА' },
+  ].map(group => {
+    const rows = visible.filter(quest => guildSide(quest.round_side) === group.key);
+    if (!rows.length) return '';
+    return `<section class="guild-demand-side guild-demand-side--${group.key}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${rows.filter(quest => quest.status === 'available').length}/${rows.length}</b></header><div>${rows.map(quest => guildDemandTask(quest, assignmentByQuest.get(quest.id), abilityIcon)).join('')}</div></section>`;
+  }).join('');
+  return {
+    selectedAgent:activeAgent,
+    selectedMap:activeMap,
+    html: quests.length ? `<div class="guild-demand-board">
+      <p class="guild-demand-note">Порядок учитывает реальный дефицит материалов. Выбери агента и карту, затем возьми конкретное задание.</p>
+      <section class="guild-demand-stage"><label>1 · АГЕНТ · ПО ПРИОРИТЕТУ ЗАДАНИЙ</label><div class="guild-demand-agents">${agentButtons}</div></section>
+      <section class="guild-demand-stage"><label>2 · КАРТА · ПРИОРИТЕТНЫЕ ПЕРВЫМИ</label><div class="guild-demand-maps">${mapButtons}</div></section>
+      <section class="guild-demand-stage"><label>3 · СПОСОБНОСТЬ И НЕДОСТАЮЩИЕ ЗОНЫ</label><div class="guild-demand-side-columns">${groups || '<div class="guild-empty"><strong>Для выбранной пары заданий нет</strong><span>Выбери другого агента или карту.</span></div>'}</div></section>
+    </div>` : '<div class="guild-empty"><strong>Свободных заданий пока нет</strong><span>Алгоритм обновляет доску по фактическому дефициту материалов.</span></div>',
+  };
+}
+
 function assignmentRow(item) {
   const deadline = item.status === 'revision_required' ? item.revision_deadline_at : item.deadline_at;
   const reward = Number(item.snapshot?.reward_vp || 0) + Number(item.snapshot?.bonus_vp || 0);
   const penalty = Number(item.penalty_applied_vp || 0);
   const canOpen = ['active', 'revision_required'].includes(item.status);
   const appealLabel = ({ pending:'Апелляция на рассмотрении', approved:'Штраф отменён', rejected:'Апелляция отклонена' })[item.appeal_status] || '';
-  return `<article class="guild-assignment-row guild-assignment-row--${esc(item.status)}">
-    <div><span>${esc(statusCopy(item.status))}</span><strong>${esc(item.snapshot?.generated_title || item.snapshot?.ability || 'Задание')}</strong><small>${[item.snapshot?.map, item.snapshot?.agent, item.snapshot?.ability].filter(Boolean).map(esc).join(' · ')}</small></div>
-    <div class="guild-assignment-result"><b>${penalty ? `−${penalty} VP` : item.status === 'hot_awarded' ? `+${Number(item.awarded_vp || reward)} VP` : `${reward} VP`}</b><small>${appealLabel || (deadline ? remainingLabel(deadline) : statusCopy(item.status))}</small></div>
+  const imported = item.imported_from_reward_program === true;
+  return `<article class="guild-assignment-row guild-assignment-row--${esc(item.status)}${imported ? ' guild-assignment-row--imported' : ''}">
+    <div><span>${imported ? 'ПЕРЕНЕСЕНО ИЗ АКЦИИ VP' : esc(statusCopy(item.status))}</span><strong>${esc(item.snapshot?.generated_title || item.snapshot?.ability || 'Задание')}</strong><small>${[item.snapshot?.map, item.snapshot?.agent, item.snapshot?.ability].filter(Boolean).map(esc).join(' · ')}</small></div>
+    <div class="guild-assignment-result"><b>${penalty ? `−${penalty} VP` : item.status === 'hot_awarded' ? `+${Number(item.awarded_vp || reward)} VP` : `${reward} VP`}</b><small>${imported ? `Ранее выдано · +${Number(item.awarded_guild_xp || item.snapshot?.guild_xp || 0)} Guild XP` : (appealLabel || (deadline ? remainingLabel(deadline) : statusCopy(item.status)))}</small></div>
     ${canOpen ? `<button class="guild-button guild-button--open" type="button" data-guild-action="open" data-assignment-id="${esc(item.id)}">Продолжить</button>` : ''}
     ${penalty && !item.appeal_status ? `<button class="guild-button guild-button--quiet" type="button" data-guild-action="appeal" data-assignment-id="${esc(item.id)}">Оспорить штраф</button>` : ''}
   </article>`;
@@ -93,11 +171,15 @@ export function createGuildWebsite({
   ensureRewardMembership,
   openAssignmentDraft,
   detachAssignmentDraft,
+  agentIcon = () => '',
+  abilityIcon = () => '',
   toast,
 }) {
   let entry = null;
   let dashboard = null;
   let loading = false;
+  let selectedAgent = '';
+  let selectedMap = '';
 
   function renderEntry() {
     const settings = entry?.settings || {};
@@ -123,6 +205,12 @@ export function createGuildWebsite({
     const assignmentByQuest = new Map(assignments.map(item => [item.quest_id, item]));
     const active = assignments.filter(item => ['active', 'revision_required', 'submitted', 'moderator_rework'].includes(item.status));
     const history = assignments.filter(item => !active.includes(item)).slice(0, 20);
+    const demandBoard = guildDemandBoard({
+      quests:dashboard.quests || [], assignmentByQuest,
+      selectedAgent, selectedMap, agentIcon, abilityIcon,
+    });
+    selectedAgent = demandBoard.selectedAgent;
+    selectedMap = demandBoard.selectedMap;
     host.innerHTML = `<div class="guild-board">
       <header class="guild-command-strip">
         <div class="guild-rank"><span>РАНГ ГИЛЬДИИ</span><strong>${esc(rankLabel(profile.rank_key))}</strong><small>Уровень ${Number(profile.level || 1)} · серия ${Number(profile.completion_streak_days || 0)} дн. · рекорд ${Number(profile.best_completion_streak_days || 0)}</small></div>
@@ -133,7 +221,7 @@ export function createGuildWebsite({
       <section class="guild-legend" aria-label="Обозначения заданий"><b>Метки</b><span class="available">Свободно</span><span class="bonus">Активный бонус</span><span class="claimed">Взято авантюристом</span><span class="review">Проверяется</span><span class="revision">Нужна доработка</span><span class="fulfilled">Пирожки / награда выдана</span></section>
       ${active.length ? `<section class="guild-active"><div class="guild-section-head"><div><span>МОЯ РАБОТА</span><h2>Текущие задания</h2></div><b>${active.filter(item => ['active','revision_required'].includes(item.status)).length} занимают слот</b></div><div class="guild-assignment-list">${active.map(assignmentRow).join('')}</div></section>` : ''}
       <section class="guild-quests"><div class="guild-section-head"><div><span>ДОСКА ГИЛЬДИИ</span><h2>Задания алгоритма</h2></div><b>${(dashboard.quests || []).filter(item => item.status === 'available').length} свободно</b></div>
-        <div class="guild-quest-grid">${(dashboard.quests || []).map(quest => questCard(quest, assignmentByQuest.get(quest.id))).join('') || '<div class="guild-empty"><strong>Свободных заданий пока нет</strong><span>Алгоритм обновляет доску по фактическому дефициту материалов.</span></div>'}</div></section>
+        ${demandBoard.html}</section>
       <section class="guild-history"><div class="guild-section-head"><div><span>ЛИЧНЫЙ ЖУРНАЛ</span><h2>История и награды</h2></div></div><div class="guild-assignment-list">${history.map(assignmentRow).join('') || '<div class="guild-empty"><strong>История начнётся с первого задания</strong><span>Здесь появятся принятые работы, начисления, отказы и просрочки.</span></div>'}</div></section>
     </div>`;
   }
@@ -245,9 +333,34 @@ export function createGuildWebsite({
   }
 
   host.addEventListener('click', event => {
+    const agent = event.target.closest('[data-guild-filter-agent]');
+    if (agent) {
+      selectedAgent = agent.dataset.guildFilterAgent || '';
+      selectedMap = '';
+      renderDashboard();
+      return;
+    }
+    const map = event.target.closest('[data-guild-filter-map]');
+    if (map) {
+      selectedMap = map.dataset.guildFilterMap || '';
+      renderDashboard();
+      return;
+    }
     const button = event.target.closest('[data-guild-action]');
     if (button) act(button);
   });
+
+  host.addEventListener('wheel', event => {
+    const rail = event.target.closest?.('.guild-demand-agents,.guild-demand-maps');
+    if (!rail || rail.scrollWidth <= rail.clientWidth) return;
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    if (!delta) return;
+    const maxScroll = rail.scrollWidth - rail.clientWidth;
+    const canMove = delta < 0 ? rail.scrollLeft > 0 : rail.scrollLeft < maxScroll - 1;
+    if (!canMove) return;
+    event.preventDefault();
+    rail.scrollLeft = Math.max(0, Math.min(maxScroll, rail.scrollLeft + delta));
+  }, { passive:false });
 
   return {
     open:options => load(options),
@@ -259,7 +372,7 @@ export function createGuildWebsite({
       }
       await openTrackedDraft(assignment);
     },
-    reset() { entry = null; dashboard = null; loading = false; host.innerHTML = ''; },
+    reset() { entry = null; dashboard = null; loading = false; selectedAgent = ''; selectedMap = ''; host.innerHTML = ''; },
     refresh() { entry = null; dashboard = null; return load({ force:true }); },
   };
 }

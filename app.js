@@ -49,7 +49,7 @@ import {
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
 import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-guild-v3';
-import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v3';
+import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v4';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -118,6 +118,8 @@ const guildWebsite = createGuildWebsite({
   ensureRewardMembership:ensureGuildRewardMembership,
   openAssignmentDraft:assignment => openGuildAssignmentDraft(assignment),
   detachAssignmentDraft:assignmentId => detachGuildAssignmentDraft(assignmentId),
+  agentIcon:agent => rewardDemandIcon(agent),
+  abilityIcon:(agent, ability) => rewardDemandAbilityIcon(agent, ability),
   toast:(...args) => toast(...args),
 });
 const guildDeepLink = (() => {
@@ -420,8 +422,8 @@ function renderRewardDialog() {
 }
 async function loadRewardDashboard({render=false}={}) {
   if(!currentUser) return;
-  try { rewardDashboard=(await getRewardsDashboard()).data; const balance=document.getElementById('author-reward-balance'); if(balance) balance.textContent=`${Number(rewardDashboard?.balance?.available_vp||0)} VP · открыть`; renderCabinetVpStats(); }
-  catch(error){ console.warn('rewards dashboard',error); const balance=document.getElementById('author-reward-balance'); if(balance) balance.textContent='Баланс временно недоступен'; }
+  try { rewardDashboard=(await getRewardsDashboard()).data; const balance=document.getElementById('author-reward-balance'); if(balance) balance.textContent='Открыть доску заданий'; renderCabinetVpStats(); }
+  catch(error){ console.warn('rewards dashboard',error); const balance=document.getElementById('author-reward-balance'); if(balance) balance.textContent='Открыть доску заданий'; }
   updateRewardSubmitOptIn(); if(render) renderRewardDialog();
 }
 
@@ -455,7 +457,7 @@ function setRewardModalOpen(open) {
     window.scrollTo(0, rewardModalScrollY);
   }
 }
-document.getElementById('author-reward-open')?.addEventListener('click', async()=>{ rewardDemandCategory=''; setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
+document.getElementById('author-reward-open')?.addEventListener('click', ()=>switchWorkspaceTab('guild'));
 document.getElementById('cabinet-vp-open')?.addEventListener('click', async()=>{ rewardDemandCategory=''; setRewardModalOpen(true); renderRewardDialog(); await loadRewardDashboard({render:true}); });
 document.getElementById('reward-close')?.addEventListener('click',()=>setRewardModalOpen(false));
 document.getElementById('reward-modal')?.addEventListener('wheel',event=>{

@@ -21,6 +21,30 @@ test('guild is a dedicated author workspace with responsive quest board', () => 
   assert.match(css, /guild-legend \.fulfilled::before/);
 });
 
+test('guild quests use the familiar agent, map and side demand-board flow', () => {
+  assert.match(guild, /data-guild-filter-agent/);
+  assert.match(guild, /data-guild-filter-map/);
+  assert.match(guild, /1 · АГЕНТ · ПО ПРИОРИТЕТУ ЗАДАНИЙ/);
+  assert.match(guild, /2 · КАРТА · ПРИОРИТЕТНЫЕ ПЕРВЫМИ/);
+  assert.match(guild, /3 · СПОСОБНОСТЬ И НЕДОСТАЮЩИЕ ЗОНЫ/);
+  assert.match(css, /\.guild-demand-side-columns/);
+  assert.match(css, /\.guild-demand-task--claimed/);
+  assert.match(css, /@media\(max-width:700px\).*\.guild-demand-task/s);
+});
+
+test('the former rewards card opens the Guild board while VP payout remains separate', () => {
+  assert.match(html, /<small>ГИЛЬДИЯ<\/small><strong id="author-reward-balance">Открыть доску заданий<\/strong>/);
+  assert.match(app, /author-reward-open'\)\?\.addEventListener\('click', \(\)=>switchWorkspaceTab\('guild'\)\)/);
+  assert.match(app, /cabinet-vp-open'\)\?\.addEventListener\('click'.*setRewardModalOpen\(true\)/);
+});
+
+test('reward-program history is visibly distinguished from new Guild work', () => {
+  assert.match(guild, /imported_from_reward_program/);
+  assert.match(guild, /ПЕРЕНЕСЕНО ИЗ АКЦИИ VP/);
+  assert.match(guild, /Ранее выдано/);
+  assert.match(css, /\.guild-assignment-row--imported/);
+});
+
 test('guild dashboard keeps separate XP, slots, labels and Pirozhki state', () => {
   assert.match(guild, /Guild XP/);
   assert.match(guild, /СЛОТЫ ЗАДАНИЙ/);
