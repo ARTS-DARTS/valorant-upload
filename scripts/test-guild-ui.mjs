@@ -24,12 +24,16 @@ test('guild is a dedicated author workspace with responsive quest board', () => 
 test('guild quests use the familiar agent, map and side demand-board flow', () => {
   assert.match(guild, /data-guild-filter-agent/);
   assert.match(guild, /data-guild-filter-map/);
-  assert.match(guild, /1 · АГЕНТ · ПО ПРИОРИТЕТУ ЗАДАНИЙ/);
-  assert.match(guild, /2 · КАРТА · ПРИОРИТЕТНЫЕ ПЕРВЫМИ/);
+  assert.match(guild, /1 · АГЕНТ · ПО ПРИОРИТЕТУ И ПОДПИСКАМ/);
+  assert.match(guild, /2 · ВЕСЬ АКТИВНЫЙ МАППУЛ · ПРИОРИТЕТНЫЕ КАРТЫ ПЕРВЫМИ/);
   assert.match(guild, /3 · СПОСОБНОСТЬ И НЕДОСТАЮЩИЕ ЗОНЫ/);
+  assert.match(guild, /market_zone_coverage/);
+  assert.match(guild, /data-guild-action="take-demand"/);
+  assert.match(guild, /ensureGuildDemandQuest/);
+  assert.match(guild, /guildKey\(row\.category \|\| row\.content_type \|\| 'lineup'\) === 'lineup'/);
   assert.match(css, /\.guild-demand-side-columns/);
-  assert.match(css, /\.guild-demand-task--claimed/);
-  assert.match(css, /@media\(max-width:700px\).*\.guild-demand-task/s);
+  assert.match(css, /\.guild-demand-ability\.claimed/);
+  assert.match(css, /@media\(max-width:700px\).*\.guild-demand-ability/s);
 });
 
 test('the former rewards card opens the Guild board while VP payout remains separate', () => {
