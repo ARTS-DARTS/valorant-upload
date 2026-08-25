@@ -49,6 +49,7 @@ import {
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
 import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-surgical-v2';
+import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v1';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -69,6 +70,7 @@ await initializePublicAppCheck(app);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 const functions = getFunctions(app, 'us-central1');
+const guildFunctions = getFunctions(app, 'europe-west1');
 const socialWebsite = createSocialWebsite({ db, functions, toast: (...args) => toast(...args) });
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
 const getRewardsDashboard = httpsCallable(functions, 'getRewardsDashboard');
@@ -77,6 +79,11 @@ const requestRewardPayout = httpsCallable(functions, 'requestRewardPayout');
 const cancelRewardPayout = httpsCallable(functions, 'cancelRewardPayout');
 const staffReviewRewardLineup = httpsCallable(functions, 'staffReviewRewardLineup');
 const getRewardReviewContext = httpsCallable(functions, 'getRewardReviewContext');
+const guildCallables = new Map();
+const callGuild = async (name, data = {}) => {
+  if (!guildCallables.has(name)) guildCallables.set(name, httpsCallable(guildFunctions, name));
+  return (await guildCallables.get(name)(data)).data;
+};
 const syncAuthorTrainingCriteriaNotifications = httpsCallable(
   functions,
   'syncAuthorTrainingCriteriaNotifications',
@@ -91,6 +98,29 @@ let rewardDemandMap = '';
 let rewardDemandRanking = 'map_pool';
 let rewardDemandCategory = '';
 
+async function ensureGuildRewardMembership(region) {
+  await loadRewardDashboard();
+  if (rewardDashboard?.membership?.status === 'active') return;
+  if (!rewardProgramAccepting(rewardDashboard?.settings)) {
+    throw new Error('Программа VP пока не принимает участников.');
+  }
+  await joinRewardProgram({
+    accepted:true,
+    terms_version:rewardDashboard.settings.terms_version,
+    region,
+  });
+  await loadRewardDashboard();
+}
+
+const guildWebsite = createGuildWebsite({
+  host:document.getElementById('guild-workspace'),
+  call:callGuild,
+  ensureRewardMembership:ensureGuildRewardMembership,
+  openAssignmentDraft:assignment => openGuildAssignmentDraft(assignment),
+  detachAssignmentDraft:assignmentId => detachGuildAssignmentDraft(assignmentId),
+  toast:(...args) => toast(...args),
+});
+
 function rewardStatusLabel(status) {
   return ({pending:'На проверке',approved:'Проверена',ready:'Код готов',revealed:'Код открыт',confirmed:'Завершена',rejected:'Отклонена',canceled:'Отменена'})[status] || status || '—';
 }
@@ -104,7 +134,7 @@ function rewardDate(value) {
 function updateRewardSubmitOptIn() {
   const host = document.getElementById('reward-submit-optin');
   const input = document.getElementById('reward-submit-checkbox');
-  const active = canSubmitForRewards(rewardDashboard);
+  const active = canSubmitForRewards(rewardDashboard) && !guildAssignmentId;
   const moderationActive = !!moderatorDraftSourceId;
   const becomingAvailable = active && !moderatorDraftSourceId && host?.hidden === true;
   if (host) host.hidden = !active;
@@ -2453,7 +2483,7 @@ function safePlay(player) {
 function updateUploadGate() {
   const box = document.getElementById('upload-gate');
   if (!box) return;
-  if (!currentUser || canCurrentUserUpload()) {
+  if (!currentUser || guildAssignmentId || canCurrentUserUpload()) {
     box.style.display = 'none';
     box.textContent = '';
     return;
@@ -2941,6 +2971,10 @@ let myLineupsStatusFilter = 'all';
 let myLineupsSearch = '';
 let resubmissionSourceId = '';
 let moderatorDraftSourceId = '';
+let guildAssignmentId = '';
+let guildDraftLineupId = '';
+let guildAssignmentSnapshot = null;
+let guildAssignmentDeadline = null;
 let moderatorRewardOptIn = false;
 const MODERATOR_EDIT_SESSION_KEY = 'vl_active_moderator_edit_id';
 let moderatorResumeAttempted = false;
@@ -3704,6 +3738,27 @@ function initWorkspaceTabs() {
       toast('Поля сброшены, видео сохранено', 's');
       return;
     }
+    if (guildAssignmentId) {
+      if (!confirm('Очистить заполненную часть заготовки? Само задание и закреплённые поля останутся на месте.')) return;
+      const assignmentDraft = {
+        map:guildAssignmentSnapshot?.map || '',
+        agent:guildAssignmentSnapshot?.agent || '',
+        ability:guildAssignmentSnapshot?.ability || '',
+        category:normalizeContentCategory(guildAssignmentSnapshot?.content_type || guildAssignmentSnapshot?.category || 'lineup'),
+        roundSide:guildAssignmentSnapshot?.round_side || '',
+        title:guildAssignmentSnapshot?.generated_title || guildAssignmentSnapshot?.ability || '',
+        guildAssignmentId,
+        guildDraftLineupId,
+        guildAssignmentSnapshot,
+        guildAssignmentDeadline,
+      };
+      resetUploadForm({ keepDraft:true });
+      _restoreDraft(assignmentDraft);
+      applyGuildAssignmentLock();
+      _saveDraft();
+      toast('Заполненная часть очищена. Задание и его заготовка сохранены.', 's');
+      return;
+    }
     if (!confirm('Полностью очистить форму и удалить несохранённые изменения?')) return;
     cancelResubmissionDraft({ skipConfirm: true, resetOnly: true });
   });
@@ -3729,6 +3784,7 @@ function initWorkspaceTabs() {
       if (activeWorkspaceTab === 'materials') {
         await loadAuthorMaterials({ force: true });
       }
+      if (activeWorkspaceTab === 'guild') await guildWebsite.refresh();
       updateUploadGate();
       renderAuthorWorkspace();
       toast('Кабинет обновлён', 's');
@@ -3873,6 +3929,7 @@ function switchWorkspaceTab(tab) {
   document.getElementById('header-moderation')?.classList.toggle('active', activeWorkspaceTab === 'moderation');
   if (previousTab !== activeWorkspaceTab) activateWorkspaceTab(activeWorkspaceTab);
   if (activeWorkspaceTab === 'materials') loadAuthorMaterials();
+  if (activeWorkspaceTab === 'guild') guildWebsite.open();
   if (activeWorkspaceTab === 'moderation') loadModerationWorkspace();
   if (activeWorkspaceTab === 'admin-chat') openAdminChat();
   if (activeWorkspaceTab === 'notifications') renderSiteNotifications();
@@ -5217,6 +5274,126 @@ function rejectedLineupDraft(item) {
   };
 }
 
+function guildDeadlineDate(value) {
+  const seconds = Number(value?.seconds ?? value?._seconds ?? 0);
+  return seconds ? new Date(seconds * 1000) : null;
+}
+
+function guildDraftFromAssignment(assignment, existing = {}) {
+  const snapshot = assignment.snapshot || {};
+  return {
+    ...existing,
+    map:snapshot.map || existing.map || '',
+    agent:snapshot.agent || existing.agent || '',
+    ability:snapshot.ability || existing.ability || '',
+    category:normalizeContentCategory(snapshot.content_type || snapshot.category || existing.category || 'lineup'),
+    roundSide:snapshot.round_side || existing.roundSide || existing.round_side || '',
+    title:existing.title || snapshot.generated_title || snapshot.ability || '',
+    resubmissionSourceId:'',
+    moderatorDraftSourceId:'',
+    guildAssignmentId:assignment.id,
+    guildDraftLineupId:assignment.draft_lineup_id || '',
+    guildAssignmentSnapshot:snapshot,
+    guildAssignmentDeadline:assignment.status === 'revision_required'
+      ? assignment.revision_deadline_at
+      : assignment.deadline_at,
+    guildRevisionRequired:assignment.status === 'revision_required',
+    guildRevisionCount:Number(assignment.revision_count || 0),
+  };
+}
+
+function clearGuildAssignmentContext() {
+  guildAssignmentId = '';
+  guildDraftLineupId = '';
+  guildAssignmentSnapshot = null;
+  guildAssignmentDeadline = null;
+  applyGuildAssignmentLock();
+  renderGuildAssignmentBanner();
+  updateRewardSubmitOptIn();
+}
+
+function applyGuildAssignmentLock() {
+  const locked = Boolean(guildAssignmentId);
+  ['cat-row', 'agents-grid', 'side-row'].forEach(id => {
+    document.getElementById(id)?.classList.toggle('guild-assignment-locked', locked);
+  });
+  const mapSelect = document.getElementById('sel-map');
+  if (mapSelect) mapSelect.disabled = locked;
+}
+
+function renderGuildAssignmentBanner() {
+  const banner = document.getElementById('guild-assignment-banner');
+  if (!banner) return;
+  banner.hidden = !guildAssignmentId;
+  if (!guildAssignmentId) { banner.innerHTML = ''; return; }
+  const deadline = guildDeadlineDate(guildAssignmentDeadline);
+  const route = [guildAssignmentSnapshot?.start_zone, guildAssignmentSnapshot?.end_zone].filter(Boolean).join(' → ');
+  banner.innerHTML = `<strong>◇ Заготовка задания Гильдии</strong>
+    <span>${esc([guildAssignmentSnapshot?.map, guildAssignmentSnapshot?.agent, guildAssignmentSnapshot?.ability, route].filter(Boolean).join(' · '))}${deadline ? ` · до ${deadline.toLocaleString('ru-RU')}` : ''}</span>
+    <small>Карта, категория, агент, способность и сторона закреплены заданием. Название заполнено автоматически и может быть неточным — его можно уточнить.</small>`;
+}
+
+async function openGuildAssignmentDraft(assignment) {
+  if (!assignment?.id || !assignment?.draft_lineup_id) {
+    toast('У задания нет связанной заготовки. Обнови Гильдию.', 'e');
+    return;
+  }
+  let existing = getSavedDrafts().find(item => item.guildAssignmentId === assignment.id) || {};
+  try {
+    const lineup = await getDoc(doc(db, 'lineups', assignment.draft_lineup_id));
+    if (lineup.exists()) existing = rejectedLineupDraft({ id:lineup.id, ...lineup.data() });
+  } catch (error) {
+    console.warn('guild draft load', error?.message || error);
+  }
+  const draft = guildDraftFromAssignment(assignment, existing);
+  const now = Date.now();
+  const saved = {
+    ...draft,
+    id:`guild_${assignment.id}`,
+    createdAt:Number(existing.createdAt || now),
+    updatedAt:now,
+  };
+  writeSavedDrafts([saved, ...getSavedDrafts().filter(item => item.guildAssignmentId !== assignment.id)]);
+  try {
+    localStorage.setItem(_ACTIVE_DRAFT_ID_KEY, saved.id);
+    localStorage.setItem(_DRAFT_KEY, JSON.stringify(saved));
+  } catch (_) {}
+  resetUploadForm({ keepDraft:true });
+  _restoreDraft(saved);
+  applyGuildAssignmentLock();
+  renderGuildAssignmentBanner();
+  renderDrafts();
+  switchWorkspaceTab('upload');
+  window.scrollTo({ top:0, behavior:'smooth' });
+  toast(assignment.status === 'revision_required' ? 'Доработка открыта. Новый срок — 24 часа.' : 'Заготовка задания открыта в редакторе.', 's');
+}
+
+function detachGuildAssignmentDraft(assignmentId) {
+  const current = guildAssignmentId === assignmentId ? collectDraftData() : null;
+  const drafts = getSavedDrafts();
+  const source = current || drafts.find(item => item.guildAssignmentId === assignmentId);
+  if (source) {
+    const now = Date.now();
+    const detached = { ...source, id:`draft_${now}_guild`, updatedAt:now, guildDetachedFrom:assignmentId };
+    delete detached.guildAssignmentId;
+    delete detached.guildDraftLineupId;
+    delete detached.guildAssignmentSnapshot;
+    delete detached.guildAssignmentDeadline;
+    delete detached.guildRevisionRequired;
+    delete detached.guildRevisionCount;
+    writeSavedDrafts([detached, ...drafts.filter(item => item.guildAssignmentId !== assignmentId)]);
+    if (guildAssignmentId === assignmentId) {
+      try {
+        localStorage.setItem(_ACTIVE_DRAFT_ID_KEY, detached.id);
+        localStorage.setItem(_DRAFT_KEY, JSON.stringify(detached));
+      } catch (_) {}
+    }
+  }
+  if (guildAssignmentId === assignmentId) clearGuildAssignmentContext();
+  renderDrafts();
+  renderAuthorWorkspace();
+}
+
 function categoryExtraDetailHtml(item) {
   const type = normalizeContentCategory(item.content_type || item.category || 'lineup');
   if (type === 'wallbang') {
@@ -5382,6 +5559,8 @@ function renderDrafts() {
           <span class="lineup-chip">На этом устройстве</span>
           ${date ? `<span class="lineup-chip">${esc(date)}</span>` : ''}
           ${draft.resubmissionSourceId ? '<span class="lineup-chip">Доработка отклонённого</span>' : ''}
+          ${draft.guildAssignmentId ? '<span class="lineup-chip" style="border-color:#a77bff;color:#cdbdff">Задание Гильдии</span>' : ''}
+          ${draft.guildDetachedFrom ? '<span class="lineup-chip">Сохранён после возврата задания</span>' : ''}
         </div>
       </div>
       <div class="draft-actions">
@@ -5865,6 +6044,7 @@ onAuthStateChanged(auth, async user => {
     hideSiteLoader();
   } else {
     stopTwitchLiveScan();
+    guildWebsite.reset();
     clearInterval(sitePresenceTimer);
     sitePresenceTimer = null;
     deactivateWorkspaceTab(activeWorkspaceTab);
@@ -11693,6 +11873,10 @@ function collectDraftData() {
     resubmissionSourceId,
     moderatorDraftSourceId,
     moderatorAuthor: moderatorSelectedAuthor,
+    guildAssignmentId,
+    guildDraftLineupId,
+    guildAssignmentSnapshot,
+    guildAssignmentDeadline,
   };
 }
 
@@ -11954,6 +12138,12 @@ function saveCurrentDraftSnapshot() {
     toast('Модераторская проверка сохраняется только обратно в очередь', 'w');
     return;
   }
+  if (guildAssignmentId) {
+    _saveDraft();
+    renderDrafts();
+    toast('Заготовка задания обновлена в «Черновиках»', 's');
+    return;
+  }
   const draft = collectDraftData();
   if (!hasDraftContent(draft)) {
     toast('Черновик пустой', 'w');
@@ -12105,6 +12295,7 @@ function _clearDraft() {
   try { localStorage.removeItem(_ACTIVE_DRAFT_ID_KEY); } catch(_) {}
   resubmissionSourceId = '';
   moderatorDraftSourceId = '';
+  clearGuildAssignmentContext();
   moderatorRewardOptIn = false;
   renderResubmissionBanner();
 }
@@ -12120,12 +12311,17 @@ function _restoreDraft(sourceDraft = null) {
   }
   resubmissionSourceId = d.resubmissionSourceId || '';
   moderatorDraftSourceId = d.moderatorDraftSourceId || '';
+  guildAssignmentId = d.guildAssignmentId || '';
+  guildDraftLineupId = d.guildDraftLineupId || '';
+  guildAssignmentSnapshot = d.guildAssignmentSnapshot || null;
+  guildAssignmentDeadline = d.guildAssignmentDeadline || null;
   moderatorRewardOptIn = d.moderatorRewardOptIn === true;
   moderatorSelectedAuthor = d.moderatorAuthor?.uid ? d.moderatorAuthor : null;
   updateRewardSubmitOptIn();
   sageWallHandlesHidden = d.sageWallHandlesHidden === true;
   showModeratorAuthorPicker(moderatorSelectedAuthor);
   renderResubmissionBanner();
+  renderGuildAssignmentBanner();
 
   // Text fields
   if (d.title) { const el = document.getElementById('inp-title'); if (el) { el.value = d.title; document.getElementById('title-count').textContent = d.title.length; } }
@@ -12341,6 +12537,7 @@ function _restoreDraft(sourceDraft = null) {
   }
 
   validateForm();
+  applyGuildAssignmentLock();
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -12533,7 +12730,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   }
   await loadCurrentUserProfile(currentUser);
   updateUploadGate();
-  if (!canCurrentUserUpload()) {
+  if (!guildAssignmentId && !canCurrentUserUpload()) {
     updateUploadGate();
     toast(uploadGateMessage(), 'w');
     return;
@@ -12583,7 +12780,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         const cooldownMin = cooldownMinutesFor(_approvedLineups);
         rateLimitDiagnostics.minutes_since_last_lineup = Math.floor(diffMin * 10) / 10;
         rateLimitDiagnostics.remaining_minutes = Math.max(0, Math.ceil(cooldownMin - diffMin));
-        if (!moderatorDraftSourceId && cooldownAccessKnown && diffMin < cooldownMin) {
+        if (!moderatorDraftSourceId && !guildAssignmentId && cooldownAccessKnown && diffMin < cooldownMin) {
           toast(`Подожди ещё ${Math.ceil(cooldownMin - diffMin)} мин.`, 'w');
           return;
         }
@@ -12730,7 +12927,9 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       toast('Изменения сохранены. Лайнап возвращён в очередь проверки.', 's');
       return;
     }
-    const lineupRef = doc(collection(db, 'lineups'));
+    const lineupRef = guildDraftLineupId
+      ? doc(db, 'lineups', guildDraftLineupId)
+      : doc(collection(db, 'lineups'));
     lineupId = lineupRef.id;
     submittedPayloadDiagnostics = {
       lineup_id: lineupId,
@@ -12796,16 +12995,22 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       is_outdated:   false,
       likes_count:   0,
       source:        'web',
-      reward_program_opt_in: document.getElementById('reward-submit-checkbox')?.checked === true,
-      ...(document.getElementById('reward-submit-checkbox')?.checked === true ? {
+      reward_program_opt_in: guildAssignmentId ? false : document.getElementById('reward-submit-checkbox')?.checked === true,
+      ...(guildAssignmentId ? {
+        guild_assignment_id:guildAssignmentId,
+        guild_schema_version:1,
+      } : {}),
+      ...(!guildAssignmentId && document.getElementById('reward-submit-checkbox')?.checked === true ? {
         reward_terms_version: rewardDashboard?.settings?.terms_version || '',
       } : {}),
       ...(resubmissionSourceId ? { resubmitted_from: resubmissionSourceId } : {}),
     };
-    batch.set(doc(db, 'rate_limits', uid), {
-      last_lineup_at: serverTimestamp(),
-      last_lineup_id: lineupRef.id,
-    }, { merge: true });
+    if (!guildAssignmentId) {
+      batch.set(doc(db, 'rate_limits', uid), {
+        last_lineup_at: serverTimestamp(),
+        last_lineup_id: lineupRef.id,
+      }, { merge: true });
+    }
     batch.set(doc(db, 'analytics_events', `lineup_submit_${lineupRef.id}`), {
       type: 'lineup_submitted',
       lineup_id: lineupRef.id,
@@ -12818,9 +13023,10 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
       submittedPayloadDiagnostics.removed_undefined_paths = invalidPayloadPaths.slice(0, 25);
     }
     batch.set(lineupRef, withoutUndefined(lineupPayload));
+    const guildSubmission = Boolean(guildAssignmentId);
     await batch.commit();
 
-    showSuccess();
+    showSuccess({ guildSubmission });
   } catch (e) {
     await logUploadError(e, {
       action: moderationLineupId ? 'moderation.complete lineup review' : 'submit_lineup',
@@ -12846,11 +13052,18 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
   }
 });
 
-function showSuccess() {
+function showSuccess({ guildSubmission = false } = {}) {
   deleteActiveSavedDraft();
   _clearDraft();
+  const title = document.querySelector('#success-screen .success-title');
+  const body = document.querySelector('#success-screen .success-sub');
+  if (title) title.textContent = guildSubmission ? 'Задание отправлено!' : 'Лайнап отправлен!';
+  if (body) body.innerHTML = guildSubmission
+    ? 'Срок выполнения зафиксирован.<br>Проверка больше не занимает слот задания.'
+    : 'Он появится после проверки модератором.<br>Спасибо за вклад в базу лайнапов!';
   document.getElementById('success-screen').style.display = 'flex';
-  if (currentUser) _updateCooldown(currentUser.uid);
+  if (guildSubmission) guildWebsite.refresh().catch(error => console.warn('guild refresh', error));
+  else if (currentUser) _updateCooldown(currentUser.uid);
 }
 
 function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
@@ -12860,7 +13073,7 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   if (!keepDraft) moderatorRewardOptIn = false;
   selectedAgent = null; selectedAbility = null;
   const rewardCheckbox = document.getElementById('reward-submit-checkbox');
-  if (rewardCheckbox) rewardCheckbox.checked = canSubmitForRewards(rewardDashboard) && !moderatorDraftSourceId;
+  if (rewardCheckbox) rewardCheckbox.checked = canSubmitForRewards(rewardDashboard) && !moderatorDraftSourceId && !guildAssignmentId;
   sovaCharge = 3; sovaBounces = 0;
   selectedCategory = null; selectedDifficulty = null; selectedRoundSide = null;
   spikeUsage = null; spikeX = spikeY = null;
@@ -12931,6 +13144,7 @@ function resetUploadForm({ keepDraft = false, keepVideo = false } = {}) {
   document.getElementById('btn-submit').disabled = false;
   document.getElementById('btn-submit').textContent = '⬆ Отправить лайнап';
   renderResubmissionBanner();
+  updateRewardSubmitOptIn();
   window.scrollTo(0, 0);
 }
 

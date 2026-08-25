@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/app_icon3.png">
   <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
   <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/styles.css?v=2026-08-25-surgical-v2">
+  <link rel="stylesheet" href="/styles.css?v=2026-08-25-guild-v1">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-08-25-surgical-v2">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-08-25-surgical-v2">
 </head>
@@ -146,12 +146,14 @@
       <button class="workspace-tab active" data-workspace-tab="upload">Загрузить</button>
       <button class="workspace-tab" data-workspace-tab="mine">Мои лайнапы</button>
       <button class="workspace-tab" data-workspace-tab="drafts">Черновики</button>
+      <button class="workspace-tab workspace-tab--guild" data-workspace-tab="guild">◇ Гильдия</button>
     </nav>
   </div>
 
   <div class="workspace-panel active" id="workspace-upload">
   <div class="form-layout">
   <div class="main">
+    <div class="guild-assignment-banner" id="guild-assignment-banner" hidden></div>
     <div class="resubmit-banner" id="resubmit-banner" style="display:none;"></div>
     <div class="section-title">🎯 КАТЕГОРИЯ</div>
     <div class="card">
@@ -929,6 +931,10 @@
     </div>
   </div>
 
+  <div class="workspace-panel" id="workspace-guild">
+    <main class="guild-workspace" id="guild-workspace" aria-live="polite"></main>
+  </div>
+
   <div class="workspace-panel" id="workspace-stats">
     <div class="author-list-shell">
       <div class="section-title">СТАТИСТИКА АВТОРА</div>
@@ -1076,7 +1082,7 @@
 </div>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-08-25-surgical-v2"></script>
+<script type="module" src="/app.js?v=2026-08-25-guild-v1"></script>
 <script defer src="/workspace-redesign.js?v=2026-08-02-map-gallery-sync-v1"></script>
 </body>
 </html>
