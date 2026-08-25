@@ -130,14 +130,22 @@ test('guild submission is linked to one server assignment and cannot join normal
   assert.match(app, /const active = canSubmitForRewards\(rewardDashboard\) && !guildAssignmentId/);
 });
 
-test('saving a Guild assignment draft closes the editor before refreshing draft cards', () => {
+test('saving a Guild assignment draft resets the upload form to an ordinary lineup', () => {
   const branch = app.match(/if \(guildAssignmentId\) \{\s*_saveDraft\(\);[\s\S]*?\n\s*return;\s*\}/)?.[0] || '';
-  assert.match(branch, /switchWorkspaceTab\('guild'\)/);
+  assert.match(branch, /resetUploadForm\(\)/);
+  assert.doesNotMatch(branch, /switchWorkspaceTab\('guild'\)/);
   assert.match(branch, /try \{ renderDrafts\(\); \}/);
   assert.ok(
-    branch.indexOf("switchWorkspaceTab('guild')") < branch.indexOf('renderDrafts()'),
-    'Guild board must open even when rendering an older local draft fails',
+    branch.indexOf('resetUploadForm()') < branch.indexOf('renderDrafts()'),
+    'the Guild context must be cleared before refreshing draft cards',
   );
+});
+
+test('missing plant cells are gold and the selected plant overrides them in cyan', () => {
+  assert.match(css, /\.reward-demand-zones \.missing\{border-color:#b77b18/);
+  const missingRule = css.indexOf('.reward-demand-zones .missing{');
+  const selectedRule = css.indexOf('.reward-demand-zones button.selected{', missingRule);
+  assert.ok(missingRule >= 0 && selectedRule > missingRule, 'selected cyan rule must override the gold missing-zone rule');
 });
 
 test('guild assignment enforces the mandatory template fields before submission', () => {

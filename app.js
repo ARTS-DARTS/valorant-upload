@@ -12373,10 +12373,10 @@ function saveCurrentDraftSnapshot() {
   }
   if (guildAssignmentId) {
     _saveDraft();
-    toast('Задание сохранено: Кабинет автора → Черновики. Возвращаем на доску Гильдии.', 's');
-    // Close the editor first. Draft rendering may depend on older local data;
-    // it must never be able to prevent the visible return to the Guild board.
-    switchWorkspaceTab('guild');
+    // The saved entry keeps its Guild assignment link, but the upload form
+    // must immediately return to a clean, ordinary-lineup state.
+    resetUploadForm();
+    toast('Задание сохранено: Кабинет автора → Черновики. Форма готова для обычного лайнапа.', 's');
     try { renderDrafts(); } catch (error) {
       console.warn('guild draft list refresh', error?.message || error);
     }
