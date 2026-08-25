@@ -49,7 +49,7 @@ import {
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
 import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-guild-v3';
-import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v12';
+import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v13';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -4336,6 +4336,7 @@ let guildUpdateIntroTimer = 0;
 let guildTourIndex = 0;
 let guildTourSteps = [];
 let guildTourPositionFrame = 0;
+let guildTourTransitioning = false;
 
 function guildUpdateIntroKey(uid) {
   return `${GUILD_UPDATE_INTRO_VERSION}:${uid}`;
@@ -4382,6 +4383,8 @@ function closeGuildTour() {
   guildTourIndex = 0;
   if (guildTourPositionFrame) cancelAnimationFrame(guildTourPositionFrame);
   guildTourPositionFrame = 0;
+  guildTourTransitioning = false;
+  tour?.classList.remove('is-switching');
   guildWebsite.stopTraining?.();
 }
 
@@ -4448,6 +4451,27 @@ function renderGuildTourStep() {
   scheduleGuildTourPosition();
   scheduleGuildTourPosition(260);
   next.focus();
+}
+
+async function changeGuildTourStep(nextIndex) {
+  if (guildTourTransitioning) return;
+  const boundedIndex = Math.max(0, Math.min(guildTourSteps.length - 1, nextIndex));
+  if (boundedIndex === guildTourIndex) return;
+  const tour = document.getElementById('guild-tour');
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!tour || reducedMotion) {
+    guildTourIndex = boundedIndex;
+    renderGuildTourStep();
+    return;
+  }
+  guildTourTransitioning = true;
+  tour.classList.add('is-switching');
+  await new Promise(resolve => setTimeout(resolve, 150));
+  guildTourIndex = boundedIndex;
+  renderGuildTourStep();
+  await new Promise(resolve => setTimeout(resolve, 70));
+  tour.classList.remove('is-switching');
+  guildTourTransitioning = false;
 }
 
 async function startGuildTour() {
@@ -4600,16 +4624,15 @@ document.getElementById('guild-update-intro')?.addEventListener('click', event =
   if (action === 'tour') startGuildTour();
 });
 
-document.getElementById('guild-tour')?.addEventListener('click', event => {
+document.getElementById('guild-tour')?.addEventListener('click', async event => {
   const action = event.target.closest('[data-guild-tour]')?.dataset.guildTour;
   if (!action) return;
   if (action === 'close') return closeGuildTour();
-  if (action === 'back') guildTourIndex = Math.max(0, guildTourIndex - 1);
+  if (action === 'back') return changeGuildTourStep(guildTourIndex - 1);
   if (action === 'next') {
     if (guildTourIndex >= guildTourSteps.length - 1) return closeGuildTour();
-    guildTourIndex += 1;
+    return changeGuildTourStep(guildTourIndex + 1);
   }
-  renderGuildTourStep();
 });
 
 window.addEventListener('resize', () => {

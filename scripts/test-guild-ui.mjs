@@ -95,6 +95,13 @@ test('Guild release has a one-time introduction and a replayable contextual tour
   assert.match(css, /@media\(max-width:700px\).*\.guild-tour-card/s);
 });
 
+test('Guild tour fades the current step out before revealing the next one', () => {
+  assert.match(app, /async function changeGuildTourStep\(nextIndex\)/);
+  assert.match(app, /tour\.classList\.add\('is-switching'\)[\s\S]*renderGuildTourStep\(\)[\s\S]*tour\.classList\.remove\('is-switching'\)/);
+  assert.match(css, /\.guild-tour\.is-switching \.guild-tour-card\{opacity:0/);
+  assert.match(css, /prefers-reduced-motion:reduce[^\n]*\.guild-tour-card\{transition:none/);
+});
+
 test('reward-program history is visibly distinguished from new Guild work', () => {
   assert.match(guild, /imported_from_reward_program/);
   assert.match(guild, /ПЕРЕНЕСЕНО ИЗ АКЦИИ VP/);
