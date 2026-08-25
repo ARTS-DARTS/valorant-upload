@@ -130,6 +130,16 @@ test('guild submission is linked to one server assignment and cannot join normal
   assert.match(app, /const active = canSubmitForRewards\(rewardDashboard\) && !guildAssignmentId/);
 });
 
+test('saving a Guild assignment draft closes the editor before refreshing draft cards', () => {
+  const branch = app.match(/if \(guildAssignmentId\) \{\s*_saveDraft\(\);[\s\S]*?\n\s*return;\s*\}/)?.[0] || '';
+  assert.match(branch, /switchWorkspaceTab\('guild'\)/);
+  assert.match(branch, /try \{ renderDrafts\(\); \}/);
+  assert.ok(
+    branch.indexOf("switchWorkspaceTab('guild')") < branch.indexOf('renderDrafts()'),
+    'Guild board must open even when rendering an older local draft fails',
+  );
+});
+
 test('guild assignment enforces the mandatory template fields before submission', () => {
   assert.match(app, /guildAssignmentSnapshot\?\.requirements/);
   assert.match(app, /Загрузи обязательное видео для задания Гильдии/);

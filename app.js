@@ -12373,9 +12373,13 @@ function saveCurrentDraftSnapshot() {
   }
   if (guildAssignmentId) {
     _saveDraft();
-    renderDrafts();
     toast('Задание сохранено: Кабинет автора → Черновики. Возвращаем на доску Гильдии.', 's');
+    // Close the editor first. Draft rendering may depend on older local data;
+    // it must never be able to prevent the visible return to the Guild board.
     switchWorkspaceTab('guild');
+    try { renderDrafts(); } catch (error) {
+      console.warn('guild draft list refresh', error?.message || error);
+    }
     return;
   }
   const draft = collectDraftData();
