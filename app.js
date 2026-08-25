@@ -49,7 +49,7 @@ import {
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
 import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-guild-v3';
-import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v9';
+import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v10';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -211,6 +211,7 @@ function rewardDemandCategoryOf(row) {
   return String(row?.category || 'lineup').trim().toLowerCase();
 }
 function renderRewardDemand(deficits) {
+  return '';
   const categoryLabels = { lineup:'Лайнапы', defense:'Сетапы защиты', combo:'Комбо', wallbang:'Прострелы' };
   const configuredCategories = rewardDashboard?.settings?.content_categories || { lineup:true };
   const openCategories = ['lineup', 'defense', 'combo', 'wallbang'].filter(category => configuredCategories[category] === true);
@@ -5527,6 +5528,12 @@ function applyGuildAssignmentLock() {
   });
   const mapSelect = document.getElementById('sel-map');
   if (mapSelect) mapSelect.disabled = locked;
+  const actionsTitle = document.getElementById('sidebar-actions-title');
+  const submitButton = document.getElementById('btn-submit');
+  const saveButton = document.getElementById('btn-save-draft');
+  if (actionsTitle) actionsTitle.textContent = locked ? 'ДЕЙСТВИЯ С ЗАДАНИЕМ ГИЛЬДИИ' : 'ДЕЙСТВИЯ С ЛАЙНАПОМ';
+  if (submitButton && !submitButton.disabled) submitButton.textContent = locked ? '↑ Отправить задание' : '↑ Отправить лайнап';
+  if (saveButton) saveButton.textContent = locked ? '💾 Сохранить задание в черновики' : '💾 Сохранить черновик';
 }
 
 function renderGuildAssignmentBanner() {
@@ -5694,8 +5701,8 @@ function renderResubmissionBanner() {
     cancelButton.textContent = moderatorDraftSourceId ? '✕ Отменить проверку' : '✕ Отменить редактирование';
   }
   if (rejectButton) rejectButton.hidden = !moderatorDraftSourceId;
-  if (submitButton && !submitButton.disabled) submitButton.textContent = moderatorDraftSourceId ? '✅ Завершить проверку' : '⬆ Отправить лайнап';
-  if (saveDraftButton) saveDraftButton.textContent = moderatorDraftSourceId ? '💾 Сохранить без подтверждения' : '💾 Сохранить черновик';
+  if (submitButton && !submitButton.disabled) submitButton.textContent = moderatorDraftSourceId ? '✅ Завершить проверку' : guildAssignmentId ? '↑ Отправить задание' : '↑ Отправить лайнап';
+  if (saveDraftButton) saveDraftButton.textContent = moderatorDraftSourceId ? '💾 Сохранить без подтверждения' : guildAssignmentId ? '💾 Сохранить задание в черновики' : '💾 Сохранить черновик';
   if (!banner) return;
   if (!resubmissionSourceId && !moderatorDraftSourceId) {
     banner.style.display = 'none';
@@ -12367,7 +12374,8 @@ function saveCurrentDraftSnapshot() {
   if (guildAssignmentId) {
     _saveDraft();
     renderDrafts();
-    toast('Заготовка задания обновлена в «Черновиках»', 's');
+    toast('Задание сохранено: Кабинет автора → Черновики. Возвращаем на доску Гильдии.', 's');
+    switchWorkspaceTab('guild');
     return;
   }
   const draft = collectDraftData();

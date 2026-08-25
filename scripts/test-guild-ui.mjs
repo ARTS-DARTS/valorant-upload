@@ -41,9 +41,21 @@ test('Guild demand selection is explicit, stable and case-insensitive', () => {
   assert.match(guild, /const key = guildKey\(label\)/);
   assert.match(guild, /data-guild-select-zone/);
   assert.match(guild, /disabled>Выбери плент<\/button>/);
-  assert.match(guild, /confirm\(`Взять задание на плент \$\{plant\}\?/);
+  assert.match(guild, /confirmAction\(\{[\s\S]*?title:`Взять задание на плент \$\{plant\}\?/);
   assert.match(guild, /function demandScrollState\(\)/);
   assert.match(guild, /restoreDemandScroll\(scrollState\)/);
+});
+
+test('Guild loading, assignment actions and rewards UI are separated safely', () => {
+  assert.match(guild, /if \(loading && loadPromise\) return loadPromise/);
+  assert.match(guild, /modal\.className = 'guild-confirm'/);
+  assert.doesNotMatch(guild, /confirm\(`Взять задание/);
+  assert.match(guild, /guild-button--abandon/);
+  assert.match(guild, /guild-demand-rewards/);
+  assert.match(guild, /globalDeficitCount/);
+  assert.match(app, /function renderRewardDemand\(deficits\) \{\s*return '';/);
+  assert.match(app, /ДЕЙСТВИЯ С ЗАДАНИЕМ ГИЛЬДИИ/);
+  assert.match(app, /switchWorkspaceTab\('guild'\)/);
 });
 
 test('Guild guide uses an isolated fake assignment and closes it safely', () => {

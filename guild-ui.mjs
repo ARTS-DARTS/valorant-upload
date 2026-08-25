@@ -161,11 +161,12 @@ function guildDemandTask(row, quests, abilityIcon, rewards, selectedChoice) {
     data-guild-demand-ability="${esc(row.ability)}" data-guild-demand-side="${esc(guildSide(row.side || row.round_side))}"
     data-guild-demand-zone="${esc(selected.zone)}">Взять · ${esc(zoneLabel(selected.zone))}</button>`
     : selectable.length ? '<button class="guild-demand-take" type="button" disabled>Выбери плент</button>' : '';
-  return `<article class="guild-demand-ability reward-demand-ability${missing.length ? ' urgent' : ''}${allClaimed ? ' claimed' : ''}">
+  const hasBonus = Number(rewards.bonus_vp || 0) > 0;
+  return `<article class="guild-demand-ability reward-demand-ability${hasBonus ? ' bonus' : ''}${selected ? ' selected' : ''}${allClaimed ? ' claimed' : ''}">
     <span class="guild-demand-ability-icon reward-demand-ability-icon">${icon ? `<img src="${esc(icon)}" alt="">` : '✦'}</span>
     <span class="guild-demand-count reward-demand-count">${Number(row.count || 0)}</span>
     <div class="guild-demand-copy"><strong>${esc(row.ability || 'Способность')}</strong><small>${esc(guildSide(row.side || row.round_side))}</small><div class="guild-demand-zones reward-demand-zones">${chips}</div></div>
-    <div class="guild-demand-result"><b>${status}</b><small>${rewards.vp} VP · ${rewards.xp} Guild XP</small></div>${take}
+    <div class="guild-demand-result"><b>${status}</b><span class="guild-demand-rewards"><strong>${rewards.vp} VP</strong><em>${rewards.xp} Guild XP</em>${hasBonus ? '<i>МАКС. НАГРАДА</i>' : ''}</span></div>${take}
   </article>`;
 }
 
@@ -218,7 +219,7 @@ function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selecte
     if (!rows.length) return '';
     const zoneCounts = rows.flatMap(row => Object.values(guildCoverageFor(demand, row)));
     const filled = zoneCounts.filter(count => Number(count) > 0).length;
-    const rewards = { vp:Number(settings?.algorithm_reward_vp || 0) + Number(settings?.algorithm_bonus_vp || 0), xp:Number(settings?.algorithm_guild_xp || 0) };
+    const rewards = { vp:Number(settings?.algorithm_reward_vp || 0) + Number(settings?.algorithm_bonus_vp || 0), bonus_vp:Number(settings?.algorithm_bonus_vp || 0), xp:Number(settings?.algorithm_guild_xp || 0) };
     return `<section class="guild-demand-side guild-demand-side--${group.key}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${filled}/${zoneCounts.length}</b></header><div>${rows.map(row => guildDemandTask(row, quests, abilityIcon, rewards, selectedChoice)).join('')}</div></section>`;
   }).join('');
   const manual = quests.filter(quest => quest.source === 'guildmaster');
@@ -226,6 +227,7 @@ function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selecte
     selectedAgent:activeAgent,
     selectedMap:activeMap,
     deficitCount:mapRows.filter(row => row.deficit === true).length,
+    globalDeficitCount:guildDemandRows(demand?.global).filter(row => row.deficit === true).length,
     html: mapRows.length ? `<div class="guild-demand-board">
       <p class="guild-demand-note">Порядок учитывает дефицит агента и способности на каждой карте.</p>
       <section class="guild-demand-stage"><label>1 · АГЕНТ · ПО ПРИОРИТЕТУ И ПОДПИСКАМ</label><div class="guild-demand-agents">${agentButtons}</div></section>
@@ -249,7 +251,7 @@ function assignmentRow(item) {
   return `<article class="guild-assignment-row guild-assignment-row--${esc(item.status)}${imported ? ' guild-assignment-row--imported' : ''}">
     <div><span>${imported ? 'ПЕРЕНЕСЕНО ИЗ АКЦИИ VP' : esc(statusCopy(item.status))}</span><strong>${esc(item.snapshot?.generated_title || item.snapshot?.ability || 'Задание')}</strong><small>${[item.snapshot?.map, item.snapshot?.agent, item.snapshot?.ability].filter(Boolean).map(esc).join(' · ')}</small></div>
     <div class="guild-assignment-result"><b>${penalty ? `−${penalty} VP` : item.status === 'hot_awarded' ? `+${Number(item.awarded_vp || reward)} VP` : `${reward} VP`}</b>${resultNote ? `<small>${esc(resultNote)}</small>` : ''}</div>
-    ${canOpen ? `<button class="guild-button guild-button--open" type="button" data-guild-action="open" data-assignment-id="${esc(item.id)}">Продолжить</button>` : ''}
+    ${canOpen ? `<div class="guild-assignment-actions"><button class="guild-button guild-button--open" type="button" data-guild-action="open" data-assignment-id="${esc(item.id)}">Продолжить</button><button class="guild-button guild-button--abandon" type="button" data-guild-action="abandon" data-assignment-id="${esc(item.id)}">Отказаться</button></div>` : ''}
     ${penalty && !item.appeal_status ? `<button class="guild-button guild-button--quiet" type="button" data-guild-action="appeal" data-assignment-id="${esc(item.id)}">Оспорить штраф</button>` : ''}
   </article>`;
 }
@@ -289,10 +291,26 @@ export function createGuildWebsite({
   let entry = null;
   let dashboard = null;
   let loading = false;
+  let loadPromise = null;
   let selectedAgent = '';
   let selectedMap = '';
   let selectedDemandChoice = null;
   let trainingStage = '';
+
+  function confirmAction({ title, body, confirmLabel = 'Подтвердить', danger = false }) {
+    return new Promise(resolve => {
+      const modal = document.createElement('div');
+      modal.className = 'guild-confirm';
+      modal.innerHTML = `<section role="alertdialog" aria-modal="true" aria-labelledby="guild-confirm-title"><span class="guild-confirm-mark">◇</span><h2 id="guild-confirm-title">${esc(title)}</h2><p>${esc(body)}</p><footer><button type="button" data-answer="cancel">Отмена</button><button class="${danger ? 'danger' : 'primary'}" type="button" data-answer="confirm">${esc(confirmLabel)}</button></footer></section>`;
+      const close = answer => { modal.remove(); resolve(answer); };
+      modal.addEventListener('click', event => {
+        const answer = event.target.closest('[data-answer]')?.dataset.answer;
+        if (answer) close(answer === 'confirm'); else if (event.target === modal) close(false);
+      });
+      document.body.append(modal);
+      modal.querySelector('[data-answer="confirm"]')?.focus();
+    });
+  }
 
   function demandScrollState() {
     return {
@@ -363,10 +381,10 @@ export function createGuildWebsite({
         <div class="guild-slots"><span>СЛОТЫ ЗАДАНИЙ</span><strong>${Number(profile.active_assignment_count || 0)}<i>/</i>${Number(profile.quest_limit || 5)}</strong><small>Чем выше уровень, тем больше лимит</small></div>
         <div class="guild-vp"><span>ДОСТУПНО</span><strong>${Number(dashboard.balance?.available_vp || 0)} VP</strong><div class="guild-vp-actions"><button class="guild-vp-exchange" type="button" data-guild-action="exchange">Обменять</button><button class="guild-vp-privacy" type="button" data-guild-action="privacy">${profile.hide_public_nickname ? 'Показать ник' : 'Скрыть ник'}</button></div></div>
       </header>
-      <section class="guild-legend" aria-label="Обозначения заданий"><b>Метки</b><span class="available">Свободно</span><span class="bonus">Активный бонус</span><span class="claimed">Взято авантюристом</span><span class="review">Проверяется</span><span class="revision">Нужна доработка</span><span class="fulfilled">Пирожки / награда выдана</span></section>
+      <section class="guild-legend" aria-label="Обозначения заданий"><b>Метки</b><span class="available">Обычное · без обводки</span><span class="selected">Выбрано вами · синяя</span><span class="bonus">Активный бонус · макс. награда · золотая</span><span class="claimed">Взято авантюристом · фиолетовая</span><span class="review">Проверяется</span><span class="revision">Нужна доработка</span><span class="fulfilled">Пирожки / награда выдана</span></section>
       ${trainingPanel()}
       ${active.length ? `<section class="guild-active"><div class="guild-section-head"><div><span>МОЯ РАБОТА</span><h2>Текущие задания</h2></div><b>${active.filter(item => ['active','revision_required'].includes(item.status)).length} занимают слот</b></div><div class="guild-assignment-list">${active.map(assignmentRow).join('')}</div></section>` : ''}
-      <section class="guild-quests"><div class="guild-section-head"><div><span>ДОСКА ГИЛЬДИИ</span><h2>Задания алгоритма</h2></div><div class="guild-section-head-actions"><b>${demandBoard.deficitCount} активных дефицитов</b><button type="button" data-guild-action="tour">Как это работает?</button></div></div>
+      <section class="guild-quests"><div class="guild-section-head"><div><span>ДОСКА ГИЛЬДИИ</span><h2>Задания алгоритма</h2></div><div class="guild-section-head-actions"><div class="guild-demand-totals"><span><small>МАППУЛ</small><b>${demandBoard.deficitCount}</b></span><span><small>ОБЩЕЕ</small><b>${demandBoard.globalDeficitCount}</b></span></div><button type="button" data-guild-action="tour">Как это работает?</button></div></div>
         ${demandBoard.html}</section>
       <section class="guild-history"><div class="guild-section-head"><div><span>ЛИЧНЫЙ ЖУРНАЛ</span><h2>История и награды</h2></div></div><div class="guild-assignment-list guild-assignment-list--history" data-visible-guild-history-rows="7">${history.map(assignmentRow).join('') || '<div class="guild-empty"><strong>История начнётся с первого задания</strong><span>Здесь появятся принятые работы, начисления, отказы и просрочки.</span></div>'}</div></section>
     </div>`;
@@ -400,9 +418,10 @@ export function createGuildWebsite({
   }
 
   async function load({ force = false } = {}) {
-    if (loading || (!force && (dashboard || entry))) return;
+    if (loading && loadPromise) return loadPromise;
+    if (!force && (dashboard || entry)) return dashboard || entry;
     loading = true; render();
-    try {
+    loadPromise = (async () => { try {
       entry = await call('getGuildEntry');
       dashboard = entry.member?.permanent ? await call('getGuildDashboard') : null;
       if (dashboard) preserveReturnedDrafts(dashboard.assignments);
@@ -411,7 +430,10 @@ export function createGuildWebsite({
     } finally {
       loading = false;
       if (host.querySelector('.guild-loading')) render();
+      loadPromise = null;
     }
+    return dashboard || entry; })();
+    return loadPromise;
   }
 
   async function openTrackedDraft(assignment) {
@@ -430,8 +452,11 @@ export function createGuildWebsite({
       if (assignment) await openTrackedDraft(assignment);
       return;
     }
-    if (action === 'abandon'
-      && !confirm('Вернуть задание в Гильдию? Черновик останется в «Кабинет автора → Черновики».')) return;
+    if (action === 'abandon' && !(await confirmAction({
+      title:'Отказаться от задания?',
+      body:'Черновик сохранится в разделе «Черновики». В первые 5 минут отказ бесплатный, позже применяется правило −1 VP. Баланс не уходит ниже нуля.',
+      confirmLabel:'Отказаться', danger:true,
+    }))) return;
     let appealReason = '';
     if (action === 'appeal') {
       appealReason = prompt('Объясни, почему штраф нужно пересмотреть. Минимум 10 символов.')?.trim() || '';
@@ -455,7 +480,11 @@ export function createGuildWebsite({
       if (action === 'take-demand') {
         const plant = String(button.dataset.guildDemandZone || '').toUpperCase();
         if (!plant) throw new Error('Сначала выбери плент A, B, C или MID.');
-        if (!confirm(`Взять задание на плент ${plant}? После подтверждения оно займёт слот Гильдии.`)) {
+        if (!(await confirmAction({
+          title:`Взять задание на плент ${plant}?`,
+          body:`${button.dataset.guildDemandMap} · ${button.dataset.guildDemandAgent} · ${button.dataset.guildDemandAbility}. Награда фиксируется сейчас, задание займёт слот Гильдии.`,
+          confirmLabel:`Взять · ${plant}`,
+        }))) {
           loading = false;
           button.disabled = false;
           return;
