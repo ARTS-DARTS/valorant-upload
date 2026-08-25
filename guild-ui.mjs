@@ -87,6 +87,16 @@ function guildDemandRows(value) {
   return Object.entries(value || {}).map(([key, row]) => ({ key, ...(row || {}) }));
 }
 
+function guildUniqueLabels(values) {
+  const labels = new Map();
+  for (const value of values) {
+    const label = String(value || '').trim();
+    const key = guildKey(label);
+    if (key && !labels.has(key)) labels.set(key, label);
+  }
+  return [...labels.values()];
+}
+
 function guildDemandScore(row = {}) {
   return Math.max(0, Number(row.priority_score || 0));
 }
@@ -111,26 +121,46 @@ function guildQuestForZone(quests, row, zone) {
     && guildKey(quest.end_zone) === guildKey(zone));
 }
 
-function guildDemandTask(row, quests, abilityIcon, rewards) {
+function guildChoiceMatches(choice, row, zone = '') {
+  return Boolean(choice)
+    && guildKey(choice.map) === guildKey(row.map)
+    && guildKey(choice.agent) === guildKey(row.agent)
+    && guildKey(choice.ability) === guildKey(row.ability)
+    && guildSide(choice.side) === guildSide(row.side || row.round_side)
+    && (!zone || guildKey(choice.zone) === guildKey(zone));
+}
+
+function guildDemandTask(row, quests, abilityIcon, rewards, selectedChoice) {
   const coverage = guildCoverageFor(row.demand, row);
   const zones = Object.entries(coverage);
   const missing = zones.filter(([, count]) => count <= 0).map(([zone]) => zone);
   const zoneStates = missing.map(zone => ({ zone, quest:guildQuestForZone(quests, row, zone) }));
-  const available = zoneStates.find(item => !item.quest || item.quest.status === 'available');
-  const allClaimed = missing.length > 0 && !available;
+  const selectable = zoneStates.filter(item => !item.quest || item.quest.status === 'available');
+  const selected = selectable.find(item => guildChoiceMatches(selectedChoice, row, item.zone));
+  const allClaimed = missing.length > 0 && !selectable.length;
   const icon = abilityIcon(row.agent, row.ability);
-  const status = missing.length
-    ? (allClaimed ? 'ВЗЯТО АВАНТЮРИСТОМ' : `НУЖНЫ · ${missing.map(zone => zone === 'mid' ? 'MID' : zone.toUpperCase()).join(' / ')}`)
+  const zoneLabel = zone => zone === 'mid' ? 'MID' : zone.toUpperCase();
+  const status = selected
+    ? `ВЫБРАН ПЛЕНТ · ${zoneLabel(selected.zone)}`
+    : missing.length
+      ? (allClaimed ? 'ВЗЯТО АВАНТЮРИСТОМ' : `НУЖНЫ · ${missing.map(zoneLabel).join(' / ')}`)
     : 'ВСЕ ЗОНЫ ЕСТЬ';
   const chips = zones.map(([zone, count]) => {
     const quest = guildQuestForZone(quests, row, zone);
     const state = count > 0 ? 'filled' : quest && quest.status !== 'available' ? 'claimed' : 'missing';
-    return `<span class="${state}"><em>${zone === 'mid' ? 'MID' : zone.toUpperCase()}</em><b>${Number(count || 0)}</b></span>`;
+    const contents = `<em>${zoneLabel(zone)}</em><b>${Number(count || 0)}</b>`;
+    if (state !== 'missing') return `<span class="${state}">${contents}</span>`;
+    const isSelected = guildChoiceMatches(selectedChoice, row, zone);
+    return `<button class="missing${isSelected ? ' selected' : ''}" type="button" data-guild-select-zone
+      data-guild-demand-map="${esc(row.map)}" data-guild-demand-agent="${esc(row.agent)}"
+      data-guild-demand-ability="${esc(row.ability)}" data-guild-demand-side="${esc(guildSide(row.side || row.round_side))}"
+      data-guild-demand-zone="${esc(zone)}" aria-pressed="${isSelected}" title="Выбрать плент ${esc(zoneLabel(zone))}">${contents}</button>`;
   }).join('');
-  const take = available ? `<button class="guild-demand-take" type="button" data-guild-action="take-demand"
+  const take = selected ? `<button class="guild-demand-take" type="button" data-guild-action="take-demand"
     data-guild-demand-map="${esc(row.map)}" data-guild-demand-agent="${esc(row.agent)}"
     data-guild-demand-ability="${esc(row.ability)}" data-guild-demand-side="${esc(guildSide(row.side || row.round_side))}"
-    data-guild-demand-zone="${esc(available.zone)}">Взять</button>` : '';
+    data-guild-demand-zone="${esc(selected.zone)}">Взять · ${esc(zoneLabel(selected.zone))}</button>`
+    : selectable.length ? '<button class="guild-demand-take" type="button" disabled>Выбери плент</button>' : '';
   return `<article class="guild-demand-ability reward-demand-ability${missing.length ? ' urgent' : ''}${allClaimed ? ' claimed' : ''}">
     <span class="guild-demand-ability-icon reward-demand-ability-icon">${icon ? `<img src="${esc(icon)}" alt="">` : '✦'}</span>
     <span class="guild-demand-count reward-demand-count">${Number(row.count || 0)}</span>
@@ -139,11 +169,10 @@ function guildDemandTask(row, quests, abilityIcon, rewards) {
   </article>`;
 }
 
-function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selectedAgent, selectedMap, agentIcon, abilityIcon }) {
+function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selectedAgent, selectedMap, selectedChoice, agentIcon, abilityIcon }) {
   const mapRows = guildDemandRows(demand?.map_pool).filter(row => guildKey(row.category || row.content_type || 'lineup') === 'lineup'
     && row.map && row.agent && row.ability);
   const subscribers = demand?.agent_notification_subscribers || {};
-  const unique = values => [...new Set(values.filter(Boolean))];
   const rowsForAgent = agent => mapRows.filter(row => guildKey(row.agent) === guildKey(agent));
   const agentPriority = agent => {
     const rows = rowsForAgent(agent);
@@ -154,7 +183,7 @@ function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selecte
       minCount:rows.length ? Math.min(...rows.map(row => Number(row.count || 0))) : 9999,
     };
   };
-  const agents = unique(mapRows.map(row => String(row.agent || '').trim())).sort((a, b) => {
+  const agents = guildUniqueLabels(mapRows.map(row => row.agent)).sort((a, b) => {
     const ap = agentPriority(a); const bp = agentPriority(b);
     return bp.score - ap.score || bp.subscribers - ap.subscribers || bp.deficitCount - ap.deficitCount
       || ap.minCount - bp.minCount || a.localeCompare(b, 'ru');
@@ -169,7 +198,7 @@ function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selecte
       minCount:rows.length ? Math.min(...rows.map(row => Number(row.count || 0))) : 9999,
     };
   };
-  const maps = unique([...(demand?.active_map_pool || []), ...agentRows.map(row => String(row.map || '').trim())]).sort((a, b) => {
+  const maps = guildUniqueLabels([...agentRows.map(row => row.map), ...(demand?.active_map_pool || [])]).sort((a, b) => {
     const ap = mapPriority(a); const bp = mapPriority(b);
     return bp.score - ap.score || bp.deficitCount - ap.deficitCount || ap.minCount - bp.minCount || a.localeCompare(b, 'ru');
   });
@@ -190,7 +219,7 @@ function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selecte
     const zoneCounts = rows.flatMap(row => Object.values(guildCoverageFor(demand, row)));
     const filled = zoneCounts.filter(count => Number(count) > 0).length;
     const rewards = { vp:Number(settings?.algorithm_reward_vp || 0) + Number(settings?.algorithm_bonus_vp || 0), xp:Number(settings?.algorithm_guild_xp || 0) };
-    return `<section class="guild-demand-side guild-demand-side--${group.key}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${filled}/${zoneCounts.length}</b></header><div>${rows.map(row => guildDemandTask(row, quests, abilityIcon, rewards)).join('')}</div></section>`;
+    return `<section class="guild-demand-side guild-demand-side--${group.key}"><header><span>${group.icon}</span><strong>${group.label}</strong><b>${filled}/${zoneCounts.length}</b></header><div>${rows.map(row => guildDemandTask(row, quests, abilityIcon, rewards, selectedChoice)).join('')}</div></section>`;
   }).join('');
   const manual = quests.filter(quest => quest.source === 'guildmaster');
   return {
@@ -262,6 +291,39 @@ export function createGuildWebsite({
   let loading = false;
   let selectedAgent = '';
   let selectedMap = '';
+  let selectedDemandChoice = null;
+  let trainingStage = '';
+
+  function demandScrollState() {
+    return {
+      agents:host.querySelector('.guild-demand-agents')?.scrollLeft || 0,
+      maps:host.querySelector('.guild-demand-maps')?.scrollLeft || 0,
+    };
+  }
+
+  function restoreDemandScroll(state) {
+    if (!state) return;
+    requestAnimationFrame(() => {
+      const agents = host.querySelector('.guild-demand-agents');
+      const maps = host.querySelector('.guild-demand-maps');
+      if (agents) agents.scrollLeft = state.agents;
+      if (maps) maps.scrollLeft = state.maps;
+    });
+  }
+
+  function trainingPanel() {
+    if (!trainingStage) return '';
+    if (trainingStage === 'canceled') return `<section class="guild-training guild-training--safe">
+      <div class="guild-training-safe"><span>✓</span><div><b>Тестовое задание закрыто</b><small>Слот, VP, история и настоящие задания не изменились.</small></div></div>
+    </section>`;
+    const selected = ['zone', 'taken'].includes(trainingStage);
+    const taken = trainingStage === 'taken';
+    return `<section class="guild-training${taken ? ' guild-training--taken' : ''}">
+      <header><div><span>БЕЗОПАСНОЕ ОБУЧЕНИЕ</span><h2>Тестовое задание</h2></div><b>VP и слот не затрагиваются</b></header>
+      ${taken ? `<article class="guild-training-assignment"><div><span>ТЕСТ · ВЫПОЛНЯЕТСЯ</span><strong>Змеиный укус · плент A</strong><small>Split · Viper · атака</small></div><button class="guild-training-cancel" type="button" data-guild-action="cancel-training">Отменить тестовое</button></article>`
+        : `<div class="guild-training-flow"><button class="guild-training-agent selected" type="button" tabindex="-1"><span>1</span><b>Viper</b></button><i>→</i><button class="guild-training-map selected" type="button" tabindex="-1"><span>2</span><b>Split</b></button><i>→</i><article class="guild-training-card"><div><strong>Змеиный укус</strong><small>Сначала выбери нужный плент</small></div><div class="guild-training-zones"><button class="guild-training-zone${selected ? ' selected' : ''}" type="button" tabindex="-1">A</button><button type="button" tabindex="-1">B</button><button type="button" tabindex="-1">MID</button></div><button class="guild-training-take" type="button" tabindex="-1" ${selected ? '' : 'disabled'}>${selected ? 'Взять · A' : 'Выбери плент'}</button></article></div>`}
+    </section>`;
+  }
 
   function renderEntry() {
     const settings = entry?.settings || {};
@@ -282,7 +344,7 @@ export function createGuildWebsite({
     </section>`;
   }
 
-  function renderDashboard() {
+  function renderDashboard(scrollState = null) {
     const profile = dashboard.profile || {};
     const assignments = dashboard.assignments || [];
     const assignmentByQuest = new Map(assignments.map(item => [item.quest_id, item]));
@@ -290,7 +352,7 @@ export function createGuildWebsite({
     const history = assignments.filter(item => !active.includes(item));
     const demandBoard = guildDemandBoard({
       quests:dashboard.quests || [], demand:dashboard.demand || {}, settings:dashboard.settings || {}, assignmentByQuest,
-      selectedAgent, selectedMap, agentIcon, abilityIcon,
+      selectedAgent, selectedMap, selectedChoice:selectedDemandChoice, agentIcon, abilityIcon,
     });
     selectedAgent = demandBoard.selectedAgent;
     selectedMap = demandBoard.selectedMap;
@@ -302,12 +364,14 @@ export function createGuildWebsite({
         <div class="guild-vp"><span>ДОСТУПНО</span><strong>${Number(dashboard.balance?.available_vp || 0)} VP</strong><div class="guild-vp-actions"><button class="guild-vp-exchange" type="button" data-guild-action="exchange">Обменять</button><button class="guild-vp-privacy" type="button" data-guild-action="privacy">${profile.hide_public_nickname ? 'Показать ник' : 'Скрыть ник'}</button></div></div>
       </header>
       <section class="guild-legend" aria-label="Обозначения заданий"><b>Метки</b><span class="available">Свободно</span><span class="bonus">Активный бонус</span><span class="claimed">Взято авантюристом</span><span class="review">Проверяется</span><span class="revision">Нужна доработка</span><span class="fulfilled">Пирожки / награда выдана</span></section>
+      ${trainingPanel()}
       ${active.length ? `<section class="guild-active"><div class="guild-section-head"><div><span>МОЯ РАБОТА</span><h2>Текущие задания</h2></div><b>${active.filter(item => ['active','revision_required'].includes(item.status)).length} занимают слот</b></div><div class="guild-assignment-list">${active.map(assignmentRow).join('')}</div></section>` : ''}
       <section class="guild-quests"><div class="guild-section-head"><div><span>ДОСКА ГИЛЬДИИ</span><h2>Задания алгоритма</h2></div><div class="guild-section-head-actions"><b>${demandBoard.deficitCount} активных дефицитов</b><button type="button" data-guild-action="tour">Как это работает?</button></div></div>
         ${demandBoard.html}</section>
       <section class="guild-history"><div class="guild-section-head"><div><span>ЛИЧНЫЙ ЖУРНАЛ</span><h2>История и награды</h2></div></div><div class="guild-assignment-list guild-assignment-list--history" data-visible-guild-history-rows="7">${history.map(assignmentRow).join('') || '<div class="guild-empty"><strong>История начнётся с первого задания</strong><span>Здесь появятся принятые работы, начисления, отказы и просрочки.</span></div>'}</div></section>
     </div>`;
     sizeGuildHistory(host);
+    restoreDemandScroll(scrollState);
   }
 
   function render() {
@@ -388,6 +452,16 @@ export function createGuildWebsite({
         await call('joinGuild', { accepted:true, terms_version:entry.settings.terms_version });
         toast('Статус авантюриста присвоен', 's');
       }
+      if (action === 'take-demand') {
+        const plant = String(button.dataset.guildDemandZone || '').toUpperCase();
+        if (!plant) throw new Error('Сначала выбери плент A, B, C или MID.');
+        if (!confirm(`Взять задание на плент ${plant}? После подтверждения оно займёт слот Гильдии.`)) {
+          loading = false;
+          button.disabled = false;
+          return;
+        }
+        button.textContent = 'Закрепляем…';
+      }
       if (action === 'take' || action === 'take-demand') {
         let questId = button.dataset.questId || '';
         if (action === 'take-demand') {
@@ -430,20 +504,40 @@ export function createGuildWebsite({
   }
 
   host.addEventListener('click', event => {
+    const zone = event.target.closest('[data-guild-select-zone]');
+    if (zone) {
+      const scrollState = demandScrollState();
+      selectedDemandChoice = {
+        map:zone.dataset.guildDemandMap, agent:zone.dataset.guildDemandAgent,
+        ability:zone.dataset.guildDemandAbility, side:zone.dataset.guildDemandSide,
+        zone:zone.dataset.guildDemandZone,
+      };
+      renderDashboard(scrollState);
+      return;
+    }
     const agent = event.target.closest('[data-guild-filter-agent]');
     if (agent) {
+      const scrollState = demandScrollState();
       selectedAgent = agent.dataset.guildFilterAgent || '';
       selectedMap = '';
-      renderDashboard();
+      selectedDemandChoice = null;
+      renderDashboard(scrollState);
       return;
     }
     const map = event.target.closest('[data-guild-filter-map]');
     if (map) {
+      const scrollState = demandScrollState();
       selectedMap = map.dataset.guildFilterMap || '';
-      renderDashboard();
+      selectedDemandChoice = null;
+      renderDashboard(scrollState);
       return;
     }
     const button = event.target.closest('[data-guild-action]');
+    if (button?.dataset.guildAction === 'cancel-training') {
+      trainingStage = 'canceled';
+      renderDashboard(demandScrollState());
+      return;
+    }
     if (button) act(button);
   });
 
@@ -470,6 +564,23 @@ export function createGuildWebsite({
 
   return {
     open:options => load(options),
+    startTraining() {
+      if (!dashboard) return false;
+      trainingStage = 'browse';
+      renderDashboard(demandScrollState());
+      return true;
+    },
+    setTrainingStage(stage) {
+      if (!dashboard || !['browse', 'zone', 'taken', 'canceled'].includes(stage)) return false;
+      trainingStage = stage;
+      renderDashboard(demandScrollState());
+      return true;
+    },
+    stopTraining() {
+      if (!trainingStage) return;
+      trainingStage = '';
+      renderDashboard(demandScrollState());
+    },
     async openAssignment(assignmentId) {
       await load({ force:true });
       const assignment = dashboard?.assignments?.find(item => item.id === assignmentId);
@@ -478,7 +589,7 @@ export function createGuildWebsite({
       }
       await openTrackedDraft(assignment);
     },
-    reset() { entry = null; dashboard = null; loading = false; selectedAgent = ''; selectedMap = ''; host.innerHTML = ''; },
+    reset() { entry = null; dashboard = null; loading = false; selectedAgent = ''; selectedMap = ''; selectedDemandChoice = null; trainingStage = ''; host.innerHTML = ''; },
     refresh() { entry = null; dashboard = null; return load({ force:true }); },
   };
 }

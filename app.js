@@ -49,7 +49,7 @@ import {
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
 import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-guild-v3';
-import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v8';
+import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v9';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -4330,7 +4330,7 @@ async function enableBrowserPush() {
   toast('Push об обновлениях сайта включены', 's');
 }
 
-const GUILD_UPDATE_INTRO_VERSION = 'guild-release-2026-08-v1';
+const GUILD_UPDATE_INTRO_VERSION = 'guild-release-2026-08-v2';
 let guildUpdateIntroTimer = 0;
 let guildTourIndex = 0;
 let guildTourSteps = [];
@@ -4381,6 +4381,7 @@ function closeGuildTour() {
   guildTourIndex = 0;
   if (guildTourPositionFrame) cancelAnimationFrame(guildTourPositionFrame);
   guildTourPositionFrame = 0;
+  guildWebsite.stopTraining?.();
 }
 
 function positionGuildTour() {
@@ -4428,6 +4429,7 @@ function renderGuildTourStep() {
   const tour = document.getElementById('guild-tour');
   const step = guildTourSteps[guildTourIndex];
   if (!tour || !step) return closeGuildTour();
+  if (step.trainingStage) guildWebsite.setTrainingStage?.(step.trainingStage);
   const target = document.querySelector(step.selector);
   if (!target) {
     guildTourIndex += 1;
@@ -4440,7 +4442,7 @@ function renderGuildTourStep() {
   const back = tour.querySelector('[data-guild-tour="back"]');
   const next = tour.querySelector('[data-guild-tour="next"]');
   back.hidden = guildTourIndex === 0;
-  next.textContent = guildTourIndex === guildTourSteps.length - 1 ? 'Готово' : 'Далее';
+  next.textContent = step.nextLabel || (guildTourIndex === guildTourSteps.length - 1 ? 'Готово' : 'Далее');
   target.scrollIntoView({ behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'center', inline:'nearest' });
   scheduleGuildTourPosition();
   scheduleGuildTourPosition(260);
@@ -4456,6 +4458,17 @@ async function startGuildTour() {
   await guildWebsite.open();
   await new Promise(resolve => setTimeout(resolve, 120));
   guildTourSteps = guildTourDefinitions();
+  if (document.querySelector('.guild-command-strip') && guildWebsite.startTraining?.()) {
+    guildTourSteps.push(
+      { selector:'.guild-training-agent', trainingStage:'browse', title:'1. Выбери агента', description:'Это безопасное тестовое задание. Сейчас выбираем агента — настоящие задания, VP и слоты не затрагиваются.' },
+      { selector:'.guild-training-map', trainingStage:'browse', title:'2. Выбери карту', description:'После агента выбирается карта. Лента останется на текущем месте и больше не будет прыгать в начало.' },
+      { selector:'.guild-training-zone', trainingStage:'zone', title:'3. Выбери плент', description:'Обязательно укажи нужный плент: A, B, C или MID. Система больше не выбирает первую зону автоматически.', nextLabel:'Выбрать A' },
+      { selector:'.guild-training-take', trainingStage:'zone', title:'4. Проверь и возьми', description:'Кнопка показывает выбранный плент. Для настоящего задания после неё появится отдельное подтверждение.', nextLabel:'Взять тестовое' },
+      { selector:'.guild-training-assignment', trainingStage:'taken', title:'Тестовое задание принято', description:'Так выглядит активное задание. Эта демонстрация не занимает слот и ничего не записывает в профиль.' },
+      { selector:'.guild-training-cancel', trainingStage:'taken', title:'Отмена в обучении', description:'Отмени тестовое задание. В обучении отмена всегда безопасна и не создаёт штрафов или истории.', nextLabel:'Отменить тестовое' },
+      { selector:'.guild-training-safe', trainingStage:'canceled', title:'Обучение завершено', description:'Тестовое задание закрыто. Если пропустить обучение крестиком, оно закрывается точно так же безопасно.', nextLabel:'Готово' },
+    );
+  }
   guildTourIndex = 0;
   renderGuildTourStep();
 }

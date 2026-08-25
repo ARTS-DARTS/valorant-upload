@@ -36,6 +36,27 @@ test('guild quests use the familiar agent, map and side demand-board flow', () =
   assert.match(css, /@media\(max-width:700px\).*\.guild-demand-ability/s);
 });
 
+test('Guild demand selection is explicit, stable and case-insensitive', () => {
+  assert.match(guild, /function guildUniqueLabels\(values\)/);
+  assert.match(guild, /const key = guildKey\(label\)/);
+  assert.match(guild, /data-guild-select-zone/);
+  assert.match(guild, /disabled>Выбери плент<\/button>/);
+  assert.match(guild, /confirm\(`Взять задание на плент \$\{plant\}\?/);
+  assert.match(guild, /function demandScrollState\(\)/);
+  assert.match(guild, /restoreDemandScroll\(scrollState\)/);
+});
+
+test('Guild guide uses an isolated fake assignment and closes it safely', () => {
+  assert.match(guild, /function trainingPanel\(\)/);
+  assert.match(guild, /VP и слот не затрагиваются/);
+  assert.match(guild, /startTraining\(\)/);
+  assert.match(guild, /stopTraining\(\)/);
+  assert.match(app, /guildWebsite\.stopTraining\?\.\(\)/);
+  assert.match(app, /trainingStage:'taken'/);
+  assert.match(app, /trainingStage:'canceled'/);
+  assert.match(css, /\.guild-training/);
+});
+
 test('the former rewards card opens the Guild board while VP payout remains separate', () => {
   assert.match(html, /<small>ГИЛЬДИЯ<\/small><strong id="author-reward-balance">Открыть доску заданий<\/strong>/);
   assert.match(app, /author-reward-open'\)\?\.addEventListener\('click', \(\)=>switchWorkspaceTab\('guild'\)\)/);
