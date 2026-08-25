@@ -147,7 +147,7 @@ function guildDemandReward(settings, coverageCount) {
   const base = Math.max(0, Math.trunc(Number(settings?.algorithm_reward_vp || 0)));
   const bonus = Math.max(0, Math.trunc(Number(settings?.algorithm_bonus_vp || 0)));
   const coverage = Math.max(0, Math.trunc(Number(coverageCount || 0)));
-  const rewardVp = Math.max(0, base - coverage);
+  const rewardVp = coverage === 0 ? base : Math.min(base, 7);
   const bonusVp = coverage === 0 ? bonus : 0;
   return { vp:rewardVp + bonusVp, bonus_vp:bonusVp, xp:Number(settings?.algorithm_guild_xp || 0) };
 }
@@ -186,7 +186,7 @@ function guildDemandTask(row, quests, abilityIcon, settings, selectedChoice) {
     : selectable.length ? '<button class="guild-demand-take" type="button" disabled>Выбери плент</button>' : '';
   const hasBonus = Number(rewards.bonus_vp || 0) > 0;
   return `<article class="guild-demand-ability reward-demand-ability${hasBonus ? ' bonus' : ''}${selected ? ' selected' : ''}${allClaimed ? ' claimed' : ''}">
-    <span class="guild-border-snake" aria-hidden="true"><i style="--snake-lag:0s"></i><i style="--snake-lag:-.055s"></i><i style="--snake-lag:-.11s"></i><i style="--snake-lag:-.165s"></i><i style="--snake-lag:-.22s"></i><i style="--snake-lag:-.275s"></i><i style="--snake-lag:-.33s"></i><i style="--snake-lag:-.385s"></i></span>
+    <span class="guild-border-snake" aria-hidden="true"><i style="--snake-lag:0s"></i><i style="--snake-lag:.055s"></i><i style="--snake-lag:.11s"></i><i style="--snake-lag:.165s"></i><i style="--snake-lag:.22s"></i><i style="--snake-lag:.275s"></i><i style="--snake-lag:.33s"></i><i style="--snake-lag:.385s"></i></span>
     <span class="guild-demand-ability-icon reward-demand-ability-icon">${icon ? `<img src="${esc(icon)}" alt="">` : '✦'}</span>
     <span class="guild-demand-count reward-demand-count">${Number(row.count || 0)}</span>
     <div class="guild-demand-copy"><strong>${esc(row.ability || 'Способность')}</strong><small>${esc(guildSide(row.side || row.round_side))}</small><div class="guild-demand-zones reward-demand-zones">${chips}</div></div>
@@ -406,8 +406,8 @@ export function createGuildWebsite({
       </header>
       ${trainingPanel()}
       ${active.length ? `<section class="guild-active"><div class="guild-section-head"><div><span>МОЯ РАБОТА</span><h2>Текущие задания</h2></div><b>${active.filter(item => ['active','revision_required'].includes(item.status)).length} занимают слот</b></div><div class="guild-assignment-list">${active.map(assignmentRow).join('')}</div></section>` : ''}
-      <section class="guild-quests"><div class="guild-section-head guild-section-head--board"><div class="guild-board-heading"><div><span>ДОСКА ГИЛЬДИИ</span><h2>Задания алгоритма</h2></div><section class="guild-legend" aria-label="Обозначения заданий"><b>Метки</b><span class="available">Обычное · без обводки</span><span class="selected">Выбрано вами · синяя</span><span class="bonus">Активный бонус · макс. награда · золотая</span><span class="claimed">Взято авантюристом · фиолетовая</span><span class="review">Проверяется</span><span class="revision">Нужна доработка</span><span class="fulfilled">Пирожки / награда выдана</span></section></div><div class="guild-section-head-actions"><div class="guild-demand-totals"><span><small>МАППУЛ</small><b>${demandBoard.deficitCount}</b></span><span><small>ОБЩЕЕ</small><b>${demandBoard.globalDeficitCount}</b></span></div><button type="button" data-guild-action="tour">Как это работает?</button></div></div>
-        ${demandBoard.html}</section>
+      <div class="guild-quests-layout"><aside class="guild-legend" aria-label="Обозначения заданий"><b>Метки</b><span class="available">Обычное · без обводки</span><span class="selected">Выбрано вами · синяя</span><span class="bonus">Активный бонус · макс. награда · золотая</span><span class="claimed">Взято авантюристом · фиолетовая</span><span class="review">Проверяется</span><span class="revision">Нужна доработка</span><span class="fulfilled">Пирожки / награда выдана</span></aside><section class="guild-quests"><div class="guild-section-head guild-section-head--board"><div><span>ДОСКА ГИЛЬДИИ</span><h2>Задания алгоритма</h2></div><div class="guild-section-head-actions"><div class="guild-demand-totals"><span><small>МАППУЛ</small><b>${demandBoard.deficitCount}</b></span><span><small>ОБЩЕЕ</small><b>${demandBoard.globalDeficitCount}</b></span></div><button type="button" data-guild-action="tour">Как это работает?</button></div></div>
+        ${demandBoard.html}</section></div>
       <section class="guild-history"><div class="guild-section-head"><div><span>ЛИЧНЫЙ ЖУРНАЛ</span><h2>История и награды</h2></div></div><div class="guild-assignment-list guild-assignment-list--history" data-visible-guild-history-rows="7">${history.map(assignmentRow).join('') || '<div class="guild-empty"><strong>История начнётся с первого задания</strong><span>Здесь появятся принятые работы, начисления, отказы и просрочки.</span></div>'}</div></section>
     </div>`;
     syncGuildDemandParticles(host);

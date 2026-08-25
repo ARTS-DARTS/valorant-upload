@@ -32,9 +32,9 @@ test('both pending claims and reward history use a bounded seven-row scroller', 
   assert.match(app, /list\.style\.maxHeight = 'none'/);
   assert.match(app, /window\.addEventListener\('resize',[\s\S]*?sizeRewardLists\(host\)/);
   assert.match(styles, /reward-list--held,\.reward-list--bounded\{max-height:469px;overflow-y:auto/);
-  assert.match(html, /styles\.css\?v=2026-08-25-guild-v17/);
+  assert.match(html, /styles\.css\?v=2026-08-25-guild-v18/);
   assert.match(html, /workspace-redesign-fixes\.css\?v=2026-08-25-surgical-v2/);
-  assert.match(html, /app\.js\?v=2026-08-25-guild-v17/);
+  assert.match(html, /app\.js\?v=2026-08-25-guild-v18/);
 });
 
 test('reward actions require an explicitly enabled program', () => {

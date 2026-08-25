@@ -21,10 +21,10 @@ test('guild is a dedicated author workspace with responsive quest board', () => 
   assert.match(css, /guild-legend \.fulfilled::before/);
 });
 
-test('Guild status labels sit inside the algorithm board heading', () => {
+test('Guild status labels sit to the left of the algorithm board', () => {
   assert.match(guild, /guild-section-head guild-section-head--board/);
-  assert.match(guild, /guild-board-heading[\s\S]*Задания алгоритма[\s\S]*guild-legend/);
-  assert.match(css, /guild-board-heading\{display:flex;align-items:flex-end/);
+  assert.match(guild, /guild-quests-layout[\s\S]*guild-legend[\s\S]*guild-quests/);
+  assert.match(css, /guild-quests-layout\{display:grid;grid-template-columns:210px minmax\(0,920px\)/);
 });
 
 test('guild quests use the familiar agent, map and side demand-board flow', () => {
@@ -164,7 +164,7 @@ test('missing plant cells are gold and the selected plant overrides them in cyan
 test('covered plant cells remain selectable and reduce the displayed VP reward', () => {
   assert.match(guild, /const zoneStates = zones\.map\(\(\[zone, count\]\) => \(\{ zone, count,/);
   assert.match(guild, /if \(state === 'claimed'\) return/);
-  assert.match(guild, /const rewardVp = Math\.max\(0, base - coverage\)/);
+  assert.match(guild, /const rewardVp = coverage === 0 \? base : Math\.min\(base, 7\)/);
   assert.match(guild, /const bonusVp = coverage === 0 \? bonus : 0/);
   assert.match(css, /\.reward-demand-zones button\.filled:hover/);
 });
@@ -180,6 +180,7 @@ test('available Guild task frames are gold and their particle snakes share one p
   assert.match(css, /\.guild-demand-ability\{[^}]*--guild-frame-color:#b77b18[^}]*position:relative[^}]*border-color:var\(--guild-frame-color\)/);
   assert.match(css, /@keyframes guild-border-particle\{to\{offset-distance:100%\}\}/);
   assert.match(guild, /class="guild-border-snake"[^>]*>(?:<i[^>]*><\/i>){8}<\/span>/);
+  assert.doesNotMatch(guild, /--snake-lag:-/);
   assert.match(css, /\.guild-border-snake i\{[^}]*animation-delay:calc\(var\(--guild-particle-delay,0s\) \+ var\(--snake-lag,0s\)\)/);
   assert.match(css, /\.guild-border-snake i:nth-child\(8\)\{[^}]*opacity:\.18/);
   assert.match(guild, /const GUILD_PARTICLE_CYCLE_MS = 6000/);
