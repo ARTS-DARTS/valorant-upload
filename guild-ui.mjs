@@ -4,6 +4,14 @@ const esc = value => String(value ?? '')
 
 const secondsOf = value => Number(value?.seconds ?? value?._seconds ?? 0);
 const dateOf = value => secondsOf(value) ? new Date(secondsOf(value) * 1000) : null;
+const GUILD_PARTICLE_CYCLE_MS = 6000;
+
+function syncGuildDemandParticles(host) {
+  const phaseSeconds = -((performance.now() % GUILD_PARTICLE_CYCLE_MS) / 1000);
+  host.querySelectorAll('.guild-demand-ability:not(.claimed)').forEach(card => {
+    card.style.setProperty('--guild-particle-delay', `${phaseSeconds}s`);
+  });
+}
 
 function remainingLabel(value) {
   const date = dateOf(value);
@@ -388,6 +396,7 @@ export function createGuildWebsite({
         ${demandBoard.html}</section>
       <section class="guild-history"><div class="guild-section-head"><div><span>ЛИЧНЫЙ ЖУРНАЛ</span><h2>История и награды</h2></div></div><div class="guild-assignment-list guild-assignment-list--history" data-visible-guild-history-rows="7">${history.map(assignmentRow).join('') || '<div class="guild-empty"><strong>История начнётся с первого задания</strong><span>Здесь появятся принятые работы, начисления, отказы и просрочки.</span></div>'}</div></section>
     </div>`;
+    syncGuildDemandParticles(host);
     sizeGuildHistory(host);
     restoreDemandScroll(scrollState);
   }

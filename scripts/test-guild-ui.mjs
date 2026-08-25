@@ -162,6 +162,17 @@ test('Guild demand cards keep readable text and ability icons on desktop and mob
   assert.match(css, /@media\(max-width:700px\)[^\n]*\.guild-demand-ability\{grid-template-columns:34px 34px/);
 });
 
+test('available Guild task frames are gold and their border particles share one page-clock phase', () => {
+  assert.match(css, /\.guild-demand-ability\{[^}]*--guild-frame-color:#b77b18[^}]*position:relative[^}]*border-color:var\(--guild-frame-color\)/);
+  assert.match(css, /@keyframes guild-border-particle\{to\{offset-distance:100%\}\}/);
+  assert.match(css, /animation-delay:var\(--guild-particle-delay,0s\)/);
+  assert.match(guild, /const GUILD_PARTICLE_CYCLE_MS = 6000/);
+  assert.match(guild, /performance\.now\(\) % GUILD_PARTICLE_CYCLE_MS/);
+  assert.match(guild, /syncGuildDemandParticles\(host\)/);
+  assert.match(css, /\.guild-demand-ability\.selected\{--guild-frame-color:#55e7ff/);
+  assert.match(css, /@media\(prefers-reduced-motion:reduce\).*\.guild-demand-ability::before/s);
+});
+
 test('guild assignment enforces the mandatory template fields before submission', () => {
   assert.match(app, /guildAssignmentSnapshot\?\.requirements/);
   assert.match(app, /Загрузи обязательное видео для задания Гильдии/);

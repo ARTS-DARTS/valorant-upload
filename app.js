@@ -49,7 +49,7 @@ import {
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
 import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-guild-v3';
-import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v13';
+import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v14';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
