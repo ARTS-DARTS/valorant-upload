@@ -38,6 +38,13 @@ test('guild submission is linked to one server assignment and cannot join normal
   assert.match(app, /const active = canSubmitForRewards\(rewardDashboard\) && !guildAssignmentId/);
 });
 
+test('guild assignment enforces the mandatory template fields before submission', () => {
+  assert.match(app, /guildAssignmentSnapshot\?\.requirements/);
+  assert.match(app, /Загрузи обязательное видео для задания Гильдии/);
+  assert.match(app, /Заполни обязательное описание задания/);
+  assert.match(app, /Нарисуй обязательную траекторию задания/);
+});
+
 test('resetting a guild draft retains the assignment and locked snapshot', () => {
   assert.match(app, /if \(guildAssignmentId\) \{/);
   assert.match(app, /Само задание и закреплённые поля останутся на месте/);

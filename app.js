@@ -12569,6 +12569,7 @@ function validationCard(id) {
 
 function collectFormValidationErrors() {
   const category = normalizeContentCategory(selectedCategory || '');
+  const guildRequirements = guildAssignmentSnapshot?.requirements || {};
   const errors = [];
   const add = (message, target, input = null) => errors.push({ message, target, input });
   const mapCard = validationCard('sel-map');
@@ -12582,6 +12583,12 @@ function collectFormValidationErrors() {
   if (!selectedDifficulty) add('Укажи сложность.', validationCard('diff-row'));
   if (!selectedRoundSide) add('Выбери сторону раунда.', validationCard('side-row'));
   if (!document.getElementById('inp-title').value.trim()) add('Напиши название материала.', validationCard('inp-title'), document.getElementById('inp-title'));
+  if (guildRequirements.video === true && !videoUrl) {
+    add('Загрузи обязательное видео для задания Гильдии.', validationCard('drop-zone'));
+  }
+  if (guildRequirements.description === true && !document.getElementById('inp-desc').value.trim()) {
+    add('Заполни обязательное описание задания.', validationCard('inp-desc'), document.getElementById('inp-desc'));
+  }
   const readyScreenshots = screenshots.filter(item => item.cloudUrl && !item.uploading);
   if (!readyScreenshots.length) {
     add(screenshots.some(item => item.uploading)
@@ -12590,6 +12597,9 @@ function collectFormValidationErrors() {
   }
 
   if (category === 'lineup' && markerX === null) add('Поставь позицию броска на карте.', mapEditorCard);
+  if (guildRequirements.trajectory === true && normalizeTrajectoryPoints(trajectoryPoints).length < 2) {
+    add('Нарисуй обязательную траекторию задания.', mapEditorCard);
+  }
   if (category === 'lineup' && selectedRoundSide === 'attack') {
     if (!['placed', 'not_used'].includes(spikeUsage)) {
       add('Укажи Spike на карте или выбери «Не используется».', mapEditorCard);
