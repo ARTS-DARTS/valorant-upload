@@ -202,6 +202,10 @@ function rewardDemandAbilityIcon(agentName, abilityName) {
   const ability = (agent?.abilities || []).find(item => normalized(item.displayName) === normalized(abilityName));
   return proxiedValorantUrl(ability?.displayIcon || '');
 }
+function rewardDemandCategoryOf(row) {
+  if (String(row?.ability || '').trim().toLowerCase() === 'defense setup') return 'defense';
+  return String(row?.category || 'lineup').trim().toLowerCase();
+}
 function renderRewardDemand(deficits) {
   const categoryLabels = { lineup:'Лайнапы', defense:'Сетапы защиты', combo:'Комбо', wallbang:'Прострелы' };
   const configuredCategories = rewardDashboard?.settings?.content_categories || { lineup:true };
@@ -214,7 +218,7 @@ function renderRewardDemand(deficits) {
     rewardDemandCategory = '';
     return `<section class="reward-demand"><header><div><span>РАДАР СПРОСА</span><h3>Что сейчас нужно сообществу</h3></div></header>${categoryChooser}</section>`;
   }
-  const belongsToCategory = row => String(row.category || 'lineup').toLowerCase() === rewardDemandCategory;
+  const belongsToCategory = row => rewardDemandCategoryOf(row) === rewardDemandCategory;
   const globalRows = rewardDemandRows(deficits?.global).filter(belongsToCategory);
   const mapRows = rewardDemandRows(deficits?.map_pool).filter(row => isRealRewardMap(row.map) && belongsToCategory(row));
   const subscriberCounts = deficits?.agent_notification_subscribers || {};

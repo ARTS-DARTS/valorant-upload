@@ -119,6 +119,12 @@ test('reward demand starts with an open category and explains setup quotas', () 
   assert.match(app, /БЕЗ ДОП\. VP/);
 });
 
+test('legacy defense placeholders never render inside lineup demand', () => {
+  assert.match(app, /function rewardDemandCategoryOf\(row\)/);
+  assert.match(app, /ability \|\| ''\)\.trim\(\)\.toLowerCase\(\) === 'defense setup'/);
+  assert.match(app, /belongsToCategory = row => rewardDemandCategoryOf\(row\) === rewardDemandCategory/);
+});
+
 test('lineup demand keeps A, B, C and Mid coverage visible after tasks close', () => {
   assert.match(app, /market_zone_coverage/);
   assert.match(app, /zoneCoverageForRow/);
