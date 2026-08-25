@@ -159,12 +159,35 @@ function assignmentRow(item) {
   const canOpen = ['active', 'revision_required'].includes(item.status);
   const appealLabel = ({ pending:'Апелляция на рассмотрении', approved:'Штраф отменён', rejected:'Апелляция отклонена' })[item.appeal_status] || '';
   const imported = item.imported_from_reward_program === true;
+  const resultNote = imported
+    ? `Ранее выдано · +${Number(item.awarded_guild_xp || item.snapshot?.guild_xp || 0)} Guild XP`
+    : (appealLabel || (deadline ? remainingLabel(deadline) : ''));
   return `<article class="guild-assignment-row guild-assignment-row--${esc(item.status)}${imported ? ' guild-assignment-row--imported' : ''}">
     <div><span>${imported ? 'ПЕРЕНЕСЕНО ИЗ АКЦИИ VP' : esc(statusCopy(item.status))}</span><strong>${esc(item.snapshot?.generated_title || item.snapshot?.ability || 'Задание')}</strong><small>${[item.snapshot?.map, item.snapshot?.agent, item.snapshot?.ability].filter(Boolean).map(esc).join(' · ')}</small></div>
-    <div class="guild-assignment-result"><b>${penalty ? `−${penalty} VP` : item.status === 'hot_awarded' ? `+${Number(item.awarded_vp || reward)} VP` : `${reward} VP`}</b><small>${imported ? `Ранее выдано · +${Number(item.awarded_guild_xp || item.snapshot?.guild_xp || 0)} Guild XP` : (appealLabel || (deadline ? remainingLabel(deadline) : statusCopy(item.status)))}</small></div>
+    <div class="guild-assignment-result"><b>${penalty ? `−${penalty} VP` : item.status === 'hot_awarded' ? `+${Number(item.awarded_vp || reward)} VP` : `${reward} VP`}</b>${resultNote ? `<small>${esc(resultNote)}</small>` : ''}</div>
     ${canOpen ? `<button class="guild-button guild-button--open" type="button" data-guild-action="open" data-assignment-id="${esc(item.id)}">Продолжить</button>` : ''}
     ${penalty && !item.appeal_status ? `<button class="guild-button guild-button--quiet" type="button" data-guild-action="appeal" data-assignment-id="${esc(item.id)}">Оспорить штраф</button>` : ''}
   </article>`;
+}
+
+function sizeGuildHistory(host) {
+  requestAnimationFrame(() => {
+    const list = host.querySelector('[data-visible-guild-history-rows]');
+    if (!list) return;
+    const rowCount = Math.max(1, Number(list.dataset.visibleGuildHistoryRows || 7));
+    const items = [...list.children].slice(0, rowCount);
+    if (list.children.length <= rowCount || items.length < rowCount) {
+      list.style.maxHeight = 'none';
+      return;
+    }
+    const style = getComputedStyle(list);
+    const gap = Number.parseFloat(style.rowGap || style.gap) || 0;
+    const padding = (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
+    const border = (Number.parseFloat(style.borderTopWidth) || 0) + (Number.parseFloat(style.borderBottomWidth) || 0);
+    const height = items.reduce((total, item) => total + item.getBoundingClientRect().height, 0)
+      + gap * (items.length - 1) + padding + border;
+    list.style.maxHeight = `${Math.ceil(height)}px`;
+  });
 }
 
 export function createGuildWebsite({
@@ -206,7 +229,7 @@ export function createGuildWebsite({
     const assignments = dashboard.assignments || [];
     const assignmentByQuest = new Map(assignments.map(item => [item.quest_id, item]));
     const active = assignments.filter(item => ['active', 'revision_required', 'submitted', 'moderator_rework'].includes(item.status));
-    const history = assignments.filter(item => !active.includes(item)).slice(0, 20);
+    const history = assignments.filter(item => !active.includes(item));
     const demandBoard = guildDemandBoard({
       quests:dashboard.quests || [], assignmentByQuest,
       selectedAgent, selectedMap, agentIcon, abilityIcon,
@@ -224,8 +247,9 @@ export function createGuildWebsite({
       ${active.length ? `<section class="guild-active"><div class="guild-section-head"><div><span>МОЯ РАБОТА</span><h2>Текущие задания</h2></div><b>${active.filter(item => ['active','revision_required'].includes(item.status)).length} занимают слот</b></div><div class="guild-assignment-list">${active.map(assignmentRow).join('')}</div></section>` : ''}
       <section class="guild-quests"><div class="guild-section-head"><div><span>ДОСКА ГИЛЬДИИ</span><h2>Задания алгоритма</h2></div><b>${(dashboard.quests || []).filter(item => item.status === 'available').length} свободно</b></div>
         ${demandBoard.html}</section>
-      <section class="guild-history"><div class="guild-section-head"><div><span>ЛИЧНЫЙ ЖУРНАЛ</span><h2>История и награды</h2></div></div><div class="guild-assignment-list">${history.map(assignmentRow).join('') || '<div class="guild-empty"><strong>История начнётся с первого задания</strong><span>Здесь появятся принятые работы, начисления, отказы и просрочки.</span></div>'}</div></section>
+      <section class="guild-history"><div class="guild-section-head"><div><span>ЛИЧНЫЙ ЖУРНАЛ</span><h2>История и награды</h2></div></div><div class="guild-assignment-list guild-assignment-list--history" data-visible-guild-history-rows="7">${history.map(assignmentRow).join('') || '<div class="guild-empty"><strong>История начнётся с первого задания</strong><span>Здесь появятся принятые работы, начисления, отказы и просрочки.</span></div>'}</div></section>
     </div>`;
+    sizeGuildHistory(host);
   }
 
   function render() {
@@ -363,6 +387,15 @@ export function createGuildWebsite({
     event.preventDefault();
     rail.scrollLeft = Math.max(0, Math.min(maxScroll, rail.scrollLeft + delta));
   }, { passive:false });
+
+  let historyResizeFrame = 0;
+  window.addEventListener('resize', () => {
+    if (historyResizeFrame) cancelAnimationFrame(historyResizeFrame);
+    historyResizeFrame = requestAnimationFrame(() => {
+      historyResizeFrame = 0;
+      sizeGuildHistory(host);
+    });
+  });
 
   return {
     open:options => load(options),

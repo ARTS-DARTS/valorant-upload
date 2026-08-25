@@ -45,6 +45,17 @@ test('reward-program history is visibly distinguished from new Guild work', () =
   assert.match(css, /\.guild-assignment-row--imported/);
 });
 
+test('Guild history avoids duplicate final status and scrolls after seven rows', () => {
+  assert.match(guild, /const resultNote = imported/);
+  assert.doesNotMatch(guild, /deadline \? remainingLabel\(deadline\) : statusCopy\(item\.status\)/);
+  assert.match(guild, /function sizeGuildHistory\(host\)/);
+  assert.match(guild, /data-visible-guild-history-rows="7"/);
+  assert.match(guild, /list\.style\.maxHeight = 'none'/);
+  assert.match(guild, /sizeGuildHistory\(host\)/);
+  assert.doesNotMatch(guild, /filter\(item => !active\.includes\(item\)\)\.slice/);
+  assert.match(css, /\.guild-assignment-list--history\{max-height:594px;overflow-y:auto/);
+});
+
 test('guild dashboard keeps separate XP, slots, labels and Pirozhki state', () => {
   assert.match(guild, /Guild XP/);
   assert.match(guild, /СЛОТЫ ЗАДАНИЙ/);
