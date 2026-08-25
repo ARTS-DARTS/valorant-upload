@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/app_icon3.png">
   <link rel="stylesheet" href="/site-loader.css?v=2026-08-01-v2">
   <script src="/site-loader.js?v=2026-08-01-v2"></script>
-  <link rel="stylesheet" href="/styles.css?v=2026-08-25-guild-v7">
+  <link rel="stylesheet" href="/styles.css?v=2026-08-25-guild-v8">
   <link rel="stylesheet" href="/workspace-redesign.css?v=2026-08-25-surgical-v2">
   <link rel="stylesheet" href="/workspace-redesign-fixes.css?v=2026-08-25-surgical-v2">
 </head>
@@ -1081,8 +1081,27 @@
   </div>
 </div>
 
+<div id="guild-update-intro" class="guild-update-intro" hidden>
+  <section class="guild-update-intro-card" role="dialog" aria-modal="true" aria-labelledby="guild-update-title">
+    <div class="guild-update-mark" aria-hidden="true"><span>V</span><i>GUILD</i></div>
+    <div class="guild-update-copy"><span>НОВОЕ ОБНОВЛЕНИЕ</span><h2 id="guild-update-title">Открылась Гильдия VLineups</h2><p>Теперь помощь проекту оформлена как задания. Подтверди участие, стань авантюристом, закрывай реальные пробелы базы и получай VP вместе с опытом Гильдии.</p>
+      <ul><li>Алгоритм сам находит нужные лайнапы</li><li>До пяти заданий на первом уровне</li><li>Прогресс, награды и история — в одном месте</li></ul>
+    </div>
+    <div class="guild-update-actions"><button type="button" data-guild-update="later">Посмотреть позже</button><button type="button" data-guild-update="tour">Показать Гильдию</button></div>
+  </section>
+</div>
+
+<div id="guild-tour" class="guild-tour" hidden>
+  <div class="guild-tour-focus" aria-hidden="true"></div>
+  <section class="guild-tour-card" role="dialog" aria-modal="true" aria-labelledby="guild-tour-title" aria-describedby="guild-tour-description">
+    <header><span id="guild-tour-progress">1 / 7</span><button type="button" data-guild-tour="close" aria-label="Закрыть экскурсию">Пропустить</button></header>
+    <h2 id="guild-tour-title">Гильдия</h2><p id="guild-tour-description"></p>
+    <footer><button type="button" data-guild-tour="back">Назад</button><button type="button" data-guild-tour="next">Далее</button></footer>
+  </section>
+</div>
+
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script type="module" src="/app.js?v=2026-08-25-guild-v7"></script>
+<script type="module" src="/app.js?v=2026-08-25-guild-v8"></script>
 <script defer src="/workspace-redesign.js?v=2026-08-02-map-gallery-sync-v1"></script>
 </body>
 </html>

@@ -49,7 +49,7 @@ import {
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
 import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-guild-v3';
-import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v7';
+import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v8';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -119,6 +119,7 @@ const guildWebsite = createGuildWebsite({
   openAssignmentDraft:assignment => openGuildAssignmentDraft(assignment),
   detachAssignmentDraft:assignmentId => detachGuildAssignmentDraft(assignmentId),
   openVpExchange:openRewardExchange,
+  startTour:startGuildTour,
   agentIcon:agent => rewardDemandIcon(agent),
   abilityIcon:(agent, ability) => rewardDemandAbilityIcon(agent, ability),
   toast:(...args) => toast(...args),
@@ -4329,11 +4330,152 @@ async function enableBrowserPush() {
   toast('Push об обновлениях сайта включены', 's');
 }
 
+const GUILD_UPDATE_INTRO_VERSION = 'guild-release-2026-08-v1';
+let guildUpdateIntroTimer = 0;
+let guildTourIndex = 0;
+let guildTourSteps = [];
+let guildTourPositionFrame = 0;
+
+function guildUpdateIntroKey(uid) {
+  return `${GUILD_UPDATE_INTRO_VERSION}:${uid}`;
+}
+
+function showGuildUpdateIntro(uid) {
+  if (!uid || localStorage.getItem(guildUpdateIntroKey(uid))) return;
+  const query = new URLSearchParams(window.location.search);
+  if (query.get('assignment') || query.get('lineup') || activeWorkspaceTab === 'moderation') return;
+  clearTimeout(guildUpdateIntroTimer);
+  guildUpdateIntroTimer = setTimeout(() => {
+    if (!currentUser || currentUser.uid !== uid) return;
+    const intro = document.getElementById('guild-update-intro');
+    if (!intro) return;
+    localStorage.setItem(guildUpdateIntroKey(uid), '1');
+    intro.hidden = false;
+    intro.querySelector('[data-guild-update="tour"]')?.focus();
+  }, 350);
+}
+
+function guildTourDefinitions() {
+  if (document.querySelector('.guild-command-strip')) {
+    return [
+      { selector:'[data-workspace-tab="guild"]', title:'Вход в Гильдию', description:'Эта вкладка открывает личную доску авантюриста. Здесь находятся задания, прогресс и награды.' },
+      { selector:'.guild-rank', title:'Ранг и уровень', description:'За принятые задания начисляется Guild XP. Новый уровень повышает ранг и открывает больший лимит заданий.' },
+      { selector:'.guild-slots', title:'Слоты заданий', description:'Число слева — сколько заданий занято сейчас, справа — сколько можно выполнять одновременно.' },
+      { selector:'.guild-vp', title:'VP и обмен', description:'Здесь виден доступный баланс. Кнопка «Обменять» открывает выбор купона для указанного Riot-региона.' },
+      { selector:'.guild-legend', title:'Метки и статусы', description:'Цвет метки показывает состояние задания: свободно, бонус, взято, проверяется, нужна доработка или награда уже выдана.' },
+      { selector:'.guild-demand-stage', title:'Как найти задание', description:'Сначала выбери агента, затем карту. Ниже появятся конкретные способности и недостающие зоны, которые можно взять в работу.' },
+      { selector:'.guild-history .guild-section-head', title:'История и награды', description:'Здесь сохраняются завершённые задания, начисления, отказы и просрочки. В списке видно семь записей, остальные прокручиваются.' },
+    ];
+  }
+  return [
+    { selector:'[data-workspace-tab="guild"]', title:'Вход в Гильдию', description:'Эта вкладка открывает правила участия и будущую личную доску авантюриста.' },
+    { selector:'.guild-entry-copy', title:'Кто такие авантюристы', description:'Авантюристы помогают закрывать реальные пробелы базы VLineups, выполняют сольные задания и получают VP и Guild XP.' },
+    { selector:'.guild-entry-contract', title:'Перед вступлением', description:'Здесь находятся правила, выбор Riot-региона и подтверждение участия. Статус авантюриста присваивается постоянно.' },
+  ];
+}
+
+function closeGuildTour() {
+  const tour = document.getElementById('guild-tour');
+  if (tour) tour.hidden = true;
+  guildTourSteps = [];
+  guildTourIndex = 0;
+  if (guildTourPositionFrame) cancelAnimationFrame(guildTourPositionFrame);
+  guildTourPositionFrame = 0;
+}
+
+function positionGuildTour() {
+  const tour = document.getElementById('guild-tour');
+  const focus = tour?.querySelector('.guild-tour-focus');
+  const card = tour?.querySelector('.guild-tour-card');
+  const step = guildTourSteps[guildTourIndex];
+  const target = step ? document.querySelector(step.selector) : null;
+  if (!tour || tour.hidden || !focus || !card || !target) return;
+  const rect = target.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const pad = 8;
+  const left = Math.max(6, rect.left - pad);
+  const top = Math.max(6, rect.top - pad);
+  const width = Math.min(window.innerWidth - left - 6, rect.width + pad * 2);
+  const height = Math.min(window.innerHeight - top - 6, rect.height + pad * 2);
+  Object.assign(focus.style, {
+    left:`${Math.round(left)}px`, top:`${Math.round(top)}px`,
+    width:`${Math.round(width)}px`, height:`${Math.round(height)}px`,
+  });
+  if (window.innerWidth <= 700) return;
+  const cardRect = card.getBoundingClientRect();
+  const cardLeft = Math.max(12, Math.min(window.innerWidth - cardRect.width - 12, rect.left));
+  const below = rect.bottom + pad + 12;
+  const above = rect.top - pad - cardRect.height - 12;
+  const cardTop = below + cardRect.height <= window.innerHeight - 12
+    ? below
+    : Math.max(12, above);
+  card.style.left = `${Math.round(cardLeft)}px`;
+  card.style.top = `${Math.round(cardTop)}px`;
+}
+
+function scheduleGuildTourPosition(delay = 0) {
+  if (guildTourPositionFrame) cancelAnimationFrame(guildTourPositionFrame);
+  const place = () => {
+    guildTourPositionFrame = requestAnimationFrame(() => {
+      guildTourPositionFrame = 0;
+      positionGuildTour();
+    });
+  };
+  if (delay) setTimeout(place, delay); else place();
+}
+
+function renderGuildTourStep() {
+  const tour = document.getElementById('guild-tour');
+  const step = guildTourSteps[guildTourIndex];
+  if (!tour || !step) return closeGuildTour();
+  const target = document.querySelector(step.selector);
+  if (!target) {
+    guildTourIndex += 1;
+    return guildTourIndex < guildTourSteps.length ? renderGuildTourStep() : closeGuildTour();
+  }
+  tour.hidden = false;
+  tour.querySelector('#guild-tour-progress').textContent = `${guildTourIndex + 1} / ${guildTourSteps.length}`;
+  tour.querySelector('#guild-tour-title').textContent = step.title;
+  tour.querySelector('#guild-tour-description').textContent = step.description;
+  const back = tour.querySelector('[data-guild-tour="back"]');
+  const next = tour.querySelector('[data-guild-tour="next"]');
+  back.hidden = guildTourIndex === 0;
+  next.textContent = guildTourIndex === guildTourSteps.length - 1 ? 'Готово' : 'Далее';
+  target.scrollIntoView({ behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'center', inline:'nearest' });
+  scheduleGuildTourPosition();
+  scheduleGuildTourPosition(260);
+  next.focus();
+}
+
+async function startGuildTour() {
+  const intro = document.getElementById('guild-update-intro');
+  const notificationsIntro = document.getElementById('notifications-intro');
+  if (intro) intro.hidden = true;
+  if (notificationsIntro) notificationsIntro.hidden = true;
+  switchWorkspaceTab('guild');
+  await guildWebsite.open();
+  await new Promise(resolve => setTimeout(resolve, 120));
+  guildTourSteps = guildTourDefinitions();
+  guildTourIndex = 0;
+  renderGuildTourStep();
+}
+
 function showNotificationsIntro(uid) {
   const key = `notifications-intro-v1:${uid}`;
   if (localStorage.getItem(key)) return;
-  localStorage.setItem(key, '1');
-  setTimeout(() => { const intro = document.getElementById('notifications-intro'); if (intro) intro.hidden = false; }, 900);
+  const reveal = () => {
+    if (!currentUser || currentUser.uid !== uid) return;
+    const guildIntro = document.getElementById('guild-update-intro');
+    const guildTour = document.getElementById('guild-tour');
+    if ((guildIntro && !guildIntro.hidden) || (guildTour && !guildTour.hidden)) {
+      setTimeout(reveal, 15000);
+      return;
+    }
+    localStorage.setItem(key, '1');
+    const intro = document.getElementById('notifications-intro');
+    if (intro) intro.hidden = false;
+  };
+  setTimeout(reveal, 900);
 }
 
 function startSiteNotifications(uid) {
@@ -4435,6 +4577,39 @@ document.getElementById('notifications-intro')?.addEventListener('click', event 
   if (!action) return;
   event.currentTarget.hidden = true;
   if (action === 'open') openNotificationsWorkspace();
+});
+
+document.getElementById('guild-update-intro')?.addEventListener('click', event => {
+  const action = event.target.closest('[data-guild-update]')?.dataset.guildUpdate;
+  if (!action) return;
+  event.currentTarget.hidden = true;
+  if (action === 'tour') startGuildTour();
+});
+
+document.getElementById('guild-tour')?.addEventListener('click', event => {
+  const action = event.target.closest('[data-guild-tour]')?.dataset.guildTour;
+  if (!action) return;
+  if (action === 'close') return closeGuildTour();
+  if (action === 'back') guildTourIndex = Math.max(0, guildTourIndex - 1);
+  if (action === 'next') {
+    if (guildTourIndex >= guildTourSteps.length - 1) return closeGuildTour();
+    guildTourIndex += 1;
+  }
+  renderGuildTourStep();
+});
+
+window.addEventListener('resize', () => {
+  if (!document.getElementById('guild-tour')?.hidden) scheduleGuildTourPosition();
+});
+window.addEventListener('scroll', () => {
+  if (!document.getElementById('guild-tour')?.hidden) scheduleGuildTourPosition();
+}, { passive:true, capture:true });
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  const intro = document.getElementById('guild-update-intro');
+  const tour = document.getElementById('guild-tour');
+  if (intro && !intro.hidden) intro.hidden = true;
+  if (tour && !tour.hidden) closeGuildTour();
 });
 
 function newestAdminMessageTs(data) {
@@ -6071,12 +6246,17 @@ onAuthStateChanged(auth, async user => {
     await syncAuthorTrainingCriteriaNotifications().catch(error => {
       console.warn('training criteria notification sync', error?.message || error);
     });
+    showGuildUpdateIntro(user.uid);
     startSiteNotifications(user.uid);
     initializeBrowserPush(user.uid);
     startSitePresence();
     hideSiteLoader();
   } else {
     stopTwitchLiveScan();
+    clearTimeout(guildUpdateIntroTimer);
+    const guildIntro = document.getElementById('guild-update-intro');
+    if (guildIntro) guildIntro.hidden = true;
+    closeGuildTour();
     guildWebsite.reset();
     clearInterval(sitePresenceTimer);
     sitePresenceTimer = null;

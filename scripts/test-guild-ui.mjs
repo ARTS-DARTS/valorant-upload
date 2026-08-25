@@ -41,6 +41,23 @@ test('the former rewards card opens the Guild board while VP payout remains sepa
   assert.match(guild, /if \(action === 'exchange'\) return openVpExchange\(\)/);
 });
 
+test('Guild release has a one-time introduction and a replayable contextual tour', () => {
+  assert.match(html, /id="guild-update-intro"/);
+  assert.match(html, /id="guild-tour"/);
+  assert.match(app, /const GUILD_UPDATE_INTRO_VERSION/);
+  assert.match(app, /function showGuildUpdateIntro\(uid\)/);
+  assert.match(app, /query\.get\('assignment'\).*query\.get\('lineup'\).*activeWorkspaceTab === 'moderation'/s);
+  assert.match(app, /function guildTourDefinitions\(\)/);
+  assert.match(app, /async function startGuildTour\(\)/);
+  assert.match(app, /showGuildUpdateIntro\(user\.uid\)/);
+  assert.match(app, /guildIntro && !guildIntro\.hidden/);
+  assert.match(guild, /data-guild-action="tour">Как это работает\?<\/button>/);
+  assert.match(guild, /data-guild-action="tour">Короткая экскурсия<\/button>/);
+  assert.match(guild, /if \(action === 'tour'\) return startTour\(\)/);
+  assert.match(css, /\.guild-tour-focus\{[^}]*box-shadow:0 0 0 9999px/);
+  assert.match(css, /@media\(max-width:700px\).*\.guild-tour-card/s);
+});
+
 test('reward-program history is visibly distinguished from new Guild work', () => {
   assert.match(guild, /imported_from_reward_program/);
   assert.match(guild, /ПЕРЕНЕСЕНО ИЗ АКЦИИ VP/);

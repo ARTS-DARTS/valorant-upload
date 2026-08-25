@@ -197,6 +197,7 @@ export function createGuildWebsite({
   openAssignmentDraft,
   detachAssignmentDraft,
   openVpExchange = () => {},
+  startTour = () => {},
   agentIcon = () => '',
   abilityIcon = () => '',
   toast,
@@ -221,6 +222,7 @@ export function createGuildWebsite({
           ${entry.reward_membership_ready ? '' : '<label class="guild-region">Регион Riot-аккаунта<select id="guild-reward-region"><option value="RU">Россия (RU)</option><option value="TR">Турция (TR)</option></select></label>'}
           <button class="guild-button guild-button--join" type="button" data-guild-action="join">Вступить в Гильдию</button>`
           : `<div class="guild-entry-closed">Набор авантюристов пока закрыт. Правила и прогресс уже подготовлены.</div>`}
+        <button class="guild-button guild-button--quiet" type="button" data-guild-action="tour">Короткая экскурсия</button>
       </div>
     </section>`;
   }
@@ -246,7 +248,7 @@ export function createGuildWebsite({
       </header>
       <section class="guild-legend" aria-label="Обозначения заданий"><b>Метки</b><span class="available">Свободно</span><span class="bonus">Активный бонус</span><span class="claimed">Взято авантюристом</span><span class="review">Проверяется</span><span class="revision">Нужна доработка</span><span class="fulfilled">Пирожки / награда выдана</span></section>
       ${active.length ? `<section class="guild-active"><div class="guild-section-head"><div><span>МОЯ РАБОТА</span><h2>Текущие задания</h2></div><b>${active.filter(item => ['active','revision_required'].includes(item.status)).length} занимают слот</b></div><div class="guild-assignment-list">${active.map(assignmentRow).join('')}</div></section>` : ''}
-      <section class="guild-quests"><div class="guild-section-head"><div><span>ДОСКА ГИЛЬДИИ</span><h2>Задания алгоритма</h2></div><b>${(dashboard.quests || []).filter(item => item.status === 'available').length} свободно</b></div>
+      <section class="guild-quests"><div class="guild-section-head"><div><span>ДОСКА ГИЛЬДИИ</span><h2>Задания алгоритма</h2></div><div class="guild-section-head-actions"><b>${(dashboard.quests || []).filter(item => item.status === 'available').length} свободно</b><button type="button" data-guild-action="tour">Как это работает?</button></div></div>
         ${demandBoard.html}</section>
       <section class="guild-history"><div class="guild-section-head"><div><span>ЛИЧНЫЙ ЖУРНАЛ</span><h2>История и награды</h2></div></div><div class="guild-assignment-list guild-assignment-list--history" data-visible-guild-history-rows="7">${history.map(assignmentRow).join('') || '<div class="guild-empty"><strong>История начнётся с первого задания</strong><span>Здесь появятся принятые работы, начисления, отказы и просрочки.</span></div>'}</div></section>
     </div>`;
@@ -303,6 +305,7 @@ export function createGuildWebsite({
     if (loading) return;
     if (action === 'reload') return load({ force:true });
     if (action === 'exchange') return openVpExchange();
+    if (action === 'tour') return startTour();
     if (action === 'open') {
       const assignment = dashboard?.assignments?.find(item => item.id === button.dataset.assignmentId);
       if (assignment) await openTrackedDraft(assignment);
