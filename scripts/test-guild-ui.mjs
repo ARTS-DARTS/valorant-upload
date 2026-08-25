@@ -25,8 +25,11 @@ test('Guild status labels sit to the left of the algorithm board', () => {
   assert.match(guild, /guild-section-head guild-section-head--board/);
   assert.match(guild, /guild-quests-layout[\s\S]*guild-legend[\s\S]*guild-quests/);
   assert.match(css, /guild-quests-layout\{position:relative;display:block;width:min\(920px,100%\)/);
-  assert.match(css, /guild-quests-layout>\.guild-legend\{position:absolute;top:0;right:calc\(100% \+ 18px\);width:280px/);
+  assert.match(css, /guild-quests-layout>\.guild-legend\{position:absolute;top:var\(--guild-legend-top,0px\);right:calc\(100% \+ 18px\);width:280px/);
   assert.match(css, /guild-quests-layout>\.guild-legend span\{padding:9px 10px;font-size:11px/);
+  assert.match(guild, /function syncGuildLegendPosition\(host\)/);
+  assert.match(guild, /guild-demand-stage:nth-of-type\(3\)/);
+  assert.match(guild, /--guild-legend-top/);
 });
 
 test('guild quests use the familiar agent, map and side demand-board flow', () => {
@@ -188,6 +191,8 @@ test('available Guild task frames are gold and their particle snakes share one p
   assert.match(guild, /const GUILD_PARTICLE_CYCLE_MS = 6000/);
   assert.match(guild, /performance\.now\(\) % GUILD_PARTICLE_CYCLE_MS/);
   assert.match(guild, /syncGuildDemandParticles\(host\)/);
+  assert.match(guild, /host\.style\.setProperty\('--guild-particle-delay'/);
+  assert.doesNotMatch(guild, /querySelectorAll\('\.guild-demand-ability:not\(\.claimed\)'\)/);
   assert.match(css, /\.guild-demand-ability\.selected\{--guild-frame-color:#55e7ff/);
   assert.match(css, /@media\(prefers-reduced-motion:reduce\).*\.guild-border-snake/s);
 });

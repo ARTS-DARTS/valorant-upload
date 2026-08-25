@@ -8,9 +8,20 @@ const GUILD_PARTICLE_CYCLE_MS = 6000;
 
 function syncGuildDemandParticles(host) {
   const phaseSeconds = -((performance.now() % GUILD_PARTICLE_CYCLE_MS) / 1000);
-  host.querySelectorAll('.guild-demand-ability:not(.claimed)').forEach(card => {
-    card.style.setProperty('--guild-particle-delay', `${phaseSeconds}s`);
-  });
+  host.style.setProperty('--guild-particle-delay', `${phaseSeconds}s`);
+}
+
+function syncGuildLegendPosition(host) {
+  const legend = host.querySelector('.guild-quests-layout > .guild-legend');
+  const layout = host.querySelector('.guild-quests-layout');
+  const abilities = host.querySelector('.guild-demand-board .guild-demand-stage:nth-of-type(3)');
+  if (!legend || !layout || !abilities) return;
+  if (window.matchMedia('(max-width:1280px)').matches) {
+    legend.style.removeProperty('--guild-legend-top');
+    return;
+  }
+  const top = Math.max(0, abilities.getBoundingClientRect().top - layout.getBoundingClientRect().top);
+  legend.style.setProperty('--guild-legend-top', `${Math.round(top)}px`);
 }
 
 function remainingLabel(value) {
@@ -397,6 +408,7 @@ export function createGuildWebsite({
     });
     selectedAgent = demandBoard.selectedAgent;
     selectedMap = demandBoard.selectedMap;
+    syncGuildDemandParticles(host);
     host.innerHTML = `<div class="guild-board">
       <header class="guild-command-strip">
         <div class="guild-rank"><span>РАНГ ГИЛЬДИИ</span><strong>${esc(rankLabel(profile.rank_key))}</strong><small>Уровень ${Number(profile.level || 1)} · серия ${Number(profile.completion_streak_days || 0)} дн. · рекорд ${Number(profile.best_completion_streak_days || 0)}</small></div>
@@ -410,7 +422,7 @@ export function createGuildWebsite({
         ${demandBoard.html}</section></div>
       <section class="guild-history"><div class="guild-section-head"><div><span>ЛИЧНЫЙ ЖУРНАЛ</span><h2>История и награды</h2></div></div><div class="guild-assignment-list guild-assignment-list--history" data-visible-guild-history-rows="7">${history.map(assignmentRow).join('') || '<div class="guild-empty"><strong>История начнётся с первого задания</strong><span>Здесь появятся принятые работы, начисления, отказы и просрочки.</span></div>'}</div></section>
     </div>`;
-    syncGuildDemandParticles(host);
+    requestAnimationFrame(() => syncGuildLegendPosition(host));
     sizeGuildHistory(host);
     restoreDemandScroll(scrollState);
   }
@@ -611,6 +623,7 @@ export function createGuildWebsite({
     historyResizeFrame = requestAnimationFrame(() => {
       historyResizeFrame = 0;
       sizeGuildHistory(host);
+      syncGuildLegendPosition(host);
     });
   });
 
