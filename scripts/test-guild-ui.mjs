@@ -162,15 +162,17 @@ test('Guild demand cards keep readable text and ability icons on desktop and mob
   assert.match(css, /@media\(max-width:700px\)[^\n]*\.guild-demand-ability\{grid-template-columns:34px 34px/);
 });
 
-test('available Guild task frames are gold and their border particles share one page-clock phase', () => {
+test('available Guild task frames are gold and their particle snakes share one page-clock phase', () => {
   assert.match(css, /\.guild-demand-ability\{[^}]*--guild-frame-color:#b77b18[^}]*position:relative[^}]*border-color:var\(--guild-frame-color\)/);
   assert.match(css, /@keyframes guild-border-particle\{to\{offset-distance:100%\}\}/);
-  assert.match(css, /animation-delay:var\(--guild-particle-delay,0s\)/);
+  assert.match(guild, /class="guild-border-snake"[^>]*>(?:<i[^>]*><\/i>){8}<\/span>/);
+  assert.match(css, /\.guild-border-snake i\{[^}]*animation-delay:calc\(var\(--guild-particle-delay,0s\) \+ var\(--snake-lag,0s\)\)/);
+  assert.match(css, /\.guild-border-snake i:nth-child\(8\)\{[^}]*opacity:\.18/);
   assert.match(guild, /const GUILD_PARTICLE_CYCLE_MS = 6000/);
   assert.match(guild, /performance\.now\(\) % GUILD_PARTICLE_CYCLE_MS/);
   assert.match(guild, /syncGuildDemandParticles\(host\)/);
   assert.match(css, /\.guild-demand-ability\.selected\{--guild-frame-color:#55e7ff/);
-  assert.match(css, /@media\(prefers-reduced-motion:reduce\).*\.guild-demand-ability::before/s);
+  assert.match(css, /@media\(prefers-reduced-motion:reduce\).*\.guild-border-snake/s);
 });
 
 test('guild assignment enforces the mandatory template fields before submission', () => {

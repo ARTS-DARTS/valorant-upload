@@ -171,6 +171,7 @@ function guildDemandTask(row, quests, abilityIcon, rewards, selectedChoice) {
     : selectable.length ? '<button class="guild-demand-take" type="button" disabled>Выбери плент</button>' : '';
   const hasBonus = Number(rewards.bonus_vp || 0) > 0;
   return `<article class="guild-demand-ability reward-demand-ability${hasBonus ? ' bonus' : ''}${selected ? ' selected' : ''}${allClaimed ? ' claimed' : ''}">
+    <span class="guild-border-snake" aria-hidden="true"><i style="--snake-lag:0s"></i><i style="--snake-lag:-.055s"></i><i style="--snake-lag:-.11s"></i><i style="--snake-lag:-.165s"></i><i style="--snake-lag:-.22s"></i><i style="--snake-lag:-.275s"></i><i style="--snake-lag:-.33s"></i><i style="--snake-lag:-.385s"></i></span>
     <span class="guild-demand-ability-icon reward-demand-ability-icon">${icon ? `<img src="${esc(icon)}" alt="">` : '✦'}</span>
     <span class="guild-demand-count reward-demand-count">${Number(row.count || 0)}</span>
     <div class="guild-demand-copy"><strong>${esc(row.ability || 'Способность')}</strong><small>${esc(guildSide(row.side || row.round_side))}</small><div class="guild-demand-zones reward-demand-zones">${chips}</div></div>
