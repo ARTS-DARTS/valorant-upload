@@ -22,7 +22,7 @@ test('moderation tasks and submitted lineups can be filtered independently', () 
   assert.match(htmlSource, /value="tasks">Задания/);
   assert.match(htmlSource, /value="lineups">Лайнапы/);
   assert.match(backendSource, /guild_assignment_id: clean\(d\.guild_assignment_id\)/);
-  assert.match(backendSource, /!!item\?\.guild_assignment_id/);
+  assert.match(backendSource, /return item\?\.guild_assignment_id \? 'tasks' : 'lineups'/);
   assert.match(backendSource, /function queueWorkCategory\(item\)/);
   assert.match(backendSource, /queue\.filter\(item => queueWorkCategory\(item\) === requestedCategory\)/);
   assert.match(moderationSource, /queueQuery\.set\('category', selectedWorkCategory\)/);

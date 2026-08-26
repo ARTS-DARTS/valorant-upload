@@ -560,9 +560,7 @@ function queueAuthorKey(item) {
 }
 
 function queueWorkCategory(item) {
-  return item?.task_kind === 'metadata' || item?.moderator_only === true || item?.media_recovery_task === true || !!item?.guild_assignment_id
-    ? 'tasks'
-    : 'lineups';
+  return item?.guild_assignment_id ? 'tasks' : 'lineups';
 }
 
 async function listQueue(req, res, moderator) {
