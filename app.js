@@ -49,7 +49,7 @@ import {
   remainingCooldownMs,
 } from './cooldown-core.mjs?v=2026-08-08-cooldown-authority-v1';
 import { createSocialWebsite } from './social-communication.mjs?v=2026-08-25-guild-v3';
-import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-25-guild-v20';
+import { createGuildWebsite } from './guild-ui.mjs?v=2026-08-26-guild-v23';
 import {
   canSubmitForRewards,
   rewardActionErrorMessage,
@@ -121,6 +121,7 @@ const guildWebsite = createGuildWebsite({
   openVpExchange:openRewardExchange,
   startTour:startGuildTour,
   agentIcon:agent => rewardDemandIcon(agent),
+  mapImage:map => rewardDemandMapImage(map),
   abilityIcon:(agent, ability) => rewardDemandAbilityIcon(agent, ability),
   toast:(...args) => toast(...args),
 });

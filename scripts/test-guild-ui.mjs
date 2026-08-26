@@ -47,6 +47,16 @@ test('guild quests use the familiar agent, map and side demand-board flow', () =
   assert.match(css, /@media\(max-width:700px\).*\.guild-demand-ability/s);
 });
 
+test('Guild map picker wraps five image cards per row without horizontal scrolling', () => {
+  assert.match(app, /mapImage:map => rewardDemandMapImage\(map\)/);
+  assert.match(guild, /const image = mapImage\(map\)/);
+  assert.match(guild, /--guild-map-image:url/);
+  assert.match(css, /\.guild-demand-maps\{display:grid;grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.guild-demand-map strong\{font-size:16px/);
+  assert.match(css, /\.guild-demand-map small\{[^}]*font-size:9px/);
+  assert.match(css, /var\(--guild-map-image,none\)/);
+});
+
 test('Guild demand selection is explicit, stable and case-insensitive', () => {
   assert.match(guild, /function guildUniqueLabels\(values\)/);
   assert.match(guild, /const key = guildKey\(label\)/);

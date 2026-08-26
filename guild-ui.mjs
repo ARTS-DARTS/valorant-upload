@@ -205,7 +205,7 @@ function guildDemandTask(row, quests, abilityIcon, settings, selectedChoice) {
   </article>`;
 }
 
-function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selectedAgent, selectedMap, selectedChoice, agentIcon, abilityIcon }) {
+function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selectedAgent, selectedMap, selectedChoice, agentIcon, mapImage, abilityIcon }) {
   const mapRows = guildDemandRows(demand?.map_pool).filter(row => guildKey(row.category || row.content_type || 'lineup') === 'lineup'
     && row.map && row.agent && row.ability);
   const subscribers = demand?.agent_notification_subscribers || {};
@@ -246,7 +246,10 @@ function guildDemandBoard({ quests, demand, settings, assignmentByQuest, selecte
     const opacity = Math.max(.34, 1 - (index / Math.max(1, agents.length - 1)) * .66);
     return `<button class="guild-demand-agent${selected ? ' selected' : ''}" type="button" data-guild-filter-agent="${esc(agent)}" aria-pressed="${selected}" title="${esc(agent)} · подписки: ${agentPriority(agent).subscribers}" style="--demand-opacity:${opacity.toFixed(2)}">${icon ? `<img src="${esc(icon)}" alt="${esc(agent)}">` : `<span>${esc(agent.slice(0, 1) || '?')}</span>`}</button>`;
   }).join('');
-  const mapButtons = maps.map((map, index) => `<button class="guild-demand-map${map === activeMap ? ' selected' : ''}${mapPriority(map).deficitCount ? ' priority' : ''}" type="button" data-guild-filter-map="${esc(map)}" aria-pressed="${map === activeMap}"><strong>${esc(map)}</strong><small>ПРИОРИТЕТ ${index + 1}</small></button>`).join('');
+  const mapButtons = maps.map((map, index) => {
+    const image = mapImage(map);
+    return `<button class="guild-demand-map${map === activeMap ? ' selected' : ''}${mapPriority(map).deficitCount ? ' priority' : ''}" type="button" data-guild-filter-map="${esc(map)}" aria-pressed="${map === activeMap}"${image ? ` style="--guild-map-image:url('${esc(image)}')"` : ''}><strong>${esc(map)}</strong><small>ПРИОРИТЕТ ${index + 1}</small></button>`;
+  }).join('');
   const groups = [
     { key:'attack', icon:'⚔', label:'АТАКА' }, { key:'defense', icon:'◆', label:'ЗАЩИТА' },
   ].map(group => {
@@ -319,6 +322,7 @@ export function createGuildWebsite({
   openVpExchange = () => {},
   startTour = () => {},
   agentIcon = () => '',
+  mapImage = () => '',
   abilityIcon = () => '',
   toast,
 }) {
