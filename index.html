@@ -795,6 +795,14 @@
             <option value="">Все авторы</option>
           </select>
         </label>
+        <label class="moderation-author-filter" for="moderation-work-filter">
+          <span>Категория работы</span>
+          <select id="moderation-work-filter" aria-label="Показать выбранную категорию работы">
+            <option value="">Вся работа</option>
+            <option value="tasks">Задания модерации</option>
+            <option value="lineups">Присланные лайнапы</option>
+          </select>
+        </label>
         <div id="moderation-status" class="moderation-status" role="status" aria-live="polite">Открой раздел, чтобы загрузить очередь.</div>
       </div>
       <div id="moderation-list" class="moderation-list"></div>

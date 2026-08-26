@@ -558,6 +558,12 @@ function queueAuthorKey(item) {
   return name ? `name:${name.toLocaleLowerCase('ru')}` : 'unknown';
 }
 
+function queueWorkCategory(item) {
+  return item?.task_kind === 'metadata' || item?.moderator_only === true || item?.media_recovery_task === true
+    ? 'tasks'
+    : 'lineups';
+}
+
 async function listQueue(req, res, moderator) {
   const db = getFirestore();
   const [pendingSnap, moderatorSnap, metadataSnap, staffCountSnap] = await Promise.all([
@@ -591,7 +597,13 @@ async function listQueue(req, res, moderator) {
     })
     .map(doc => safeLineup(doc, moderator.uid))
     .sort((a, b) => a.submitted_at - b.submitted_at);
-  const authors = [...queue.reduce((result, item) => {
+  const requestedCategory = ['tasks', 'lineups'].includes(clean(req.query?.category))
+    ? clean(req.query.category)
+    : '';
+  const categoryQueue = requestedCategory
+    ? queue.filter(item => queueWorkCategory(item) === requestedCategory)
+    : queue;
+  const authors = [...categoryQueue.reduce((result, item) => {
     const key = queueAuthorKey(item);
     const current = result.get(key);
     if (current) current.count += 1;
@@ -599,7 +611,9 @@ async function listQueue(req, res, moderator) {
     return result;
   }, new Map()).values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   const requestedAuthor = clean(req.query?.author).slice(0, 160);
-  const selectedQueue = requestedAuthor ? queue.filter(item => queueAuthorKey(item) === requestedAuthor) : queue;
+  const selectedQueue = requestedAuthor
+    ? categoryQueue.filter(item => queueAuthorKey(item) === requestedAuthor)
+    : categoryQueue;
   const total = selectedQueue.length;
   const staffCount = Number(staffCountSnap.data().count) || 1;
   const capacity = staffCount * 2;

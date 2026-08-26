@@ -16,6 +16,8 @@ let refreshButton = null;
 let moderationList = null;
 let authorFilter = null;
 let selectedAuthorKey = '';
+let workFilter = null;
+let selectedWorkCategory = '';
 let queueAuthors = [];
 let moderationMaps = new Map();
 
@@ -551,12 +553,19 @@ async function load({ silent = false, allowInactive = false, renderQueue = true 
       await api('', { method: 'POST', body: JSON.stringify({ action: 'seed_metadata_queue' }), signal: requestController.signal });
       sessionStorage.setItem('metadata-review-seeded-v2', '1');
     }
-    const queuePath = selectedAuthorKey ? `?author=${encodeURIComponent(selectedAuthorKey)}` : '';
+    const queueQuery = new URLSearchParams();
+    if (selectedAuthorKey) queueQuery.set('author', selectedAuthorKey);
+    if (selectedWorkCategory) queueQuery.set('category', selectedWorkCategory);
+    const queuePath = queueQuery.size ? `?${queueQuery}` : '';
     const body = await api(queuePath, { signal: requestController.signal });
     if (!active && !allowInactive) return;
     const items = Array.isArray(body.items) ? body.items : [];
     queueAuthors = Array.isArray(body.authors) ? body.authors : [];
     renderAuthorFilter();
+    if (workFilter) {
+      workFilter.value = selectedWorkCategory;
+      workFilter.disabled = false;
+    }
     const nextSignature = queueSignature(items);
     if (!active || !renderQueue) {
       loadedItems = items;
@@ -717,6 +726,14 @@ function setSpikeMetadataState(card, usage, x = '', y = '') {
   }
 }
 
+async function handleWorkFilterChange() {
+  selectedWorkCategory = workFilter?.value || '';
+  selectedAuthorKey = '';
+  renderedQueueSignature = '';
+  if (workFilter) workFilter.disabled = true;
+  await load();
+}
+
 function handleModerationListClick(event) {
   if (!active) return;
   const spikeUsageButton = event.target.closest('[data-spike-usage]');
@@ -819,10 +836,13 @@ function destroy() {
   moderationList?.removeEventListener('click', handleModerationListClick);
   moderationList?.removeEventListener('input', handleModerationListInput);
   authorFilter?.removeEventListener('change', handleAuthorFilterChange);
+  workFilter?.removeEventListener('change', handleWorkFilterChange);
   refreshButton = null;
   moderationList = null;
   authorFilter = null;
+  workFilter = null;
   selectedAuthorKey = '';
+  selectedWorkCategory = '';
   queueAuthors = [];
   loadedItems = [];
   totalQueueItems = 0;
@@ -834,10 +854,12 @@ export function initModeration(nextContext) {
   refreshButton = document.getElementById('moderation-refresh');
   moderationList = document.getElementById('moderation-list');
   authorFilter = document.getElementById('moderation-author-filter');
+  workFilter = document.getElementById('moderation-work-filter');
   refreshButton?.addEventListener('click', load);
   moderationList?.addEventListener('click', handleModerationListClick);
   moderationList?.addEventListener('input', handleModerationListInput);
   authorFilter?.addEventListener('change', handleAuthorFilterChange);
+  workFilter?.addEventListener('change', handleWorkFilterChange);
   loadModerationMaps();
   async function releaseClaim(lineupId) {
     if (!lineupId) return;

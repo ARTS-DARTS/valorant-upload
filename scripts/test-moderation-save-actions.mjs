@@ -10,11 +10,21 @@ const htmlSource = await readFile(new URL('index.html', root), 'utf8');
 
 test('moderation queue can be filtered by authors present in the queue', () => {
   assert.match(htmlSource, /id="moderation-author-filter"/);
-  assert.match(backendSource, /const authors = \[\.\.\.queue\.reduce/);
-  assert.match(backendSource, /selectedQueue = requestedAuthor \? queue\.filter/);
+  assert.match(backendSource, /const authors = \[\.\.\.categoryQueue\.reduce/);
+  assert.match(backendSource, /categoryQueue\.filter\(item => queueAuthorKey\(item\) === requestedAuthor\)/);
   assert.match(backendSource, /authors \}/);
-  assert.match(moderationSource, /\?author=\$\{encodeURIComponent\(selectedAuthorKey\)\}/);
+  assert.match(moderationSource, /queueQuery\.set\('author', selectedAuthorKey\)/);
   assert.match(moderationSource, /queueAuthors = Array\.isArray\(body\.authors\)/);
+});
+
+test('moderation tasks and submitted lineups can be filtered independently', () => {
+  assert.match(htmlSource, /id="moderation-work-filter"/);
+  assert.match(htmlSource, /value="tasks">Задания модерации/);
+  assert.match(htmlSource, /value="lineups">Присланные лайнапы/);
+  assert.match(backendSource, /function queueWorkCategory\(item\)/);
+  assert.match(backendSource, /queue\.filter\(item => queueWorkCategory\(item\) === requestedCategory\)/);
+  assert.match(moderationSource, /queueQuery\.set\('category', selectedWorkCategory\)/);
+  assert.match(moderationSource, /workFilter\?\.addEventListener\('change', handleWorkFilterChange\)/);
 });
 
 test('moderator save and completion use different API actions', () => {
