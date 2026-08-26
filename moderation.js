@@ -775,6 +775,7 @@ function startPolling() {
 function activate() {
   if (active) return;
   active = true;
+  loadModerationMaps();
   startPolling();
   renderClaimTimer();
 }
