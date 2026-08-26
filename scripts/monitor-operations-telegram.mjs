@@ -139,6 +139,20 @@ export async function collectOperationalProblems({
   const errorCount = Number(recentErrors?.data()?.count || 0);
   if (errorCount >= 5) problems.push(`Всплеск ошибок приложения: ${errorCount} за 15 минут`);
 
+  const selectelMonitor = await db.collection('storage_monitoring').doc('selectel_images').get().catch(() => null);
+  const selectelData = selectelMonitor?.data?.() || {};
+  const selectelAge = now() - millis(selectelData.checked_at);
+  if (!selectelMonitor?.exists || selectelAge > 30 * 60 * 60_000) {
+    problems.push('Selectel: проверка фотографий не запускалась более 30 часов');
+  } else {
+    if (Number(selectelData.failed) > 0) {
+      problems.push(`Selectel: недоступно фотографий — ${Number(selectelData.failed)}`);
+    }
+    if (Number(selectelData.usage_ratio) >= 0.9) {
+      problems.push(`Selectel: использовано ${Math.round(Number(selectelData.usage_ratio) * 100)}% заданного лимита фотографий`);
+    }
+  }
+
   const cron = await db.collection('cron_logs').orderBy('run_at', 'desc').limit(3).get().catch(() => null);
   const latestCron = cron?.docs?.[0]?.data?.() || null;
   if (latestCron?.ok === false && now() - millis(latestCron.run_at) < 6 * 60 * 60_000) {

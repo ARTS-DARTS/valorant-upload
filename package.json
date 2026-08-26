@@ -14,7 +14,8 @@
     "test:e2e:duel": "node scripts/test-duel-finalizer.mjs",
     "test:e2e:duel:server": "node scripts/test-duel-finalizer.mjs",
     "billing:test-scenarios": "node scripts/generate-robokassa-test-scenarios.mjs",
-    "moderation:clear-locks": "node scripts/clear-moderation-locks.mjs"
+    "moderation:clear-locks": "node scripts/clear-moderation-locks.mjs",
+    "monitor:selectel-images": "node scripts/monitor-selectel-images.mjs"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.7.0",
