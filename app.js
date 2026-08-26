@@ -73,6 +73,7 @@ const functions = getFunctions(app, 'us-central1');
 const guildFunctions = getFunctions(app, 'europe-west1');
 const socialWebsite = createSocialWebsite({ db, functions, toast: (...args) => toast(...args) });
 const createSelectelVideoUpload = httpsCallable(functions, 'createSelectelVideoUpload');
+const createSelectelImageUpload = httpsCallable(functions, 'createSelectelImageUpload');
 const getRewardsDashboard = httpsCallable(functions, 'getRewardsDashboard');
 const joinRewardProgram = httpsCallable(functions, 'joinRewardProgram');
 const requestRewardPayout = httpsCallable(functions, 'requestRewardPayout');
@@ -2700,26 +2701,35 @@ function compressImage(file) {
 }
 
 function uploadToCloudinary(blob, onProgress) {
-  const fd = new FormData();
-  fd.append('file', blob, 'screenshot.jpg');
-  fd.append('upload_preset', '4343242');
-  fd.append('folder', 'lineups_screenshots');
-  let xhr;
-  const promise = new Promise((resolve, reject) => {
-    xhr = new XMLHttpRequest();
-    xhr.open('POST', 'https://api.cloudinary.com/v1_1/djxgwkbqn/image/upload');
-    xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try { resolve(JSON.parse(xhr.responseText).secure_url); }
-        catch { reject(new Error('Неверный ответ Cloudinary')); }
-      } else { reject(new Error('Cloudinary ' + xhr.status)); }
-    };
-    xhr.onerror = () => reject(new Error('Сетевая ошибка'));
-    xhr.onabort = () => reject(new Error('canceled'));
-    xhr.send(fd);
+  let xhr = null;
+  let aborted = false;
+  const contentType = ['image/jpeg', 'image/png', 'image/webp'].includes(blob.type)
+    ? blob.type : 'image/jpeg';
+  const promise = new Promise(async (resolve, reject) => {
+    try {
+      const signed = await createSelectelImageUpload({ contentType, sizeBytes: blob.size });
+      const uploadUrl = signed.data?.uploadUrl;
+      const publicUrl = signed.data?.publicUrl;
+      if (!uploadUrl || !publicUrl) throw new Error('Сервер не вернул ссылку загрузки кадра');
+      if (aborted) return reject(new Error('canceled'));
+      xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl);
+      xhr.setRequestHeader('Content-Type', contentType);
+      xhr.upload.onprogress = event => {
+        if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve(publicUrl);
+        else reject(new Error(`Selectel upload error: ${xhr.status}`));
+      };
+      xhr.onerror = () => reject(new Error('Сетевая ошибка загрузки кадра'));
+      xhr.onabort = () => reject(new Error('canceled'));
+      xhr.send(blob);
+    } catch (error) {
+      reject(error);
+    }
   });
-  promise.abort = () => xhr?.abort();
+  promise.abort = () => { aborted = true; xhr?.abort(); };
   return promise;
 }
 
