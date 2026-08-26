@@ -175,8 +175,11 @@ function updateQueueStatus() {
   const status = document.getElementById('moderation-status');
   if (!status) return;
   const queueText = `В очереди: ${loadedItems.length} · Всего: ${totalQueueItems}`;
+  const remainingMinutes = activeClaimSummary
+    ? Math.max(1, Math.ceil((Number(activeClaimSummary.expires_at) - Date.now()) / 60_000))
+    : 0;
   status.innerHTML = activeClaimSummary
-    ? `${esc(queueText)}<button class="moderation-active-claim" type="button" data-active-claim-category="${esc(activeClaimSummary.category)}">В работе: ${esc(activeClaimSummary.label || 'открыть')}</button>`
+    ? `${esc(queueText)}<button class="moderation-active-claim" type="button" data-active-claim-category="${esc(activeClaimSummary.category)}">В работе: ${esc(activeClaimSummary.label || 'открыть')} · ${remainingMinutes} мин</button>`
     : esc(queueText);
 }
 

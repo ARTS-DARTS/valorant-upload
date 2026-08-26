@@ -38,9 +38,11 @@ test('moderation tasks and submitted lineups can be filtered independently', () 
 test('an active claim remains discoverable when queue filters hide its card', () => {
   assert.match(backendSource, /activeClaimItem = queue\.find/);
   assert.match(backendSource, /authors, active_claim/);
+  assert.match(backendSource, /expires_at: activeClaimItem\.moderation_lock_expires_at/);
   assert.match(moderationSource, /activeClaimSummary = body\.active_claim/);
   assert.match(moderationSource, /data-active-claim-category/);
   assert.match(moderationSource, /selectedWorkCategory = button\.dataset\.activeClaimCategory/);
+  assert.match(moderationSource, /remainingMinutes/);
 });
 
 test('expired and inconsistent moderation claims repair themselves safely', () => {

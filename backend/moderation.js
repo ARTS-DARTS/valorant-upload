@@ -676,6 +676,7 @@ async function listQueue(req, res, moderator) {
     id: activeClaimItem.id,
     category: queueWorkCategory(activeClaimItem),
     label: [activeClaimItem.map, activeClaimItem.agent, activeClaimItem.ability].filter(Boolean).join(' · ').slice(0, 180),
+    expires_at: activeClaimItem.moderation_lock_expires_at,
   } : null;
   res.status(200).json({ items, total, capacity, staff_count: staffCount, authors, active_claim });
 }
