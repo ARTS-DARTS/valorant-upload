@@ -17,6 +17,8 @@ const ACTION_WINDOW_MS = 60_000;
 const ACTION_LIMIT = 120;
 const actionWindows = new Map();
 const autosaveWindows = new Map();
+let expiredClaimCleanupPromise = null;
+let lastExpiredClaimCleanupAt = 0;
 
 function clean(value) {
   return String(value ?? '').replace(/п»ї/g, '').trim();
@@ -562,6 +564,46 @@ function queueAuthorKey(item) {
   return name ? `name:${name.toLocaleLowerCase('ru')}` : 'unknown';
 }
 
+async function cleanupExpiredClaims(db) {
+  const now = Date.now();
+  if (expiredClaimCleanupPromise) return expiredClaimCleanupPromise;
+  if (now - lastExpiredClaimCleanupAt < 60_000) return;
+  lastExpiredClaimCleanupAt = now;
+  expiredClaimCleanupPromise = (async () => {
+    const expired = await db.collection('moderation_claims')
+      .where('expires_at', '<=', new Date(now))
+      .limit(25)
+      .get();
+    for (const claimDoc of expired.docs) {
+      await db.runTransaction(async tx => {
+        const claimRef = claimDoc.ref;
+        const currentClaim = await tx.get(claimRef);
+        if (!currentClaim.exists || timestampMillis(currentClaim.data()?.expires_at) > Date.now()) return;
+        const lineupId = clean(currentClaim.data()?.lineup_id);
+        const lineupRef = /^[A-Za-z0-9_-]{6,128}$/.test(lineupId) ? db.collection('lineups').doc(lineupId) : null;
+        const lineupSnap = lineupRef ? await tx.get(lineupRef) : null;
+        if (lineupSnap?.exists && clean(lineupSnap.data()?.moderation_lock_uid) === claimDoc.id && timestampMillis(lineupSnap.data()?.moderation_lock_expires_at) <= Date.now()) {
+          tx.update(lineupRef, {
+            moderation_lock_uid: FieldValue.delete(),
+            moderation_lock_name: FieldValue.delete(),
+            moderation_lock_expires_at: FieldValue.delete(),
+            moderator_autosave: FieldValue.delete(),
+            moderator_autosaved_at: FieldValue.delete(),
+          });
+        }
+        tx.delete(claimRef);
+        tx.create(db.collection('moderator_logs').doc(), {
+          lineup_id: lineupId,
+          action: 'claim_expired_cleanup',
+          moderator_uid: claimDoc.id,
+          created_at: FieldValue.serverTimestamp(),
+        });
+      });
+    }
+  })().finally(() => { expiredClaimCleanupPromise = null; });
+  return expiredClaimCleanupPromise;
+}
+
 function queueWorkCategory(item) {
   if (item?.moderation_work_kind === 'task') return 'tasks';
   if (item?.moderation_work_kind === 'lineup') return 'lineups';
@@ -571,6 +613,7 @@ function queueWorkCategory(item) {
 
 async function listQueue(req, res, moderator) {
   const db = getFirestore();
+  await cleanupExpiredClaims(db);
   const [pendingSnap, moderatorSnap, metadataSnap, staffCountSnap] = await Promise.all([
     // Admin-created pending lineups can have created_at without submitted_at.
     // orderBy('submitted_at') silently excludes those documents from the queue.
@@ -694,7 +737,33 @@ async function claimDraft(req, res, moderator) {
     const claimedLineupId = clean(currentClaim.lineup_id);
     const claimedUntil = timestampMillis(currentClaim.expires_at);
     if (claimedLineupId && claimedLineupId !== lineupId && claimedUntil > Date.now()) {
-      throw Object.assign(new Error('У тебя уже есть задание в работе. Заверши его или нажми «Отказаться».'), { status: 409 });
+      const previousRef = db.collection('lineups').doc(claimedLineupId);
+      const previousSnap = await tx.get(previousRef);
+      const previousData = previousSnap.data() || {};
+      const previousLockValid = previousSnap.exists &&
+        isQueuedForModeration(previousData) &&
+        clean(previousData.moderation_lock_uid) === moderator.uid &&
+        timestampMillis(previousData.moderation_lock_expires_at) > Date.now();
+      if (previousLockValid) {
+        throw Object.assign(new Error('У тебя уже есть работа. Открой её через индикатор «В работе» или нажми «Отказаться».'), { status: 409 });
+      }
+      if (previousSnap.exists && clean(previousData.moderation_lock_uid) === moderator.uid) {
+        tx.update(previousRef, {
+          moderation_lock_uid: FieldValue.delete(),
+          moderation_lock_name: FieldValue.delete(),
+          moderation_lock_expires_at: FieldValue.delete(),
+          moderator_autosave: FieldValue.delete(),
+          moderator_autosaved_at: FieldValue.delete(),
+        });
+      }
+      tx.create(db.collection('moderator_logs').doc(), {
+        lineup_id: claimedLineupId,
+        action: 'stale_claim_replaced',
+        moderator_uid: moderator.uid,
+        moderator_name: moderator.name,
+        moderator_role: moderator.role,
+        created_at: FieldValue.serverTimestamp(),
+      });
     }
     tx.update(ref, {
       moderation_lock_uid: moderator.uid,

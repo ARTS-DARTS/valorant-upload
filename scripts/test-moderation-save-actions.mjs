@@ -43,6 +43,15 @@ test('an active claim remains discoverable when queue filters hide its card', ()
   assert.match(moderationSource, /selectedWorkCategory = button\.dataset\.activeClaimCategory/);
 });
 
+test('expired and inconsistent moderation claims repair themselves safely', () => {
+  assert.match(backendSource, /async function cleanupExpiredClaims\(db\)/);
+  assert.match(backendSource, /where\('expires_at', '<=', new Date\(now\)\)/);
+  assert.match(backendSource, /action: 'claim_expired_cleanup'/);
+  assert.match(backendSource, /const previousLockValid = previousSnap\.exists/);
+  assert.match(backendSource, /action: 'stale_claim_replaced'/);
+  assert.match(backendSource, /await cleanupExpiredClaims\(db\)/);
+});
+
 test('moderator save and completion use different API actions', () => {
   const saveClickHandler = appSource.match(
     /getElementById\('btn-save-draft'\)[\s\S]*?saveCurrentDraftSnapshot\(\);/,
