@@ -53,6 +53,7 @@ test('moderator metadata task supports an explicit Spike decision and map positi
   assert.match(moderationClient, /data-spike-usage="placed"/);
   assert.match(moderationClient, /data-spike-usage="not_used"/);
   assert.match(moderationClient, /data-spike-map/);
+  assert.match(moderationClient, /Указать использование Spike/);
   assert.match(moderationClient, /data\.spike_usage =/);
   assert.match(moderationClient, /data\.spike_x = Number/);
   assert.match(moderationClient, /data\.spike_y = Number/);

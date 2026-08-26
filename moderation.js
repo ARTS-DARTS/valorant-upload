@@ -140,6 +140,14 @@ function metadataFields(item) {
   </div>`;
 }
 
+function metadataTaskTitle(item) {
+  const missing = new Set(item.missing_fields || []);
+  if (missing.has('spike_usage')) {
+    return missing.size === 1 ? 'Указать использование Spike' : 'Проверить Spike и параметры';
+  }
+  return 'Проверить параметры лайнапа';
+}
+
 async function api(path = '', options = {}) {
   const token = await context.getToken();
   const response = await fetch(`/api/moderation${path}`, {
@@ -401,7 +409,7 @@ function render(items, total = totalQueueItems) {
         ${video ? `<div class="moderation-video-wrap"><video class="moderation-video" src="${esc(video)}" data-original-src="${esc(originalVideo)}"${poster ? ` poster="${esc(poster)}" preload="none"` : ' preload="metadata" data-preview-frame="pending"'} controls playsinline></video><div class="moderation-video-error" data-moderation-video-error hidden><strong>Видео заблокировано или недоступно</strong><span>Отключи блокировщик для vlineups.ru и попробуй ещё раз.</span><button type="button" data-moderation-video-retry>Повторить через прокси</button></div></div>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
         <div class="moderation-info">
           <div class="moderation-meta">${meta.map(value => `<span class="moderation-chip">${esc(value)}</span>`).join('')}</div>
-          <h3 class="moderation-title">${metadataTask ? 'Проверить параметры лайнапа' : esc(item.title || 'Без названия')}</h3>
+          <h3 class="moderation-title">${metadataTask ? metadataTaskTitle(item) : esc(item.title || 'Без названия')}</h3>
           ${metadataTask
             ? (ownedByCurrentModerator ? metadataFields(item) : '<p class="moderation-description">Сначала возьми задание в работу. После этого откроются параметры для проверки.</p>')
             : `<p class="moderation-description">${esc(item.description || 'Описание отсутствует')}</p><div class="moderation-author">Автор: ${esc(item.submitted_by || 'не указан')}</div>${item.reward_program_opt_in ? '<div class="moderation-reward-notice">🎁 Участвует в программе наград · итоговая оценка появится при завершении проверки</div>' : ''}`}
