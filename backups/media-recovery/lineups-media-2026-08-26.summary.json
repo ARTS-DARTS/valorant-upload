@@ -1,0 +1,11 @@
+{
+  "snapshot_version": 1,
+  "exported_at": "2026-08-26T16:46:26.393Z",
+  "collection": "lineups",
+  "documents": 412,
+  "media_urls": 1839,
+  "cloudinary_urls": 1474,
+  "encrypted_file": "lineups-media-2026-08-26.json.enc",
+  "sha256": "90302c9c92e9686b7f722da2f9c9f0689c8383e47a8575e34fd0c18ef1f5f31b",
+  "privacy": "Encrypted snapshot contains no user identity, email, payment, moderation-note, or secret fields."
+}
