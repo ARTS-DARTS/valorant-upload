@@ -1,4 +1,5 @@
 import test from 'node:test';
+import './test-selectel-image-storage.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
