@@ -408,7 +408,7 @@ export function createGuildWebsite({
     const history = assignments.filter(item => !active.includes(item));
     const demandBoard = guildDemandBoard({
       quests:dashboard.quests || [], demand:dashboard.demand || {}, settings:dashboard.settings || {}, assignmentByQuest,
-      selectedAgent, selectedMap, selectedChoice:selectedDemandChoice, agentIcon, abilityIcon,
+      selectedAgent, selectedMap, selectedChoice:selectedDemandChoice, agentIcon, mapImage, abilityIcon,
     });
     selectedAgent = demandBoard.selectedAgent;
     selectedMap = demandBoard.selectedMap;
