@@ -32,9 +32,9 @@ test('both pending claims and reward history use a bounded seven-row scroller', 
   assert.match(app, /list\.style\.maxHeight = 'none'/);
   assert.match(app, /window\.addEventListener\('resize',[\s\S]*?sizeRewardLists\(host\)/);
   assert.match(styles, /reward-list--held,\.reward-list--bounded\{max-height:469px;overflow-y:auto/);
-  assert.match(html, /styles\.css\?v=2026-08-25-guild-v20/);
+  assert.match(html, /styles\.css\?v=2026-08-26-guild-v21/);
   assert.match(html, /workspace-redesign-fixes\.css\?v=2026-08-25-surgical-v2/);
-  assert.match(html, /app\.js\?v=2026-08-25-guild-v20/);
+  assert.match(html, /app\.js\?v=2026-08-26-guild-v21/);
 });
 
 test('reward actions require an explicitly enabled program', () => {
@@ -180,7 +180,16 @@ test('reward demand totals place labels above their numbers', () => {
   assert.match(app, /<small>Общее<\/small><b>\$\{globalRows/);
 });
 
-test('reward demand agent and map rails support horizontal mouse-wheel scrolling', () => {
+test('reward demand maps use a five-column image grid without horizontal scrolling', () => {
+  assert.match(app, /function rewardDemandMapImage\(mapName\)/);
+  assert.match(app, /--reward-map-image:url/);
+  assert.match(styles, /grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+  assert.match(styles, /overflow:visible/);
+  assert.match(styles, /background-image:linear-gradient[^}]*var\(--reward-map-image\)!important/);
+  assert.match(styles, /reward-demand-map>span\{[^}]*font-size:17px!important/);
+});
+
+test('reward demand agent rail keeps horizontal mouse-wheel scrolling', () => {
   assert.match(app, /\.reward-demand-agents,\.reward-demand-maps/);
   assert.match(app, /rail\.scrollLeft=Math\.max\(0,Math\.min\(maxScroll,rail\.scrollLeft\+delta\)\)/);
   assert.match(app, /\{passive:false\}/);

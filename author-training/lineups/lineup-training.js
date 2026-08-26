@@ -7,7 +7,7 @@ const steps = [
   ['Допуск', 'Подтверди правила'],
 ];
 const recordingItems = [
-  'Видео записано в 1920×1080 (Full HD)',
+  'Видео записано строго в 1920×1080 (Full HD), 60 FPS, H.264 — не 30 и не 120 FPS',
   'Качество графики в игре — минимум «Среднее»',
   'Исходная позиция игрока показана крупно',
   'Ориентир прицела хорошо различим',
@@ -34,7 +34,7 @@ const params = new URLSearchParams(location.search);
 const criteriaUpdateMode = params.get('mode') === 'changes';
 const criteriaRevision = params.get('revision') || '';
 const criteriaUpdateItems = [
-  'Видео записано в 1920×1080 (Full HD)',
+  'Видео записано строго в 1920×1080 (Full HD), 60 FPS, H.264 — не 30 и не 120 FPS',
   'Качество графики в игре — минимум «Среднее»',
 ];
 const criteriaUpdateState = { checked: new Set(), loading: true, saving: false, completed: false, alreadyCompleted: false, error: '' };

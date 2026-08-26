@@ -1,5 +1,5 @@
 const requirements = [
-  { key: 'full-hd', text: 'Видео записано в 1920×1080 (Full HD)' },
+  { key: 'full-hd-60fps', text: 'Видео записано строго в 1920×1080 (Full HD), 60 FPS, H.264 — не 30 и не 120 FPS' },
   { key: 'game-quality', text: 'Качество графики в игре — минимум «Среднее»' },
 ];
 

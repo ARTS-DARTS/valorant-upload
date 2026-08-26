@@ -200,6 +200,10 @@ function rewardDemandIcon(agentName) {
   const agent = agentsList.find(item => item.displayName === agentName);
   return proxiedValorantUrl(agent?.displayIconSmall || agent?.displayIcon || '');
 }
+function rewardDemandMapImage(mapName) {
+  const map = mapsData.find(item => item.displayName === mapName);
+  return proxiedValorantUrl(map?.splash || map?.listViewIcon || map?.displayIcon || MAP_FALLBACK_URLS[mapName] || '');
+}
 function rewardDemandAbilityIcon(agentName, abilityName) {
   const normalized = value => String(value || '').trim().toLocaleLowerCase('ru-RU');
   const agent = agentsList.find(item => normalized(item.displayName) === normalized(agentName));
@@ -308,7 +312,10 @@ function renderRewardDemand(deficits) {
     const subscribers=agentPriority(agent).subscribers;
     return `<button class="reward-demand-agent${selected?' selected':''}" type="button" data-demand-agent="${esc(agent)}" title="${esc(agent)} · уведомления: ${subscribers}" aria-label="${esc(agent)}, уведомления: ${subscribers}" aria-pressed="${selected}" style="--demand-opacity:${opacity.toFixed(2)}">${icon?`<img src="${esc(icon)}" alt="">`:`<span>${esc(agent.slice(0,1)||'?')}</span>`}</button>`;
   }).join('');
-  const mapButtons=maps.map((map,index)=>`<button class="reward-demand-map${map===rewardDemandMap?' selected':''}${mapPriority(map).deficitCount?' priority':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}">${esc(map)}${mapPriority(map).deficitCount?`<small>приоритет ${index+1}</small>`:''}</button>`).join('');
+  const mapButtons=maps.map((map,index)=>{
+    const image=rewardDemandMapImage(map);
+    return `<button class="reward-demand-map${map===rewardDemandMap?' selected':''}${mapPriority(map).deficitCount?' priority':''}" type="button" data-demand-map="${esc(map)}" aria-pressed="${map===rewardDemandMap}"${image?` style="--reward-map-image:url('${esc(image)}')"`:''}><span>${esc(map)}</span>${mapPriority(map).deficitCount?`<small>приоритет ${index+1}</small>`:''}</button>`;
+  }).join('');
   const normalizeDemandKey=value=>String(value||'').trim().toLowerCase();
   const zoneCoverageForRow=row=>rewardDashboard?.deficits?.market_zone_coverage?.[normalizeDemandKey(row.map)]?.[normalizeDemandKey(row.agent||rewardDemandAgent)]?.[normalizeDemandKey(row.ability)]?.[normalizeDemandKey(row.side)]||null;
   const expectedZonesForMap=map=>['a','b',...(['haven','lotus'].includes(normalizeDemandKey(map))?['c']:[]),'mid'];
@@ -2840,7 +2847,7 @@ function uploadCompatibleLineupVideo(file, onProgress) {
         resolve(
           `https://res.cloudinary.com/djxgwkbqn/video/upload/` +
           `c_limit,h_1080,w_1920/` +
-          `f_mp4,vc_h264:main:4.1,ac_aac,fps_1-30,fl_progressive,q_auto:good/` +
+          `f_mp4,vc_h264:high:4.2,ac_aac,fps_60,fl_progressive,q_auto:good/` +
           `v${result.version}/${result.public_id}.mp4`,
         );
       } catch (error) {
@@ -2857,8 +2864,8 @@ function uploadCompatibleLineupVideo(file, onProgress) {
 
 function uploadVideoToSelectel(file, onProgress) {
   // Normalize user video before its URL reaches a lineup. Directly storing the
-  // source preserved 1080p/120 FPS and codecs unsupported by some Android
-  // hardware decoders.
+  // Enforce the publication standard: 1920x1080 at 60 FPS in a broadly
+  // decodable H.264/AAC MP4. In particular, never preserve 120 FPS sources.
   return uploadCompatibleLineupVideo(file, onProgress);
 
   /* Legacy direct-to-Selectel uploader retained temporarily for rollback.
@@ -3019,7 +3026,7 @@ const CATEGORY_FORM_GUIDES = {
     description: 'Пройди форму сверху вниз: выбери данные лайнапа, подготовь видео и кадры, разметь карту, добавь описание и отправь материал.',
     steps: ['Заполни основу', 'Подготовь видео', 'Добавь кадры', 'Разметь карту', 'Опиши и отправь'],
     important: [
-      'Записывай видео в 1920×1080 (Full HD), качество графики — не ниже «Среднего».',
+      'Записывай видео строго в 1920×1080 (Full HD), 60 FPS, H.264; качество графики — не ниже «Среднего».',
       'Покажи стартовую позицию, ориентир прицела, сам бросок и конечный результат.',
       'Не вырезай движение, подготовку броска и момент использования способности.',
       'Карта, агент, способность и название должны точно соответствовать записи.',
@@ -3033,7 +3040,7 @@ const CATEGORY_FORM_GUIDES = {
     description: 'Собери понятный сетап: где стоят способности, какую зону они держат и что происходит при активации.',
     steps: ['Выбери карту', 'Покажи зону', 'Расставь способности', 'Займи позицию', 'Покажи активацию'],
     important: [
-      'Записывай видео в 1920×1080 (Full HD), качество графики — не ниже «Среднего».',
+      'Записывай видео строго в 1920×1080 (Full HD), 60 FPS, H.264; качество графики — не ниже «Среднего».',
       'Сначала покажи общий вид плента и зону, которую удерживает сетап.',
       'Отдельно и разборчиво покажи установку каждой способности.',
       'Покажи итоговую позицию игрока после установки всего сетапа.',
@@ -10201,7 +10208,7 @@ document.getElementById('edit-reset')?.addEventListener('click', resetVideoEdit)
 function isVideoFile(file) {
   return file && (
     file.type.startsWith('video/') ||
-    /\.(mp4|mov|webm)$/i.test(file.name)
+    /\.(mp4|mov)$/i.test(file.name)
   );
 }
 
@@ -10213,7 +10220,7 @@ async function handleVideoFile(file) {
     const actualSize = localMetadata.width && localMetadata.height
       ? ` Загружено: ${localMetadata.width}×${localMetadata.height}.`
       : '';
-    toast(`Видео должно быть записано строго в 1920×1080 (Full HD).${actualSize}`, 'e');
+    toast(`Видео должно быть записано строго в 1920×1080 (Full HD), 60 FPS.${actualSize}`, 'e');
     return;
   }
   resetVideoViewerZoom();

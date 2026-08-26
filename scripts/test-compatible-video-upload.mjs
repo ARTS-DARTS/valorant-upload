@@ -10,6 +10,6 @@ test('lineup uploads always return a broadly decodable video derivative', async 
   const wrapper = source.slice(wrapperStart, wrapperStart + 500);
 
   assert.match(uploader, /c_limit,h_1080,w_1920/);
-  assert.match(uploader, /f_mp4,vc_h264:main:4\.1,ac_aac,fps_1-30,fl_progressive,q_auto:good/);
+  assert.match(uploader, /f_mp4,vc_h264:high:4\.2,ac_aac,fps_60,fl_progressive,q_auto:good/);
   assert.match(wrapper, /return uploadCompatibleLineupVideo\(file, onProgress\)/);
 });

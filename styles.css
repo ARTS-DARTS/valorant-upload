@@ -1828,6 +1828,49 @@ html body h1,html body h2,html body h3,html body strong,html body b{font-family:
 .reward-demand-map.selected small{color:#12303b!important}
 html body .reward-demand-map{min-height:44px;padding:6px 14px;font-size:15px!important;font-weight:900;line-height:1.05}
 html body .reward-demand-map small{display:block;margin-top:4px;font-size:10px!important;font-weight:800;line-height:1!important;letter-spacing:.045em}
+
+/* Map pool: five cards per row, no horizontal rail, with the matching map art. */
+html body .reward-demand-stage:not(.reward-demand-category-stage)>.reward-demand-maps{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:9px;
+  overflow:visible;
+  padding:6px 7px 4px;
+}
+html body .reward-demand-stage:not(.reward-demand-category-stage)>.reward-demand-maps .reward-demand-map{
+  width:100%;
+  min-width:0;
+  min-height:58px;
+  overflow:hidden;
+  padding:8px 12px;
+  border-color:rgba(255,176,46,.42);
+  background-image:linear-gradient(90deg,rgba(7,18,30,.96),rgba(7,18,30,.7)),var(--reward-map-image)!important;
+  background-position:center;
+  background-size:cover;
+  background-repeat:no-repeat;
+  text-shadow:0 1px 4px #02070c;
+}
+html body .reward-demand-stage:not(.reward-demand-category-stage)>.reward-demand-maps .reward-demand-map>span{
+  margin:0;
+  color:#f4f9fd;
+  font-size:17px!important;
+  font-weight:900;
+  line-height:1.05;
+}
+html body .reward-demand-stage:not(.reward-demand-category-stage)>.reward-demand-maps .reward-demand-map small{
+  margin-top:5px;
+  color:#ffc15a;
+  font-size:10px!important;
+  text-shadow:0 1px 4px #02070c;
+}
+html body .reward-demand-stage:not(.reward-demand-category-stage)>.reward-demand-maps .reward-demand-map.selected{
+  background-image:linear-gradient(90deg,rgba(85,231,255,.94),rgba(85,231,255,.72)),var(--reward-map-image)!important;
+  text-shadow:none;
+}
+html body .reward-demand-stage:not(.reward-demand-category-stage)>.reward-demand-maps .reward-demand-map.selected>span{color:#06131c}
+html body .reward-demand-stage:not(.reward-demand-category-stage)>.reward-demand-maps .reward-demand-map.selected small{text-shadow:none}
+@media(max-width:760px){html body .reward-demand-stage:not(.reward-demand-category-stage)>.reward-demand-maps{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:480px){html body .reward-demand-stage:not(.reward-demand-category-stage)>.reward-demand-maps{grid-template-columns:repeat(2,minmax(0,1fr))}}
 html body .reward-demand-totals button small{margin:0 0 5px;font-size:10px!important;line-height:1!important}
 html body .reward-demand-totals button b{font-size:17px!important;line-height:1}
 
