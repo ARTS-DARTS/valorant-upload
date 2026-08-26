@@ -1,0 +1,12 @@
+[Unit]
+Description=Verify VLineups Selectel images and storage budget
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/valorant-upload
+EnvironmentFile=/var/www/valorant-upload/.env
+ExecStart=/usr/bin/node scripts/monitor-selectel-images.mjs
+User=root
+

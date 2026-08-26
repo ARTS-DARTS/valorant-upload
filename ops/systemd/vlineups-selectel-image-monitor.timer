@@ -1,0 +1,11 @@
+[Unit]
+Description=Run VLineups Selectel image verification daily
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 Europe/Moscow
+Persistent=true
+RandomizedDelaySec=10m
+Unit=vlineups-selectel-image-monitor.service
+
+[Install]
+WantedBy=timers.target
