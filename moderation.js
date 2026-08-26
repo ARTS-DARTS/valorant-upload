@@ -17,6 +17,7 @@ let moderationList = null;
 let authorFilter = null;
 let selectedAuthorKey = '';
 let queueAuthors = [];
+let moderationMaps = new Map();
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
@@ -89,6 +90,38 @@ function sovaShotFields(item) {
   }).join('');
 }
 
+function moderationMapImage(mapName) {
+  const value = moderationMaps.get(String(mapName || '').trim().toLocaleLowerCase('ru-RU')) || '';
+  return value ? `/api/valorant-proxy?url=${encodeURIComponent(value)}` : '';
+}
+
+async function loadModerationMaps() {
+  if (moderationMaps.size) return;
+  try {
+    const response = await fetch('/api/valorant-proxy?url=' + encodeURIComponent('https://valorant-api.com/v1/maps'));
+    if (!response.ok) return;
+    const body = await response.json();
+    moderationMaps = new Map((body.data || []).map(map => [String(map.displayName || '').trim().toLocaleLowerCase('ru-RU'), map.displayIcon || '']));
+    if (active && loadedItems.length) render(loadedItems);
+  } catch (_) {}
+}
+
+function spikeMetadataField(item) {
+  const image = moderationMapImage(item.map);
+  return `<fieldset class="moderation-spike-field"><legend>Spike</legend>
+    <p>Посмотри видео и укажи, нужен ли Spike для этого лайнапа.</p>
+    <div class="moderation-choice-row">
+      <button type="button" data-spike-usage="placed">Используется — отметить на карте</button>
+      <button type="button" data-spike-usage="not_used">Не используется</button>
+    </div>
+    <div class="moderation-spike-map" data-spike-map${image ? ` style="--moderation-map-image:url('${esc(image)}')"` : ''} hidden>
+      <span class="moderation-spike-marker" data-spike-marker hidden>◆</span>
+      <small>${image ? 'Нажми на место установки Spike' : 'Карта загружается…'}</small>
+    </div>
+    <input type="hidden" data-spike-x><input type="hidden" data-spike-y><input type="hidden" data-spike-value>
+  </fieldset>`;
+}
+
 function metadataFields(item) {
   const missing = new Set(item.missing_fields || []);
   return `<div class="moderation-metadata-form">
@@ -102,6 +135,7 @@ function metadataFields(item) {
       <label><input type="radio" name="round-side-${esc(item.id)}" value="defense"> Защита</label>
       <label><input type="radio" name="round-side-${esc(item.id)}" value="any"> Любая</label>
     </div></fieldset>` : ''}
+    ${missing.has('spike_usage') ? spikeMetadataField(item) : ''}
     ${missing.has('sova_shots') ? sovaShotFields(item) : ''}
   </div>`;
 }
@@ -185,6 +219,9 @@ function captureMetadataFormState() {
       roundSide: card.querySelector(`input[name="round-side-${CSS.escape(id)}"]:checked`)?.value || '',
       charges: charges.map(input => input.value),
       bounces: bounces.map(picker => picker.dataset.value ?? ''),
+      spikeUsage: card.querySelector('[data-spike-value]')?.value || '',
+      spikeX: card.querySelector('[data-spike-x]')?.value || '',
+      spikeY: card.querySelector('[data-spike-y]')?.value || '',
     });
   });
   return state;
@@ -202,6 +239,7 @@ function restoreMetadataFormState(state) {
       const input = card.querySelector(`input[name="round-side-${CSS.escape(id)}"][value="${CSS.escape(values.roundSide)}"]`);
       if (input) input.checked = true;
     }
+    if (values.spikeUsage) setSpikeMetadataState(card, values.spikeUsage, values.spikeX, values.spikeY);
     card.querySelectorAll('[data-metadata-charge]').forEach((charge, index) => {
       const stored = values.charges?.[index];
       if (stored === undefined || stored === '') return;
@@ -357,7 +395,7 @@ function render(items, total = totalQueueItems) {
     const poster = safeMediaUrl(item.video_thumbnail_url || item.screenshots?.[0]);
     const metadataTask = item.task_kind === 'metadata';
     const ownedByCurrentModerator = item.moderation_lock_owned === true;
-    const meta = [item.moderator_only ? 'ЗАГОТОВКА ДЛЯ МОДЕРАЦИИ' : '', item.map, item.agent, item.agent ? item.ability : 'Выбери агента', sideLabel(item.round_side)].filter(Boolean);
+    const meta = [item.media_recovery_task ? 'ВОССТАНОВЛЕНИЕ МЕДИА' : (item.moderator_only ? 'ЗАГОТОВКА ДЛЯ МОДЕРАЦИИ' : ''), item.map, item.agent, item.agent ? item.ability : 'Выбери агента', sideLabel(item.round_side)].filter(Boolean);
     return `<article class="moderation-card" data-moderation-id="${esc(item.id)}">
       <div class="moderation-card-main">
         ${video ? `<div class="moderation-video-wrap"><video class="moderation-video" src="${esc(video)}" data-original-src="${esc(originalVideo)}"${poster ? ` poster="${esc(poster)}" preload="none"` : ' preload="metadata" data-preview-frame="pending"'} controls playsinline></video><div class="moderation-video-error" data-moderation-video-error hidden><strong>Видео заблокировано или недоступно</strong><span>Отключи блокировщик для vlineups.ru и попробуй ещё раз.</span><button type="button" data-moderation-video-retry>Повторить через прокси</button></div></div>` : '<div class="moderation-video moderation-empty">Видео не прикреплено</div>'}
@@ -584,6 +622,13 @@ async function act(card, action) {
     const data = {};
     if (missing.has('difficulty')) data.difficulty = card.querySelector(`input[name="difficulty-${CSS.escape(item.id)}"]:checked`)?.value || '';
     if (missing.has('round_side')) data.round_side = card.querySelector(`input[name="round-side-${CSS.escape(item.id)}"]:checked`)?.value || '';
+    if (missing.has('spike_usage')) {
+      data.spike_usage = card.querySelector('[data-spike-value]')?.value || '';
+      if (data.spike_usage === 'placed') {
+        data.spike_x = Number(card.querySelector('[data-spike-x]')?.value);
+        data.spike_y = Number(card.querySelector('[data-spike-y]')?.value);
+      }
+    }
     if (missing.has('sova_shots')) data.sova_shots = [...card.querySelectorAll('[data-sova-shot]')].map(shot => ({
       charge: Number(shot.querySelector('[data-metadata-charge]')?.value),
       bounces: Number(shot.querySelector('[data-metadata-bounces]')?.dataset.value || 0),
@@ -642,8 +687,43 @@ async function act(card, action) {
 
 let loadedItems = [];
 
+function setSpikeMetadataState(card, usage, x = '', y = '') {
+  if (!card) return;
+  const value = card.querySelector('[data-spike-value]');
+  const xInput = card.querySelector('[data-spike-x]');
+  const yInput = card.querySelector('[data-spike-y]');
+  const map = card.querySelector('[data-spike-map]');
+  const marker = card.querySelector('[data-spike-marker]');
+  if (value) value.value = usage;
+  card.querySelectorAll('[data-spike-usage]').forEach(button => button.classList.toggle('is-selected', button.dataset.spikeUsage === usage));
+  if (map) map.hidden = usage !== 'placed';
+  const hasPosition = usage === 'placed' && x !== '' && y !== '' && Number.isFinite(Number(x)) && Number.isFinite(Number(y));
+  if (xInput) xInput.value = hasPosition ? String(x) : '';
+  if (yInput) yInput.value = hasPosition ? String(y) : '';
+  if (marker) {
+    marker.hidden = !hasPosition;
+    if (hasPosition) {
+      marker.style.left = `${Number(x) * 100}%`;
+      marker.style.top = `${Number(y) * 100}%`;
+    }
+  }
+}
+
 function handleModerationListClick(event) {
   if (!active) return;
+  const spikeUsageButton = event.target.closest('[data-spike-usage]');
+  if (spikeUsageButton) {
+    setSpikeMetadataState(spikeUsageButton.closest('[data-moderation-id]'), spikeUsageButton.dataset.spikeUsage);
+    return;
+  }
+  const spikeMap = event.target.closest('[data-spike-map]');
+  if (spikeMap && !spikeMap.hidden) {
+    const rect = spikeMap.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    setSpikeMetadataState(spikeMap.closest('[data-moderation-id]'), 'placed', x, y);
+    return;
+  }
   const videoRetry = event.target.closest('[data-moderation-video-retry]');
   if (videoRetry) {
     const video = videoRetry.closest('.moderation-video-wrap')?.querySelector('video');
@@ -749,6 +829,7 @@ export function initModeration(nextContext) {
   moderationList?.addEventListener('click', handleModerationListClick);
   moderationList?.addEventListener('input', handleModerationListInput);
   authorFilter?.addEventListener('change', handleAuthorFilterChange);
+  loadModerationMaps();
   async function releaseClaim(lineupId) {
     if (!lineupId) return;
     await api('', { method: 'POST', body: JSON.stringify({ lineupId, action: 'release_claim' }) });

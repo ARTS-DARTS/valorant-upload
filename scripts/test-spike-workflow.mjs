@@ -6,6 +6,7 @@ const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 const moderation = readFileSync(new URL('../backend/moderation.js', import.meta.url), 'utf8');
+const moderationClient = readFileSync(new URL('../moderation.js', import.meta.url), 'utf8');
 
 test('attack lineup requires an explicit Spike decision', () => {
   assert.match(html, /id="mode-spike"/);
@@ -24,7 +25,7 @@ test('map ability icons face down independently from Spike', () => {
   assert.match(app, /rotate\(\$\{-currentMapQuarterTurns\(\) \* 90\} \$\{cx\} \$\{cy\}\)/);
   assert.match(app, /icon\.setAttribute\('width', '18'\)/);
   assert.match(app, /icon\.setAttribute\('height', '18'\)/);
-  assert.match(css, /#marker-icon\{[^}]*rotate\(var\(--map-counter-rotation, 0deg\)\)/);
+  assert.match(css, /#marker-icon\s*\{[^}]*rotate\(var\(--map-counter-rotation, 0deg\)\)/);
   assert.match(css, /\.spike-map-marker img\{[^}]*\+ 90deg/);
 });
 
@@ -46,4 +47,16 @@ test('moderation preserves and validates Spike metadata', () => {
   assert.match(restoredDraft, /spikeUsage: item\.spike_usage \|\| null/);
   assert.match(restoredDraft, /spikeX: item\.spike_x \?\? null/);
   assert.match(restoredDraft, /spikeY: item\.spike_y \?\? null/);
+});
+
+test('moderator metadata task supports an explicit Spike decision and map position', () => {
+  assert.match(moderationClient, /data-spike-usage="placed"/);
+  assert.match(moderationClient, /data-spike-usage="not_used"/);
+  assert.match(moderationClient, /data-spike-map/);
+  assert.match(moderationClient, /data\.spike_usage =/);
+  assert.match(moderationClient, /data\.spike_x = Number/);
+  assert.match(moderationClient, /data\.spike_y = Number/);
+  assert.match(moderation, /update\.spike_usage = usage/);
+  assert.match(moderation, /update\.spike_x = finite01/);
+  assert.match(moderation, /update\.spike_y = finite01/);
 });

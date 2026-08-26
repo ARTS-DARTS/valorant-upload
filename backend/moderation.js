@@ -206,6 +206,10 @@ function safeLineup(doc, viewerUid = '') {
     missing_fields: missingMetadata(d),
     content_type: clean(d.content_type || d.category).slice(0, 20),
     moderator_only: d.moderator_only === true,
+    media_recovery_task: d.media_recovery_task === true,
+    recovery_source_id: clean(d.recovery_source_id).slice(0, 128),
+    recovery_requirements: d.recovery_requirements && typeof d.recovery_requirements === 'object'
+      ? d.recovery_requirements : null,
     reward_program_opt_in: d.reward_program_opt_in === true,
     reward_terms_version: clean(d.reward_terms_version).slice(0, 60),
     user_id: clean(d.user_id || d.uid || d.author_uid).slice(0, 128),
@@ -423,7 +427,9 @@ async function saveDraft(req, res, moderator, { complete = true } = {}) {
     tx.create(moderationLogRef, {
       lineup_id: lineupId,
       action: complete ? 'complete_lineup' : 'save_progress',
-      task_kind: currentData.moderator_only === true ? 'template' : 'lineup',
+      task_kind: currentData.media_recovery_task === true
+        ? 'media_recovery'
+        : (currentData.moderator_only === true ? 'template' : 'lineup'),
       moderator_uid: moderator.uid,
       moderator_name: moderator.name,
       moderator_role: moderator.role,
@@ -738,6 +744,27 @@ async function completeMetadata(req, res, moderator) {
       const value = clean(input.round_side);
       if (!['attack', 'defense', 'any'].includes(value)) throw Object.assign(new Error('Укажи сторону раунда'), { status: 400 });
       update.round_side = value;
+    }
+    const effectiveSide = clean(update.round_side || current.round_side);
+    if (clean(current.content_type || current.category || 'lineup') === 'lineup' && effectiveSide === 'attack') {
+      const currentUsage = clean(current.spike_usage);
+      const currentPositionValid = currentUsage === 'placed' && Number.isFinite(Number(current.spike_x)) && Number.isFinite(Number(current.spike_y));
+      if (!['placed', 'not_used'].includes(currentUsage) || (currentUsage === 'placed' && !currentPositionValid)) {
+        const usage = clean(input.spike_usage);
+        if (!['placed', 'not_used'].includes(usage)) throw Object.assign(new Error('Укажи, используется ли Spike'), { status: 400 });
+        update.spike_usage = usage;
+        if (usage === 'placed') {
+          if (input.spike_x === '' || input.spike_y === '' || input.spike_x === null || input.spike_y === null ||
+              !Number.isFinite(Number(input.spike_x)) || !Number.isFinite(Number(input.spike_y))) {
+            throw Object.assign(new Error('Отметь место установки Spike на карте'), { status: 400 });
+          }
+          update.spike_x = finite01(input.spike_x);
+          update.spike_y = finite01(input.spike_y);
+        } else {
+          update.spike_x = FieldValue.delete();
+          update.spike_y = FieldValue.delete();
+        }
+      }
     }
     const shotAbilities = sovaShotAbilities(current);
     if (shotAbilities.length && normalizedSovaShots(current).length < shotAbilities.length) {
