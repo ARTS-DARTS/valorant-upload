@@ -27,7 +27,8 @@ async function main() {
   const database = getFirestore();
   const snapshot = await database.collection('lineups').where('status', '==', 'approved').get();
   const targets = snapshot.docs.filter(document => needsSpikeReview(document.data()));
-  console.log(JSON.stringify({ mode: apply ? 'apply' : 'dry-run', approved: snapshot.size, spike_tasks: targets.length }, null, 2));
+  const alreadyQueued = targets.filter(document => document.data()?.metadata_review_required === true).length;
+  console.log(JSON.stringify({ mode: apply ? 'apply' : 'dry-run', approved: snapshot.size, spike_tasks: targets.length, already_queued: alreadyQueued }, null, 2));
   if (!apply) return;
   for (let offset = 0; offset < targets.length; offset += 400) {
     const batch = database.batch();
