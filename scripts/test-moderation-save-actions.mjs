@@ -19,8 +19,10 @@ test('moderation queue can be filtered by authors present in the queue', () => {
 
 test('moderation tasks and submitted lineups can be filtered independently', () => {
   assert.match(htmlSource, /id="moderation-work-filter"/);
-  assert.match(htmlSource, /value="tasks">Задания модерации/);
-  assert.match(htmlSource, /value="lineups">Присланные лайнапы/);
+  assert.match(htmlSource, /value="tasks">Задания/);
+  assert.match(htmlSource, /value="lineups">Лайнапы/);
+  assert.match(backendSource, /guild_assignment_id: clean\(d\.guild_assignment_id\)/);
+  assert.match(backendSource, /!!item\?\.guild_assignment_id/);
   assert.match(backendSource, /function queueWorkCategory\(item\)/);
   assert.match(backendSource, /queue\.filter\(item => queueWorkCategory\(item\) === requestedCategory\)/);
   assert.match(moderationSource, /queueQuery\.set\('category', selectedWorkCategory\)/);

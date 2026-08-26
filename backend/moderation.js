@@ -206,6 +206,7 @@ function safeLineup(doc, viewerUid = '') {
     missing_fields: missingMetadata(d),
     content_type: clean(d.content_type || d.category).slice(0, 20),
     moderator_only: d.moderator_only === true,
+    guild_assignment_id: clean(d.guild_assignment_id).slice(0, 128),
     media_recovery_task: d.media_recovery_task === true,
     recovery_source_id: clean(d.recovery_source_id).slice(0, 128),
     recovery_requirements: d.recovery_requirements && typeof d.recovery_requirements === 'object'
@@ -559,7 +560,7 @@ function queueAuthorKey(item) {
 }
 
 function queueWorkCategory(item) {
-  return item?.task_kind === 'metadata' || item?.moderator_only === true || item?.media_recovery_task === true
+  return item?.task_kind === 'metadata' || item?.moderator_only === true || item?.media_recovery_task === true || !!item?.guild_assignment_id
     ? 'tasks'
     : 'lineups';
 }
