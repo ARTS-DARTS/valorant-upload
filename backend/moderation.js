@@ -628,7 +628,13 @@ async function listQueue(req, res, moderator) {
   const items = selectedQueue
     .filter(item => !item.moderation_lock_active || item.moderation_lock_owned)
     .slice(0, capacity);
-  res.status(200).json({ items, total, capacity, staff_count: staffCount, authors });
+  const activeClaimItem = queue.find(item => item.moderation_lock_owned && item.moderation_lock_expires_at > Date.now());
+  const active_claim = activeClaimItem ? {
+    id: activeClaimItem.id,
+    category: queueWorkCategory(activeClaimItem),
+    label: [activeClaimItem.map, activeClaimItem.agent, activeClaimItem.ability].filter(Boolean).join(' · ').slice(0, 180),
+  } : null;
+  res.status(200).json({ items, total, capacity, staff_count: staffCount, authors, active_claim });
 }
 
 async function listLocks(req, res, moderator) {

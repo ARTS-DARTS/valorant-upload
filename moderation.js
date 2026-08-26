@@ -19,6 +19,7 @@ let selectedAuthorKey = '';
 let workFilter = null;
 let selectedWorkCategory = '';
 let queueAuthors = [];
+let activeClaimSummary = null;
 let moderationMaps = new Map();
 
 function esc(value) {
@@ -172,7 +173,20 @@ async function api(path = '', options = {}, retry = 0) {
 
 function updateQueueStatus() {
   const status = document.getElementById('moderation-status');
-  if (status) status.textContent = `В очереди: ${loadedItems.length} · Всего: ${totalQueueItems}`;
+  if (!status) return;
+  const queueText = `В очереди: ${loadedItems.length} · Всего: ${totalQueueItems}`;
+  status.innerHTML = activeClaimSummary
+    ? `${esc(queueText)}<button class="moderation-active-claim" type="button" data-active-claim-category="${esc(activeClaimSummary.category)}">В работе: ${esc(activeClaimSummary.label || 'открыть')}</button>`
+    : esc(queueText);
+}
+
+async function handleStatusClick(event) {
+  const button = event.target.closest('[data-active-claim-category]');
+  if (!button) return;
+  selectedWorkCategory = button.dataset.activeClaimCategory || '';
+  selectedAuthorKey = '';
+  renderedQueueSignature = '';
+  await load();
 }
 
 function renderAuthorFilter() {
@@ -564,6 +578,7 @@ async function load({ silent = false, allowInactive = false, renderQueue = true 
     const body = await api(queuePath, { signal: requestController.signal });
     if (!active && !allowInactive) return;
     const items = Array.isArray(body.items) ? body.items : [];
+    activeClaimSummary = body.active_claim && typeof body.active_claim === 'object' ? body.active_claim : null;
     queueAuthors = Array.isArray(body.authors) ? body.authors : [];
     renderAuthorFilter();
     if (workFilter) {
@@ -836,6 +851,7 @@ function deactivate() {
 function destroy() {
   deactivate();
   clearClaim();
+  document.getElementById('moderation-status')?.removeEventListener('click', handleStatusClick);
   refreshButton?.removeEventListener('click', load);
   moderationList?.removeEventListener('click', handleModerationListClick);
   moderationList?.removeEventListener('input', handleModerationListInput);
@@ -848,6 +864,7 @@ function destroy() {
   selectedAuthorKey = '';
   selectedWorkCategory = '';
   queueAuthors = [];
+  activeClaimSummary = null;
   loadedItems = [];
   totalQueueItems = 0;
   context = null;
@@ -864,6 +881,7 @@ export function initModeration(nextContext) {
   moderationList?.addEventListener('input', handleModerationListInput);
   authorFilter?.addEventListener('change', handleAuthorFilterChange);
   workFilter?.addEventListener('change', handleWorkFilterChange);
+  document.getElementById('moderation-status')?.addEventListener('click', handleStatusClick);
   loadModerationMaps();
   async function releaseClaim(lineupId) {
     if (!lineupId) return;

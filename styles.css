@@ -208,6 +208,8 @@
     .moderation-author-filter select:focus-visible { border-color:#50d6ff; box-shadow:0 0 0 3px rgba(80,214,255,.14); }
     .moderation-author-filter select:disabled { cursor:not-allowed; opacity:.55; }
     .moderation-status { padding:0; color:var(--text2); text-align:right; font-size:13px; white-space:nowrap; }
+    .moderation-active-claim { display:block; margin:7px 0 0 auto; padding:6px 9px; border:1px solid rgba(167,123,255,.55); border-radius:7px; background:rgba(167,123,255,.12); color:#c9adff; font:inherit; font-weight:800; cursor:pointer; }
+    .moderation-active-claim:hover { background:rgba(167,123,255,.2); }
     @media (max-width:760px) { .moderation-queue-toolbar { grid-template-columns:1fr; align-items:stretch; } .moderation-status { text-align:left; } }
     .moderation-list { display:grid; gap:14px; }
     .moderation-card { overflow:hidden; border:1px solid var(--border); border-radius:var(--r); background:var(--surface); }

@@ -12,7 +12,7 @@ test('moderation queue can be filtered by authors present in the queue', () => {
   assert.match(htmlSource, /id="moderation-author-filter"/);
   assert.match(backendSource, /const authors = \[\.\.\.categoryQueue\.reduce/);
   assert.match(backendSource, /categoryQueue\.filter\(item => queueAuthorKey\(item\) === requestedAuthor\)/);
-  assert.match(backendSource, /authors \}/);
+  assert.match(backendSource, /authors, active_claim \}/);
   assert.match(moderationSource, /queueQuery\.set\('author', selectedAuthorKey\)/);
   assert.match(moderationSource, /queueAuthors = Array\.isArray\(body\.authors\)/);
 });
@@ -33,6 +33,14 @@ test('moderation tasks and submitted lineups can be filtered independently', () 
   assert.match(backendSource, /queue\.filter\(item => queueWorkCategory\(item\) === requestedCategory\)/);
   assert.match(moderationSource, /queueQuery\.set\('category', selectedWorkCategory\)/);
   assert.match(moderationSource, /workFilter\?\.addEventListener\('change', handleWorkFilterChange\)/);
+});
+
+test('an active claim remains discoverable when queue filters hide its card', () => {
+  assert.match(backendSource, /activeClaimItem = queue\.find/);
+  assert.match(backendSource, /authors, active_claim/);
+  assert.match(moderationSource, /activeClaimSummary = body\.active_claim/);
+  assert.match(moderationSource, /data-active-claim-category/);
+  assert.match(moderationSource, /selectedWorkCategory = button\.dataset\.activeClaimCategory/);
 });
 
 test('moderator save and completion use different API actions', () => {
