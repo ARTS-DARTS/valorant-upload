@@ -12,7 +12,9 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:3000',
 ]);
 const ACTION_WINDOW_MS = 60_000;
-const ACTION_LIMIT = 20;
+// Moderators can legitimately process dozens of short metadata tasks per minute.
+// This remains a safety ceiling, not a throttle for normal queue work.
+const ACTION_LIMIT = 120;
 const actionWindows = new Map();
 const autosaveWindows = new Map();
 
@@ -560,7 +562,8 @@ function queueAuthorKey(item) {
 }
 
 function queueWorkCategory(item) {
-  return item?.guild_assignment_id ? 'tasks' : 'lineups';
+  const moderatorTask = item?.task_kind === 'metadata' || item?.moderator_only === true || item?.media_recovery_task === true;
+  return moderatorTask ? 'tasks' : 'lineups';
 }
 
 async function listQueue(req, res, moderator) {

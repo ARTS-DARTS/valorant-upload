@@ -150,7 +150,7 @@ function metadataTaskTitle(item) {
   return 'Проверить параметры лайнапа';
 }
 
-async function api(path = '', options = {}) {
+async function api(path = '', options = {}, retry = 0) {
   const token = await context.getToken();
   const response = await fetch(`/api/moderation${path}`, {
     ...options,
@@ -158,6 +158,10 @@ async function api(path = '', options = {}) {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) },
   });
   const body = await response.json().catch(() => ({}));
+  if (!options.method && retry < 1 && [502, 503, 504].includes(response.status)) {
+    await new Promise(resolve => setTimeout(resolve, 450));
+    return api(path, options, retry + 1);
+  }
   if (!response.ok) {
     const error = new Error(body.error || `Ошибка ${response.status}`);
     error.status = response.status;
