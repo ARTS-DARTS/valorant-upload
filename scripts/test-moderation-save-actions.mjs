@@ -22,7 +22,10 @@ test('moderation tasks and submitted lineups can be filtered independently', () 
   assert.match(htmlSource, /value="tasks">Задания/);
   assert.match(htmlSource, /value="lineups">Лайнапы/);
   assert.match(backendSource, /guild_assignment_id: clean\(d\.guild_assignment_id\)/);
-  assert.match(backendSource, /const moderatorTask = item\?\.task_kind === 'metadata'/);
+  assert.match(backendSource, /moderation_work_kind: clean\(d\.moderation_work_kind\)/);
+  assert.match(backendSource, /if \(item\?\.moderation_work_kind === 'task'\) return 'tasks'/);
+  assert.match(backendSource, /if \(item\?\.moderation_work_kind === 'lineup'\) return 'lineups'/);
+  assert.match(backendSource, /const moderatorTask = item\?\.task_kind === 'metadata' \|\| item\?\.media_recovery_task === true/);
   assert.match(backendSource, /return moderatorTask \? 'tasks' : 'lineups'/);
   assert.match(backendSource, /const ACTION_LIMIT = 120/);
   assert.match(moderationSource, /\[502, 503, 504\]\.includes\(response\.status\)/);
