@@ -29,6 +29,8 @@ test('same-origin client error endpoint records authenticated browser failures',
   assert.equal(response.statusCode, 201);
   assert.equal(saved.uid, 'uid-token');
   assert.equal(saved.received_via, 'same_origin_backend');
+  assert.equal(saved.appVersion, 'upload-site');
+  assert.ok(saved.site_build);
   assert.equal(saved.context.media_error_code, 4);
 });
 

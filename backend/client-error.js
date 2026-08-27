@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 
 import { adminAuth, adminFirestore } from './_lib/firebase-admin.js';
+import { deploymentVersion } from './site-version.js';
 
 const rateBuckets = new Map();
 const MAX_REPORTS_PER_MINUTE = 30;
@@ -65,7 +66,8 @@ export function createClientErrorHandler({ auth = adminAuth(), db = adminFiresto
         user_name:clean(body.user_name || user.name, 120),
         user_email:clean(body.user_email || user.email, 200),
         platform:'web',
-        appVersion:clean(body.appVersion || 'upload-site', 80),
+        appVersion:'upload-site',
+        site_build:clean(deploymentVersion, 80),
         url:clean(body.url, 1000),
         userAgent:clean(body.userAgent || req.headers?.['user-agent'], 1000),
         ip:clean(req.ip || req.socket?.remoteAddress, 120),
